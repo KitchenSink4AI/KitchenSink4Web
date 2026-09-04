@@ -34,6 +34,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Any
 
+from .. import anchors
 from ..errors import BadParams, Conflict, TargetNotFound, Timeout
 from ..projection import CLOSED_SHADOW_HOOK
 from ..projection.meter import warm as _warm_estimator
@@ -91,6 +92,20 @@ class Session:
         default_factory=lambda: {"navigations": 0, "reads": 0, "actions": 0,
                                  "pages_opened": 0, "origins": 0})
     origins: set[str] = field(default_factory=set)
+    #: The sticky element map and the delta store, per SESSION rather than
+    #: per page, because refs are unique across the session (DESIGN 3.5) so a
+    #: bare `e12` is never ambiguous. The engine owns them and the anchors
+    #: package never learns what a browser is.
+    element_map: Any = field(default_factory=anchors.ElementMap)
+    reads: Any = field(default_factory=anchors.ReadStore)
+
+    def invalidate_page(self, handle: str, why: str) -> dict:
+        """A navigation, a page close, or a session end. Refs and read tokens
+        minted on a page do not survive it, and the counts come back so the
+        caller can SAY so rather than leaving a later failure to explain it."""
+        return {"refs_invalidated": self.element_map.invalidate_page(handle, why),
+                "read_tokens_invalidated": self.reads.invalidate(handle, why),
+                "why": why}
 
     def page(self, handle: str | None) -> PageHandle:
         if handle is None:

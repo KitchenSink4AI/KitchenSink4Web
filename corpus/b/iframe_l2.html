@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Corpus B: nested iframe, level 2</title>
+<style>
+  body { font: 13px system-ui, sans-serif; margin: 0; padding: 8px;
+         background: #f4f7fb; }
+  iframe { width: 560px; height: 150px; border: 2px dashed #a05a4a; }
+</style>
+</head>
+<body>
+<h2>Level 2 document</h2>
+<p>Same origin as the top document, so it is enterable. It carries its own
+form control, which a read of the page should find rather than lose to the
+frame boundary.</p>
+<label for="l2-field">Level two search</label>
+<input id="l2-field" name="q" type="search" placeholder="Search level two">
+<button id="l2-action">Level two button</button>
+
+<iframe id="l3" src="iframe_l3.html" title="Level three, same origin"></iframe>
+</body>
+</html>

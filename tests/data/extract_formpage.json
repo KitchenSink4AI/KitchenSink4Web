@@ -6,6 +6,18 @@
  "affordance_total": 7,
  "affordances": [
   {
+   "anchor": {
+    "attr_id": "email",
+    "attr_name": "email",
+    "attr_testid": "",
+    "labelled_ancestor": "",
+    "landmark": "form",
+    "landmark_label": "checkout",
+    "name": "Email address",
+    "ordinal": 1,
+    "page_key": "nullblank",
+    "role": "textbox"
+   },
    "area": 3717,
    "cls": "form_control",
    "external": false,
@@ -28,6 +40,18 @@
    "type": "email"
   },
   {
+   "anchor": {
+    "attr_id": "pw",
+    "attr_name": "pw",
+    "attr_testid": "",
+    "labelled_ancestor": "",
+    "landmark": "form",
+    "landmark_label": "checkout",
+    "name": "Password",
+    "ordinal": 2,
+    "page_key": "nullblank",
+    "role": "textbox"
+   },
    "area": 3717,
    "cls": "form_control",
    "external": false,
@@ -50,6 +74,18 @@
    "type": "password"
   },
   {
+   "anchor": {
+    "attr_id": "cc",
+    "attr_name": "cc",
+    "attr_testid": "",
+    "labelled_ancestor": "",
+    "landmark": "form",
+    "landmark_label": "checkout",
+    "name": "Card number",
+    "ordinal": 3,
+    "page_key": "nullblank",
+    "role": "textbox"
+   },
    "area": 3717,
    "cls": "form_control",
    "external": false,
@@ -72,6 +108,18 @@
    "type": "text"
   },
   {
+   "anchor": {
+    "attr_id": "size",
+    "attr_name": "size",
+    "attr_testid": "",
+    "labelled_ancestor": "",
+    "landmark": "form",
+    "landmark_label": "checkout",
+    "name": "Size",
+    "ordinal": 1,
+    "page_key": "nullblank",
+    "role": "combobox"
+   },
    "area": 1330,
    "cls": "form_control",
    "external": false,
@@ -94,6 +142,18 @@
    "type": null
   },
   {
+   "anchor": {
+    "attr_id": "lang",
+    "attr_name": "lang",
+    "attr_testid": "",
+    "labelled_ancestor": "",
+    "landmark": "form",
+    "landmark_label": "checkout",
+    "name": "Written in this language",
+    "ordinal": 2,
+    "page_key": "nullblank",
+    "role": "combobox"
+   },
    "area": 1900,
    "cls": "form_control",
    "external": false,
@@ -116,6 +176,18 @@
    "type": null
   },
   {
+   "anchor": {
+    "attr_id": "notes",
+    "attr_name": "notes",
+    "attr_testid": "",
+    "labelled_ancestor": "",
+    "landmark": "form",
+    "landmark_label": "checkout",
+    "name": "Notes",
+    "ordinal": 4,
+    "page_key": "nullblank",
+    "role": "textbox"
+   },
    "area": 6048,
    "cls": "form_control",
    "external": false,
@@ -138,6 +210,18 @@
    "type": null
   },
   {
+   "anchor": {
+    "attr_id": "",
+    "attr_name": "",
+    "attr_testid": "",
+    "labelled_ancestor": "",
+    "landmark": "form",
+    "landmark_label": "checkout",
+    "name": "Place order",
+    "ordinal": 1,
+    "page_key": "nullblank",
+    "role": "button"
+   },
    "area": 1768,
    "cls": "primary",
    "external": false,
@@ -184,6 +268,7 @@
   "name_fallbacks": 0,
   "open_shadow_roots": 0,
   "region_cap_hit": false,
+  "scope": null,
   "text_chars": 107,
   "total_elements": 64,
   "viewport_height": 900,
@@ -195,6 +280,18 @@
  "forms": [
   {
    "action": "/checkout",
+   "anchor": {
+    "attr_id": "",
+    "attr_name": "checkout",
+    "attr_testid": "",
+    "labelled_ancestor": "",
+    "landmark": "main",
+    "landmark_label": "",
+    "name": "checkout",
+    "ordinal": 2,
+    "page_key": "nullblank",
+    "role": "form"
+   },
    "fields": [
     {
      "label": "Email address",
@@ -281,6 +378,18 @@
  ],
  "headings": [
   {
+   "anchor": {
+    "attr_id": "",
+    "attr_name": "",
+    "attr_testid": "",
+    "labelled_ancestor": "",
+    "landmark": "main",
+    "landmark_label": "",
+    "name": "Sign in and pay",
+    "ordinal": 1,
+    "page_key": "nullblank",
+    "role": "heading"
+   },
    "level": 1,
    "name_quality": "computed",
    "ref": "h1",
@@ -288,21 +397,38 @@
    "section_affordances": 7,
    "section_chars": 92,
    "section_known": true,
+   "section_words": 16,
    "text": "Sign in and pay"
   }
  ],
  "headings_total": 1,
  "identity": {
+  "doc_epoch": "1788550148460:0.7966515047422216",
   "lang": "en",
   "origin": "null",
+  "page_key": "nullblank",
   "screens": 1,
   "title": "Form fixture",
   "url": "https://fixture.invalid/formpage",
   "viewport": "1280x900"
  },
  "lead": "",
+ "modal": null,
+ "nav_regions_demoted": [],
  "regions": [
   {
+   "anchor": {
+    "attr_id": "",
+    "attr_name": "",
+    "attr_testid": "",
+    "labelled_ancestor": "",
+    "landmark": "document",
+    "landmark_label": "",
+    "name": "Sign in and pay",
+    "ordinal": 1,
+    "page_key": "nullblank",
+    "role": "main"
+   },
    "children": [
     "r2"
    ],
@@ -317,7 +443,9 @@
     "headings": 1,
     "images": 0,
     "interactive": 0,
-    "text_blocks": 0
+    "prose_links": 0,
+    "text_blocks": 0,
+    "words": 4
    },
    "parent": null,
    "ref": "r1",
@@ -325,6 +453,18 @@
    "top": 21
   },
   {
+   "anchor": {
+    "attr_id": "",
+    "attr_name": "checkout",
+    "attr_testid": "",
+    "labelled_ancestor": "",
+    "landmark": "main",
+    "landmark_label": "",
+    "name": "(form)",
+    "ordinal": 1,
+    "page_key": "nullblank",
+    "role": "form"
+   },
    "children": [],
    "depth": 1,
    "in_viewport": true,
@@ -337,7 +477,9 @@
     "headings": 0,
     "images": 0,
     "interactive": 7,
-    "text_blocks": 0
+    "prose_links": 0,
+    "text_blocks": 0,
+    "words": 16
    },
    "parent": "r1",
    "ref": "r2",

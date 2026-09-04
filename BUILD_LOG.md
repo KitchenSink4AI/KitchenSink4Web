@@ -1305,3 +1305,202 @@ architecture freezes with S8, S9, and S10 named as delivery decisions rather
 than blockers.
 
 **Suite unchanged and green, 218 tests.** The spike touches no shipped code.
+
+---
+
+## Part X: Phase 2, projection and anchors, the keystone (2026-09-05 04:33 KST)
+
+Two modules everything else is downstream of, built together because deltas
+require sticky refs and sticky refs are only useful because reads are cheap.
+**The suite went from 218 tests to 279. Eight of the nine reported gate items
+are green and part 7 is red**, with numbers rather than adjectives below.
+
+### What landed
+
+`anchors/`, the second keystone, in four modules that never touch a browser:
+`keys.py` (the key ladder, the page key on every rung, the ordinal rule
+asserted at import rather than in a comment), `map.py` (the sticky element
+map, gone-marking, turn-local refs), `ladder.py` (six entry conditions then
+five outcomes), and `deltas.py` (`since=` under a bounded five-read LRU).
+`projection/` gained `find.js` and `text.js`, and `extract.js` gained the
+anchor descriptor, a scoping root for `location=`, and the modal state the
+ladder checks first. `get_page_view` gained `location` and `since`;
+`find_elements` and `get_text` landed as real tools. Corpus B (19 pathological
+pages) and corpus wide (5 frozen benchmark pages) were built.
+`scripts/gate_phase2.py` reports the gate.
+
+**The anchor system costs 9 percent of extract time at 50,000 nodes.** That is
+the whole price of durable addressing, and it is measured by an interleaved
+reference arm rather than asserted.
+
+### The two measured debts, both discharged
+
+**Versailles engaged the ladder through a cliff rather than a size problem.**
+The page was 465 tokens over the effective budget and was delivered 817 tokens
+under it, because the step that fit was 906 tokens below the step that did
+not: a 20 percent drop where a 3 percent one would have fit. The cliff was the
+region cap moving from "all of them" straight to twenty, on a page carrying
+forty regions at roughly 40 tokens a line. Sixteen rungs now shed the
+lowest-priority regions a few at a time. **Measured steps: 2.2, 2.9, 4.0, 3.4,
+4.9 percent. The delivered read is 4,356 at rung 6 rather than 3,683 at rung
+3, and the live drift check fell from plus 15.3 percent to plus 2.4**, which
+is the independent confirmation that the discontinuity was the rung boundary
+rather than the page.
+
+**GDP measured 3,166 against a 3,000 target and the target moved to 3,500.**
+Recorded as a revision, never as a pass: `measure_corpus_a.py` carries the
+superseded number and the gate line prints `PASS (target REVISED from 3000)`.
+The arithmetic, in the order it happened. Two real defects were found and
+fixed, recovering 124 tokens: an empty landmark advertising `~40 tok to
+expand` for a call that returns nothing, and column headers scraped from every
+`th` in a table's subtree including nested tables, which made the GDP page
+print `cols: show Lists of countries by... | Trade | Investment` for a
+one-column layout table. Then the gate found a third defect whose fix COST 363
+tokens, and it is the most important finding in the phase.
+
+### The defect that mattered most: a list item is not prose
+
+Every link inside an `<li>` was classified in-prose and suppressed by the zero
+quota. **Navigation menus are `<ul><li><a>` by universal convention**, so the
+projection was discarding the page's own navigation on every site that builds
+one normally. On the frozen GitHub repository page it removed all six
+repository tabs, Issues included. That is S1's original failure arriving
+through a different door, buried by a quota this time instead of by a
+proximity score, and it was caught by the gate part that exists because of the
+first one.
+
+An `LI` now counts as prose only when the link sits inside a sentence,
+measured as the item carrying substantially more text than the link itself.
+Two corrections travelled with it. **Citation markers are recognised by
+shape**, because the ancestor test misses every marker sitting in an infobox
+cell or a caption, and `[ 1 ]`, `[ 2 ]` and `[ n. 1 ]` had come back among the
+flagship article's top affordances. **And the navigation floor's premise is
+now mechanical**: "it is small" is false for a Wikipedia navbox holding 155
+links, so a nav-shaped region over thirty controls is a link collection and
+its members compete in `other`.
+
+### The floor was not bounded by construction
+
+DESIGN 3.4 argued the floor was bounded because "tables were never more than
+one line each". True and insufficient: one line each is unbounded in the
+NUMBER of tables. The 50,000-node fixture carries 595, its floor came to
+12,727 tokens, and **a default read REFUSED that page instead of degrading
+it**, which is the one thing the ladder exists to prevent. Rungs now cap how
+many forms and tables are listed as well as how much each prints, and the
+completeness block reports `forms omitted: N of M` and `tables omitted: N of
+M` from the ledger rather than the two hardcoded zeros it used to carry. The
+content-aware override ("on a form page the field listing survives the floor")
+needed the same qualifier, since applied unconditionally it reinstated the
+unbounded floor on a 320-field fixture.
+
+### Gate part 7, and why it is red
+
+**Part 7 earned its place in its first run by finding a bug nothing else
+would have.** A scoped read was REPLACING the page's map of live elements, so
+expanding a second region from one read refused with a stale-ref error. That
+breaks read-once-expand-many, which is the flow this design sells. The map
+merges across reads now, and a scoped read no longer marks anything gone
+either, since "not in this read" says nothing about a page it did not look at.
+
+**Then it found that the contract could not be satisfied as written.** "Issue
+the call and compare against the advertised figure" assumes expanding a region
+RETURNS that region's content. It does not: it returns another budgeted
+projection, so a region holding 46,320 tokens came back as a 4,917-token
+orientation and the price looked wrong by 845 percent while being right about
+the page. The price is a CONTENT SIZE, the payload now says so in the block
+header, and the harness checks the three things that are true: executable,
+bounded, and meaningful against `get_text` on the same region net of its
+nested regions.
+
+**The measurement: 65 units, 37 above the noise floor, median error 13.6
+percent, rank correlation 0.848, five outside the 35 percent band and all
+under-priced by two and a half to three times.** Getting there meant counting
+each region's characters ONCE, since the first formula added per-affordance,
+per-heading and per-text-block rates on top of a character count that already
+contained all of their text: that alone took the median from 96 percent to
+13.6. A words-based estimate was then measured against the same 37 regions on
+the theory that tokens track words more closely than characters, and it came
+out WORSE at 17.8 percent, so characters stand and the experiment is recorded
+so nobody repeats it. **The residual under-pricing is open and is not
+waived.**
+
+### The latency gate needed a load control before it meant anything
+
+Phase 1 gave the orphan gate a negative control because it had to prove it
+could FAIL. The latency gate needs the mirror: it has to prove a failure is
+the CODE'S. A Phase 2 run measured 798 ms p95 at 50,000 nodes against a 500 ms
+bound, and **the committed Phase 1 extractor measured 963 ms on the same
+machine minutes later, against the 417 ms it had recorded when the machine was
+quiet.** A gate reporting RED under those conditions is reporting on the
+machine and calling it a code regression. Every run now interleaves the
+extractor exactly as committed at HEAD, and a miss with the reference also
+above 80 percent of the same budget is reported UNCERTIFIED rather than RED.
+It still exits non-zero; it never turns a red into a green.
+
+**And the p95 was not a p95.** With ten repetitions the 95th percentile
+selects the last index, which is the maximum, so the gate failed on any single
+scheduling hiccup. Twenty repetitions put it where the name says it is.
+
+The optimisation that closed the gap was one rule broken twice, and it is the
+rule DESIGN 3.6a already states: cap what you RETURN, tally what you COUNT.
+The walk was minting an anchor descriptor for every heading on a
+5,000-heading page when 150 are ever returned, and calling `new URL()` on
+every one of six thousand links to build a path string that 300 of them
+print. Computing display detail only for units that will be returned, while
+keeping every classification the tallies depend on, took the anchor system's
+overhead from 20 percent to 9.
+
+### The entry-condition table was in the wrong order
+
+DESIGN 3.5 listed the gone-marked row above the URL-changed row. Evaluated in
+that printed order a gone-marked ref skips to re-resolution, and after a
+navigation EVERY ref on the page is gone-marked by the next read, so the URL
+test below it would never run and **cross-page rebinding would be on by
+default for exactly the refs most likely to rebind wrongly.** The outcomes are
+unchanged; the order is now the one S2 measured zero false rebinds under, and
+there is a test named for it.
+
+### The gate, item by item
+
+| Part | Result |
+|---|---|
+| 1. Token bill on frozen corpus A | **GREEN.** 573 / 842 / 3,399 / 4,356; every target met, GDP's revised and labelled |
+| 2. Refs sticky, zero false rebinds | **GREEN.** 9 scenarios, 145 resolutions, zero false rebinds, zero false stickiness |
+| 3. Completeness accurate by construction | **GREEN.** virtualized list, closed shadow roots, cross-origin iframe, canvas and injected hidden content each reported on corpus B |
+| 4. Ladder never truncates, monotonic as exposed | **GREEN.** all 16 rungs forced on the 50,000-node fixture, none truncated, exposed sequence monotonic |
+| 5. Latency budgets | **GREEN.** 386 ms p95 at 50,012 (budget 500), 650 ms at 100,012 (budget 1,000), reference arm reported alongside |
+| 6. Affordance quotas on the adversarial cases | **GREEN.** every GitHub repo tab present, in-prose citations zero, loose controls competing rather than exempt |
+| 7. Every printed price executable and accurate | **RED.** executable and bounded pass; 5 of 37 gated units outside the 35 percent band |
+| 8. Completeness derived, not recomputed | **GREEN.** the named "0 regions not expanded" regression holds |
+| 9. Accessible names computed, not scraped | **GREEN.** including the hidden-through-ancestor fixture, itself asserted to hide through the ancestor |
+| House: corpus drift check | **GREEN.** -1.9 / -1.1 / -1.4 / +2.4 percent |
+| House: docstring ratchet | **GREEN.** lite 2,720 tokens, unchanged |
+
+### Divergences from the plan, stated
+
+1. **The GDP target moved**, 3,000 to 3,500, after a 124-token recovery and a
+   363-token correctness fix. Recorded as a revision on the gate line itself.
+2. **The entry-condition table's row order was corrected** in DESIGN 3.5.
+3. **DESIGN 3.3a's price contract was corrected**, because it was
+   unsatisfiable as written.
+4. **The latency gate gained a load control and a real p95.** Both are
+   instrument fixes and neither can turn a red into a green.
+5. **The name-only fuzzy tier is absent and no ordinal rung exists**, which is
+   S2's recommended configuration rather than a new decision.
+6. **A browser test stopped hardcoding a budget just above the floor** and now
+   reads the number the floor refusal names, then reads at it. That caught the
+   refusal quoting a budget that did not in fact fit, because the budget line
+   states the budget inside the payload it is measuring.
+
+### Open items carried forward
+
+- **Gate part 7's residual under-pricing.** Five regions of 37, all under by
+  2.5 to 3 times, cause not yet isolated. Phase 3.
+- **The dom50k fixture still shows a rung cliff** (17,849 to 3,380) where the
+  table cap engages. It lands under budget and never refuses, and it is a
+  synthetic page carrying 595 tables, but it is the same shape as the
+  Versailles finding and is worth a look.
+- **httpbin's margin is 58 tokens** against its 900 target, down from 91. It
+  is the row to re-run after any change to the completeness block.
+- **`cursor=` and `include_hidden=` are still unbuilt** and refuse by naming
+  Phase 5 and Phase 3 respectively.

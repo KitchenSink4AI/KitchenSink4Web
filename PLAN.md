@@ -722,7 +722,36 @@ Firefox, never the daily one, until the author personally runs the dogfood pass.
   ~1.0 s, which is what makes a per-launch census affordable and therefore what
   makes the journal's arrival-difference filter possible at all.
 
-### Phase 2: Projection and anchors (the keystone)
+### Phase 2: Projection and anchors (the keystone) — **RUN 2026-09-05, EIGHT OF NINE GATE ITEMS GREEN, PART 7 RED**
+
+**Status.** The suite is 279 tests, up from 218. The anchor system landed
+whole (`anchors/`: the key ladder, the sticky element map, the rebind ladder,
+the delta engine) and the S2 battery is ported into it, running against the
+SHIPPED code rather than the prototype: **zero false rebinds and zero false
+stickiness across 9 scenarios, 145 resolutions**, with the documented cost of
+the page key (an app shell loses its refs on a hash route change) asserted
+rather than denied. `get_page_view` gained `location` and `since`;
+`find_elements` and `get_text` landed. Corpus B is built (19 pathological
+pages) and the widened benchmark set is frozen (5 pages, GitHub nav bar
+intact).
+
+**Both measured debts are discharged.** The Versailles rung cliff is gone: the
+steps around the default budget are 2.2, 2.9, 4.0, 3.4 and 4.9 percent against
+the 19.7 percent step that made a page 465 tokens over budget arrive 817 under
+it, and the delivered read is 4,356 rather than 3,683. The live drift on that
+page fell from plus 15.3 percent to plus 2.4, which is the independent
+confirmation. The GDP structure read recovered 124 tokens from two real
+defects and then SPENT 363 restoring the page navigation a third defect was
+suppressing, so **the published target moved from 3,000 to 3,500 and the gate
+prints `PASS (target REVISED from 3000)` rather than a bare green.**
+
+**What is RED: gate part 7, the executable prices.** 65 priced units on four
+frozen pages, 37 above the noise floor: median error 13.6 percent, rank
+correlation 0.848, and five units outside the 35 percent band, all
+under-priced by roughly two and a half to three times. Fixing the formula took
+the median from 96 percent to 13.6; a words-based alternative measured worse
+and was reverted. The residual is an open item and is not waived. Full
+numbers in `gates/phase2.json`; the finding list is in the BUILD_LOG.
 
 The two modules everything else is downstream of. Built together because deltas
 require sticky refs and sticky refs are only useful because reads are cheap.

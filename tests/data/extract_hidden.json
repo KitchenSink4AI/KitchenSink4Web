@@ -45,6 +45,7 @@
   "name_fallbacks": 0,
   "open_shadow_roots": 0,
   "region_cap_hit": false,
+  "scope": null,
   "text_chars": 177,
   "total_elements": 19,
   "viewport_height": 900,
@@ -56,6 +57,18 @@
  "forms": [],
  "headings": [
   {
+   "anchor": {
+    "attr_id": "",
+    "attr_name": "",
+    "attr_testid": "",
+    "labelled_ancestor": "",
+    "landmark": "main",
+    "landmark_label": "",
+    "name": "A page with hidden regions",
+    "ordinal": 1,
+    "page_key": "nullblank",
+    "role": "heading"
+   },
    "level": 1,
    "name_quality": "computed",
    "ref": "h1",
@@ -63,21 +76,38 @@
    "section_affordances": 0,
    "section_chars": 151,
    "section_known": true,
+   "section_words": 26,
    "text": "A page with hidden regions"
   }
  ],
  "headings_total": 1,
  "identity": {
+  "doc_epoch": "1788550148608:0.3564814389506118",
   "lang": "en",
   "origin": "null",
+  "page_key": "nullblank",
   "screens": 1,
   "title": "Hidden content fixture",
   "url": "https://fixture.invalid/hidden",
   "viewport": "1280x900"
  },
  "lead": "",
+ "modal": null,
+ "nav_regions_demoted": [],
  "regions": [
   {
+   "anchor": {
+    "attr_id": "",
+    "attr_name": "",
+    "attr_testid": "",
+    "labelled_ancestor": "",
+    "landmark": "document",
+    "landmark_label": "",
+    "name": "A page with hidden regions",
+    "ordinal": 1,
+    "page_key": "nullblank",
+    "role": "main"
+   },
    "children": [],
    "depth": 0,
    "in_viewport": true,
@@ -90,7 +120,9 @@
     "headings": 1,
     "images": 0,
     "interactive": 0,
-    "text_blocks": 3
+    "prose_links": 0,
+    "text_blocks": 3,
+    "words": 31
    },
    "parent": null,
    "ref": "r1",

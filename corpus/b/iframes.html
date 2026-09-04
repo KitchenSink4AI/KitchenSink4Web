@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Corpus B: three levels of nested iframes</title>
+<style>
+  body { font: 14px system-ui, sans-serif; margin: 0; padding: 12px; }
+  iframe { width: 620px; height: 260px; border: 2px solid #4a6fa5; }
+</style>
+</head>
+<body>
+<h1>Nested frames, top document</h1>
+<p>The chain below is three frames deep. This document holds
+<code>iframe_l2.html</code>, which holds <code>iframe_l3.html</code>, which
+holds a cross-origin frame. A read that only walks the top document sees a
+heading, a paragraph, and two empty boxes.</p>
+
+<main>
+  <h2>Level 1 frame, same origin</h2>
+  <iframe id="l2" src="iframe_l2.html" title="Level two, same origin"></iframe>
+
+  <h2>Cross-origin frame at the top level</h2>
+  <!-- Offline this never loads and that is expected. The iframe ELEMENT is
+       what the projection has to account for: a frame it cannot enter is a
+       completeness gap, and a gap it does not report is worse than one it
+       does. -->
+  <iframe id="xo-top" src="https://example.com/shallow"
+          title="A cross-origin frame at the top level"></iframe>
+
+  <button id="top-action">Top-level button</button>
+</main>
+</body>
+</html>

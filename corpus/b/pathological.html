@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Corpus B: controls that refuse, hide, move, and escape</title>
+<style>
+  body { font: 14px system-ui, sans-serif; margin: 0; padding: 12px; }
+  section { border-top: 1px solid #ddd; padding: 12px 0; }
+  .fakebtn {
+    display: inline-block; padding: 8px 14px; background: #2d6cdf;
+    color: #fff; border-radius: 4px; cursor: pointer; user-select: none;
+  }
+  #shield {
+    position: absolute; z-index: 500; width: 320px; height: 90px;
+    background: rgba(255, 0, 0, .06);
+  }
+  #shielded-wrap { position: relative; height: 90px; }
+  #shielded { position: absolute; top: 24px; left: 12px; z-index: 1; }
+  #runner { position: relative; left: 0; }
+  #portal-root { position: fixed; right: 12px; bottom: 12px; }
+  .menu { border: 1px solid #888; background: #fff; padding: 6px; }
+  .menu button { display: block; width: 100%; text-align: left; }
+  .log { color: #555; font-family: ui-monospace, monospace; }
+</style>
+</head>
+<body>
+<h1>Pathological controls</h1>
+<p>Five separate ways a click can appear to succeed and do nothing, on one
+page, each in its own section. Every control records what it actually did in
+the log line beside it, so a harness can tell a real effect from a reported
+one.</p>
+
+<main>
+<section id="sec-trusted">
+  <h2>A React control that checks event.isTrusted</h2>
+  <!-- Rendered by React below. It reads `event.isTrusted` and returns
+       silently when the event was dispatched by script. A driver that
+       synthesises clicks through the DOM gets no error, no exception, and no
+       state change: the tool reports success and nothing happened. This is
+       the single most expensive failure in the set, because it is the one
+       that produces a confident false report. -->
+  <div id="trusted-root"></div>
+</section>
+
+<section id="sec-divbtn">
+  <h2>A div that behaves like a button</h2>
+  <!-- No role, no tabindex, no type, no accessible name from any ARIA
+       source. Role-based selection cannot see it and neither can the
+       accessibility tree; only the text and the click handler give it away.
+       It is the most common "invisible" control on real pages. -->
+  <div class="fakebtn" id="divbtn" onclick="fired('divbtn')">Submit order</div>
+  <span class="log" id="log-divbtn">not clicked</span>
+  <p>Alongside it, a real button so a test has a control group.</p>
+  <button id="realbtn" onclick="fired('realbtn')">Cancel order</button>
+  <span class="log" id="log-realbtn">not clicked</span>
+</section>
+
+<section id="sec-overlay">
+  <h2>An overlay that intercepts clicks</h2>
+  <!-- The button below is visible, enabled, has a name and a role, and
+       passes every actionability check that looks at the element itself. A
+       transparent panel sits over it and swallows the click. The failure is
+       silent unless the driver hit-tests the point it is about to click. -->
+  <div id="shielded-wrap">
+    <div id="shield" title="An invisible shield"></div>
+    <button id="shielded" onclick="fired('shielded')">Confirm payment</button>
+  </div>
+  <span class="log" id="log-shielded">not clicked</span>
+  <span class="log" id="log-shield">shield hits: 0</span>
+</section>
+
+<section id="sec-moving">
+  <h2>A target that moves under the cursor</h2>
+  <!-- A CSS animation walks this button back and forth continuously. A
+       driver that reads the bounding box, waits, then clicks the remembered
+       point, clicks empty space. There is no settled position to wait for,
+       so "wait for stable" never returns. -->
+  <button id="runner" onclick="fired('runner')">Claim reward</button>
+  <span class="log" id="log-runner">not clicked</span>
+</section>
+
+<section id="sec-portal">
+  <h2>A dropdown rendered through a portal</h2>
+  <!-- The trigger is here; the menu React renders for it is mounted at the
+       end of body, outside this section and outside the trigger's landmark.
+       It carries no aria-controls, no aria-owns, and no aria-expanded
+       relationship, so nothing in the accessibility tree connects the two.
+       Scoping a search to the trigger's region finds no menu at all. -->
+  <div id="portal-trigger-root"></div>
+  <span class="log" id="log-portal">menu closed</span>
+</section>
+</main>
+
+<!-- The portal's mount point. Last in the document, first on screen. -->
+<div id="portal-root"></div>
+
+<script src="vendor/react.production.min.js"></script>
+<script src="vendor/react-dom.production.min.js"></script>
+<script>
+const e = React.createElement;
+
+window.__effects = {};
+function fired(name) {
+  window.__effects[name] = (window.__effects[name] || 0) + 1;
+  const log = document.getElementById('log-' + name);
+  if (log) log.textContent = name + ' fired ' + window.__effects[name] + 'x';
+}
+window.fired = fired;
+
+// --- the isTrusted control ------------------------------------------------
+function TrustedOnly() {
+  const [count, setCount] = React.useState(0);
+  const [rejected, setRejected] = React.useState(0);
+  return e('div', null,
+    e('button', {
+      id: 'trusted-btn',
+      'data-truth': 'btn-trusted-only',
+      onClick: function (event) {
+        // The whole landmine, in one line.
+        if (!event.nativeEvent.isTrusted) { setRejected(function (n) { return n + 1; }); return; }
+        setCount(function (n) { return n + 1; });
+        fired('trusted');
+      },
+    }, 'Approve request'),
+    e('span', {className: 'log', id: 'log-trusted'},
+      'approved ' + count + 'x, silently ignored ' + rejected + 'x'));
+}
+ReactDOM.createRoot(document.getElementById('trusted-root'))
+  .render(e(TrustedOnly));
+
+// --- the portal dropdown --------------------------------------------------
+function PortalMenu() {
+  const [open, setOpen] = React.useState(false);
+  return e(React.Fragment, null,
+    e('button', {
+      id: 'portal-trigger', 'data-truth': 'btn-portal-trigger',
+      onClick: function () { setOpen(function (v) { return !v; }); },
+    }, 'Account'),
+    open
+      ? ReactDOM.createPortal(
+          e('div', {className: 'menu', id: 'portal-menu'},
+            e('button', {'data-truth': 'menu-profile'}, 'Profile'),
+            e('button', {'data-truth': 'menu-billing'}, 'Billing'),
+            e('button', {'data-truth': 'menu-signout'}, 'Sign out')),
+          document.getElementById('portal-root'))
+      : null);
+}
+ReactDOM.createRoot(document.getElementById('portal-trigger-root'))
+  .render(e(PortalMenu));
+
+// --- the shield -----------------------------------------------------------
+let shieldHits = 0;
+document.getElementById('shield').addEventListener('click', function () {
+  shieldHits += 1;
+  window.__effects.shield = shieldHits;
+  document.getElementById('log-shield').textContent =
+    'shield hits: ' + shieldHits;
+});
+
+// --- the moving target ----------------------------------------------------
+// Driven by requestAnimationFrame rather than a CSS keyframe so the element
+// never has a still frame at all, not even between iterations.
+const runner = document.getElementById('runner');
+function step(t) {
+  runner.style.left = (Math.sin(t / 300) * 180 + 180).toFixed(1) + 'px';
+  requestAnimationFrame(step);
+}
+requestAnimationFrame(step);
+</script>
+</body>
+</html>

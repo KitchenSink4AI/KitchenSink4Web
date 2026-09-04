@@ -41,11 +41,13 @@ from __future__ import annotations
 import time
 from urllib.parse import urlparse
 
+from .. import anchors
 from ..engine import lanes, session as _session
 from ..errors import (AuthRequired, BadParams, BlockedBySite, LaneUnsupported,
-                      NotImplementedYet)
+                      NotImplementedYet, TargetNotFound)
 from ..policy import readonly
-from ..projection import ENCODING_NAME as _ENCODING, RUNGS as _RUNGS, read_page
+from ..projection import (ENCODING_NAME as _ENCODING, RUNGS as _RUNGS,
+                          find as _find, ntok as _ntok, read_page, read_text)
 from ..projection.render import VIEWS as _PROJECTION_VIEWS
 
 MANAGER = _session.MANAGER
@@ -204,17 +206,16 @@ async def get_page_view(
     for anything unexpanded. `location` scopes to one region or frame,
     `since` gives a delta, `budget_tokens=2500` suits a subagent.
     """
-    for name, value in (("location", location), ("cursor", cursor),
-                        ("since", since)):
-        if value:
-            _stub(f"get_page_view({name}=...)", "Phase 2 (anchors and deltas)")
+    if cursor:
+        _stub("get_page_view(cursor=...)", "Phase 5 (spill-to-file paging)")
     if include_hidden:
-        _stub("get_page_view(include_hidden=True)", "Phase 2")
+        _stub("get_page_view(include_hidden=True)", "Phase 3 (the policy "
+              "layer owns what hidden content may be shown at all)")
     if view not in _PROJECTION_VIEWS:
         raise BadParams(
-            f"unknown view {view!r}. Phase 1 serves {sorted(_PROJECTION_VIEWS)}; "
-            f"'read', 'links', and 'dom' land in Phase 2 with get_text and the "
-            f"DOM projection.")
+            f"unknown view {view!r}. This build serves "
+            f"{sorted(_PROJECTION_VIEWS)}; 'read' is get_text, 'links' is "
+            f"find_elements, and 'dom' lands with the DOM projection.")
     if detail not in _DETAIL_SCALE:
         raise BadParams(
             f"unknown detail {detail!r}; the levels are "
@@ -223,15 +224,49 @@ async def get_page_view(
     budget = max(200, int(budget_tokens * _DETAIL_SCALE[detail]))
     record.touch(record.page.url)
     sess.counters["reads"] += 1
+    root = _scope_root(sess, record, location)
+    token = sess.reads.mint_token(record.handle)
+    ts = time.strftime("%Y-%m-%dT%H:%M:%S")
     meta = {"status": getattr(record, "last_status", None),
             "load_state": getattr(record, "last_load_state", "load"),
             "lane": sess.spec.label, "page": record.handle,
-            "read_token": f"rt{sess.counters['reads']}",
-            "ts": time.strftime("%Y-%m-%dT%H:%M:%S")}
-    result = await read_page(record.page, meta, budget=budget, view=view)
-    return {
+            "read_token": token, "ts": ts}
+
+    state: dict = {}
+
+    def absorb(data: dict) -> None:
+        # Sticky refs are minted HERE, before a single line is rendered, so
+        # the payload the caller reads carries session refs rather than the
+        # extractor's per-read numbering (DESIGN 3.5).
+        state["read"] = sess.element_map.absorb(
+            data, record.handle, token, ts=ts, scope=root)
+
+    baseline = sess.reads.get(record.handle, since) if since else None
+    if baseline is not None and baseline.scope != root:
+        raise BadParams(
+            f"since={since!r} was a "
+            f"{'whole-page' if baseline.scope is None else 'scoped'} read and "
+            f"this call is "
+            f"{'whole-page' if root is None else 'scoped'}. A delta across "
+            f"two different scopes would report everything outside the "
+            f"narrower one as removed, which is a lie about the page rather "
+            f"than a delta. Ask for the delta at the same scope, or read "
+            f"without `since` to re-baseline.")
+    result = await read_page(record.page, meta, budget=budget, view=view,
+                             root=root, absorb=absorb)
+    if isinstance(result, dict) and result.get("error"):
+        raise TargetNotFound(
+            f'location named {result["asked_for"]!r} and that ref is not on '
+            f'{record.handle} any more. Refs are invalidated by a navigation '
+            f'and by a page close. Re-read the page and use the ref it '
+            f'returns.')
+    sess.reads.put(state["read"])
+
+    payload = {
         "page": record.handle, "session": sess.session_id,
         "url": record.page.url, "lane": sess.spec.lane,
+        "read_token": token,
+        "scope": location if location else "whole page",
         # The projection IS the payload. Nothing structured here repeats what
         # the text already carries, because the measured token bill is what
         # the client actually pays and duplicating the completeness block into
@@ -241,6 +276,56 @@ async def get_page_view(
                    "margin_held": result.meter.margin, "rung": result.rung,
                    "rungs": len(_RUNGS), "estimator": _ENCODING},
     }
+    if baseline is not None:
+        # A delta is the WHOLE answer when one is asked for. Returning both a
+        # full projection and a delta would charge the caller twice for the
+        # thing they asked to stop paying for.
+        delta = anchors.diff(baseline, state["read"])
+        payload["projection"] = anchors.render(delta, record.handle)
+        payload["delta"] = {k: delta[k] for k in
+                            ("since", "read", "navigated", "stable")}
+        payload["budget"]["used"] = _ntok(payload["projection"])
+    return payload
+
+
+def _scope_root(sess, record, location: dict | None) -> str | None:
+    """Turn a location object into the in-page id the extractor scopes on.
+
+    Only ref-shaped locations are served here; the rest of the location
+    grammar (role plus name, text, css, xpath) belongs to `find_elements`,
+    which returns a ref, so the two compose rather than duplicating a
+    resolver."""
+    if not location:
+        return None
+    ref = (location.get("ref") or location.get("region")
+           or location.get("form") or location.get("table"))
+    if not ref:
+        raise BadParams(
+            f"location={location!r} is not something a page view can scope "
+            f"to. Pass {{'region': 'r7'}}, {{'ref': 'e12'}}, {{'form': 'f1'}} "
+            f"or {{'table': 't2'}} from a previous read. To scope by text, "
+            f"role and name, css, or xpath, call find_elements first and pass "
+            f"the ref it returns.")
+    entry = sess.element_map.entries.get(ref)
+    if entry is None:
+        raise TargetNotFound(
+            f"{ref!r} was never minted in this session. Refs are minted only "
+            f"by a read in this session; call get_page_view(page="
+            f"{record.handle!r}) first.")
+    if entry.handle != record.handle:
+        raise BadParams(
+            f"{ref!r} belongs to page {entry.handle}, not {record.handle}. "
+            f"Pass that handle, or re-read {record.handle} for its own refs.")
+    # The extractor scopes on the id IT assigned in the most recent read,
+    # because that is what `window.__ks4web_refs` is keyed by. The sticky ref
+    # is the caller's address; the node ref is the page's.
+    node_ref = (sess.element_map.node_refs.get(record.handle) or {}).get(ref)
+    if node_ref is None:
+        raise TargetNotFound(
+            f"{ref!r} was minted on {record.handle} but no read of it has "
+            f"located that element, so there is no live element to scope to. "
+            f"Re-read the page and use the ref it returns.")
+    return node_ref
 
 
 async def find_elements(
@@ -258,8 +343,73 @@ async def find_elements(
     results are listed rather than resolved, and zero results come back with
     the nearest misses so a miss is a one-turn recovery.
     """
-    _stub("find_elements", "Phase 2")
-    return {}
+    kinds = ("auto", "text", "any", "css", "xpath")
+    if kind not in kinds:
+        raise BadParams(f"unknown kind {kind!r}; the kinds are {list(kinds)}.")
+    if not (query or "").strip() and kind not in ("css", "xpath"):
+        raise BadParams(
+            "find_elements needs a query. This is the cheap targeted "
+            "follow-up to get_page_view: read the page first, then search "
+            "for the string that read told you about.")
+    sess, record = MANAGER.locate(page)
+    record.touch(record.page.url)
+    root = _scope_root(sess, record, location)
+    found = await _find(record.page, query, kind=kind, limit=limit, root=root)
+    if found.get("selector_error"):
+        raise BadParams(
+            f'{kind} selector {query!r} did not parse: '
+            f'{found["selector_error"]}')
+
+    # A found element gets its ref from the SAME sticky map a page view uses,
+    # so a find result is immediately actionable and its ref is the ref the
+    # page view already gave you where the element was in that read too.
+    # DESIGN 3.5: there is no operation whose only purpose is to unlock other
+    # operations.
+    shim = {"identity": {"url": found["url"], "page_key": found["page_key"]},
+            "affordances": found["matches"], "regions": [], "headings": [],
+            "forms": [], "tables": []}
+    sess.element_map.absorb(shim, record.handle,
+                            sess.reads.mint_token(record.handle),
+                            ts=time.strftime("%Y-%m-%dT%H:%M:%S"))
+
+    lines = [f'{len(found["matches"])} of {found["total_matches"]} match(es) '
+             f'for {query!r} ({found["searched"]}, '
+             f'{found["candidates_scanned"]:,} candidates scanned)']
+    for m in found["matches"]:
+        bits = [m["ref"], m["role"], f'"{m["name"] or "(unnamed)"}"']
+        if m["state"]:
+            bits.append(f'[{m["state"]}]')
+        if m["path"]:
+            bits.append(m["path"])
+        bits.append("in-view" if m["in_viewport"] else f'y={m["top"]}')
+        lines.append(" | ".join(bits))
+    if found["total_matches"] > found["returned"]:
+        lines.append(f'{found["total_matches"] - found["returned"]} further '
+                     f'match(es) not returned; raise limit or narrow the query')
+    if found["hidden_matches"]:
+        lines.append(f'{found["hidden_matches"]} match(es) are in hidden '
+                     f'content and were counted rather than returned')
+    if not found["matches"]:
+        # A zero-result search is a one-turn recovery rather than a dead end.
+        misses = ", ".join(f'"{n["name"]}" ({n["role"]})'
+                           for n in found["nearest_misses"])
+        lines.append(f'nearest by name: {misses}' if misses
+                     else 'no near misses either; the string may be inside an '
+                          'iframe, a shadow root, or content that has not '
+                          'rendered yet')
+    ns = found["not_searched"]
+    lines.append(
+        f'not searched: {ns["iframes"]} iframe(s), '
+        f'{ns["open_shadow_roots"]} open shadow root(s) (traversed=no), '
+        f'{ns["closed_shadow_roots"]} closed (unreachable by any tool)')
+    text = "\n".join(lines)
+    return {
+        "page": record.handle, "session": sess.session_id,
+        "query": query, "kind": kind,
+        "results": text,
+        "matched": found["total_matches"], "returned": found["returned"],
+        "budget": {"used": _ntok(text), "estimator": _ENCODING},
+    }
 
 
 async def get_text(
@@ -276,8 +426,53 @@ async def get_text(
     silently included, and the result carries refs so anything mentioned in
     the prose can still be acted on without a second read.
     """
-    _stub("get_text", "Phase 2")
-    return {}
+    if include_hidden:
+        _stub("get_text(include_hidden=True)", "Phase 3 (the policy layer "
+              "owns what hidden content may be shown at all)")
+    sess, record = MANAGER.locate(page)
+    record.touch(record.page.url)
+    root = _scope_root(sess, record, location)
+    got = await read_text(record.page, root=root, start_index=start_index,
+                          max_chars=max_chars, include_hidden=include_hidden)
+    if got.get("error"):
+        raise TargetNotFound(
+            f'location named {got["asked_for"]!r} and that ref is not on '
+            f'{record.handle} any more. Re-read the page and use the ref it '
+            f'returns.')
+    hidden = got["hidden"]
+    reasons = ", ".join(f"{k}={v}" for k, v in sorted(
+        hidden["reasons"].items(), key=lambda kv: -kv[1])[:6])
+    # The continuation protocol, taught inside the payload, stolen outright
+    # from the reference MCP fetch server because it is the best idea in the
+    # extractor field: the tool teaches the model its own paging in the
+    # result, with no extra schema and no documentation dependency.
+    more = (f'get_text(page="{record.handle}", '
+            f'start_index={got["next_start_index"]}) returns the next '
+            f'{max_chars:,} characters'
+            if got["next_start_index"] is not None
+            else "this is the end of the text in scope")
+    return {
+        "page": record.handle, "session": sess.session_id,
+        "scope": location if location else "whole page",
+        "url": got["url"],
+        "text": got["text"],
+        "chars": {"returned": got["returned_chars"],
+                  "total_in_scope": got["total_chars"],
+                  "start_index": got["start_index"],
+                  "next_start_index": got["next_start_index"]},
+        "continue": more,
+        "stripped": (
+            f'{hidden["blocks"]} hidden block(s) carrying '
+            f'{hidden["chars"]:,} characters were counted and not returned '
+            f'[{reasons or "none"}]'
+            + (f'; {hidden["injection_suspects"]} of them carried more than '
+               f'20 characters, which is the shape of an injected instruction'
+               if hidden["injection_suspects"] else '')
+            + (f'; zero-width characters were removed from '
+               f'{hidden["zero_width_blocks"]} block(s)'
+               if hidden["zero_width_blocks"] else '')),
+        "budget": {"used": _ntok(got["text"]), "estimator": _ENCODING},
+    }
 
 
 # ------------------------------------------------------------- the actions
@@ -349,6 +544,13 @@ async def navigate(
     record.touch(record.page.url)
     record.last_status = status
     record.last_load_state = wait_until
+    invalidated = None
+    if record.page.url != before:
+        # DESIGN 3.5: read tokens invalidate on navigation of that page, and
+        # so do the refs. Saying so here is what keeps a later STALE_ANCHOR
+        # from being the first the caller hears of it.
+        invalidated = sess.invalidate_page(
+            record.handle, f"the page navigated from {before}")
     verdict = await _wall_verdict(record.page, status)
     if status == 401:
         raise _auth_refusal(record.page.url)
@@ -371,6 +573,8 @@ async def navigate(
         "robots": await _robots_advisory(sess, record.page.url),
         "verdict": verdict,
         "history_depth": len(record.history),
+        "invalidated": invalidated or "nothing; the URL did not change, so "
+                                     "refs and read tokens still hold",
     }
 
 
@@ -537,12 +741,15 @@ async def manage_tabs(
         sess.pages.pop(record.handle, None)
         if sess.focused == record.handle:
             sess.focused = next(iter(sess.pages), None)
+        dropped = sess.invalidate_page(record.handle, "the page was closed")
         return {
             "session": sess.session_id, "closed": record.handle,
             "focused": sess.focused,
             "invalidated": (
-                f"every ref minted on {record.handle} is now gone, and so is "
-                f"its delta read token. {record.handle} is never reused."),
+                f'{dropped["refs_invalidated"]} ref(s) minted on '
+                f'{record.handle} are now gone, and so are '
+                f'{dropped["read_tokens_invalidated"]} delta read token(s). '
+                f'{record.handle} is never reused.'),
             "pages": _tab_list(sess),
         }
     else:

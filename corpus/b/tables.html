@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Corpus B: a spanned table and a table that is not a table</title>
+<style>
+  body { font: 14px system-ui, sans-serif; margin: 0; padding: 12px; }
+  table { border-collapse: collapse; margin-bottom: 24px; }
+  th, td { border: 1px solid #bbb; padding: 4px 8px; text-align: left; }
+  [role="table"], [role="grid"] { display: table; border-collapse: collapse; }
+  [role="row"] { display: table-row; }
+  [role="columnheader"], [role="cell"], [role="gridcell"] {
+    display: table-cell; border: 1px solid #bbb; padding: 4px 8px;
+  }
+  .fake { margin-bottom: 24px; }
+</style>
+</head>
+<body>
+<h1>Two tables and a look-alike</h1>
+
+<main>
+<h2>A real table with rowspan and colspan</h2>
+<!-- The trap: a naive row-by-row read of this table produces rows of
+     different lengths and silently misaligns every value after the first
+     span. Q1 belongs to 2024 and to North America, and nothing in the second
+     row says so; the reader has to carry the span forward. A table
+     inventory that reports "4 columns" here is reporting the header width,
+     not the data shape. -->
+<table>
+  <caption>Revenue by region and quarter</caption>
+  <thead>
+    <tr>
+      <th rowspan="2">Region</th>
+      <th colspan="4">2024</th>
+      <th rowspan="2">Total</th>
+    </tr>
+    <tr><th>Q1</th><th>Q2</th><th>Q3</th><th>Q4</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th rowspan="2">North America</th>
+      <td>120</td><td>135</td><td>128</td><td>190</td>
+      <td rowspan="2">1,004</td>
+    </tr>
+    <tr><td>118</td><td>131</td><td>92</td><td>90</td></tr>
+    <tr>
+      <th>Europe</th>
+      <td colspan="2">210 (H1 reported together)</td>
+      <td>102</td><td>140</td><td>452</td>
+    </tr>
+    <tr>
+      <th>Asia Pacific</th>
+      <td>88</td><td>94</td><td>101</td><td>117</td><td>400</td>
+    </tr>
+    <tr>
+      <th colspan="5">No data collected for Latin America in 2024</th>
+      <td>0</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>A "table" built from nested divs</h2>
+<!-- Same information, zero table elements. A table inventory keyed on the
+     TABLE tag reports this page as having one table; the page has two, and
+     the second is the shape most application frameworks actually ship. -->
+<div class="fake" role="table" aria-label="Headcount by team">
+  <div role="rowgroup">
+    <div role="row">
+      <div role="columnheader">Team</div>
+      <div role="columnheader">Engineers</div>
+      <div role="columnheader">Open roles</div>
+    </div>
+  </div>
+  <div role="rowgroup">
+    <div role="row">
+      <div role="cell">Platform</div><div role="cell">24</div>
+      <div role="cell">3</div>
+    </div>
+    <div role="row">
+      <div role="cell">Browser</div><div role="cell">31</div>
+      <div role="cell">5</div>
+    </div>
+    <div role="row">
+      <div role="cell">Tooling</div><div role="cell">12</div>
+      <div role="cell">1</div>
+    </div>
+  </div>
+</div>
+
+<h2>An interactive grid, also nested divs</h2>
+<div class="fake" role="grid" aria-label="Editable schedule" aria-rowcount="4">
+  <div role="row" aria-rowindex="1">
+    <div role="columnheader">Day</div>
+    <div role="columnheader">Shift</div>
+    <div role="columnheader">Action</div>
+  </div>
+  <div role="row" aria-rowindex="2">
+    <div role="gridcell">Monday</div>
+    <div role="gridcell">08:00 to 16:00</div>
+    <div role="gridcell"><button>Edit Monday</button></div>
+  </div>
+  <div role="row" aria-rowindex="3">
+    <div role="gridcell">Tuesday</div>
+    <div role="gridcell">12:00 to 20:00</div>
+    <div role="gridcell"><button>Edit Tuesday</button></div>
+  </div>
+  <div role="row" aria-rowindex="4">
+    <div role="gridcell">Wednesday</div>
+    <div role="gridcell">off</div>
+    <div role="gridcell"><button>Edit Wednesday</button></div>
+  </div>
+</div>
+
+<h2>A layout table that carries no data</h2>
+<!-- Presentation role, no caption, no headers. Counting this as a data table
+     inflates the inventory and prices a two-cell layout hack as content. -->
+<table role="presentation">
+  <tr><td>Sidebar</td><td>Body copy that happens to be laid out in a table
+  because the page is old.</td></tr>
+</table>
+</main>
+</body>
+</html>

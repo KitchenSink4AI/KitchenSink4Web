@@ -24,7 +24,21 @@
 // count is NET of nested regions and a parent can be priced net of its
 // children (DESIGN 3.3a rule 2). Nothing is double counted, and the net
 // counts of all regions plus the unowned remainder sum to the document.
-() => {
+(opts) => {
+  opts = opts || {};
+  // `location=` scoping. The read is the same read, run over a subtree: the
+  // same blocks, the same ladder, the same completeness discipline, over a
+  // smaller document. A scoped read that quietly became a different KIND of
+  // read would make the advertised expand prices unverifiable, and DESIGN
+  // 3.3a's contract is that every printed price is executable.
+  let scopeRoot = null, scopeRef = null;
+  if (opts.root) {
+    const map = window.__ks4web_refs;
+    scopeRoot = map ? map.get(opts.root) : null;
+    if (!scopeRoot) return { error: 'ROOT_GONE', asked_for: opts.root };
+    scopeRef = opts.root;
+  }
+
   const MAX_REGIONS = 40;       // listed regions; deeper ones fold into parents
   const MAX_REGION_DEPTH = 3;   // nesting depth that still earns its own ref
   // Caps on what is RETURNED, not on what is counted. Every interactive
@@ -292,8 +306,179 @@
     return !!r && /^(button|link|checkbox|radio|tab|menuitem|menuitemcheckbox|menuitemradio|switch|combobox|searchbox|textbox|option|slider|spinbutton)$/.test(r.trim().split(/\s+/)[0]);
   }
 
+  const NAV_ROLE = /^(navigation|tablist|menubar|menu)$/;
+  const climbCache = new Map();
+
+  //: 'prose' | {li: element} | null, for the chain above a starting parent.
+  function climbFrom(start) {
+    if (!start) return null;
+    const hit = climbCache.get(start);
+    if (hit !== undefined) return hit;
+    let out = null;
+    let p = start, hops = 0;
+    while (p && hops++ < 8) {
+      const r = (p.getAttribute('role') || '').trim().split(/\s+/)[0];
+      if (p.tagName === 'NAV' || NAV_ROLE.test(r)) break;
+      if (p.tagName === 'LI') { out = { li: p }; break; }
+      if (PROSE_ANCESTOR.has(p.tagName)) { out = 'prose'; break; }
+      p = p.parentElement;
+    }
+    climbCache.set(start, out);
+    return out;
+  }
+
   const TEXT_BLOCK = new Set(['P', 'LI', 'BLOCKQUOTE', 'PRE', 'DD', 'DT', 'FIGCAPTION']);
   const PROSE_ANCESTOR = new Set(['P', 'LI', 'BLOCKQUOTE', 'DD', 'FIGCAPTION']);
+
+  // ------------------------------------------------- the anchor descriptor
+  //
+  // DESIGN 3.5's durable half, produced by the SAME walk that produces the
+  // projection rather than by a second evaluate. The descriptor is role,
+  // accessible name, a scoping path (nearest landmark, then nearest labelled
+  // ancestor, then ordinal among same-role siblings), stable attributes where
+  // the page offers them, and the page key it was minted on.
+  //
+  // The landmark here is computed by climbing ancestors rather than read off
+  // the projection's region stack, and that is deliberate: the region list is
+  // CAPPED (forty regions, three deep) because it is a menu a human reads,
+  // and an anchor scoped by a capped structure would silently lose its
+  // scoping on exactly the pages that need it most.
+  const LM_ANCHOR_TAG = {
+    HEADER: 'banner', NAV: 'navigation', MAIN: 'main', ASIDE: 'complementary',
+    FOOTER: 'contentinfo', FORM: 'form', SECTION: 'region', DIALOG: 'dialog'
+  };
+  const LM_ANCHOR_ROLE = new Set(['banner', 'navigation', 'main',
+    'complementary', 'contentinfo', 'form', 'region', 'search', 'dialog',
+    'alertdialog', 'tablist']);
+
+  // Both of these walk ancestors, and on a deep page every affordance walks
+  // most of the same chain again. Memoizing per ancestor turns the pair from
+  // O(affordances x depth) into O(distinct ancestors), which is what keeps
+  // the anchor descriptor inside the latency budget: unmemoized it cost 505
+  // ms p95 at 50,000 nodes against a 500 ms bound, for work that is the same
+  // answer every time.
+  const lmCache = new Map();
+  function landmarkFrom(n) {
+    if (!n) return { node: document.body, kind: 'document', label: '' };
+    const hit = lmCache.get(n);
+    if (hit !== undefined) return hit;
+    const explicit = (n.getAttribute('role') || '').trim().split(/\s+/)[0];
+    const kind = (explicit && LM_ANCHOR_ROLE.has(explicit)) ? explicit
+      : LM_ANCHOR_TAG[n.tagName];
+    let out = null;
+    if (kind) {
+      const label = squash(n.getAttribute('aria-label'))
+        || squash(n.getAttribute('name'))
+        || (n.getAttribute('aria-labelledby')
+            ? squash((document.getElementById(
+                n.getAttribute('aria-labelledby').split(/\s+/)[0])
+                || {}).textContent)
+            : '');
+      // An unlabelled <section> is not a landmark under HTML-AAM, and
+      // treating it as one scopes anchors to a container the page does not
+      // consider structural.
+      if (!(n.tagName === 'SECTION' && !label)) {
+        out = { node: n, kind: kind, label: label };
+      }
+    }
+    if (out === null) out = landmarkFrom(n.parentElement);
+    lmCache.set(n, out);
+    return out;
+  }
+
+  function landmarkOf(el) {
+    return landmarkFrom(el.parentElement);
+  }
+
+  const laCache = new Map();
+  function labelledFrom(n) {
+    if (!n) return null;
+    const hit = laCache.get(n);
+    if (hit !== undefined) return hit;
+    let out = null;
+    const al = squash(n.getAttribute('aria-label'));
+    if (al) {
+      out = { node: n, label: al };
+    } else {
+      const lb = n.getAttribute('aria-labelledby');
+      if (lb) {
+        const t = document.getElementById(lb.split(/\s+/)[0]);
+        if (t && squash(t.textContent)) out = { node: n, label: squash(t.textContent) };
+      }
+    }
+    if (out === null) out = labelledFrom(n.parentElement);
+    laCache.set(n, out);
+    return out;
+  }
+
+  function labelledAncestorOf(el, stopAt) {
+    const found = labelledFrom(el.parentElement);
+    // Memoization answers "nearest labelled ancestor anywhere above", so the
+    // landmark boundary is applied here: a label found AT or ABOVE the
+    // landmark is the landmark's own label, not a scoping refinement inside
+    // it, and using it would collapse the two rungs into one.
+    if (!found || found.node === stopAt || found.node.contains(stopAt)) {
+      return '';
+    }
+    return found.label;
+  }
+
+  // The page key, on every anchor KEY and not merely in the descriptor. S2
+  // found the distinction by producing the failure: a ref minted on one page
+  // came back bound to a same-named control on another, seven per run, at the
+  // STRONGEST tier of the ladder rather than in the fuzzy tail where anyone
+  // would look for it. The hash is in because a hash route is a page by every
+  // meaning that matters to a ref.
+  const PAGE_KEY = location.origin + location.pathname + location.hash;
+  const anchorOrdinals = {};
+
+  function anchorOf(el, role, name) {
+    const lm = landmarkOf(el);
+    const scope = lm.kind + ':' + lm.label + '|' + role;
+    anchorOrdinals[scope] = (anchorOrdinals[scope] || 0) + 1;
+    return {
+      page_key: PAGE_KEY,
+      role: role,
+      name: name,
+      landmark: lm.kind,
+      landmark_label: lm.label,
+      labelled_ancestor: labelledAncestorOf(el, lm.node),
+      // Scopes a lookup and NEVER binds a ref. A virtualized list rewrites
+      // its rendered window while keeping every ordinal, which put row 0's
+      // ref onto row 3,998 and did the same for twenty-one of its
+      // neighbours. Carried here for the candidate list an ambiguous refusal
+      // prints, not for the key ladder.
+      ordinal: anchorOrdinals[scope],
+      attr_id: el.id || '',
+      attr_testid: el.getAttribute('data-testid') || '',
+      attr_name: el.getAttribute('name') || ''
+    };
+  }
+
+  // Column headers come from THIS table's own header row, never from every
+  // `th` in the subtree. The first version took `querySelectorAll('th')` and
+  // sliced eight, which on a Wikipedia navbox returned the header cells of
+  // tables nested inside it: the GDP page printed
+  // `cols: show Lists of countries by... | Trade | Investment | Funds` for a
+  // one-column layout table, which are not that table's column headers and
+  // are not column headers at all. A wrong header list is the same disease as
+  // a wrong accessible name, a confident answer to a question nobody asked.
+  //
+  // A single-column table has no column header list worth printing, so it
+  // returns none rather than the one cell that happens to lead it.
+  function columnHeaders(table, cols) {
+    if (cols < 2) return [];
+    const rows = table.rows || [];
+    for (let i = 0; i < rows.length && i < 3; i++) {
+      const cells = Array.from(rows[i].cells || []).filter(
+        c => c.tagName === 'TH');
+      if (cells.length >= 2) {
+        return cells.slice(0, 8).map(
+          x => clip(contentName(x, 0, new Set()), 28).text).filter(Boolean);
+      }
+    }
+    return [];
+  }
 
   // ----------------------------------------------------------- the walk
 
@@ -316,8 +501,18 @@
   // write onto the page. KS4Web reads pages; a projection that mutated the
   // DOM to give itself handles would be changing the thing it is reporting
   // on, and a MutationObserver-driven app would see it.
-  const refMap = new Map();
-  const refOf = new WeakMap();
+  // Reused across reads rather than replaced. `location={"region":"r7"}`
+  // resolves a ref that a PREVIOUS read minted, so a map that started empty
+  // on every evaluate would make every scoped call fail with a stale ref that
+  // is not in fact stale. Entries for elements that have left the document
+  // are dropped here rather than accumulating.
+  const refMap = window.__ks4web_refs instanceof Map
+    ? window.__ks4web_refs : new Map();
+  for (const [k, v] of Array.from(refMap.entries())) {
+    if (!v || !v.isConnected) refMap.delete(k);
+  }
+  const refOf = window.__ks4web_refof instanceof WeakMap
+    ? window.__ks4web_refof : new WeakMap();
   window.__ks4web_refs = refMap;
   window.__ks4web_refof = refOf;
   let eCounter = 0, rCounter = 0, hCounter = 0, fCounter = 0, tCounter = 0;
@@ -325,6 +520,10 @@
   let currentHeading = null;
   const roleOrdinals = {};
   const classTotals = {};
+  //: How many `nav`-classified controls each region holds, counted over
+  //: EVERY one rather than the returned sample, so the demotion below is
+  //: made on the page's number.
+  const navByRegion = {};
 
   function bump(field, n) {
     const reg = regionStack.length ? regionStack[regionStack.length - 1] : null;
@@ -384,13 +583,21 @@
             if (label) break;
           }
         }
+        const finalLabel = label || '(' + el.tagName.toLowerCase() + ')';
         const rec = {
-          ref: ref, kind: kind, label: label || '(' + el.tagName.toLowerCase() + ')',
+          ref: ref, kind: kind, label: finalLabel,
+          anchor: anchorOf(el, kind, finalLabel),
           name_quality: named.quality,
           tag: el.tagName.toLowerCase(),
           depth: regionStack.length,
           parent: regionStack.length ? regionStack[regionStack.length - 1].ref : null,
-          net: { interactive: 0, text_blocks: 0, images: 0, chars: 0, headings: 0 },
+          // `prose_links` is a SUBSET of `interactive`, tracked separately
+          // because the class carries a quota of zero and a region ranker
+          // that counts it ranks a footnote block above the page's own data
+          // table. It is not subtracted from `interactive`, because the
+          // region's real interactive count is a completeness fact.
+          net: { interactive: 0, text_blocks: 0, images: 0, chars: 0,
+                 words: 0, headings: 0, prose_links: 0 },
           children: [],
           top: Math.round(geo.rect.top + window.scrollY),
           in_viewport: geo.rect.top < window.innerHeight && geo.rect.bottom > 0,
@@ -399,6 +606,8 @@
         if (rec.parent) {
           regionStack[regionStack.length - 1].children.push(ref);
         }
+        refMap.set(ref, el);
+        refOf.set(el, ref);
         regions.push(rec);
         regionStack.push(rec);
         pushed = true;
@@ -409,12 +618,14 @@
     const region = regionStack.length ? regionStack[regionStack.length - 1] : null;
 
     // direct text, attributed to the innermost region and the current section
-    let direct = 0;
+    let direct = 0, directWords = 0;
     for (const node of el.childNodes) {
       if (node.nodeType === 3) {
         const s = node.nodeValue || '';
         if (ZERO_WIDTH.test(s)) { zeroWidthHits++; }
-        direct += squash(s).length;
+        const t = squash(s);
+        direct += t.length;
+        if (t) directWords += t.split(' ').length;
       }
     }
     if (direct) {
@@ -434,7 +645,17 @@
       } else {
         textCharsTotal += direct;
         bump('chars', direct);
-        if (currentHeading) currentHeading.section_chars += direct;
+        // Words as well as characters, because tokens track WORDS far more
+        // closely than they track characters across content classes. A cell
+        // of "1,234" and a clause of English prose have very different
+        // characters per token and similar tokens per word, and a region
+        // price built on characters alone under-priced a numeric table by a
+        // factor of three while pricing the prose beside it correctly.
+        bump('words', directWords);
+        if (currentHeading) {
+        currentHeading.section_chars += direct;
+        currentHeading.section_words += directWords;
+      }
         if (direct > 20 && lowContrast(el, style)) {
           injectionSuspects++;
           hiddenReasons['low-contrast'] =
@@ -450,12 +671,26 @@
       if (/^H[1-6]$/.test(tag)) {
         const named = accName(el, 'heading');
         if (named.name) {
+          // CAP WHAT YOU RETURN, TALLY WHAT YOU COUNT (DESIGN 3.6a), applied
+          // to the anchor descriptor as well as to the payload. Minting an
+          // anchor for every heading on a 5,000-heading page costs two
+          // ancestor walks apiece for 4,850 descriptors nothing will ever
+          // return, and that alone was most of the Phase 2 latency
+          // regression. The heading is still COUNTED, and its section extent
+          // is still tracked, so no completeness figure moves.
+          const keep = headings.length < MAX_HEADINGS;
           const rec = {
             ref: 'h' + (++hCounter), level: +tag[1], text: named.name,
+            anchor: keep ? anchorOf(el, 'heading', named.name) : null,
             name_quality: named.quality,
             region: region ? region.ref : null,
-            section_chars: 0, section_affordances: 0, section_known: true
+            section_chars: 0, section_words: 0, section_affordances: 0,
+            section_known: true
           };
+          if (keep) {
+            refMap.set(rec.ref, el);
+            refOf.set(el, rec.ref);
+          }
           headings.push(rec);
           bump('headings', 1);
           // A section runs to the next heading of the same or higher level,
@@ -486,36 +721,103 @@
             const secret = type === 'password' ||
               /current-password|new-password|one-time-code/.test(ac);
             const payment = /cc-number|cc-exp|cc-csc|cc-name/.test(ac);
+            // The same rule as the headings above: DISPLAY detail is computed
+            // only for the elements that will be returned, while everything
+            // CLASSIFICATION needs is computed for all of them so the
+            // completeness tallies stay the page's numbers. `new URL()` on
+            // every one of six thousand links, to produce a path string that
+            // three hundred of them will print, is the expensive half of that
+            // distinction.
             const state = [];
-            if (el.disabled) state.push('disabled');
-            if (el.checked) state.push('checked');
-            if (el.required) state.push('required');
-            const ae = el.getAttribute('aria-expanded'); if (ae) state.push('expanded=' + ae);
-            if (el.getAttribute('aria-selected') === 'true') state.push('selected');
-            if (el.getAttribute('aria-current')) state.push('current');
+            if (collect) {
+              if (el.disabled) state.push('disabled');
+              if (el.checked) state.push('checked');
+              if (el.required) state.push('required');
+              const ae = el.getAttribute('aria-expanded');
+              if (ae) state.push('expanded=' + ae);
+              if (el.getAttribute('aria-selected') === 'true') state.push('selected');
+              if (el.getAttribute('aria-current')) state.push('current');
+            }
 
             let href = null, path = null, external = false;
             if (tag === 'A') {
+              // The raw attribute is cheap and the citation test below needs
+              // it, so it is read for every link; the URL PARSE is not.
               href = el.getAttribute('href');
-              try {
-                const u = new URL(el.href, location.href);
-                external = u.origin !== location.origin;
-                path = external ? u.origin + u.pathname : (u.pathname + u.search + u.hash);
-              } catch (e) { path = href; }
+              if (collect) {
+                try {
+                  const u = new URL(el.href, location.href);
+                  external = u.origin !== location.origin;
+                  path = external ? u.origin + u.pathname : (u.pathname + u.search + u.hash);
+                } catch (e) { path = href; }
+              }
             }
 
             // Quota class. Order matters: a link inside prose is a prose link
             // even when it also sits under a nav-shaped ancestor, and a form
             // control is a form control wherever it lives.
+            // **A list item is not prose.** The first version treated any
+            // LI ancestor as evidence of prose, and navigation menus are
+            // `<ul><li><a>` by universal convention, so the zero quota
+            // suppressed every real navigation bar on the web. On the frozen
+            // GitHub repo page that removed all six repository tabs,
+            // including Issues, which is S1's original failure returning
+            // through a different door: buried by a quota this time instead
+            // of by a proximity score.
+            //
+            // So an LI is prose only when the link sits INSIDE A SENTENCE,
+            // measured as the item carrying substantially more text than the
+            // link itself. `<li><a>Code</a></li>` is a menu item;
+            // `<li>See also the <a>Fourteen Points</a> for context</li>` is
+            // prose. And the climb stops at a navigation ancestor, so a menu
+            // nested somewhere under an article never inherits prose from a
+            // paragraph far above it.
+            // Only LINKS can be in-prose, so the ancestor climb is gated on
+            // the role rather than run for every button and input, and the
+            // link's own text is measured only if an LI is actually reached.
+            // Both were unconditional in the first version and the pair cost
+            // roughly 45 percent of extract time on a link-heavy page, for
+            // an answer most elements never use.
             let inProse = false;
-            let p = el.parentElement, hops = 0;
-            while (p && hops++ < 6) {
-              if (PROSE_ANCESTOR.has(p.tagName)) { inProse = true; break; }
-              p = p.parentElement;
+            if (role === 'link') {
+              // Memoized on the STARTING PARENT, which is exact: the climb
+              // is deterministic in the parent and the hop budget, and both
+              // are the same for every link. On a link-heavy page the links
+              // share ancestors, so this turns 8 getAttribute calls per link
+              // into 8 per distinct container.
+              const found = climbFrom(el.parentElement);
+              if (found === 'prose') {
+                inProse = true;
+              } else if (found && found.li) {
+                // The one part that cannot be memoized, because it is a
+                // property of the LINK rather than of the chain: a list item
+                // is prose only when the link sits inside a sentence.
+                const own = squash(el.textContent || '').length;
+                if (squash(found.li.textContent || '').length > own + 40) {
+                  inProse = true;
+                }
+              }
             }
             const formEl = el.form || el.closest('form');
+            // A CITATION MARKER is a reference, not an affordance, and it is
+            // recognizable by its own shape rather than by its ancestor. The
+            // ancestor test alone misses every marker that sits in an
+            // infobox cell or a caption instead of a paragraph, which is how
+            // `[ 1 ]`, `[ 2 ]`, `[ n. 1 ]` came back among the top
+            // affordances on the flagship article after the prose rule was
+            // otherwise correct. A whole name that is a short bracketed
+            // token, pointing at a fragment of the SAME page, is a footnote
+            // by construction.
+            // Read from the element rather than from the computed name, so
+            // the class is the same whether or not this one was collected.
+            // A tally that changed at the 300th element would make the
+            // completeness figures a property of the cap.
+            const citation = role === 'link'
+              && (href || '').charAt(0) === '#'
+              && el.textContent.length < 24
+              && /^\[\s*[^\]]{0,12}\s*\]$/.test(squash(el.textContent));
             let cls;
-            if (role === 'link' && inProse) cls = 'prose_link';
+            if (role === 'link' && (inProse || citation)) cls = 'prose_link';
             // A form control is a control INSIDE A FORM. The quota that says
             // "complete whenever the form fits, never sampled" is a promise
             // about forms, and letting every loose input on an app shell
@@ -536,13 +838,19 @@
             else cls = 'other';
 
             classTotals[cls] = (classTotals[cls] || 0) + 1;
+            if (cls === 'prose_link') bump('prose_links', 1);
+            if (cls === 'nav') {
+              const rk = region ? region.ref : '(unowned)';
+              navByRegion[rk] = (navByRegion[rk] || 0) + 1;
+            }
             if (collect) {
               roleOrdinals[role] = (roleOrdinals[role] || 0) + 1;
               const ref = 'e' + (++eCounter);
               refMap.set(ref, el);
               refOf.set(el, ref);
               affordances.push({
-                ref: ref, role: role, name: named.name,
+                ref: ref, anchor: anchorOf(el, role, named.name),
+                role: role, name: named.name,
                 name_quality: named.quality,
                 cls: cls, region: region ? region.ref : null,
                 region_label: region ? region.label : null,
@@ -564,17 +872,24 @@
       }
 
       if (tag === 'FORM') {
-        forms.push({ el: el, ref: 'f' + (++fCounter), region: region ? region.ref : null });
+        const fref = 'f' + (++fCounter);
+        refMap.set(fref, el);
+        refOf.set(el, fref);
+        forms.push({ el: el, ref: fref, region: region ? region.ref : null });
       } else if (tag === 'TABLE') {
         const rows = el.rows ? el.rows.length : 0;
         if (rows) {
           const named = accName(el, 'table');
+          const cols = el.rows[0] ? el.rows[0].cells.length : 0;
+          const tref = 't' + (++tCounter);
+          refMap.set(tref, el);
+          refOf.set(el, tref);
           tables.push({
-            ref: 't' + (++tCounter), caption: named.name,
+            ref: tref, caption: named.name,
+            anchor: anchorOf(el, 'table', named.name),
             name_quality: named.quality,
-            rows: rows, cols: el.rows[0] ? el.rows[0].cells.length : 0,
-            headers: Array.from(el.querySelectorAll('th')).slice(0, 8)
-              .map(x => clip(contentName(x, 0, new Set()), 28).text),
+            rows: rows, cols: cols,
+            headers: columnHeaders(el, cols),
             region: region ? region.ref : null,
             chars: squash(el.textContent || '').length,
             spans: el.querySelectorAll('[rowspan],[colspan]').length
@@ -599,14 +914,39 @@
         });
       }
 
+      // Virtualization detection, and the geometric test is the one that
+      // catches the real thing. The attribute and class-name tests find a
+      // library that announces itself; react-window does not, and it is the
+      // library the fixture uses because it is the library people use. A
+      // windowed list is a SCROLLABLE BOX WHOSE SCROLL EXTENT IS FAR LARGER
+      // THAN WHAT IT HOLDS, which is exactly the shape a projection would
+      // otherwise report as a complete twenty-row list.
       const setsize = el.getAttribute('aria-setsize') || el.getAttribute('aria-rowcount');
       const clsName = typeof el.className === 'string' ? el.className : '';
-      if (setsize || /virtual|infinite|windowed/i.test(clsName)) {
-        const kids = el.children.length;
+      let windowed = null;
+      if (!setsize && !/virtual|infinite|windowed/i.test(clsName)) {
+        const ov = style.overflowY;
+        if ((ov === 'auto' || ov === 'scroll') && el.clientHeight > 40
+            && el.scrollHeight > el.clientHeight * 3) {
+          windowed = { extent: el.scrollHeight, visible: el.clientHeight };
+        }
+      }
+      if (setsize || windowed || /virtual|infinite|windowed/i.test(clsName)) {
+        // The rendered rows are the leaf-ish children of the scrolling box,
+        // one level deeper when the library wraps them in a sizing element,
+        // which is what react-window does.
+        let host = el;
+        if (el.children.length === 1 && el.children[0].children.length > 2) {
+          host = el.children[0];
+        }
+        const kids = host.children.length;
         if (kids > 2 || setsize) {
           virtualContainers.push({
             region: region ? region.ref : null, dom_count: kids,
             claimed: setsize ? parseInt(setsize, 10) : null,
+            how: setsize ? 'aria-setsize'
+              : (windowed ? 'scroll extent ' + windowed.extent + 'px in a '
+                 + windowed.visible + 'px box' : 'class name'),
             hint: clip(clsName, 30).text
           });
         }
@@ -622,7 +962,35 @@
     if (pushed) regionStack.pop();
   }
 
-  if (document.body) walk(document.body, 0);
+  const walkRoot = scopeRoot || document.body;
+  if (walkRoot) walk(walkRoot, 0);
+
+  // The navigation class carries a GUARANTEED FLOOR, filled before any other
+  // class, and DESIGN 3.3 justifies that with "this is what an agent asks for
+  // most and it is small." The second half is a premise, so it is checked
+  // rather than assumed: a Wikipedia navbox is a nav-shaped landmark holding
+  // 155 links, and a guaranteed floor sized for a tab bar becomes a flood
+  // when a related-links block claims it. That is the same failure as the
+  // form-control quota before it was scoped to controls inside a form.
+  //
+  // A navigation region larger than this is a link collection, not the page's
+  // navigation, and its members compete in `other` on their merits.
+  const NAV_BAR_MAX = 30;
+  const floodedRegions = new Set(
+    Object.keys(navByRegion).filter(k => navByRegion[k] > NAV_BAR_MAX));
+  if (floodedRegions.size) {
+    for (const key of floodedRegions) {
+      const n = navByRegion[key];
+      classTotals['nav'] = (classTotals['nav'] || 0) - n;
+      classTotals['other'] = (classTotals['other'] || 0) + n;
+    }
+    for (const aff of affordances) {
+      if (aff.cls === 'nav'
+          && floodedRegions.has(aff.region || '(unowned)')) {
+        aff.cls = 'other';
+      }
+    }
+  }
   for (const h of headings) delete h.parentHeading;
 
   // A heading with no attributed text has no determinable section, so the
@@ -672,6 +1040,7 @@
     const named = accName(el, 'form');
     formOut.push({
       ref: f.ref, region: f.region,
+      anchor: anchorOf(el, 'form', named.name || el.getAttribute('name') || el.id || ''),
       name: named.name || el.getAttribute('name') || el.id || '',
       action: clip(el.getAttribute('action') || '(same page)', 60).text,
       method: (el.getAttribute('method') || 'get').toUpperCase(),
@@ -688,7 +1057,7 @@
   // gated disagreed inside one payload. This one requires the prose to be a
   // real SHARE of the page and to contain at least one substantial paragraph,
   // and the projection states which shape it chose and why.
-  const paras = Array.from(document.querySelectorAll('p,article>div>p'))
+  const paras = Array.from(walkRoot.querySelectorAll('p,article>div>p'))
     .filter(p => !hiddenReason(p, null));
   let proseChars = 0, longest = 0, leadEl = null, leadRegion = null;
   const proseByRegion = {};
@@ -706,7 +1075,8 @@
       if (!bestRegion || rec.net.chars > bestRegion.net.chars) bestRegion = rec;
     }
   }
-  const readableHost = document.querySelector('main,[role=main],article');
+  const readableHost = scopeRoot
+    || document.querySelector('main,[role=main],article');
   const hostParas = readableHost
     ? Array.from(readableHost.querySelectorAll('p')).filter(p => !hiddenReason(p, null))
     : paras;
@@ -753,6 +1123,16 @@
       url: location.href, title: document.title,
       lang: document.documentElement.lang || '',
       origin: location.origin,
+      // The anchor key's page scope, computed once and carried, so the
+      // Python side never rebuilds it from a URL string and never disagrees
+      // with what the descriptors were minted under.
+      page_key: PAGE_KEY,
+      // Dies with the document and survives pushState, which is the line
+      // between "the app routed" and "the browser navigated". S2 measured
+      // document identity as the alternative cross-page test and it is worse
+      // in both directions, so this is REPORTED and not used as the test.
+      doc_epoch: (window.__ks4web_doc = window.__ks4web_doc
+                  || String(Date.now()) + ':' + Math.random()),
       viewport: (window.innerWidth || 1280) + 'x' + vpH,
       screens: Math.max(1, Math.round((docH / vpH) * 10) / 10)
     },
@@ -763,7 +1143,8 @@
       paragraphs: hostParas.length, longest_paragraph: longest
     },
     regions: regions.map(r => ({
-      ref: r.ref, kind: r.kind, label: r.label, name_quality: r.name_quality,
+      ref: r.ref, kind: r.kind, label: r.label, anchor: r.anchor,
+      name_quality: r.name_quality,
       tag: r.tag, depth: r.depth, parent: r.parent, children: r.children,
       net: r.net, top: r.top, in_viewport: r.in_viewport,
       nav_shaped: r.nav_shaped
@@ -772,10 +1153,24 @@
     // Totals over EVERY interactive element, including the ones past the
     // return cap, so "unlisted affordances: N" is the real number.
     affordance_class_totals: classTotals,
+    //: Named so the completeness block could say it if the author wants it
+    //: said, and so a test can assert the demotion happened rather than
+    //: inferring it from a token count.
+    nav_regions_demoted: Array.from(floodedRegions),
     affordance_total: affordances.length + affordancesUncollected,
     headings: headings.slice(0, MAX_HEADINGS),
     headings_total: headings.length,
     lead: leadEl || '',
+    // Entry condition one of the rebind ladder: a pending modal blocks
+    // interaction before any resolution is attempted at all, and it beats
+    // every other entry condition including a ref that was never minted.
+    modal: (() => {
+      const d = document.querySelector(
+        '[role="dialog"][aria-modal="true"], [role="alertdialog"], dialog[open]');
+      if (!d) return null;
+      return squash(d.getAttribute('aria-label'))
+        || clip(contentName(d, 0, new Set()), 40).text || 'dialog';
+    })(),
     forms: formOut,
     tables: tables,
     div_tables: divTables,
@@ -790,7 +1185,10 @@
       hidden_text_chars: hiddenTextChars, hidden_reasons: hiddenReasons,
       injection_suspects: injectionSuspects, zero_width_hits: zeroWidthHits,
       name_fallbacks: nameFallbacks,
-      total_elements: document.getElementsByTagName('*').length,
+      scope: scopeRef,
+      total_elements: (scopeRoot
+        ? scopeRoot.getElementsByTagName('*').length + 1
+        : document.getElementsByTagName('*').length),
       walked_elements: elementCount,
       text_chars: textCharsTotal,
       doc_height: docH, viewport_height: vpH,

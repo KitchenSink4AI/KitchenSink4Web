@@ -98,6 +98,13 @@ SUPPRESSED_QUOTA = "suppressed_by_quota"
 DROPPED_RUNG = "dropped_by_rung"
 LISTED_NOT_EXPANDED = "listed_not_expanded"
 NOT_REACHED = "not_reached"
+#: A landmark that owns nothing of its own and exists to hold nested regions.
+#: Listed, because the structure is real, but with NO price: expanding it
+#: returns nothing that expanding its children would not.
+CONTAINER_ONLY = "listed_container_only"
+#: A landmark that owns nothing and holds no nested region either. Not listed
+#: at all, and counted here so the completeness block can say so.
+NO_CONTENT = "no_content"
 
 
 @dataclass
@@ -172,10 +179,21 @@ class Rates:
     heading: float = 12.0
     text_block: float = 3.0
     chars_per_token: float = 3.7
+    #: Kept because the walk counts it and it is a real content statistic,
+    #: and because the experiment that produced it is worth not repeating: a
+    #: words-based price was measured against the same 37 regions and came
+    #: out WORSE than characters (17.8 percent median error against 13.6),
+    #: so characters stayed. The intuition that tokens track words more
+    #: closely than characters is right about prose and wrong about the
+    #: mixed content a landmark actually holds.
+    tokens_per_word: float = 1.45
     call_overhead: float = 40.0
 
     def from_chars(self, chars: int) -> int:
         return int(chars / self.chars_per_token)
+
+    def from_words(self, words: int) -> int:
+        return int(words * self.tokens_per_word)
 
 
 class BudgetMeter:
@@ -207,6 +225,10 @@ class BudgetMeter:
             tokens = ntok(sample_text)
             if tokens:
                 self.rates.chars_per_token = max(2.0, len(sample_text) / tokens)
+                words = len(sample_text.split())
+                if words:
+                    self.rates.tokens_per_word = min(
+                        3.0, max(1.0, tokens / words))
 
     # -------------------------------------------------------------- pricing
 
@@ -216,15 +238,21 @@ class BudgetMeter:
         DESIGN 3.3a rule 2. The extractor's counts are already net, because
         region ownership is assigned to the INNERMOST region during the walk,
         so a parent that is genuinely just a container prices as one and says
-        so rather than inheriting the sum of everything it wraps."""
+        so rather than inheriting the sum of everything it wraps.
+
+        **It counts the region's characters ONCE.** The first version added a
+        per-affordance rate, a per-heading rate, and a per-text-block rate on
+        top of the character count, and every one of those units contributes
+        its own text to that same character count, so the price was two to
+        three times the content. Measured against `get_text` on the same
+        region across four frozen pages, the median error was 96 percent; on
+        characters plus the call overhead alone it is 23 percent. That is the
+        difference between a menu with prices and a menu with plausible
+        numbers on it, and DESIGN 3.3a makes it a correctness requirement
+        rather than a nicety."""
         net = region["net"]
-        return int(
-            net["interactive"] * self.rates.affordance
-            + net["headings"] * self.rates.heading
-            + net["text_blocks"] * self.rates.text_block
-            + self.rates.from_chars(net["chars"])
-            + self.rates.call_overhead
-        )
+        return int(self.rates.from_chars(net["chars"])
+                   + self.rates.call_overhead)
 
     def price_section(self, heading: dict) -> int | None:
         """What reading one named section would cost.
@@ -233,14 +261,15 @@ class BudgetMeter:
         extractor attributes in document order from the heading to the next
         heading of the same or higher level. Where the extent cannot be
         determined, this returns None and the projection prints no price
-        rather than a number derived from a walk that found nothing."""
+        rather than a number derived from a walk that found nothing.
+
+        The section's characters are counted ONCE, for the same reason the
+        region price counts its own once: an affordance inside the section
+        contributes its accessible name to that character total already."""
         if not heading.get("section_known"):
             return None
-        return int(
-            self.rates.from_chars(heading["section_chars"])
-            + heading.get("section_affordances", 0) * self.rates.affordance
-            + self.rates.call_overhead
-        )
+        return int(self.rates.from_chars(heading["section_chars"])
+                   + self.rates.call_overhead)
 
     def price_table(self, table: dict) -> int:
         return int(self.rates.from_chars(table["chars"])

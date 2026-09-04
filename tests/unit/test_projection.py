@@ -129,6 +129,8 @@ def test_every_cap_is_non_increasing_down_the_ladder():
         assert b.headings <= a.headings
         assert b.field_cap <= a.field_cap
         assert b.next_calls <= a.next_calls
+        assert b.forms_cap <= a.forms_cap
+        assert b.tables_cap <= a.tables_cap
         for cls, quota in b.quotas.items():
             assert quota <= a.quotas[cls], f"{cls} grew at rung {b.n}"
 
@@ -305,7 +307,7 @@ def test_the_zero_regions_not_expanded_regression():
     for name in FIXTURES:
         result = project(load(name), META, budget=5000)
         priced = len([line for line in result.text.splitlines()
-                      if "tok to expand" in line])
+                      if "tok of content" in line])
         if priced:
             assert f"regions listed but not expanded: {priced}" in result.text
 

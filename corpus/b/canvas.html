@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Corpus B: a canvas-rendered UI</title>
+<style>
+  body { font: 14px system-ui, sans-serif; margin: 0; padding: 12px; }
+  canvas { border: 1px solid #ccc; display: block; }
+</style>
+</head>
+<body>
+<h1>Canvas application</h1>
+
+<main>
+<!-- 900x520, far over the 80x80 threshold at which a canvas stops being an
+     icon and starts being a user interface. Everything a user can see and
+     click inside it is painted pixels: the toolbar, the four buttons, the
+     chart, the axis labels, and the status line. There is no text projection
+     to be had, no accessible name, and no fallback content, which is the
+     whole point. A read of this page has to SAY that the interface is a
+     canvas rather than reporting an empty region and letting the caller
+     conclude the page is blank. -->
+<canvas id="app" width="900" height="520" role="img"></canvas>
+<p id="note">The interface above is drawn, not marked up.</p>
+</main>
+
+<script>
+const c = document.getElementById('app').getContext('2d');
+c.fillStyle = '#fbfbfd'; c.fillRect(0, 0, 900, 520);
+c.fillStyle = '#22304a'; c.fillRect(0, 0, 900, 48);
+c.fillStyle = '#ffffff'; c.font = '16px system-ui';
+c.fillText('Portfolio', 16, 30);
+
+const buttons = ['New', 'Open', 'Export', 'Delete'];
+buttons.forEach(function (label, i) {
+  const x = 16 + i * 150;
+  c.fillStyle = '#e8ecf4'; c.fillRect(x, 70, 130, 36);
+  c.strokeStyle = '#9aa7bd'; c.strokeRect(x, 70, 130, 36);
+  c.fillStyle = '#22304a'; c.font = '14px system-ui';
+  c.fillText(label, x + 14, 93);
+});
+
+c.strokeStyle = '#cccccc';
+c.beginPath(); c.moveTo(60, 140); c.lineTo(60, 460); c.lineTo(860, 460);
+c.stroke();
+const bars = [120, 200, 90, 260, 180, 300, 240, 140, 210, 280];
+bars.forEach(function (h, i) {
+  c.fillStyle = '#4a6fa5';
+  c.fillRect(90 + i * 76, 460 - h, 48, h);
+  c.fillStyle = '#555555'; c.font = '11px system-ui';
+  c.fillText('Q' + (i + 1), 96 + i * 76, 476);
+});
+c.fillStyle = '#333333'; c.font = '13px system-ui';
+c.fillText('Ten quarters of revenue. Select a bar to drill in.', 60, 500);
+</script>
+</body>
+</html>
