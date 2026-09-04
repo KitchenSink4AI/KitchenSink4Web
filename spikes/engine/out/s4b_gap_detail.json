@@ -1,0 +1,79 @@
+{
+ "notes": [
+  {
+   "req.method": "POST"
+  },
+  {
+   "req.post_data": "None"
+  },
+  {
+   "req.post_data_buffer": "None"
+  },
+  {
+   "req.post_data_json": "None"
+  },
+  {
+   "req.all_headers keys": [
+    "accept",
+    "accept-encoding",
+    "accept-language",
+    "connection",
+    "content-length",
+    "content-type",
+    "host",
+    "origin",
+    "referer",
+    "sec-fetch-dest",
+    "sec-fetch-mode",
+    "sec-fetch-site",
+    "user-agent"
+   ]
+  },
+  {
+   "req.headers content-length": "24"
+  },
+  {
+   "routed_post_data": "None"
+  },
+  {
+   "routed_buffer": "None"
+  },
+  {
+   "continue_post_data": "accepted"
+  },
+  {
+   "server saw (after tamper attempt)": "{\"echo\": \"{\\\"hello\\\":\\\"tampered\\\",\\\"n\\\":7}\", \"ctype\": \"application/json\"}"
+  },
+  {
+   "url before go_back": "http://127.0.0.1:61542/form"
+  },
+  {
+   "go_back error": "TimeoutError: Page.go_back: Timeout 6000ms exceeded.\nCall log:\n  - waiting for navigation until \"load\"\n"
+  },
+  {
+   "go_back elapsed_ms": 6014
+  },
+  {
+   "url AFTER failed go_back": "http://127.0.0.1:61542/form"
+  },
+  {
+   "document.readyState": "complete"
+  },
+  {
+   "in-page marker after go_back": "INDEX-OK"
+  },
+  {
+   "url after in-page history.back()": "http://127.0.0.1:61542/form"
+  },
+  {
+   "marker after in-page history.back()": "INDEX-OK"
+  },
+  {
+   "go_forward error": "TimeoutError: Page.go_forward: Timeout 6000ms exceeded.\nCall log:\n  - waiting for navigation until \"load\"\n"
+  },
+  {
+   "reload": "OK -> http://127.0.0.1:61542/form"
+  }
+ ],
+ "orphans_after": []
+}

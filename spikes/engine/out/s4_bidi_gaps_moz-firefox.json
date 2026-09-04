@@ -1,0 +1,161 @@
+{
+ "playwright": "1.62.0",
+ "firefox": "C:\\Program Files\\Mozilla Firefox\\firefox.exe",
+ "rows": [
+  {
+   "lane": "moz-firefox",
+   "probe": "response.body() [document]",
+   "status": "SUPPORTED",
+   "observed": "len=708 head='<!doctype html><html><head><title>fixtur'",
+   "ms": 147
+  },
+  {
+   "lane": "moz-firefox",
+   "probe": "response.body() [xhr POST]",
+   "status": "SUPPORTED",
+   "observed": "status=200 body='{\"echo\": \"{\\\\\"hello\\\\\":\\\\\"world\\\\\",\\\\\"n\\\\\":42}\", \"ctype\": \"application/json\"}'",
+   "ms": 95
+  },
+  {
+   "lane": "moz-firefox",
+   "probe": "request.post_data [fetch POST]",
+   "status": "DEGRADED",
+   "observed": "method=POST post_data=None post_data_buffer=b''",
+   "ms": 75,
+   "note": "call returned without error but the result is wrong/empty"
+  },
+  {
+   "lane": "moz-firefox",
+   "probe": "request.post_data [form submit]",
+   "status": "DEGRADED",
+   "observed": "post_data=None",
+   "ms": 299,
+   "note": "call returned without error but the result is wrong/empty"
+  },
+  {
+   "lane": "moz-firefox",
+   "probe": "route.fulfill",
+   "status": "SUPPORTED",
+   "observed": "ROUTED",
+   "ms": 96
+  },
+  {
+   "lane": "moz-firefox",
+   "probe": "route.abort",
+   "status": "SUPPORTED",
+   "observed": "blocked: NetworkError when attempting to fetch resource.",
+   "ms": 62
+  },
+  {
+   "lane": "moz-firefox",
+   "probe": "route.fetch() body",
+   "status": "SUPPORTED",
+   "observed": "{\n \"user-agent\": \"Mozilla/5.0 (Windows NT 10.0; Win64; x64; ",
+   "ms": 51
+  },
+  {
+   "lane": "moz-firefox",
+   "probe": "download event + save",
+   "status": "SUPPORTED",
+   "observed": "suggested=spike.txt bytes=460",
+   "ms": 213
+  },
+  {
+   "lane": "moz-firefox",
+   "probe": "extra_http_headers across 302",
+   "status": "SUPPORTED",
+   "observed": "header_seen=True",
+   "ms": 158
+  },
+  {
+   "lane": "moz-firefox",
+   "probe": "click inside CSS transform",
+   "status": "SUPPORTED",
+   "observed": "CLICKED",
+   "ms": 151
+  },
+  {
+   "lane": "moz-firefox",
+   "probe": "go_back (plain GET history)",
+   "status": "UNSUPPORTED",
+   "error_type": "TimeoutError",
+   "error": "Page.go_back: Timeout 15000ms exceeded.\nCall log:\n  - waiting for navigation until \"load\"\n",
+   "observed": "",
+   "ms": 15077
+  },
+  {
+   "lane": "moz-firefox",
+   "probe": "go_back (after form POST)",
+   "status": "UNSUPPORTED",
+   "error_type": "TimeoutError",
+   "error": "Page.go_back: Timeout 15000ms exceeded.\nCall log:\n  - waiting for navigation until \"load\"\n",
+   "observed": "",
+   "ms": 15144
+  },
+  {
+   "lane": "moz-firefox",
+   "probe": "cookies add/read",
+   "status": "SUPPORTED",
+   "observed": "['ks4web']",
+   "ms": 5
+  },
+  {
+   "lane": "moz-firefox",
+   "probe": "dialog handling",
+   "status": "SUPPORTED",
+   "observed": "hi from spike",
+   "ms": 109
+  },
+  {
+   "lane": "moz-firefox",
+   "probe": "set_input_files",
+   "status": "SUPPORTED",
+   "observed": "upload_probe.txt",
+   "ms": 106
+  },
+  {
+   "lane": "moz-firefox",
+   "probe": "screenshot full_page",
+   "status": "SUPPORTED",
+   "observed": "665019",
+   "ms": 504
+  },
+  {
+   "lane": "moz-firefox",
+   "probe": "page.pdf",
+   "status": "SUPPORTED",
+   "observed": "231705",
+   "ms": 8357
+  },
+  {
+   "lane": "moz-firefox",
+   "probe": "request events fire",
+   "status": "SUPPORTED",
+   "observed": "requests_seen=1",
+   "ms": 358
+  },
+  {
+   "lane": "moz-firefox",
+   "probe": "http_credentials (continueWithAuth)",
+   "status": "SUPPORTED",
+   "observed": "status=200 body='AUTH-OK'",
+   "ms": 162
+  },
+  {
+   "lane": "moz-firefox",
+   "probe": "locale + timezone emulation",
+   "status": "SUPPORTED",
+   "observed": "tz=Asia/Tokyo lang=fr-FR",
+   "ms": 170
+  }
+ ],
+ "orphans_after": [
+  {
+   "pid": 78896,
+   "ppid": 91412,
+   "name": "node.exe",
+   "exe": "",
+   "cmd": ""
+  }
+ ]
+}

@@ -1,0 +1,426 @@
+{
+ "mechanics": {
+  "cim_enumeration_ms": 1031,
+  "cim_process_count": 557,
+  "CreateJobObjectW": true,
+  "context_impl_attrs": [],
+  "context_browser_is_none": false,
+  "descendants_of_this_python": [
+   [
+    "node.exe",
+    118240
+   ],
+   [
+    "powershell.exe",
+    114368
+   ],
+   [
+    "chrome-headless-shell.exe",
+    102536
+   ],
+   [
+    "chrome-headless-shell.exe",
+    106024
+   ],
+   [
+    "chrome-headless-shell.exe",
+    114916
+   ],
+   [
+    "chrome-headless-shell.exe",
+    121792
+   ]
+  ]
+ },
+ "scenarios": [
+  {
+   "lane": "chromium",
+   "mode": "nojob",
+   "kill": "graceful",
+   "child_pid": 125020,
+   "browser_pids": [
+    116452,
+    109888,
+    99764,
+    118808
+   ],
+   "node_pids": [
+    99316
+   ],
+   "descendant_names": [
+    "chrome-headless-shell.exe",
+    "node.exe",
+    "powershell.exe"
+   ],
+   "job_result": null,
+   "timeline": [
+    {
+     "t_s": 2.0,
+     "alive": []
+    }
+   ],
+   "survivors": [],
+   "orphan_count": 0,
+   "reap_seconds": 2.0
+  },
+  {
+   "lane": "chromium",
+   "mode": "nojob",
+   "kill": "taskkill_f",
+   "child_pid": 82872,
+   "browser_pids": [
+    119592,
+    112904,
+    113464,
+    113444
+   ],
+   "node_pids": [
+    120404
+   ],
+   "descendant_names": [
+    "chrome-headless-shell.exe",
+    "node.exe",
+    "powershell.exe"
+   ],
+   "job_result": null,
+   "taskkill_rc": 0,
+   "taskkill_out": "SUCCESS: The process with PID 82872 has been terminated.",
+   "timeline": [
+    {
+     "t_s": 2.7,
+     "alive": []
+    }
+   ],
+   "survivors": [],
+   "orphan_count": 0,
+   "reap_seconds": 2.7
+  },
+  {
+   "lane": "chromium",
+   "mode": "job",
+   "kill": "taskkill_f",
+   "child_pid": 115228,
+   "browser_pids": [
+    107596,
+    25540,
+    74788,
+    83268
+   ],
+   "node_pids": [
+    91920
+   ],
+   "descendant_names": [
+    "chrome-headless-shell.exe",
+    "node.exe",
+    "powershell.exe"
+   ],
+   "job_result": {
+    "job": true
+   },
+   "taskkill_rc": 0,
+   "taskkill_out": "SUCCESS: The process with PID 115228 has been terminated.",
+   "timeline": [
+    {
+     "t_s": 2.7,
+     "alive": []
+    }
+   ],
+   "survivors": [],
+   "orphan_count": 0,
+   "reap_seconds": 2.7
+  },
+  {
+   "lane": "chromium",
+   "mode": "nojob",
+   "kill": "parent_and_driver",
+   "child_pid": 111792,
+   "browser_pids": [
+    97180,
+    123304,
+    126852,
+    120636
+   ],
+   "node_pids": [
+    112652
+   ],
+   "descendant_names": [
+    "chrome-headless-shell.exe",
+    "node.exe",
+    "powershell.exe"
+   ],
+   "job_result": null,
+   "killed": [
+    111792,
+    112652
+   ],
+   "timeline": [
+    {
+     "t_s": 3.5,
+     "alive": []
+    }
+   ],
+   "survivors": [],
+   "orphan_count": 0,
+   "reap_seconds": 3.5
+  },
+  {
+   "lane": "chromium",
+   "mode": "job",
+   "kill": "parent_and_driver",
+   "child_pid": 93480,
+   "browser_pids": [
+    103972,
+    92132,
+    106216,
+    117044
+   ],
+   "node_pids": [
+    112716
+   ],
+   "descendant_names": [
+    "chrome-headless-shell.exe",
+    "node.exe",
+    "powershell.exe"
+   ],
+   "job_result": {
+    "job": true
+   },
+   "killed": [
+    93480,
+    112716
+   ],
+   "timeline": [
+    {
+     "t_s": 3.3,
+     "alive": []
+    }
+   ],
+   "survivors": [],
+   "orphan_count": 0,
+   "reap_seconds": 3.3
+  },
+  {
+   "lane": "chromium",
+   "scenario": "hung_navigation",
+   "timeout_raised": true,
+   "error_type": "TimeoutError",
+   "error": "Page.goto: Timeout 3000ms exceeded.\nCall log:\n  - navigating to \"http://127.0.0.1:53039/hang\", waiting until \"load\"\n",
+   "elapsed_ms": 3017,
+   "browser_usable_after": "INDEX-OK"
+  },
+  {
+   "lane": "moz-firefox",
+   "mode": "nojob",
+   "kill": "graceful",
+   "child_pid": 120860,
+   "browser_pids": [
+    116844,
+    121424,
+    79648,
+    106200,
+    91700,
+    98700,
+    104764,
+    34084,
+    113988,
+    104432,
+    39468
+   ],
+   "node_pids": [
+    116848
+   ],
+   "descendant_names": [
+    "crashhelper.exe",
+    "firefox.exe",
+    "node.exe",
+    "powershell.exe"
+   ],
+   "job_result": null,
+   "timeline": [
+    {
+     "t_s": 2.2,
+     "alive": []
+    }
+   ],
+   "survivors": [],
+   "orphan_count": 0,
+   "reap_seconds": 2.2
+  },
+  {
+   "lane": "moz-firefox",
+   "mode": "nojob",
+   "kill": "taskkill_f",
+   "child_pid": 69344,
+   "browser_pids": [
+    108272,
+    77412,
+    96456,
+    88884,
+    112432,
+    120840,
+    121736,
+    18256,
+    98108,
+    115780,
+    99340
+   ],
+   "node_pids": [
+    121168
+   ],
+   "descendant_names": [
+    "crashhelper.exe",
+    "firefox.exe",
+    "node.exe",
+    "powershell.exe"
+   ],
+   "job_result": null,
+   "taskkill_rc": 0,
+   "taskkill_out": "SUCCESS: The process with PID 69344 has been terminated.",
+   "timeline": [
+    {
+     "t_s": 2.8,
+     "alive": []
+    }
+   ],
+   "survivors": [],
+   "orphan_count": 0,
+   "reap_seconds": 2.8
+  },
+  {
+   "lane": "moz-firefox",
+   "mode": "job",
+   "kill": "taskkill_f",
+   "child_pid": 87728,
+   "browser_pids": [
+    66892,
+    90132,
+    117152,
+    97320,
+    91312,
+    116008,
+    116516,
+    72956,
+    121140,
+    96960
+   ],
+   "node_pids": [
+    116644
+   ],
+   "descendant_names": [
+    "crashhelper.exe",
+    "firefox.exe",
+    "node.exe",
+    "powershell.exe"
+   ],
+   "job_result": {
+    "job": true
+   },
+   "taskkill_rc": 0,
+   "taskkill_out": "SUCCESS: The process with PID 87728 has been terminated.",
+   "timeline": [
+    {
+     "t_s": 2.8,
+     "alive": []
+    }
+   ],
+   "survivors": [],
+   "orphan_count": 0,
+   "reap_seconds": 2.8
+  },
+  {
+   "lane": "moz-firefox",
+   "mode": "nojob",
+   "kill": "parent_and_driver",
+   "child_pid": 105256,
+   "browser_pids": [
+    47248,
+    101856,
+    114904,
+    121176,
+    119940,
+    588,
+    17568,
+    104948,
+    118808,
+    79168
+   ],
+   "node_pids": [
+    121416
+   ],
+   "descendant_names": [
+    "crashhelper.exe",
+    "firefox.exe",
+    "node.exe",
+    "powershell.exe"
+   ],
+   "job_result": null,
+   "killed": [
+    105256,
+    121416
+   ],
+   "timeline": [
+    {
+     "t_s": 3.4,
+     "alive": []
+    }
+   ],
+   "survivors": [],
+   "orphan_count": 0,
+   "reap_seconds": 3.4
+  },
+  {
+   "lane": "moz-firefox",
+   "mode": "job",
+   "kill": "parent_and_driver",
+   "child_pid": 102484,
+   "browser_pids": [
+    115556,
+    66736,
+    123580,
+    114036,
+    103600,
+    102356,
+    110616,
+    121236,
+    98416,
+    82872,
+    7528
+   ],
+   "node_pids": [
+    119116
+   ],
+   "descendant_names": [
+    "crashhelper.exe",
+    "firefox.exe",
+    "node.exe",
+    "powershell.exe"
+   ],
+   "job_result": {
+    "job": true
+   },
+   "killed": [
+    102484,
+    119116
+   ],
+   "timeline": [
+    {
+     "t_s": 3.4,
+     "alive": []
+    }
+   ],
+   "survivors": [],
+   "orphan_count": 0,
+   "reap_seconds": 3.4
+  },
+  {
+   "lane": "moz-firefox",
+   "scenario": "hung_navigation",
+   "timeout_raised": true,
+   "error_type": "TimeoutError",
+   "error": "Page.goto: Timeout 3000ms exceeded.\nCall log:\n  - navigating to \"http://127.0.0.1:53039/hang\", waiting until \"load\"\n",
+   "elapsed_ms": 3015,
+   "browser_usable_after": "INDEX-OK"
+  }
+ ],
+ "orphans_at_exit": []
+}
