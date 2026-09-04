@@ -28,6 +28,24 @@ table in this file. The enforcing test reads them positionally.
 | `playwright` | Apache-2.0 | permissive, one-way into anything including AGPL-3.0 | The engine (DESIGN 4.1). Moved from the `engine` extra into the required install when Phase 1 opened, as the ledger said it would. The 38.2 MB wheel bundles a Node runtime and the playwright-core driver; the browsers are downloaded at runtime and are not dependencies (see below). |
 | `tiktoken` | MIT | permissive | The budget meter's estimator, fixed at `o200k_base` by DESIGN 3.4 and named in every published number. Required rather than optional because the hard-cap property is the product: without a named estimator, "never exceeds its budget" is unfalsifiable. |
 
+## Vendored fixture assets (not dependencies, and in the repo anyway)
+
+Nothing here is installed, imported, or distributed with the package. They are
+browser assets served to a headless page by a spike harness, and they are
+listed because the rule this ledger enforces is about what enters the repo,
+not only about what `pip` resolves. Both are permissive and both are pinned by
+the vendored file itself rather than by a range.
+
+| Package | License | Where | Why it is vendored |
+|---|---|---|---|
+| `react` 18.3.1 (UMD) | MIT | `spikes/s2/fixtures/vendor/` | S2 measures anchor durability against a REAL re-render, and a hand-rolled imitation of React's reconciliation would have proved nothing about React. |
+| `react-dom` 18.3.1 (UMD) | MIT | `spikes/s2/fixtures/vendor/` | Same. |
+| `react-window` 1.8.10 (UMD) | MIT | `spikes/s2/fixtures/vendor/` | PLAN 1.3's corpus B names this library specifically, and DOM node RECYCLING is the failure being tested. |
+
+Vendored rather than fetched at run time so the fixture needs no network and
+no build step, per PLAN 1.3's rule that the corpus must never become a
+maintenance project.
+
 ## Optional extras
 
 The package name is the FIRST column in every table here, because the test

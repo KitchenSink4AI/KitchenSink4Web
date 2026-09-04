@@ -1177,7 +1177,7 @@ encoder finding recorded in its place.
 **Suite: 218 tests, all passing** (194 unit, 24 browser), up from 213 by the
 corpus digest checks and the named-property regression.
 
-## Part IX: Spike S2, anchor durability. The spike gate closes (2026-09-05 02:52 KST)
+## Part IX: Spike S2, anchor durability. The spike gate closes (2026-09-05 02:46 KST)
 
 **GREEN. Zero false rebinds and zero false stickiness across 396 resolutions in
 18 scenarios, against real React 18.3.1 and real react-window 1.8.10.** Neither
