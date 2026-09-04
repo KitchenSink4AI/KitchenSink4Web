@@ -746,17 +746,58 @@ region's content, and it does not (block 2 above). So the harness
   60 tokens are reported and not gated, because an error ratio against them
   is a statement about the call overhead rather than about the price.
 
-**The measurement, and it is not yet green.** Across 65 priced units on four
-frozen pages, 37 above the noise floor: **median error 13.6 percent, rank
-correlation 0.848, and five units outside the 35 percent band, all of them
-UNDER-priced by roughly two and a half to three times.** Fixing the formula
-took the median from 96 percent to 13.6 by counting each region's characters
-ONCE: the first version added a per-affordance, per-heading and per-text-block
-rate on top of the character count, and every one of those units contributes
-its own text to that same count. A words-based estimate was then tried against
-the same 37 regions on the theory that tokens track words more closely than
-characters, and it measured WORSE (17.8 percent), so characters stand. **The
-residual under-pricing is an open Phase 3 item**, recorded rather than waived.
+**The measurement.** Across 65 priced units on four frozen pages, 36 above
+the noise floor: **median error 6.3 percent, worst 27.1, rank correlation
+0.993, and every gated unit inside the 35 percent band.** Getting there took
+three corrections, in the order they were found.
+
+**One: count each region's characters ONCE.** The first version added a
+per-affordance, a per-heading and a per-text-block rate on top of the
+character count, and every one of those units contributes its own text to
+that same count. That alone took the median from 96 percent to 13.6. A
+words-based estimate was then tried against the same regions on the theory
+that tokens track words more closely than characters, and it measured WORSE
+(17.8 percent), so characters stand and the experiment is recorded so nobody
+repeats it.
+
+**Two: four of the five residual outliers were the MEASUREMENT, not the
+price.** `get_text` read a block's own text as the `textContent` of its
+inline children, and `textContent` knows nothing about hiding and nothing
+about nesting. It flattened hidden descendants back into the payload the
+hygiene layer had just counted as withheld (1,426 characters of a
+`visibility:hidden` menu on the frozen GitHub page, 666 of a `display:none`
+sidebar on the frozen article), and it flattened nested blocks that the walk
+then emitted again, so a navbox came back at two and a half times its true
+length. **A tool whose own hidden-content counter contradicts its output is
+the more serious half of that finding**, and it is why 3.6's rule is now
+tested one level down, under an inline wrapper, rather than only at the top
+of a block.
+
+**Three: a page does not have a characters-per-token rate.** The fifth
+outlier was the price, and it was the statistical article's own data table,
+priced at the rate of the prose around it. That page runs 5.3 characters to
+the token in its lead and 1.8 in the table, a factor of three, and one
+page-level rate cannot describe both. **RULE: every priced unit carries a
+bounded, decimated sample of its OWN text, and the meter measures that unit's
+rate on it with the same tokenizer that enforces the budget.** No
+content-class constants are introduced and nothing is calibrated per fixture:
+a table of numbers, a navbox of link labels and a paragraph of prose are each
+described by their own characters. The sample is bounded twice, at 1,500
+characters per unit and 40,000 per read, and a unit that carries none falls
+back to the page rate. Two properties of the sample are load-bearing and both
+were measured rather than assumed: it is taken in runs of 200 characters,
+because 50-character pieces pay a token boundary at each end and measured
+prose at 2.9 characters to the token that really runs 4.8; and it breaks its
+runs where `get_text` breaks its lines, because a navbox of 150 one-word
+links costs a line boundary per link and a sample that glues them into
+sentences describes a page that does not exist.
+
+**And a price is a CONTENT SIZE, so it carries no call overhead.** The
+estimator kept a 40-token per-call constant from before the contract was
+corrected. Under the corrected contract the number answers "how much is in
+there", a scaffold the caller pays either way is not part of that, and the
+constant was most of the residual error on every region small enough for it
+to matter.
 
 ### 3.4 The projection parameter, and the degradation ladder
 
@@ -1149,6 +1190,16 @@ between KS4Web's read layer and the incumbents'.
   (console logging shipped as an improvement and became a 6x token regression).
 - It never silently omits. Everything not returned is counted in the
   completeness block.
+- **It never returns hidden text, and "never" reaches under the wrappers.**
+  Phase 2 found `get_text` handing back a `visibility:hidden` navigation menu
+  and a `display:none` sidebar because a block's own text was read as the
+  `textContent` of its inline children, which reports every hidden descendant
+  underneath them. The hygiene counter, walking separately, recorded the same
+  characters as withheld, so the read was counted clean and was not: an
+  injected instruction parked one wrapper down travelled straight through the
+  defence that exists to stop it. A block's own text is now the inline run it
+  contains, stopping wherever a nested block begins and wherever a hidden
+  element begins, and two tests are named for the two halves of it.
 
 ### 3.6a The projection's wall-clock cost, measured
 

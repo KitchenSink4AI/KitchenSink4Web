@@ -397,13 +397,14 @@
    "section_affordances": 7,
    "section_chars": 92,
    "section_known": true,
+   "section_sample": "Email address Password Card number Size small medium large Written in this language Notes Place order",
    "section_words": 16,
    "text": "Sign in and pay"
   }
  ],
  "headings_total": 1,
  "identity": {
-  "doc_epoch": "1788550148460:0.7966515047422216",
+  "doc_epoch": "1788552153153:0.5623171954057693",
   "lang": "en",
   "origin": "null",
   "page_key": "nullblank",
@@ -449,6 +450,7 @@
    },
    "parent": null,
    "ref": "r1",
+   "sample": "Sign in and pay",
    "tag": "main",
    "top": 21
   },
@@ -483,6 +485,7 @@
    },
    "parent": "r1",
    "ref": "r2",
+   "sample": "Email address Password Card number Size small medium large Written in this language Notes Place order",
    "tag": "form",
    "top": 80
   }

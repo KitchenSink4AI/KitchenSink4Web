@@ -1504,3 +1504,135 @@ there is a test named for it.
   is the row to re-run after any change to the completeness block.
 - **`cursor=` and `include_hidden=` are still unbuilt** and refuse by naming
   Phase 5 and Phase 3 respectively.
+
+---
+
+## Part XI: Gate part 7 closed, and what the red was really about (2026-09-05 05:13 KST)
+
+Phase 2 landed with eight of nine gate items green and the prices red: 65
+priced units, 37 above the noise floor, median error 13.6 percent, rank
+correlation 0.848, and **five units under-priced by two and a half to three
+times with the cause not yet isolated.** The five turned out to be two
+separate defects wearing the same number, and only one of them was in the
+price.
+
+**Final: 65 units, 36 gated, median error 6.3 percent, worst 27.1, rank
+correlation 0.993, nothing outside the 35 percent band. The suite is 285
+tests and every gate item is green.**
+
+### Four of the five were the measurement, and the measurement was a shipped tool
+
+`get_text` read a block's own text as the `textContent` of its inline
+children. `textContent` knows nothing about hiding and nothing about nesting,
+so that one line did two wrong things at once.
+
+**It returned hidden text.** On the frozen GitHub page it handed back 1,426
+characters of a `visibility:hidden` navigation menu; on the frozen Wikipedia
+article, 666 characters of a `display:none` sidebar. The hygiene counter,
+which walks separately, recorded those very same characters as withheld. So
+the read was counted clean and was not, and **an injected instruction parked
+one inline wrapper below a paragraph travelled straight through the defence
+that exists to stop it.** DESIGN 3.6 says the default read never returns
+hidden text; it was true at the top of a block and false one level down.
+
+**And it returned nested blocks twice**, once folded into the text of the
+block above them and once as themselves, because the walk emits every block
+it reaches. That costs nothing visible on prose, where blocks rarely nest,
+and it doubles a navbox whose cells wrap their lists in a div: the GDP
+article's country navbox measured 4,485 characters against the 1,866 it
+holds.
+
+A block's own text is now the inline run it contains, stopping wherever a
+nested block begins and wherever a hidden element begins. Two tests are named
+for the two halves, on a fixture built for it. **The price gate found a
+hygiene bug the hygiene gate could not see**, because the hygiene gate asks
+whether hidden text was counted and this text was counted AND returned.
+
+### The fifth was the price: a page does not have a characters-per-token rate
+
+The estimator converted characters to tokens at one rate for the whole page,
+calibrated on the page's lead. The GDP article's prose runs 5.3 characters to
+the token and **its own data table runs 1.8**, a factor of three, so the most
+expensive call on a statistical page was the one the price understated most.
+The same defect was pricing the table lines, which part 7 does not even test.
+
+Every priced unit now carries a bounded sample of its OWN text and the meter
+measures that unit's rate on it with `tiktoken`, the same tokenizer that
+enforces the budget. It is DESIGN 3.3a's one-arithmetic rule applied to the
+conversion rather than only to the counting, and **it introduces no
+content-class constants and nothing calibrated per fixture**: a numeric table,
+a navbox and a paragraph are each described by their own characters. The
+sample is bounded twice, 1,500 characters per unit and 40,000 per read, and
+decimated as it fills so it spreads over the unit instead of describing its
+opening paragraph.
+
+Two properties of that sample are load-bearing and both were found by
+measuring rather than by reasoning.
+
+1. **Samples are taken in runs of 200 characters, not in pieces of 50.** Every
+   piece pays a token boundary at each end, and 50-character pieces measured
+   Versailles prose at 2.9 characters to the token on text that really runs
+   4.8. That over-priced the article's prose regions by a quarter, took the
+   median from 6.6 percent to 19.1, and looked exactly like a modelling
+   problem while being an instrument problem.
+2. **A run breaks where `get_text` breaks a line.** Text arrives one text node
+   at a time, so a paragraph interrupted by six inline links arrives as seven
+   fragments, and gluing those back into a run is right. Gluing 150 one-word
+   navbox links into a sentence is not, because reading that region back costs
+   a line boundary per link. The walk tracks which block it is inside and
+   joins with a newline across blocks and a space within one, which took the
+   two nav regions from 41 and 36 percent under to inside the band.
+
+### And a price is a content size, so it carries no call overhead
+
+The estimator kept a 40-token per-call constant from before Phase 2 corrected
+the contract. Under the corrected contract the number answers "how much is in
+there", and a scaffold the caller pays either way is not part of that. It was
+also most of the residual error on every region small enough for it to matter:
+seven Versailles regions sat 13 to 32 percent high, each by approximately 40
+tokens.
+
+### The gate, item by item
+
+| Part | Result |
+|---|---|
+| 1. Token bill on frozen corpus A | **GREEN.** 573 / 842 / 3,399 / 4,364; every target met |
+| 2. Refs sticky, zero false rebinds | **GREEN.** the ported S2 battery, in the suite |
+| 3. Completeness accurate by construction | **GREEN.** corpus B |
+| 4. Ladder never truncates, monotonic as exposed | **GREEN.** 16 rungs forced, none truncated |
+| 5. Latency budgets | **GREEN.** 413 ms p95 at 50,012 (budget 500), 713 at 100,012 (budget 1,000), reference arm alongside |
+| 6. Affordance quotas on the adversarial cases | **GREEN.** |
+| 7. Every printed price executable and accurate | **GREEN.** 65 units, 36 gated, median 6.3 percent, worst 27.1, rank correlation 0.993, zero failures, zero unpriceable calls |
+| 8. Completeness derived, not recomputed | **GREEN.** |
+| 9. Accessible names computed, not scraped | **GREEN.** |
+| House: corpus drift check | **GREEN.** -1.9 / -1.1 / -5.2 / +2.5 percent |
+| House: docstring ratchet | **GREEN.** lite 2,720 tokens, unchanged |
+
+**Suite: 285 tests, up from 279.** Six new: two for the hidden-and-nested
+`get_text` defects, three for the per-unit rate and the content-size price,
+and one browser regression that prices every region on the statistical page
+against `get_text` and would have failed at 65 percent before this.
+
+### One instrument note
+
+The per-unit rate is measured with the tokenizer, and the ladder prices the
+same unit on every rung, on every fixpoint pass, and again on the refusal path
+that verifies the budget it names, which is on the order of a hundred times
+per read. Measured naively that put the Python assembly p95 at 10.2 ms against
+its 10.0 ms budget and turned part 5 red. The rate is measured once per sample
+and cached; the answer is identical either way, which is what makes the cache
+a cache rather than an approximation.
+
+### Open items carried forward
+
+- **The dom50k fixture still shows a rung cliff** (17,849 to 3,380) where the
+  table cap engages. Unchanged by this work.
+- **httpbin's margin is 58 tokens** against its 900 target.
+- **The sample budget is first-come within a read.** A page with hundreds of
+  priced units spends the 40,000 characters on the units the walk reaches
+  first and prices the rest at the page rate. That is the old behaviour as a
+  fallback rather than a regression, but the fallback is silent, and whether
+  the completeness block should say how many units were priced that way is an
+  author call.
+- **`cursor=` and `include_hidden=` are still unbuilt** and refuse by naming
+  Phase 5 and Phase 3 respectively.

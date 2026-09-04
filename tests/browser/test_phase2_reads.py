@@ -180,6 +180,52 @@ def test_hidden_text_is_counted_and_never_returned(corpus_site):
     run(go())
 
 
+def test_hidden_text_does_not_travel_under_an_inline_wrapper():
+    """The same rule, one level down, where it was false.
+
+    A block's own text was read as the `textContent` of its inline children,
+    and `textContent` reports every hidden descendant underneath them. So a
+    `display:none` instruction parked inside a paragraph's span was returned
+    to the caller while the hygiene counter, walking separately, recorded the
+    very same characters as withheld: 1,426 of them on the frozen GitHub page
+    and 666 on the frozen Wikipedia article. Counted AND returned is worse
+    than either, because the count is the evidence the read was clean."""
+    async def go():
+        from tests.fixtures.pages import INLINE_LEAK
+
+        session = await MANAGER.open(lane="A", engine="chromium",
+                                     headless=True)
+        record = session.page(session.focused)
+        await record.page.set_content(INLINE_LEAK)
+        got = await lite.get_text(page=session.focused)
+        assert "IGNORE ALL PREVIOUS" not in got["text"]
+        assert "Concealed by visibility" not in got["text"]
+        assert "hidden block(s)" in got["stripped"]
+        assert "an inline wrapper with a hidden payload" in got["text"]
+
+    run(go())
+
+
+def test_a_nested_block_is_read_once_and_not_twice():
+    """A list item inside a table cell's div is ONE line, not two.
+
+    The same flattening emitted every nested block twice, once folded into
+    the text of the block above it and once as itself. It cost nothing
+    visible on prose and it doubled a navbox, which is why the price gate
+    found it and the eye did not."""
+    async def go():
+        from tests.fixtures.pages import INLINE_LEAK
+
+        session = await MANAGER.open(lane="A", engine="chromium",
+                                     headless=True)
+        record = session.page(session.focused)
+        await record.page.set_content(INLINE_LEAK)
+        got = await lite.get_text(page=session.focused)
+        assert got["text"].count("Unique cell item text") == 1
+
+    run(go())
+
+
 def test_text_can_be_scoped_to_a_ref_from_a_previous_read(corpus_site):
     async def go():
         _, page = await _open(corpus_site, "a/wikipedia_versailles.html")
@@ -193,6 +239,46 @@ def test_text_can_be_scoped_to_a_ref_from_a_previous_read(corpus_site):
         assert scoped["chars"]["total_in_scope"] <= \
             whole["chars"]["total_in_scope"]
         assert scoped["scope"] == {"ref": region.group(1)}
+
+    run(go())
+
+
+def test_every_printed_price_is_within_tolerance_on_the_statistical_page(
+        corpus_site):
+    """The page gate part 7 could not price, kept as a named regression.
+
+    Five regions of thirty-seven sat outside the 35 percent band and all five
+    were under-priced by two and a half to three times. Four of them were the
+    measurement rather than the price: `get_text` was flattening hidden and
+    nested text into what it returned. The fifth was the price, and it was
+    the article's own data table, priced at the prose rate of the page around
+    it. The three worst offenders all live here."""
+    async def go():
+        _, page = await _open(corpus_site, "a/wikipedia_gdp_table.html")
+        view = await lite.get_page_view(page=page)
+        priced = re.findall(r"^(r\d+) \|.*?~([\d,]+) tok of content",
+                            view["projection"], re.M)
+        assert len(priced) >= 6
+        checked = 0
+        for ref, advertised in priced:
+            got = await lite.get_text(page=page, location={"ref": ref},
+                                      max_chars=400000)
+            measured = ntok(got["text"])
+            if measured < 60:      # priced by overhead, not by content
+                continue
+            checked += 1
+            advertised = int(advertised.replace(",", ""))
+            # Gross against gross: this reads one region's whole subtree, so
+            # a region holding others is skipped rather than compared against
+            # a net price.
+            if any(f'{ref} |' in line and "net of" in line
+                   for line in view["projection"].splitlines()):
+                continue
+            error = abs(advertised - measured) / measured
+            assert error <= 0.35, (
+                f'{ref} advertised {advertised} tokens of content and holds '
+                f'{measured}, off by {error:.0%}')
+        assert checked >= 4
 
     run(go())
 

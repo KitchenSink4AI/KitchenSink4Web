@@ -4920,6 +4920,7 @@
    "section_affordances": 0,
    "section_chars": 10,
    "section_known": true,
+   "section_sample": "Background",
    "section_words": 1,
    "text": "An article-shaped page"
   },
@@ -4943,6 +4944,7 @@
    "section_affordances": 40,
    "section_chars": 9171,
    "section_known": true,
+   "section_sample": "Sentence 1 mentions in passing and then continues with enough ordinary words to look like real prose rather than a link farm, because the readability gate is measuring the ratio and a page of bare lin\ntopic 1 topic 2 topic 3 topic 4 topic 5 topic 6 topic 7 topic 8 topic 9 topic 10 topic 11 topic 12 topic 13 topic 14 topic 15 topic 16 topic 17 topic 18 topic 19 topic 20\nSentence 1 mentions in passin",
    "section_words": 1681,
    "text": "Background"
   },
@@ -4966,6 +4968,7 @@
    "section_affordances": 60,
    "section_chars": 13760,
    "section_known": true,
+   "section_sample": "Sentence 1 mentions in passing and then continues with enough ordinary words to look like real prose rather than a link farm, because the readability gate is measuring the ratio and a page of bare lin\ntopic 1 topic 2 topic 3 topic 4 topic 5 topic 6 topic 7 topic 8 topic 9 topic 10 topic 11 topic 12 topic 13 topic 14 topic 15 topic 16 topic 17 topic 18 topic 19 topic 20\nSentence 1 mentions in passin\ntopic 1 topic 2 topic 3 topic 4 topic 5 topic 6 topic 7 topic 8 topic 9 topic 10 topic 11 topic 12 topic 13 topic 14 topic 15 topic 16 topic 17 topic 18 topic 19 topic 20\nSentence 1 mentions in passin",
    "section_words": 2522,
    "text": "Reactions"
   },
@@ -4989,6 +4992,7 @@
    "section_affordances": 20,
    "section_chars": 4590,
    "section_known": true,
+   "section_sample": "Sentence 1 mentions in passing and then continues with enough ordinary words to look like real prose rather than a link farm, because the readability gate is measuring the ratio and a page of bare lin",
    "section_words": 841,
    "text": "Later assessments"
   },
@@ -5012,13 +5016,14 @@
    "section_affordances": 20,
    "section_chars": 4595,
    "section_known": true,
+   "section_sample": "Sentence 1 mentions in passing and then continues with enough ordinary words to look like real prose rather than a link farm, because the readability gate is measuring the ratio and a page of bare lin",
    "section_words": 842,
    "text": "Aftermath"
   }
  ],
  "headings_total": 5,
  "identity": {
-  "doc_epoch": "1788550148373:0.15794280233004054",
+  "doc_epoch": "1788552153062:0.7222775700297284",
   "lang": "en",
   "origin": "null",
   "page_key": "nullblank",
@@ -5064,6 +5069,7 @@
    },
    "parent": null,
    "ref": "r1",
+   "sample": null,
    "tag": "header",
    "top": 8
   },
@@ -5098,6 +5104,7 @@
    },
    "parent": "r1",
    "ref": "r2",
+   "sample": "Home Index About",
    "tag": "nav",
    "top": 8
   },
@@ -5132,6 +5139,7 @@
    },
    "parent": null,
    "ref": "r3",
+   "sample": "An article-shaped page\nBackground\nSentence 1 mentions in passing and then continues with enough ordinary words to look like real prose rather than a link farm, because the readability gate is measurin\ntopic 1 topic 2 topic 3 topic 4 topic 5 topic 6 topic 7 topic 8 topic 9 topic 10 topic 11 topic 12 topic 13 topic 14 topic 15 topic 16 topic 17 topic 18 topic 19 topic 20\nSentence 1 mentions in passin\ntopic 1 topic 2 topic 3 topic 4 topic 5 topic 6 topic 7 topic 8 topic 9 topic 10 topic 11 topic 12 topic 13 topic 14 topic 15 topic 16 topic 17 topic 18 topic 19 topic 20\nReactions\nSentence 1 mentions\ntopic 1 topic 2 topic 3 topic 4 topic 5 topic 6 topic 7 topic 8 topic 9 topic 10 topic 11 topic 12 topic 13 topic 14 topic 15 topic 16 topic 17 topic 18 topic 19 topic 20\nSentence 1 mentions in passin\ntopic 1 topic 2 topic 3 topic 4 topic 5 topic 6 topic 7 topic 8 topic 9 topic 10 topic 11 topic 12 topic 13 topic 14 topic 15 topic 16 topic 17 topic 18 topic 19 topic 20\nSentence 1 mentions in passin\ntopic 1 topic 2 topic 3 topic 4 topic 5 topic 6 topic 7 topic 8 topic 9 topic 10 topic 11 topic 12 topic 13 topic 14 topic 15 topic 16 topic 17 topic 18 topic 19 topic 20\nLater assessments\nSentence 1 \ntopic 1 topic 2 topic 3 topic 4 topic 5 topic 6 topic 7 topic 8 topic 9 topic 10 topic 11 topic 12 topic 13 topic 14 topic 15 topic 16 topic 17 topic 18 topic 19 topic 20\nAftermath\nSentence 1 mentions",
    "tag": "main",
    "top": 47
   },
@@ -5166,6 +5174,7 @@
    },
    "parent": null,
    "ref": "r4",
+   "sample": "Fixture footer",
    "tag": "footer",
    "top": 3434
   }

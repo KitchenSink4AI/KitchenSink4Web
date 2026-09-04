@@ -2643,13 +2643,14 @@
    "section_affordances": 63,
    "section_chars": 4621,
    "section_known": true,
+   "section_sample": "Add file Star Sign in\nchore(deps): bump some-package from 1.1.0 to 1.1.1 in the tooling workspace\nchore(deps): bump some-package from 1.2.0 to 1.2.1 in the tooling workspace\nchore(deps): bump some-pac\nchore(deps): bump some-package from 1.13.0 to 1.13.1 in the tooling workspace\nchore(deps): bump some-package from 1.14.0 to 1.14.1 in the tooling workspace\nchore(deps): bump some-package from 1.15.0 t\nchore(deps): bump some-package from 1.25.0 to 1.25.1 in the tooling workspace\nchore(deps): bump some-package from 1.26.0 to 1.26.1 in the tooling workspace\nchore(deps): bump some-package from 1.27.0 t\nchore(deps): bump some-package from 1.37.0 to 1.37.1 in the tooling workspace\nchore(deps): bump some-package from 1.38.0 to 1.38.1 in the tooling workspace\nchore(deps): bump some-package from 1.39.0 t\nchore(deps): bump some-package from 1.49.0 to 1.49.1 in the tooling workspace\nchore(deps): bump some-package from 1.50.0 to 1.50.1 in the tooling workspace\nchore(deps): bump some-package from 1.51.0 t",
    "section_words": 665,
    "text": "owner / repository"
   }
  ],
  "headings_total": 1,
  "identity": {
-  "doc_epoch": "1788550148428:0.9406290270171495",
+  "doc_epoch": "1788552153119:0.8454229087513305",
   "lang": "en",
   "origin": "null",
   "page_key": "nullblank",
@@ -2695,6 +2696,7 @@
    },
    "parent": null,
    "ref": "r1",
+   "sample": null,
    "tag": "header",
    "top": 8
   },
@@ -2729,6 +2731,7 @@
    },
    "parent": "r1",
    "ref": "r2",
+   "sample": "Code Issues Pull requests Actions Projects Wiki Security Insights Settings Discussions Releases Packages Branches",
    "tag": "nav",
    "top": 8
   },
@@ -2763,6 +2766,7 @@
    },
    "parent": null,
    "ref": "r3",
+   "sample": "owner / repository Add file Star Sign in\nchore(deps): bump some-package from 1.1.0 to 1.1.1 in the tooling workspace\nchore(deps): bump some-package from 1.2.0 to 1.2.1 in the tooling workspace\nchore(d\nchore(deps): bump some-package from 1.13.0 to 1.13.1 in the tooling workspace\nchore(deps): bump some-package from 1.14.0 to 1.14.1 in the tooling workspace\nchore(deps): bump some-package from 1.15.0 t\nchore(deps): bump some-package from 1.25.0 to 1.25.1 in the tooling workspace\nchore(deps): bump some-package from 1.26.0 to 1.26.1 in the tooling workspace\nchore(deps): bump some-package from 1.27.0 t\nchore(deps): bump some-package from 1.37.0 to 1.37.1 in the tooling workspace\nchore(deps): bump some-package from 1.38.0 to 1.38.1 in the tooling workspace\nchore(deps): bump some-package from 1.39.0 t\nchore(deps): bump some-package from 1.49.0 to 1.49.1 in the tooling workspace\nchore(deps): bump some-package from 1.50.0 to 1.50.1 in the tooling workspace\nchore(deps): bump some-package from 1.51.0 t",
    "tag": "main",
    "top": 47
   }

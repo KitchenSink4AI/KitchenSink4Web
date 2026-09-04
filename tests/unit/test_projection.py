@@ -273,6 +273,51 @@ def test_regions_are_priced_net_of_their_children():
         "child it holds, which is the overlapping-parent defect")
 
 
+def test_a_unit_is_priced_at_its_own_tokenization_rate():
+    """A page does not have one characters-per-token rate.
+
+    The frozen GDP article runs 5.3 characters to the token in its prose and
+    1.8 in its own data table, and the single page-level rate that priced
+    both under-priced the table by nearly three times. Each unit now carries
+    a bounded sample of its own text and the meter measures the rate on it,
+    so the same 4,000 characters cost more when they are numbers."""
+    meter = BudgetMeter(5000)
+    numbers = "\n".join(f"{i} 1,234.5{i} 9{i}8.2 42.{i}" for i in range(40))
+    prose = ("The delegation met again in the spring and the terms were read "
+             "aloud to the assembly before any of them were signed. ") * 12
+    table = {"net": {"chars": 4000}, "sample": numbers[:1500]}
+    article = {"net": {"chars": 4000}, "sample": prose[:1500]}
+    assert meter.price_region(table) > meter.price_region(article) * 1.5, (
+        "a numeric table priced the same as prose of the same length, which "
+        "is the page-level-rate defect returning")
+    # And the rate is MEASURED, so it agrees with the tokenizer on the sample
+    # it was measured from rather than approximating it.
+    assert abs(len(numbers[:1500]) / ntok(numbers[:1500])
+               - meter.rate_for(numbers[:1500])) < 0.01
+
+
+def test_a_unit_with_no_sample_falls_back_to_the_page_rate():
+    """Sampling is bounded per read, so some units on a huge page carry no
+    sample of their own. That is a fallback, not a failure, and it has to be
+    the behaviour that shipped before rather than a zero."""
+    meter = BudgetMeter(5000)
+    assert meter.rate_for(None) == meter.rates.chars_per_token
+    assert meter.rate_for("too short") == meter.rates.chars_per_token
+    assert meter.price_region({"net": {"chars": 3700}, "sample": None}) == \
+        int(3700 / meter.rates.chars_per_token)
+
+
+def test_a_price_is_a_content_size_and_carries_no_call_overhead():
+    """DESIGN 3.3a's contract was corrected in Phase 2: expanding a region
+    returns another budgeted projection rather than the region, so the
+    printed number answers "how much is in there". A 40-token scaffold the
+    caller pays either way has no place inside that number, and it was most
+    of the residual error on every region small enough for it to matter."""
+    meter = BudgetMeter(5000)
+    empty = meter.price_region({"net": {"chars": 0}, "sample": None})
+    assert empty == 0, f"an empty region priced at {empty} tokens of content"
+
+
 def test_an_overlapping_parent_is_not_the_top_next_call():
     """S1 put `expand r5 (main, ~73,716 tok)` at the top of its recommended
     list: the most expensive and least useful call on the page."""

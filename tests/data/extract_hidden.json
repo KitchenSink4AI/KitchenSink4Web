@@ -76,13 +76,14 @@
    "section_affordances": 0,
    "section_chars": 151,
    "section_known": true,
+   "section_sample": "Visible prose that the projection should carry.\nWhite on white text that a reader cannot see at all.\nZero width payload here:\u200b\u200b\u200b and then ordinary words.",
    "section_words": 26,
    "text": "A page with hidden regions"
   }
  ],
  "headings_total": 1,
  "identity": {
-  "doc_epoch": "1788550148608:0.3564814389506118",
+  "doc_epoch": "1788552153295:0.46624290886152586",
   "lang": "en",
   "origin": "null",
   "page_key": "nullblank",
@@ -126,6 +127,7 @@
    },
    "parent": null,
    "ref": "r1",
+   "sample": "A page with hidden regions\nVisible prose that the projection should carry.\nWhite on white text that a reader cannot see at all.\nZero width payload here:\u200b\u200b\u200b and then ordinary words.",
    "tag": "main",
    "top": 21
   }

@@ -49,6 +49,34 @@
     'FIGCAPTION', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'TD', 'TH']);
   const SKIP = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEMPLATE', 'SVG']);
 
+  // A block's own text is the text of the INLINE run it contains: its text
+  // nodes plus the text of inline wrappers around them, stopping wherever a
+  // nested block begins and wherever a hidden element begins.
+  //
+  // `textContent` on an inline child answers neither of those questions, and
+  // reading it was two defects at once. It flattened every HIDDEN descendant
+  // back into the payload, so the read returned a `visibility:hidden`
+  // navigation menu and a `display:none` sidebar as content while the hygiene
+  // counter, walking separately, recorded the same characters as hidden and
+  // withheld: 1,426 characters on the frozen GitHub page and 666 on the
+  // frozen Wikipedia article. Hidden text reaching a caller is the exact
+  // thing DESIGN 3.6 says this tool does not do, and an injected instruction
+  // parked under an inline wrapper travelled straight through it. It also
+  // flattened every nested BLOCK descendant, which the walk then emitted
+  // again a moment later, so a navbox whose cells wrap their lists in a div
+  // came back at two and a half times its true length. The over-long text was
+  // the measurement the price gate was failing against.
+  function inlineText(el, into) {
+    for (const node of el.childNodes) {
+      if (node.nodeType === 3) { into.push(node.nodeValue || ''); continue; }
+      if (node.nodeType !== 1) continue;
+      if (SKIP.has(node.tagName) || BLOCK.has(node.tagName)) continue;
+      if (hiddenReason(node) && !includeHidden) continue;
+      into.push(' ');
+      inlineText(node, into);
+    }
+  }
+
   const blocks = [];
   const hiddenReasons = {};
   let hiddenBlocks = 0, hiddenChars = 0, injectionSuspects = 0;
@@ -72,14 +100,9 @@
       return;
     }
     if (BLOCK.has(el.tagName)) {
-      let own = '';
-      for (const node of el.childNodes) {
-        if (node.nodeType === 3) own += node.nodeValue || '';
-        else if (node.nodeType === 1 && !BLOCK.has(node.tagName)
-                 && !SKIP.has(node.tagName) && !hiddenReason(node)) {
-          own += ' ' + (node.textContent || '');
-        }
-      }
+      const parts = [];
+      inlineText(el, parts);
+      let own = parts.join('');
       if (ZERO_WIDTH.test(own)) {
         zeroWidth++;
         own = own.replace(ZERO_WIDTH, '');

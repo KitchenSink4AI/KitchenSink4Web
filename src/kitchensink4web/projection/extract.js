@@ -328,6 +328,12 @@
   }
 
   const TEXT_BLOCK = new Set(['P', 'LI', 'BLOCKQUOTE', 'PRE', 'DD', 'DT', 'FIGCAPTION']);
+  //: What `get_text` emits as one line, which is what the rate sample has to
+  //: reproduce: a navbox of 150 one-word links costs a line boundary per
+  //: link, and a sample that glues those links into sentences measures a
+  //: page that does not exist.
+  const LINE_BLOCK = new Set(['P', 'LI', 'BLOCKQUOTE', 'PRE', 'DD', 'DT',
+    'FIGCAPTION', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'TD', 'TH']);
   const PROSE_ANCESTOR = new Set(['P', 'LI', 'BLOCKQUOTE', 'DD', 'FIGCAPTION']);
 
   // ------------------------------------------------- the anchor descriptor
@@ -530,6 +536,109 @@
     if (reg) reg.net[field] += n;
   }
 
+  // ------------------------------------------- tokenization rate samples
+  //
+  // A price is a TOKEN count, the tokenizer lives in Python, and characters
+  // do not convert to tokens at one rate. On the frozen GDP article the
+  // prose runs 5.3 characters to the token and the article's own data table
+  // runs 1.8, so a table priced at the page's rate was under-priced by very
+  // nearly three times: the number was arithmetic about a different kind of
+  // content. Rather than hand a table a table-shaped constant, the walk
+  // sends back a bounded sample of each unit's OWN text and the meter
+  // measures the rate on it with the same tokenizer that enforces the
+  // budget, which is DESIGN 3.3a's "one arithmetic" rule applied to the
+  // conversion as well as to the counting.
+  //
+  // The sample is DECIMATED as it fills rather than truncated, so it stays
+  // spread across everything the unit holds: a region whose first screen is
+  // prose and whose body is a numeric table must not be described by its
+  // opening paragraph. Everything here is bounded twice, per unit and per
+  // read, because a page carrying 595 tables would otherwise ship a sample
+  // larger than the payload.
+  //: Per unit, and measured in CHARACTERS rather than in pieces: a table
+  //: whose cells read "Ghana" and "1,234" fills twenty pieces with 140
+  //: characters, and a rate measured on 140 characters of a 6,500-character
+  //: table is a rate about its first column.
+  const SAMPLE_UNIT_CHARS = 1500;
+  //: Long enough that a run of prose tokenizes like prose. Fifty-character
+  //: pieces measured 2.9 characters to the token on text that really runs
+  //: 4.8, because every piece pays the boundary twice, and the regions the
+  //: over-short sample described were then over-priced by half. Two hundred
+  //: was measured against the same corpus at 2.5 percent median error.
+  const SAMPLE_SNIPPET_CHARS = 200;
+  //: Per read, over every unit, bounding two things at once: what crosses
+  //: the boundary, and how much text the meter tokenizes on the far side.
+  const SAMPLE_TOTAL_CHARS = 40000;
+  let sampledChars = 0;
+
+  //: Which line the walk is currently inside. Text carried by two different
+  //: blocks is two lines when it is read back, and one run when it is not.
+  let blockSeq = 0;
+
+  function newSampler() {
+    return { parts: [], buf: '', chars: 0, seen: 0, stride: 1, line: -1 };
+  }
+
+  // Text arrives one text NODE at a time, and a text node is not a run of
+  // prose: a Wikipedia paragraph broken by six inline links arrives as seven
+  // fragments of twenty characters. Measuring a rate on fragments measures
+  // the fragmentation, because every piece pays a boundary at each end, and
+  // it over-priced the flagship article's prose regions by a quarter. So the
+  // fragments are re-joined into runs first, and it is whole RUNS that are
+  // kept or skipped.
+  function sampleInto(s, text) {
+    if (!s || !text || sampledChars >= SAMPLE_TOTAL_CHARS) return;
+    const join = s.line === blockSeq ? ' ' : '\n';
+    s.line = blockSeq;
+    s.buf = s.buf ? s.buf + join + text : text;
+    if (s.buf.length < SAMPLE_SNIPPET_CHARS) return;
+    const snippet = s.buf.slice(0, SAMPLE_SNIPPET_CHARS);
+    s.buf = '';
+    if (s.seen++ % s.stride) return;
+    s.parts.push(snippet);
+    s.chars += snippet.length;
+    sampledChars += snippet.length;
+    while (s.chars > SAMPLE_UNIT_CHARS && s.parts.length > 3) {
+      const kept = [];
+      let chars = 0;
+      for (let i = 0; i < s.parts.length; i += 2) {
+        kept.push(s.parts[i]);
+        chars += s.parts[i].length;
+      }
+      sampledChars -= (s.chars - chars);
+      s.parts = kept;
+      s.chars = chars;
+      s.stride *= 2;
+    }
+  }
+
+  // A unit smaller than one run is described by what it has: the leftover
+  // buffer is the whole of a short region's text rather than a remainder.
+  function sampleOf(s) {
+    if (!s) return null;
+    if (s.parts.length) return s.parts.join('\n');
+    return s.buf || null;
+  }
+
+  // The same sample, taken from a string rather than accumulated over a
+  // walk: a table's text is read once, as one piece.
+  function sampleString(text) {
+    if (!text || sampledChars >= SAMPLE_TOTAL_CHARS) return null;
+    if (text.length <= SAMPLE_UNIT_CHARS) {
+      sampledChars += text.length;
+      return text;
+    }
+    const pieces = Math.ceil(SAMPLE_UNIT_CHARS / SAMPLE_SNIPPET_CHARS);
+    const step = Math.floor(text.length / pieces);
+    const parts = [];
+    for (let i = 0; i < pieces; i++) {
+      parts.push(text.substr(i * step, SAMPLE_SNIPPET_CHARS));
+    }
+    const out = parts.join('\n');
+    sampledChars += out.length;
+    return out;
+  }
+
   function regionCandidate(el) {
     const role = el.getAttribute && el.getAttribute('role');
     if (role) {
@@ -598,6 +707,7 @@
           // region's real interactive count is a completeness fact.
           net: { interactive: 0, text_blocks: 0, images: 0, chars: 0,
                  words: 0, headings: 0, prose_links: 0 },
+          sampler: newSampler(),
           children: [],
           top: Math.round(geo.rect.top + window.scrollY),
           in_viewport: geo.rect.top < window.innerHeight && geo.rect.bottom > 0,
@@ -616,16 +726,22 @@
 
     const tag = el.tagName;
     const region = regionStack.length ? regionStack[regionStack.length - 1] : null;
+    // Entering a block opens a new line, for the rate sample's purposes.
+    // Everything below it belongs to that line until the next block opens.
+    if (LINE_BLOCK.has(tag)) blockSeq++;
 
     // direct text, attributed to the innermost region and the current section
-    let direct = 0, directWords = 0;
+    let direct = 0, directWords = 0, directText = '';
     for (const node of el.childNodes) {
       if (node.nodeType === 3) {
         const s = node.nodeValue || '';
         if (ZERO_WIDTH.test(s)) { zeroWidthHits++; }
         const t = squash(s);
         direct += t.length;
-        if (t) directWords += t.split(' ').length;
+        if (t) {
+          directWords += t.split(' ').length;
+          directText = directText ? directText + ' ' + t : t;
+        }
       }
     }
     if (direct) {
@@ -645,6 +761,13 @@
       } else {
         textCharsTotal += direct;
         bump('chars', direct);
+        // The same characters that are COUNTED are the ones sampled, so the
+        // rate the meter measures is a rate about the text the price is
+        // being charged for.
+        const sampleReg = regionStack.length
+          ? regionStack[regionStack.length - 1] : null;
+        if (sampleReg) sampleInto(sampleReg.sampler, directText);
+        if (currentHeading) sampleInto(currentHeading.sampler, directText);
         // Words as well as characters, because tokens track WORDS far more
         // closely than they track characters across content classes. A cell
         // of "1,234" and a clause of English prose have very different
@@ -685,7 +808,7 @@
             name_quality: named.quality,
             region: region ? region.ref : null,
             section_chars: 0, section_words: 0, section_affordances: 0,
-            section_known: true
+            section_known: true, sampler: newSampler()
           };
           if (keep) {
             refMap.set(rec.ref, el);
@@ -881,6 +1004,7 @@
         if (rows) {
           const named = accName(el, 'table');
           const cols = el.rows[0] ? el.rows[0].cells.length : 0;
+          const tableText = squash(el.textContent || '');
           const tref = 't' + (++tCounter);
           refMap.set(tref, el);
           refOf.set(el, tref);
@@ -891,7 +1015,8 @@
             rows: rows, cols: cols,
             headers: columnHeaders(el, cols),
             region: region ? region.ref : null,
-            chars: squash(el.textContent || '').length,
+            chars: tableText.length,
+            sample: sampleString(tableText),
             spans: el.querySelectorAll('[rowspan],[colspan]').length
           });
         }
@@ -997,6 +1122,14 @@
   // projection prints NO price for it rather than a number derived from a
   // walk that found nothing (DESIGN 3.3a rule 1).
   for (const h of headings) h.section_known = h.section_chars > 0;
+
+  // The samplers are working state; what crosses the boundary is one string
+  // per unit, which is what the meter measures its rate on.
+  for (const r of regions) { r.sample = sampleOf(r.sampler); delete r.sampler; }
+  for (const h of headings) {
+    h.section_sample = sampleOf(h.sampler);
+    delete h.sampler;
+  }
 
   // --------------------------------------------------------- form fields
 
@@ -1147,7 +1280,10 @@
       name_quality: r.name_quality,
       tag: r.tag, depth: r.depth, parent: r.parent, children: r.children,
       net: r.net, top: r.top, in_viewport: r.in_viewport,
-      nav_shaped: r.nav_shaped
+      nav_shaped: r.nav_shaped,
+      // The bounded text sample the meter measures this region's own
+      // characters-per-token rate on. It is never printed.
+      sample: r.sample
     })),
     affordances: affordances,
     // Totals over EVERY interactive element, including the ones past the

@@ -196,13 +196,14 @@
    "section_affordances": 4,
    "section_chars": 212,
    "section_known": true,
+   "section_sample": "4 Save 18 A control whose accessible name is long enough that it has to be cut somewhere and the cut has to land on a word boundary rather than inside a word because a name cut mid token reads as a di",
    "section_words": 45,
    "text": "General 4"
   }
  ],
  "headings_total": 1,
  "identity": {
-  "doc_epoch": "1788550148479:0.4507406596993573",
+  "doc_epoch": "1788552153172:0.27864755166908994",
   "lang": "en",
   "origin": "null",
   "page_key": "nullblank",
@@ -248,6 +249,7 @@
    },
    "parent": null,
    "ref": "r1",
+   "sample": "A control whose accessible name is long enough that it has to be cut somewhere and the cut has to land on a word boundary rather than inside a word because a name cut mid token reads as a different st",
    "tag": "main",
    "top": 20
   },
@@ -282,6 +284,7 @@
    },
    "parent": "r1",
    "ref": "r2",
+   "sample": "General 4 Save 18",
    "tag": "section",
    "top": 20
   }

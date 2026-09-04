@@ -1,11 +1,11 @@
 ## 1 IDENTITY
-url: http://127.0.0.1:60675/httpbin_form.html
+url: http://127.0.0.1:63547/httpbin_form.html
 title: 
 status: 200 | load: load | lane: A | page: p1 | read: - | t=
 viewport: 1280x900 | page height: 1 screens | dom nodes: 47 | shape: form (1 form(s) and prose is 86% of page text)
 
 ## 2 PAGE SHAPE (regions, each priced with this read's own estimate of how much CONTENT it holds; expanding one returns a projection of that content under whatever budget you pass, so a large price means a lot is in there rather than a large bill)
-r1 | form | "Pizza Size" | 13 act, 13 blocks, 0 img | in-view | ~85 tok of content
+r1 | form | "Pizza Size" | 13 act, 13 blocks, 0 img | in-view | ~39 tok of content
 
 ## 3 AFFORDANCES (per-class quotas: navigation first, form controls complete, in-prose links suppressed by design)
 e1 | textbox | "Customer name:"
@@ -54,5 +54,5 @@ name quality: every accessible name was computed
 budget: 842 of 5,000 tokens used (17%), 500 held as tokenizer-drift margin, estimator tiktoken/o200k_base | degradation rung 1 of 16
 
 ## 6 NEXT CALLS (ranked by what each is likely to answer, not by size)
-expand r1 ("Pizza Size"): get_page_view(page="p1", location={"region":"r1"})  ~85 tok
+expand r1 ("Pizza Size"): get_page_view(page="p1", location={"region":"r1"})  ~39 tok
 act on any ref above: click(page="p1", location={"ref":"e<n>"}) | type_text(...) | fill_form(...)

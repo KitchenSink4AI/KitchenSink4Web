@@ -1,33 +1,33 @@
 ## 1 IDENTITY
-url: http://127.0.0.1:60675/wikipedia_gdp_table.html
+url: http://127.0.0.1:63547/wikipedia_gdp_table.html
 title: List of countries by GDP (nominal) - Wikipedia
 status: 200 | load: load | lane: A | page: p1 | read: - | t=
 viewport: 1280x900 | page height: 15.3 screens | dom nodes: 5,644 | shape: app (prose is 13% of page text over 10 paragraphs)
 
 ## 2 PAGE SHAPE (regions, each priced with this read's own estimate of how much CONTENT it holds; expanding one returns a projection of that content under whatever budget you pass, so a large price means a lot is in there rather than a large bill)
-r1 | banner | "(header)" | 1 act, 0 blocks, 2 img | in-view | ~40 tok of content (net of 3 nested region(s): r2, r3, r5)
+r1 | banner | "(header)" | 1 act, 0 blocks, 2 img | in-view | ~0 tok of content (net of 3 nested region(s): r2, r3, r5)
 r3 | search | "#p-search" | 0 act, 0 blocks, 0 img | in-view | container of r4
-r4 | form | "#searchform" | 2 act, 0 blocks, 0 img | in-view | ~41 tok of content
-r5 | navigation | "Personal tools" | 3 act, 3 blocks, 0 img | in-view | ~44 tok of content
-r6 | navigation | "Contents" | 7 act, 6 blocks, 0 img | in-view | ~54 tok of content
-r7 | main | "#content" | 31 act, 7 blocks, 3 img | in-view | ~553 tok of content (net of 10 nested region(s): r8, r9, r10, r11, r12, r16 +4 more)
-r8 | banner | "List of countries by GDP (nominal)" | 0 act, 0 blocks, 0 img | in-view | ~46 tok of content
-r9 | navigation | "Namespaces" | 2 act, 2 blocks, 0 img | in-view | ~42 tok of content
-r10 | navigation | "Views" | 3 act, 3 blocks, 0 img | in-view | ~45 tok of content
-r12 | navigation | "Appearance" | 1 act, 3 blocks, 0 img | in-view | ~45 tok of content (net of 3 nested region(s): r13, r14, r15)
-r13 | form | "(form)" | 0 act, 0 blocks, 0 img | in-view | ~43 tok of content
-r14 | form | "(form)" | 0 act, 0 blocks, 0 img | in-view | ~42 tok of content
-r15 | form | "(form)" | 0 act, 0 blocks, 0 img | in-view | ~43 tok of content
-r16 | region | "Table" | 245 act, 1 blocks, 221 img | y=1218 | ~1,267 tok of content
-r17 | region | "Nominal GDP of regional groupings" | 24 act, 1 blocks, 5 img | y=8927 | ~222 tok of content
-r18 | region | "See also" | 21 act, 24 blocks, 0 img | y=9633 | ~214 tok of content (net of 1 nested region(s): r19)
-r19 | navigation | "Portals" | 4 act, 2 blocks, 2 img | y=9697 | ~49 tok of content
-r20 | region | "Notes" | 446 act, 22 blocks, 0 img | y=10390 | ~1,135 tok of content
-r21 | region | "References" | 29 act, 7 blocks, 0 img | y=12132 | ~244 tok of content (net of 3 nested region(s): r22, r23, r24)
-r22 | navigation | "Lists of countries by financial rankings" | 7 act, 3 blocks, 0 img | y=12522 | ~48 tok of content
-r23 | navigation | "Lists of countries by GDP rankings" | 155 act, 154 blocks, 0 img | y=12557 | ~388 tok of content
-r24 | navigation | "Economic classification of countries" | 4 act, 3 blocks, 0 img | y=13403 | ~48 tok of content
-r25 | contentinfo | "#footer" | 17 act, 15 blocks, 4 img | y=13543 | ~134 tok of content
+r4 | form | "#searchform" | 2 act, 0 blocks, 0 img | in-view | ~1 tok of content
+r5 | navigation | "Personal tools" | 3 act, 3 blocks, 0 img | in-view | ~4 tok of content
+r6 | navigation | "Contents" | 7 act, 6 blocks, 0 img | in-view | ~20 tok of content
+r7 | main | "#content" | 31 act, 7 blocks, 3 img | in-view | ~635 tok of content (net of 10 nested region(s): r8, r9, r10, r11, r12, r16 +4 more)
+r8 | banner | "List of countries by GDP (nominal)" | 0 act, 0 blocks, 0 img | in-view | ~6 tok of content
+r9 | navigation | "Namespaces" | 2 act, 2 blocks, 0 img | in-view | ~2 tok of content
+r10 | navigation | "Views" | 3 act, 3 blocks, 0 img | in-view | ~5 tok of content
+r12 | navigation | "Appearance" | 1 act, 3 blocks, 0 img | in-view | ~5 tok of content (net of 3 nested region(s): r13, r14, r15)
+r13 | form | "(form)" | 0 act, 0 blocks, 0 img | in-view | ~3 tok of content
+r14 | form | "(form)" | 0 act, 0 blocks, 0 img | in-view | ~2 tok of content
+r15 | form | "(form)" | 0 act, 0 blocks, 0 img | in-view | ~3 tok of content
+r16 | region | "Table" | 245 act, 1 blocks, 221 img | y=1217 | ~2,861 tok of content
+r17 | region | "Nominal GDP of regional groupings" | 24 act, 1 blocks, 5 img | y=8926 | ~310 tok of content
+r18 | region | "See also" | 21 act, 24 blocks, 0 img | y=9632 | ~212 tok of content (net of 1 nested region(s): r19)
+r19 | navigation | "Portals" | 4 act, 2 blocks, 2 img | y=9697 | ~8 tok of content
+r20 | region | "Notes" | 446 act, 22 blocks, 0 img | y=10389 | ~1,060 tok of content
+r21 | region | "References" | 29 act, 7 blocks, 0 img | y=12131 | ~298 tok of content (net of 3 nested region(s): r22, r23, r24)
+r22 | navigation | "Lists of countries by financial rankings" | 7 act, 3 blocks, 0 img | y=12521 | ~11 tok of content
+r23 | navigation | "Lists of countries by GDP rankings" | 155 act, 154 blocks, 0 img | y=12557 | ~503 tok of content
+r24 | navigation | "Economic classification of countries" | 4 act, 3 blocks, 0 img | y=13402 | ~10 tok of content
+r25 | contentinfo | "#footer" | 17 act, 15 blocks, 4 img | y=13542 | ~123 tok of content
 
 ## 3 AFFORDANCES (per-class quotas: navigation first, form controls complete, in-prose links suppressed by design)
 e2 | link | "Wikipedia The Free Encyclopedia" | /wiki/Main_Page
@@ -76,13 +76,13 @@ e294 | columnheader | "Regional groupings"
 
 ## 4 CONTENT DIGEST (app projection: prose is 13% of page text over 10 paragraphs)
 lead: Gross domestic product (GDP) is the market value of all final goods and services from a nation in a given year.[2] Countries are sorted by nominal GDP estimates from financial and statistical institutions, which are calculated at market or government official exchange rates. Nominal GDP does not take into account differences in the cost of living in different countries, and the results can vary greatly from one year...
-  h1 | h2 | Contents | ~53 tok
-h2 | h1 | List of countries by GDP (nominal) | ~567 tok
-  h3 | h2 | Table | ~1,273 tok
-  h4 | h2 | Nominal GDP of regional groupings | ~217 tok
-  h5 | h2 | See also | ~222 tok
-  h6 | h2 | Notes | ~1,136 tok
-  h7 | h2 | References | ~715 tok
+  h1 | h2 | Contents | ~19 tok
+h2 | h1 | List of countries by GDP (nominal) | ~583 tok
+  h3 | h2 | Table | ~2,880 tok
+  h4 | h2 | Nominal GDP of regional groupings | ~300 tok
+  h5 | h2 | See also | ~223 tok
+  h6 | h2 | Notes | ~1,056 tok
+  h7 | h2 | References | ~976 tok
 prose: ~2,686 chars in the readable region; read one section with get_text(page="p1", location={"ref":"h<n>"})
 
 ## 5 FORMS
@@ -93,13 +93,13 @@ f3 | "(same page)" | GET (same page) | 0 fields | in r14
 f4 | "(same page)" | GET (same page) | 0 fields | in r15
 
 ## 6 TABLES (structure only; cells come from get_table)
-t1 | "#mwDQ" | 2x1 | cols: (no th) | ~61 tok if fully read
-t2 | "#mwJg" | 1x2 | cols: (no th) | ~133 tok if fully read
-t3 | "GDP forecast or estimate (million US$) by country" | 223x4 | cols: Country/Territory | IMF ( 2026 ) [ 1 ] | World Bank (2025) [ 6 ] | United Nations (2024) [ 7 ] | ~1,322 tok if fully read
-t4 | "GDP forecast or estimate (million US$) by region or grouping" | 15x3 | cols: Regional groupings | IMF ( 2026 ) [ 1 ] | World Bank (2024) [ 6 ] | ~159 tok if fully read
-t5 | "(unnamed)" | 9x1, 2 spanned cells | cols: (no th) | ~441 tok if fully read
-t6 | "(unnamed)" | 10x1, 2 spanned cells | cols: (no th) | ~419 tok if fully read
-t7 | "(unnamed)" | 12x1, 3 spanned cells | cols: (no th) | ~320 tok if fully read
+t1 | "#mwDQ" | 2x1 | cols: (no th) | ~24 tok if fully read
+t2 | "#mwJg" | 1x2 | cols: (no th) | ~141 tok if fully read
+t3 | "GDP forecast or estimate (million US$) by country" | 223x4 | cols: Country/Territory | IMF ( 2026 ) [ 1 ] | World Bank (2025) [ 6 ] | United Nations (2024) [ 7 ] | ~2,773 tok if fully read
+t4 | "GDP forecast or estimate (million US$) by region or grouping" | 15x3 | cols: Regional groupings | IMF ( 2026 ) [ 1 ] | World Bank (2024) [ 6 ] | ~226 tok if fully read
+t5 | "(unnamed)" | 9x1, 2 spanned cells | cols: (no th) | ~474 tok if fully read
+t6 | "(unnamed)" | 10x1, 2 spanned cells | cols: (no th) | ~344 tok if fully read
+t7 | "(unnamed)" | 12x1, 3 spanned cells | cols: (no th) | ~252 tok if fully read
 
 ## 7 COMPLETENESS (what this read did NOT see, rendered from the budget meter's own ledger)
 iframes: none
@@ -118,12 +118,12 @@ name quality: 5 accessible name(s) came from a fallback or were truncated on a w
 budget: 3,399 of 5,000 tokens used (68%), 500 held as tokenizer-drift margin, estimator tiktoken/o200k_base | degradation rung 1 of 16
 
 ## 8 NEXT CALLS (ranked by what each is likely to answer, not by size)
-expand r16 ("Table"): get_page_view(page="p1", location={"region":"r16"})  ~1,267 tok
-expand r23 ("Lists of countries by GDP rankings"): get_page_view(page="p1", location={"region":"r23"})  ~388 tok
-expand r25 ("#footer"): get_page_view(page="p1", location={"region":"r25"})  ~134 tok
-expand r20 ("Notes"): get_page_view(page="p1", location={"region":"r20"})  ~1,135 tok
-expand r17 ("Nominal GDP of regional groupings"): get_page_view(page="p1", location={"region":"r17"})  ~222 tok
-expand r18 ("See also"): get_page_view(page="p1", location={"region":"r18"})  ~214 tok
+expand r16 ("Table"): get_page_view(page="p1", location={"region":"r16"})  ~2,861 tok
+expand r23 ("Lists of countries by GDP rankings"): get_page_view(page="p1", location={"region":"r23"})  ~503 tok
+expand r25 ("#footer"): get_page_view(page="p1", location={"region":"r25"})  ~123 tok
+expand r20 ("Notes"): get_page_view(page="p1", location={"region":"r20"})  ~1,060 tok
+expand r17 ("Nominal GDP of regional groupings"): get_page_view(page="p1", location={"region":"r17"})  ~310 tok
+expand r18 ("See also"): get_page_view(page="p1", location={"region":"r18"})  ~212 tok
 read table t1: get_table(page="p1", ref="t1", rows="1-50")  (2 rows total)
 find a control or link by name: find_elements(page="p1", query="<the text you are looking for>")  tens of tokens
 act on any ref above: click(page="p1", location={"ref":"e<n>"}) | type_text(...) | fill_form(...)
