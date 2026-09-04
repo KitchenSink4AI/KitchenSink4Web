@@ -21,14 +21,21 @@ dependencies = [
     # user regex against page text, so this matters more here than in the
     # document family.
     "regex",
+    # THE ENGINE (DESIGN 4.1), required since Phase 1 opened. The wheel is
+    # 38.2 MB because it bundles a Node runtime and the playwright-core
+    # driver; the BROWSERS are not bundled and are downloaded on first use,
+    # per engine, so an install of KS4Web costs the wheel and nothing else
+    # until somebody asks it to browse.
+    "playwright>=1.62",
+    # The budget meter's estimator. DESIGN 3.4 fixes the convention at
+    # tiktoken on o200k_base and names it in every published number, which is
+    # what makes "a page view never exceeds its budget" checkable rather than
+    # a slogan: conflict record #4 has the same content measured four ways at
+    # 4,024, 4,637, 11,717, and 14,400 tokens.
+    "tiktoken",
 ]
 
 [project.optional-dependencies]
-# Playwright is the engine (DESIGN 4.1) and lands in Phase 1. It is an extra
-# rather than a required dependency for exactly one reason: the 38.2 MB wheel
-# bundles a Node runtime, and Phase 0 needs none of it. It moves into
-# `dependencies` when Phase 1 opens.
-engine = ["playwright>=1.62"]
 dev = [
     "pytest",
     "pytest-timeout",
@@ -45,6 +52,12 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+# The in-page extractor is the projection, and a wheel without it installs a
+# server that cannot read a page. Declared here rather than discovered at
+# ship time.
+kitchensink4web = ["projection/*.js"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

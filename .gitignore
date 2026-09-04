@@ -8,3 +8,4 @@ dist/
 .coverage
 spikes/*/.venv/
 spikes/*/out/raw/
+gates/_victim_*.json

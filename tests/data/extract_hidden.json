@@ -1,0 +1,112 @@
+{
+ "affordance_class_totals": {},
+ "affordance_total": 0,
+ "affordances": [],
+ "completeness": {
+  "affordance_cap_hit": false,
+  "affordances_collected": 0,
+  "affordances_uncollected": 0,
+  "canvases": [
+   {
+    "h": 300,
+    "region": "r1",
+    "w": 400
+   }
+  ],
+  "closed_shadow_roots": 0,
+  "depth_cut_subtrees": 0,
+  "doc_height": 900,
+  "extract_ms": null,
+  "frames": [
+   {
+    "ref": "if1",
+    "region": "r1",
+    "same_origin": false,
+    "src": "https://example.com/frame",
+    "title": "A cross-origin frame"
+   }
+  ],
+  "frames_cross": 1,
+  "frames_same": 0,
+  "headings_uncollected": 0,
+  "hidden_interactive": 1,
+  "hidden_nodes": 7,
+  "hidden_reasons": {
+   "aria-hidden": 1,
+   "display-none": 2,
+   "font-size-0": 1,
+   "low-contrast": 1,
+   "offscreen": 1,
+   "opacity-0": 1,
+   "visibility-hidden": 1
+  },
+  "hidden_text_chars": 300,
+  "injection_suspects": 7,
+  "name_fallbacks": 0,
+  "open_shadow_roots": 0,
+  "region_cap_hit": false,
+  "text_chars": 177,
+  "total_elements": 19,
+  "viewport_height": 900,
+  "virtual": [],
+  "walked_elements": 14,
+  "zero_width_hits": 1
+ },
+ "div_tables": 0,
+ "forms": [],
+ "headings": [
+  {
+   "level": 1,
+   "name_quality": "computed",
+   "ref": "h1",
+   "region": "r1",
+   "section_affordances": 0,
+   "section_chars": 151,
+   "section_known": true,
+   "text": "A page with hidden regions"
+  }
+ ],
+ "headings_total": 1,
+ "identity": {
+  "lang": "en",
+  "origin": "null",
+  "screens": 1,
+  "title": "Hidden content fixture",
+  "url": "https://fixture.invalid/hidden",
+  "viewport": "1280x900"
+ },
+ "lead": "",
+ "regions": [
+  {
+   "children": [],
+   "depth": 0,
+   "in_viewport": true,
+   "kind": "main",
+   "label": "A page with hidden regions",
+   "name_quality": "none",
+   "nav_shaped": false,
+   "net": {
+    "chars": 177,
+    "headings": 1,
+    "images": 0,
+    "interactive": 0,
+    "text_blocks": 3
+   },
+   "parent": null,
+   "ref": "r1",
+   "tag": "main",
+   "top": 21
+  }
+ ],
+ "shape": {
+  "kind": "app",
+  "longest_paragraph": 52,
+  "paragraphs": 3,
+  "prose_chars": 151,
+  "prose_ratio": 0.85,
+  "readable": false,
+  "readable_region": null,
+  "why": "prose is 85% of page text over 3 paragraphs"
+ },
+ "tables": []
+}

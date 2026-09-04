@@ -25,6 +25,8 @@ table in this file. The enforcing test reads them positionally.
 |---|---|---|---|
 | `fastmcp` | Apache-2.0 | permissive, one-way into anything | Pinned `>=3.4,<4` from day one. The Word v2 lesson: never ship unpinned fastmcp, because a minor bump moved the visibility API mid-build. |
 | `regex` | Apache-2.0 (CNRI-derived, permissive) | permissive | Backs the caller-pattern ReDoS guard in `policy/_regex.py`. Needed rather than convenient: stdlib `re` has no match timeout, and `find_elements` runs caller patterns against page text. |
+| `playwright` | Apache-2.0 | permissive, one-way into anything including AGPL-3.0 | The engine (DESIGN 4.1). Moved from the `engine` extra into the required install when Phase 1 opened, as the ledger said it would. The 38.2 MB wheel bundles a Node runtime and the playwright-core driver; the browsers are downloaded at runtime and are not dependencies (see below). |
+| `tiktoken` | MIT | permissive | The budget meter's estimator, fixed at `o200k_base` by DESIGN 3.4 and named in every published number. Required rather than optional because the hard-cap property is the product: without a named estimator, "never exceeds its budget" is unfalsifiable. |
 
 ## Optional extras
 
@@ -33,7 +35,6 @@ that enforces this ledger reads the first backticked cell of each row.
 
 | Package | License | Extra | Why it is optional |
 |---|---|---|---|
-| `playwright` | Apache-2.0 | `engine` | The engine (DESIGN 4.1), landing in Phase 1. Optional in Phase 0 because the 38.2 MB wheel bundles a Node runtime and nothing in Phase 0 needs it. It moves into the required install when Phase 1 opens, and it is permissive either way. |
 | `pytest` | MIT | `dev` | Test-time only, never distributed. |
 | `pytest-timeout` | MIT | `dev` | Test-time only. Present from Phase 0 because a hung browser test is the family's most common CI failure and an unbounded one wedges the runner. |
 

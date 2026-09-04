@@ -1,35 +1,33 @@
 """Engine: lanes, process hygiene, and the session and page handle model.
 
-**EMPTY IN PHASE 0, deliberately.** PLAN Phase 0's gate says "no browser
-needed yet," and that is a scope statement rather than a convenience: the
-architecture does not freeze until the spike gate, and writing engine code
-before S2 reports would be building against an unfrozen design.
+**Built in Phase 1.** Three modules exist and one is still deferred:
 
-What lands in Phase 1 (PLAN 1.2):
-
-- `lanes.py`   Lane A/B/C resolution, lazy install, lazy start, channel
+- `lanes.py`   Lane A/B resolution, lazy install, lazy start, channel
                handling, and the capabilities truth table that backs
                manage_session(capabilities) and every LANE_UNSUPPORTED
-               message. Seeded from spike S4.
-- `hygiene.py` The three defenses: own process group plus a death-pipe
-               sentinel, a startup reaper keyed on OWNED PID only, and an
-               idle timeout that parks dormant pages to about:blank. This
-               is the row where the most-installed browser MCP server in
-               the world is currently open and unfixed (42 orphaned Chrome
-               roots across 83 connections, chrome-devtools-mcp #2621), and
-               the Phase 1 gate is zero orphans after 50 cycles including
-               SIGKILL of the parent.
-- `bidi.py`    The thin in-house WebDriver BiDi client for Lane C Firefox,
-               written FROM THE W3C SPEC and not lifted from Playwright's
-               bidi sources (DESIGN 10.3 rule 2, a license-futures decision
-               made now because it is cheap now and expensive later).
+               message. Seeded from spike S4's measured table.
+- `hygiene.py` The three defenses: a kill-on-close job object alongside
+               Playwright's death pipe, a startup reaper keyed on OWNED PID
+               only, and the CPU accounting behind the idle park. This is
+               the row where the most-installed browser MCP server in the
+               world is currently open and unfixed (42 orphaned Chrome roots
+               across 83 connections, chrome-devtools-mcp #2621).
+- `session.py` The session and page handle model the 2026-07-28 spec asks
+               for, one Playwright instance across tool calls, the asyncio
+               lock, the bounded per-operation timeout, and the idle park.
+- `bidi.py`    NOT BUILT. The thin in-house WebDriver BiDi client for Lane C
+               Firefox, to be written FROM THE W3C SPEC and not lifted from
+               Playwright's bidi sources (DESIGN 10.3 rule 2). Lane C waits
+               on S5 and S6, which are deferred by a standing safety rule
+               rather than by a finding, so the lane refuses rather than
+               pretending and no public copy may claim it.
 
-Standing rules that bind this package from before it exists: never touch the
-user's real browser profile, and never kill a browser process KS4Web did not
-spawn. The owned-PID journal is authoritative and nothing is ever swept by
-process name.
+Standing rules that bind this package: never touch the user's real browser
+profile, and never kill a browser process KS4Web did not spawn. The owned-PID
+journal is authoritative and nothing is ever swept by process name.
 
-This package may import from `policy/`. `policy/` may not import from here.
+This package may import from `policy/` and from `projection/`. `policy/` may
+import from neither.
 """
 
 from __future__ import annotations

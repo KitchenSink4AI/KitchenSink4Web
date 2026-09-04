@@ -83,12 +83,62 @@ def test_the_direction_is_actually_exercised():
     assert users, "nothing depends on policy/, so the seam is untested"
 
 
-def test_no_module_imports_playwright_yet():
-    """Phase 0's gate: no browser needed yet. Playwright is an optional
-    extra until Phase 1 opens, so nothing in the package may import it."""
+def test_playwright_is_confined_to_the_engine():
+    """Phase 1's version of the Phase 0 rule, and a stronger one.
+
+    The driver is the engine's business. `projection/` takes a page-like
+    object with an `evaluate` method and never imports playwright, which is
+    what keeps it testable against a recorded extraction; `ops/` goes through
+    the session manager; `policy/` touches neither. A tool reaching for the
+    driver directly is how a lane gap becomes a silent pass-through."""
     offenders = [
         p.relative_to(SRC).as_posix()
         for p in SRC.rglob("*.py")
         if any(n.split(".")[0] == "playwright" for n in _module_imports(p))
+        and p.parent.name != "engine"
     ]
-    assert not offenders, f"playwright imported in Phase 0: {offenders}"
+    assert not offenders, (
+        f"playwright imported outside engine/: {offenders}. The driver is the "
+        f"engine's business; everything else goes through the session manager."
+    )
+
+
+def test_projection_does_not_import_the_engine():
+    """The projection is a pure function of an extraction plus a budget.
+
+    That is what lets the ladder, the quotas, the prices, and the completeness
+    accounting be tested against a recorded page with no browser running, and
+    a projection that reached into the engine would lose it."""
+    offenders = []
+    for path in _files("projection"):
+        for name in _module_imports(path):
+            head = name.replace("kitchensink4web.", "").split(".")[0]
+            if head in ("engine", "ops"):
+                offenders.append(f"{path.name} imports {name}")
+    assert not offenders, "; ".join(offenders)
+
+
+def test_importing_the_package_does_not_start_the_driver():
+    """Lazy install is also lazy start (DESIGN 4.1), and codex #21984 names
+    eager startup of GUI-capable MCP tools as the root cause of the worst leak
+    reports. A server nobody asks to browse must not spawn a Node driver, so
+    playwright is imported inside functions rather than at module scope.
+
+    Checked in a FRESH interpreter, because a browser test earlier in the same
+    session would leave playwright in sys.modules and make an in-process
+    assertion pass for the wrong reason."""
+    import subprocess
+    import sys
+
+    probe = (
+        "import sys;"
+        "from kitchensink4web import server;"
+        "server.configure();"
+        "print('playwright' in sys.modules)"
+    )
+    out = subprocess.run([sys.executable, "-X", "utf8", "-c", probe],
+                         capture_output=True, text=True, timeout=120)
+    assert out.returncode == 0, out.stderr[-800:]
+    assert out.stdout.strip().endswith("False"), (
+        "importing the package and registering the surface imported "
+        "playwright, so the driver is no longer lazy")

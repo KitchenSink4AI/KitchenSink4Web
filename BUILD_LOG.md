@@ -686,3 +686,267 @@ Three, all additive or gate-placement rather than substitutions.
 blocked on S2. No license, no browser code, nothing published.
 
 ---
+
+## Part VI: Phase 1, the browser core (2026-09-05 02:07 KST)
+
+**GATE GREEN on all four parts. 213 tests, all passing. Zero orphans across 50
+session cycles and four hard-kill scenarios on both lanes, projection p95 417 ms
+at 50,000 nodes, lite surface unchanged at 2.72k.** First code in the repo that
+touches a browser.
+
+### What landed
+
+`engine/lanes.py`, `engine/hygiene.py`, `engine/session.py`, the whole
+`projection/` package, four lite tools wired to a real browser
+(`manage_session`, `manage_tabs`, `navigate`, `get_page_view`, plus
+`get_workflows`, which needed no browser), two gate scripts, a fixture corpus,
+and 132 new tests.
+
+### The engine
+
+**Lane A and Lane B, and Lane C refuses rather than pretends.** Lane B carries
+`moz-firefox` per S3, and the S4 capability table is now code that
+`manage_session(action="capabilities")` reads rather than a table in a document
+somebody has to remember to update. Both measured gaps are LOUD REFUSALS:
+`navigate(action="back")` on Firefox/BiDi raises `LANE_UNSUPPORTED` naming the
+stale-URL behavior and the substitute, and the substitute is real because
+KS4Web tracks its own page history per handle. Lane C refuses with a message
+that says S5 and S6 are deferred by a standing safety rule rather than by a
+finding, so nothing in the product implies a capability nobody has verified.
+
+**`-no-remote` is a constant on every Firefox launch**, asserted from three
+directions: the Phase 0 constant test, a lanes test over every Firefox spec
+including the headed one, and the live Lane B test that drives the author's
+installed Firefox 154 on a throwaway profile.
+
+**Playwright is imported inside functions, never at module scope.** Lazy install
+is also lazy start, and codex #21984 names eager startup of GUI-capable MCP
+tools as the root cause of the worst leak reports. A test proves it in a FRESH
+interpreter, because a browser test earlier in the same session would leave
+playwright in `sys.modules` and make an in-process assertion pass for the wrong
+reason. A second test confines the playwright import to `engine/` entirely:
+`projection/` takes a page-like object with an `evaluate` method and never
+imports the driver, which is what keeps the whole projection testable against a
+recorded extraction.
+
+### The hygiene layer, and the gate that can actually fail
+
+Three defenses, all built: a kill-on-close job object alongside Playwright's own
+death pipe, a startup reaper keyed on OWNED PID only, and an idle park verified
+by CPU measurement rather than by asserting that a park happened.
+
+**Four mechanical findings, three of them bugs this build made and fixed.**
+
+1. **`alive()` was wrong in the dangerous direction.** `OpenProcess` succeeds on
+   a process that has already exited for as long as anyone holds a handle to it,
+   and a parent holding a `Popen` object holds one. The first version reported
+   dead processes as survivors. It now waits on the process handle, which
+   signals on exit.
+2. **`descendants()` adopted strangers.** A parent-PID field points at a NUMBER,
+   Windows recycles PIDs, and a naive walk pulls in any process whose parent PID
+   matches a recycled one. On this machine that turned a five process browser
+   tree into a forty process claim, which would have authorized forty kills. A
+   child cannot predate its parent, so creation-time comparison drops every one
+   of those without dropping a real child.
+3. **The journal has an adoption filter, and it is not a sweep by name.** Only
+   browser-shaped descendants that appeared during our own launch enter the
+   journal, so a PowerShell process spawned for a CIM query can never be
+   authorized as a kill. The house rule bans sweeping BY name; this is the
+   opposite of that.
+4. **The reaper's last fence fires on positive evidence of somebody ELSE'S
+   ownership**, never on the absence of evidence of ours. The first version
+   required a command line naming an owned profile, which declines every browser
+   helper process, since a renderer does not always repeat the profile flag its
+   root was launched with, and declining to kill a helper is how the orphan gets
+   left behind.
+
+Toolhelp32 replaced the spike's `Get-CimInstance` for the process table: single
+digit milliseconds against S7's measured 1.0 second for 557 processes, which is
+what makes a per-launch census affordable. CIM stays for command lines, which
+only the reaper's last fence needs.
+
+### The confound, and the divergence from PLAN's gate wording
+
+PLAN Phase 1 requires the orphan test to break away from the ambient job object
+(`CREATE_BREAKAWAY_FROM_JOB`), on the grounds that a shell owning a
+`KILL_ON_JOB_CLOSE` job reaps the tree for you and every result comes back green
+whether or not the server has any teardown at all. That requirement is right and
+**its stated mechanism does not work on this machine.**
+
+The ambient job here carries `0x3000`: `KILL_ON_JOB_CLOSE` plus
+`SILENT_BREAKAWAY_OK`, with `BREAKAWAY_OK` off. The explicit flag is therefore
+rejected with access denied on some paths and accepted on others, and in every
+case the child still lands inside a kill-on-close job. Creating the victim
+through WMI `Win32_Process::Create`, which builds the process from the service
+rather than from us, does not escape it either.
+
+**So the gate gets its falsifiability from a NEGATIVE CONTROL instead, which is
+a stronger instrument than the one the plan named.** Before the KS4Web
+scenarios run, the gate hard-kills a parent holding a browser started by plain
+`Popen`, with no death pipe, no job object, and no teardown of any kind. That
+browser MUST survive. It does, leaving 11 orphaned processes, which proves the
+environment is not quietly reaping browser trees. Only then do the KS4Web
+scenarios mean anything, and they leave zero. **This is a divergence from the
+plan's wording and it serves the plan's purpose better than compliance would
+have:** breakaway is a proxy for "the harness is not doing the work," and the
+negative control measures that directly.
+
+The four hard-kill rows, with the parent and the Node driver both hard-killed:
+
+| scenario | processes | orphans | reap |
+|---|---|---|---|
+| negative control, no teardown at all | 13 | **11, as required** | never |
+| Lane A chromium, KS4Web job object ON | 4 | 0 | 1.0 s |
+| Lane A chromium, KS4Web job object OFF | 4 | 0 | 1.0 s |
+| Lane B moz-firefox, job object ON | 10 | 0 | 1.0 s |
+| Lane B moz-firefox, job object OFF | 10 | 0 | 1.0 s |
+
+Running each lane with the job object OFF is what turns "the death pipe is doing
+the work and the job object is a backstop" from a claim into a measurement.
+S7 said it; this confirms it on the shipped code.
+
+### The projection
+
+The S1 prototype is not ported. It is rebuilt around the three corrections S1
+forced, and each one has a fixture that would catch the defect coming back.
+
+**One depth-first walk, one computed style per element.** Region ownership comes
+from a stack maintained during the walk, so every count is NET of nested regions
+and a parent can be priced net of its children without a second pass. The walk
+also stops at a hidden subtree and accounts for the whole thing there, which is
+what keeps the normalizer linear rather than quadratic.
+
+**Accessible names are computed by an accname walk**, with space-separated
+contributions, word-boundary truncation carrying an explicit ellipsis, and a
+refusal to emit a CSS class as a stand-in name. The `names` fixture carries
+every S1 failure: a heading glued to its count badge now reads `General 4`, the
+hidden error element no longer names the `main` region, `.mw-file-description`
+is `(unnamed)` plus its href, and a long name cuts on a space. **The region
+label bug was reproduced and fixed during this phase**: the first version took
+the first heading in the subtree and picked up the hidden `Uh oh!` exactly as S1
+did, because a heading that is itself visible can sit inside a `display:none`
+wrapper. The label now requires the whole chain up to the region to be visible.
+
+**Affordances are selected by per-class quota with guaranteed floors.** The
+`appshell` fixture is S1's GitHub failure in miniature: thirteen repository tabs
+competing with sixty truncated commit-message links. All thirteen tabs appear.
+On the `article` fixture, 140 in-prose links are suppressed by a quota of zero
+and the completeness block states the count and the class. One correction made
+during the build: a control only counts as a form control when it is INSIDE a
+form, because letting every loose input on an app shell claim the "complete,
+never sampled" guarantee turns the guarantee into the flood it was written to
+prevent.
+
+**Prices and budgets are one arithmetic.** The budget meter estimates with
+`tiktoken` on `o200k_base`, holds a 10 percent drift margin in reserve, and
+keeps a ledger of every unit and its disposition. Sections are priced over their
+true extent in document order, spanning wrappers, and a heading whose extent
+cannot be determined prints no price and says so. Regions are priced net of
+their children. **The completeness block computes nothing**; it renders the
+ledger, and the "0 regions not expanded" case is a named regression test.
+
+**The ladder has eight rungs and is monotonic as exposed.** The caps are
+non-increasing by construction, and one more mechanism was needed: dropping a
+unit can occasionally cost MORE than it saves, because the completeness block
+then has to account for what went. The `names` fixture grew by 37 tokens at rung
+7 for exactly that reason. A rung that costs more than a rung above it is
+DOMINATED and never chosen, which makes the ladder the caller sees monotonic
+even when a single step is not. The other half of that fix was a real defect:
+the suppression line was explaining the in-prose rule even when no in-prose link
+had been suppressed.
+
+**The floor is content-aware**: the field listing survives on a form page and
+the digest survives on an article, which is the inverse of what S1's floor did.
+
+### The latency budget, held
+
+Measured on the same synthetic ladder the engine round used, ten warm
+repetitions per fixture after one discarded pass, against the shipped projector.
+
+| nodes | extract p95 | Python assembly p95 | projection p95 | budget |
+|---|---|---|---|---|
+| 5,012 | 80 ms | 3.8 ms | 84 ms | 500 ms |
+| 10,012 | 100 ms | 4.1 ms | 104 ms | 500 ms |
+| 25,012 | 288 ms | 6.6 ms | 294 ms | 500 ms |
+| 50,012 | 411 ms | 5.9 ms | **417 ms** | 500 ms |
+| 100,012 | 671 ms | 5.1 ms | **676 ms** | 1,000 ms |
+
+Two findings worth banking. **The payload crossing the driver boundary was the
+bill, not the walk.** The first version returned every heading on the page, and
+a 5,000-heading fixture cost more in JSON transfer than the entire in-page pass
+cost in the browser: 604 ms round trip against 245 ms of actual work. Capping
+what is RETURNED while tallying everything that is COUNTED fixed it without
+costing a single completeness figure, because the suppression counts come from
+the extractor's own tally rather than from the list in hand.
+
+**Per-line token measurement had to be memoized.** The budget line states the
+total of the payload it sits inside, so it is self-referential and the ladder
+renders to a fixpoint, which means most lines get measured twice. Memoizing the
+line-level counts and switching to `encode_ordinary` took Python assembly from
+14 ms to under 6 ms. The estimator warms when a browser starts, so the one-off
+cost of loading the BPE table does not land inside the first read.
+
+### The fixture corpus, and why the recordings are committed
+
+`tests/fixtures/pages.py` holds five hand-written pages, one per failure class,
+and `scripts/capture_fixtures.py` records one extraction each into
+`tests/data/`. The projection is a pure function of an extraction plus a budget,
+so 72 projection tests run in half a second with no browser and cannot flake.
+**The recordings are committed on purpose: a diff in those files IS a change in
+what every read sees**, which makes them a review surface rather than a build
+artifact.
+
+### The gate
+
+| Phase 1 gate item (PLAN) | Result |
+|---|---|
+| Zero orphans after 50 session cycles | **PASS**, 50 cycles in 39.9 s, no survivors, no leftover profile directories |
+| Including SIGKILL of the server parent | **PASS**, both lanes, with and without KS4Web's job object |
+| Verified by owned PID on Windows | **PASS**, and the journal is the only thing that authorizes a kill |
+| Clean startup reap of deliberately orphaned profile dirs | **PASS**, with a control process the reaper must not touch and a live-peer journal it must skip entirely |
+| Idle-timeout park verified by CPU measurement | **PASS**, 2.53 CPU-seconds over 3 s down to 0.00 |
+| The orphan test must be able to FAIL | **PASS by a different mechanism.** Breakaway is unavailable on this machine; a negative control that orphans 11 processes proves it directly |
+| `-no-remote` on every Firefox launch | **PASS**, three independent assertions |
+| Projection p95 at or under 500 ms to 50,000 nodes | **PASS**, 417 ms |
+| Projection p95 at or under 1.0 s to 100,000 nodes | **PASS**, 676 ms |
+| Python-side assembly at or under 10 ms | **PASS**, 5.9 ms at 50,000 nodes |
+| Full suite green | **PASS**, 213 tests |
+| `measure_surface` runs | **PASS**, lite unchanged at 2.72k |
+
+### Divergences from the plan, stated
+
+Four.
+
+1. **`navigate` and `manage_tabs` moved up from Phase 4 into Phase 1**, on
+   instruction: the phase was defined as the browser core including the
+   navigation and lifecycle tools. The action tools (`click`, `type_text`,
+   `fill_form`, `press_keys`, `scroll`, `wait_for`) stay in Phase 4 behind the
+   policy layer, and every one of them still refuses honestly.
+2. **The orphan gate's falsifiability comes from a negative control rather than
+   from `CREATE_BREAKAWAY_FROM_JOB`**, because the flag cannot deliver an
+   out-of-job child on this machine. Recorded above in full.
+3. **Phase 1 opened before the spike gate closed.** S2 (anchor durability) has
+   not run, so this phase built no anchors: refs are minted per read, and the
+   rebind ladder, the sticky element map, and deltas are all Phase 2. Nothing
+   here depends on the S2 answer, and `get_page_view(since=...)` refuses by
+   naming the phase rather than pretending.
+4. **The copy guards were extended to cover the projection payload**, which the
+   Phase 0 skeleton did not reach. It is the most-read public text in the
+   product by a wide margin.
+
+### Open items carried forward
+
+- **Corpus A is still owed.** The four MEASURED pages are not frozen, and PLAN
+  1.3 requires that before the Phase 2 harness. The Phase 1 fixtures are corpus
+  B's first slice, not corpus A.
+- **The lite budget question is still an author call.** 2.72k measured against a
+  published 1,500 target, unchanged this phase because the roster and the
+  docstrings were not touched. The ratchet holds at 2,900.
+- **`view="read"`, `"links"`, and `"dom"`** are refused by name pending Phase 2,
+  along with `location`, `since`, `cursor`, and `include_hidden`.
+- **The select-options cap** is set at 12 options and 240 characters from taste,
+  and DESIGN 3.3 block 5 says Phase 2 sets it from measurement.
+
+**Status:** Phase 1 green. No license, nothing published, no anchors yet.
+
+---

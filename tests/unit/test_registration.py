@@ -164,25 +164,47 @@ def test_pack_hint_names_flag_and_env(launch):
     assert "LAUNCH" in hint
 
 
-def test_stubs_refuse_with_not_implemented(launch):
-    """Phase 0 has no engine. Every stub says so in the envelope rather than
-    returning plausible output, because a tool that reports success without
-    doing anything is the exact disease this product argues against."""
-    launch()
-
+def _call(tool: str, args: dict):
     async def run():
         async with Client(server.mcp) as c:
-            return await c.call_tool(
-                "get_page_view", {"page": "p1"}, raise_on_error=False)
+            return await c.call_tool(tool, args, raise_on_error=False)
 
-    result = asyncio.run(run())
+    return asyncio.run(run())
+
+
+def test_unbuilt_tools_still_refuse_with_not_implemented(launch):
+    """Phase 1 built the browser core and the projection, not the action
+    tools. Every tool that is not built yet says so in the envelope rather
+    than returning plausible output, because a tool that reports success
+    without doing anything is the exact disease this product argues against."""
+    launch()
+    result = _call("find_elements", {"page": "p1", "query": "x"})
     assert result.is_error is True
     assert result.structured_content["error"]["code"] == "NOT_IMPLEMENTED"
     assert "Phase 2" in result.structured_content["error"]["message"]
 
 
-def test_no_browser_dependency_is_imported():
-    """Phase 0's gate says "no browser needed yet" and this proves it: the
-    whole package imports with playwright absent from the environment."""
-    import sys
-    assert "playwright" not in sys.modules
+def test_a_ref_from_no_session_refuses_by_naming_the_mint_rule(launch):
+    """The built tools refuse honestly too. A page handle that was never
+    minted is NOT_FOUND with the mint rule stated, not a stack trace and not
+    an empty read."""
+    launch()
+    result = _call("get_page_view", {"page": "p1"})
+    assert result.is_error is True
+    assert result.structured_content["error"]["code"] == "NOT_FOUND"
+    hint = result.structured_content["error"]["hint"]
+    assert "minted only by a read in this session" in hint
+
+
+def test_get_workflows_carries_the_pack_menu_and_the_lane_menu(launch):
+    """Discoverability rule 2, adapted: there is no enable call to name, so
+    lite's own recipe tool has to carry the full menu (DESIGN 7.4)."""
+    launch()
+    result = _call("get_workflows", {})
+    assert result.is_error is False
+    flows = result.structured_content["workflows"]
+    assert set(flows["packs"]) >= {"extract", "capture", "network"}
+    assert any("--packs" in entry["launch_flag"]
+               for entry in flows["packs"].values())
+    assert any("moz-firefox" in line for line in flows["lanes"])
+    assert "no runtime enable call" in flows["packs-are-launch-time"]

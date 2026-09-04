@@ -1,0 +1,249 @@
+{
+ "measured": "2026-09-05 02:05",
+ "results": {
+  "job_context_at_start": {
+   "in_job": true,
+   "limit_flags": "0x3000",
+   "kill_on_job_close": true,
+   "breakaway_ok": false,
+   "silent_breakaway_ok": true
+  },
+  "hard_kill": [
+   {
+    "lane": "raw",
+    "job_object": false,
+    "job_before_ks4web": {
+     "in_job": true,
+     "limit_flags": "0x3000",
+     "kill_on_job_close": true,
+     "breakaway_ok": false,
+     "silent_breakaway_ok": true
+    },
+    "job_after_ks4web": {
+     "in_job": true,
+     "limit_flags": "0x3000",
+     "kill_on_job_close": true,
+     "breakaway_ok": false,
+     "silent_breakaway_ok": true
+    },
+    "job_status": "none: this control deliberately has no teardown",
+    "spawned_via": "WMI Win32_Process::Create (out of job)",
+    "inherited_kill_on_job_close": true,
+    "watched": 12,
+    "browser_pids": [
+     31532,
+     31532,
+     3540,
+     83684,
+     116728,
+     90564,
+     116620,
+     99528,
+     101384,
+     98500,
+     61332,
+     123224,
+     6816
+    ],
+    "reap_seconds": 20.0,
+    "orphans": [
+     3540,
+     31532,
+     61332,
+     83684,
+     90564,
+     98500,
+     99528,
+     101384,
+     116620,
+     116728,
+     123224
+    ],
+    "expect_orphans": true,
+    "pass": true
+   },
+   {
+    "lane": "A",
+    "job_object": true,
+    "job_before_ks4web": {
+     "in_job": true,
+     "limit_flags": "0x3000",
+     "kill_on_job_close": true,
+     "breakaway_ok": false,
+     "silent_breakaway_ok": true
+    },
+    "job_after_ks4web": {
+     "in_job": true,
+     "limit_flags": "0x2000",
+     "kill_on_job_close": true,
+     "breakaway_ok": false,
+     "silent_breakaway_ok": false
+    },
+    "job_status": "kill-on-job-close",
+    "spawned_via": "WMI Win32_Process::Create (out of job)",
+    "inherited_kill_on_job_close": true,
+    "watched": 4,
+    "browser_pids": [
+     97004,
+     97892,
+     94472,
+     124096
+    ],
+    "reap_seconds": 1.0,
+    "orphans": [],
+    "expect_orphans": false,
+    "pass": true
+   },
+   {
+    "lane": "A",
+    "job_object": false,
+    "job_before_ks4web": {
+     "in_job": true,
+     "limit_flags": "0x3000",
+     "kill_on_job_close": true,
+     "breakaway_ok": false,
+     "silent_breakaway_ok": true
+    },
+    "job_after_ks4web": {
+     "in_job": true,
+     "limit_flags": "0x3000",
+     "kill_on_job_close": true,
+     "breakaway_ok": false,
+     "silent_breakaway_ok": true
+    },
+    "job_status": "disabled by KS4WEB_JOB_OBJECT=0",
+    "spawned_via": "WMI Win32_Process::Create (out of job)",
+    "inherited_kill_on_job_close": true,
+    "watched": 4,
+    "browser_pids": [
+     103748,
+     67028,
+     113596,
+     87072
+    ],
+    "reap_seconds": 1.0,
+    "orphans": [],
+    "expect_orphans": false,
+    "pass": true
+   },
+   {
+    "lane": "B",
+    "job_object": true,
+    "job_before_ks4web": {
+     "in_job": true,
+     "limit_flags": "0x3000",
+     "kill_on_job_close": true,
+     "breakaway_ok": false,
+     "silent_breakaway_ok": true
+    },
+    "job_after_ks4web": {
+     "in_job": true,
+     "limit_flags": "0x2000",
+     "kill_on_job_close": true,
+     "breakaway_ok": false,
+     "silent_breakaway_ok": false
+    },
+    "job_status": "kill-on-job-close",
+    "spawned_via": "WMI Win32_Process::Create (out of job)",
+    "inherited_kill_on_job_close": true,
+    "watched": 11,
+    "browser_pids": [
+     118080,
+     103472,
+     124028,
+     116492,
+     82544,
+     73396,
+     101344,
+     101840,
+     120108,
+     92300
+    ],
+    "reap_seconds": 1.0,
+    "orphans": [],
+    "expect_orphans": false,
+    "pass": true
+   },
+   {
+    "lane": "B",
+    "job_object": false,
+    "job_before_ks4web": {
+     "in_job": true,
+     "limit_flags": "0x3000",
+     "kill_on_job_close": true,
+     "breakaway_ok": false,
+     "silent_breakaway_ok": true
+    },
+    "job_after_ks4web": {
+     "in_job": true,
+     "limit_flags": "0x3000",
+     "kill_on_job_close": true,
+     "breakaway_ok": false,
+     "silent_breakaway_ok": true
+    },
+    "job_status": "disabled by KS4WEB_JOB_OBJECT=0",
+    "spawned_via": "WMI Win32_Process::Create (out of job)",
+    "inherited_kill_on_job_close": true,
+    "watched": 11,
+    "browser_pids": [
+     43460,
+     119408,
+     120888,
+     90588,
+     125780,
+     114324,
+     66640,
+     117068,
+     41828,
+     120396
+    ],
+    "reap_seconds": 1.0,
+    "orphans": [],
+    "expect_orphans": false,
+    "pass": true
+   }
+  ],
+  "cycles": {
+   "cycles": 50,
+   "seconds": 39.9,
+   "leaked": [],
+   "profiles_left": [],
+   "pass": true
+  },
+  "startup_reap": {
+   "report": {
+    "journals": 2,
+    "skipped_live_owner": 1,
+    "killed": [
+     15048
+    ],
+    "declined": [],
+    "profiles_removed": [
+     "C:\\Users\\user\\AppData\\Local\\Temp\\ks4web_profile_reapdead_sy1xaa_t"
+    ],
+    "dry_run": false
+   },
+   "orphan_reaped": true,
+   "live_peer_journal_skipped": true,
+   "control_untouched": true,
+   "residue_profile_removed": true,
+   "pass": true
+  },
+  "idle_park": {
+   "pids": [
+    101544,
+    106060,
+    118816,
+    126752
+   ],
+   "busy_cpu_s_over_3s": 2.531,
+   "parked_cpu_s_over_3s": 0.0,
+   "parked": [
+    "p51"
+   ],
+   "drop": 1.0,
+   "pass": true
+  }
+ },
+ "failures": []
+}

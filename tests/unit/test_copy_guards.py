@@ -118,6 +118,41 @@ def test_no_license_claim_exists_yet():
             f"pyproject declares a license before Q1 is ruled: {stripped!r}"
 
 
+def _projection_strings() -> dict[str, str]:
+    """The projection payload, which is the most-read public text in the
+    product by a wide margin.
+
+    Phase 1 extends the guards to cover it. A tool description is read once
+    per session; a page view is read on every page, and the completeness
+    block is where a careless sentence about hidden content would turn a
+    stated behavior into a stated technique."""
+    import json
+    from pathlib import Path as _Path
+
+    from kitchensink4web.projection import project
+
+    data_dir = ROOT / "tests" / "data"
+    meta = {"status": 200, "load_state": "load", "lane": "A(chromium)",
+            "page": "p1", "read_token": "rt1", "ts": "2026-09-05T00:00:00"}
+    out = {}
+    for path in sorted(_Path(data_dir).glob("extract_*.json")):
+        data = json.loads(path.read_text(encoding="utf-8"))
+        out[f"projection:{path.stem}"] = project(data, meta,
+                                                 budget=5000).text
+    return out
+
+
+def test_the_projection_payload_obeys_every_copy_rule():
+    for where, text in _projection_strings().items():
+        assert "—" not in text, f"em dash in {where}"
+        for pattern in BANNED_SAFETY + BANNED_RECIPES + BANNED_OVERCLAIM:
+            hit = re.search(pattern, text, re.IGNORECASE)
+            assert not hit, (
+                f"{where} carries banned copy {hit.group(0)!r}. The "
+                f"projection is read on every page, so a careless sentence "
+                f"there is the most-repeated sentence in the product.")
+
+
 def test_no_trademark_or_affiliation_claim():
     """Nominative use only, no logos, no trade dress, and never an implied
     endorsement by a browser vendor."""
