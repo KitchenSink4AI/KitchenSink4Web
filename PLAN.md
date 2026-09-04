@@ -116,7 +116,7 @@ the spikes report" has one stated exception and this is it. The sequence:
 | Corpus work | Due |
 |---|---|
 | Corpus A: the four MEASURED pages fetched and frozen to disk as snapshots, with the fetch date and page revision recorded | **Before S1 starts.** S1 measures against the frozen copies, not the live pages. **NOT MET as run (2026-09-05):** S1 ran against live pages and froze the extraction outputs afterward (`spikes/s1/out/raw/*.extract.json`), plus the eleven blind-trial inputs byte-for-byte. Its ladder numbers re-derive offline and its per-page numbers do not. **MET 2026-09-05 02:20 KST**, ahead of the Phase 2 harness: `corpus/a/` holds the four pages with `corpus/a/MANIFEST.json` recording the fetch DTG, the final URL, the MediaWiki revision id where one is published, a sha256 per file, and what the capture strips. `scripts/freeze_corpus_a.py` rebuilds it and `scripts/measure_corpus_a.py --live` re-measures it with the live drift check. Every DESIGN 3.2 figure now comes from this corpus. |
-| Corpus B subset: React re-render page, react-window virtualized list, client-side route change, plus the 50,000-node DOM (S1 needs it for the degradation rungs and the latency measurement) | **Before S1 and S2 start.** |
+| Corpus B subset: React re-render page, react-window virtualized list, client-side route change, plus the 50,000-node DOM (S1 needs it for the degradation rungs and the latency measurement) | **Before S1 and S2 start.** **BUILT 2026-09-05 as part of S2**, at `spikes/s2/fixtures/`: a React SPA carrying a node-replacing remount, a label change, a list reorder, hash routing, duplicate control names and a modal; a real react-window `FixedSizeList` rendering 20 of 5,000; and a look-alike page for the cross-navigation case. React 18.3.1 and react-window 1.8.10 are vendored as UMD builds, so there is no build step and no network at run time. The 50,000-node DOM was built in Phase 1 as the latency ladder. **These move into the repo's corpus B proper before Phase 2 closes**; they live under `spikes/` today because S2 built them. |
 | The rest of corpus B: iframes, shadow roots, canvas, mutating page, rowspan tables, div-tables, lazy images, `isTrusted` control, `<div onclick>`, moving target, overlay, portal dropdown, console flood, secret fields | Before **Phase 2** opens, since the Phase 2 gate is verified against them. |
 | Corpus C in full | Before **Phase 3** opens, since the Phase 3 gate IS corpus C driven end to end. |
 
@@ -251,7 +251,46 @@ projection out, token count printed.
   completeness-block field list, and the latency table that sets the Phase 2
   bound.
 
-### S2: Anchor durability
+### S2: Anchor durability — **DONE 2026-09-05, GREEN**
+
+**Report:** `internal notes/20260905_ks4web_spike_s2.md`.
+**Code:** `spikes/s2/` on `master`. **Raw:** `spikes/s2/out/s2.json`.
+
+**Zero false rebinds and zero false stickiness across 396 resolutions in 18
+scenarios**, against real React 18.3.1 and real react-window 1.8.10 vendored as
+UMD builds. Neither gate tripped and the fallback is not needed.
+
+The headline pair: a React remount destroyed **77 percent of the DOM nodes**
+and **100 percent of distinguishable elements kept their refs**, which turns
+DESIGN 3.5's argument against copying `backendNodeId` from a claim into a
+measurement. Same-URL reload, label change, list reorder, and virtualized
+scroll all hold at 100 percent.
+
+**It was not zero on the first run, and the corrections are the substance.**
+Three false-identity classes, each now a design rule (DESIGN 3.5): the page key
+belongs in every anchor KEY and not only in the descriptor (7 wrong bindings
+per run at the strongest tier, on a look-alike page); an ordinal may scope a
+lookup and may never bind a ref (22 wrong bindings from one virtualized scroll,
+because a recycled window keeps its ordinals); and every unique key an element
+offers is registered rather than only the cheapest, which is what let a control
+survive a change to its own accessible name.
+
+Four further findings, all absorbed. **The URL test is literal**: document
+identity was measured as the plausible refinement and is worse in both
+directions, rebinding across a route change and refusing everything after a
+reload. **The name-only fuzzy tier is CUT from v1**: it changed no
+resolution's correctness anywhere and only converted STALE refusals into
+AMBIGUOUS ones. **Cross-page rebinding stays off and now has a number**: 6
+false rebinds in 22 attempts, 27 percent. **The entry-condition table gained a
+sixth row** for turn-local refs, which the obvious implementation refuses
+`NOT_FOUND` when the ref was in fact minted this session.
+
+One cost is stated rather than buried: scoping the key by origin, path, and
+hash means a persistent app shell loses its refs on a hash route change, five
+of twenty-two elements on the fixture. The alternative buys them back and costs
+a false rebind, and the harder gate settles it.
+
+### S2 (original definition, kept as the record of what was asked)
 
 Mint anchors on a React SPA and on the pathological fixture, then force a
 re-render, a route change, a virtualized-list recycle, and a full navigation.
@@ -550,7 +589,7 @@ whole session and not just one call. Everything else is a delivery decision.
 | Spike | Status |
 |---|---|
 | S1 projection proof | **GREEN**, VALIDATED-WITH-CAVEATS, absorbed |
-| S2 anchor durability | **NOT RUN.** The one remaining gate blocker. |
+| S2 anchor durability | **GREEN**, zero false rebinds over 396 resolutions, absorbed |
 | S3 `moz-firefox` | **GREEN**, HOLDS, absorbed |
 | S4 BiDi gaps | **GREEN**, lanes at full standing, absorbed |
 | S5 Firefox live attach | **DEFERRED BY SAFETY**, next Firefox-closed window |
@@ -565,9 +604,13 @@ whole session and not just one call. Everything else is a delivery decision.
 rather than the design's thesis**, both restated in DESIGN 3.2 from
 measurement. Neither S1 kill criterion tripped and neither did S3's or S4's.
 
-**The gate is not yet passable, and the blocker is now S2 alone.** S1 green
-means the product exists; S2 green means it is cheap for a whole session rather
-than one call, and nothing has tested that yet. S5 and S6 are deferred by a
+**The gate is PASSABLE as of 2026-09-05.** S1 green means the product exists;
+S2 green means it is cheap for a whole session rather than one call, and it is
+now measured: 396 resolutions, zero false rebinds, zero false stickiness, with
+100 percent ref survival through a re-render that destroyed 77 percent of the
+DOM nodes. The architecture freezes. S8, S9, and S10 remain unrun and none of
+them is a gate blocker, since each is a delivery decision rather than a test of
+whether the product exists. S5 and S6 are deferred by a
 safety rule rather than by a finding, which is a different kind of outstanding:
 the Lane C Firefox differentiator stays **UNVERIFIED** and unclaimable in public
 copy until that window opens.

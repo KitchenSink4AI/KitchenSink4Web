@@ -837,6 +837,29 @@ report.
    server-side keyed by ref and normally never enter the model's context.** The
    model pays for `e12`; KS4Web keeps the durability.
 
+**Three rules about the KEY, which is not the same thing as the descriptor, and
+S2 found all three by producing the failure each one prevents.**
+
+- **The page key is part of every anchor key.** Origin, path, and hash, on every
+  rung. The first S2 prototype carried origin and path in the descriptor and
+  left them out of the key, which is a distinction this section did not force,
+  and a ref minted on one page came back bound to a same-named control on
+  another: seven per run, silently, at the STRONGEST tier of the ladder rather
+  than in the fuzzy tail where anyone would look for it. The hash is included
+  because a hash route is a page by every meaning that matters to a ref.
+- **An ordinal may scope a lookup and may never bind a ref.** An ordinal is a
+  property of the rendered window, and a virtualized list rewrites that window
+  while keeping every ordinal. On a react-window list of 5,000 rows, scrolling
+  from row 0 to row 4,000 put row 0's ref onto row 3,998 and did the same for
+  twenty-one of its neighbours. The cost of the rule is that a control the page
+  gives no way to distinguish is not sticky, which is not really a cost: an
+  element nothing can tell apart cannot be durably addressed, and the design's
+  answer for it is `AMBIGUOUS_LOCATION`.
+- **Register every unique key an element offers, and look up strongest first.**
+  Not only the cheapest one. This is what lets a control survive a change to
+  its own accessible name, since its `id` key holds where its role-plus-name key
+  does not, and it is not derivable from a list of fields.
+
 The emerging community answer to stale refs is "content-derived hashes over
 role, accessible name, and ancestry rather than positional refs, and nobody has
 shipped it at scale." That is exactly this, and shipping it is the point.
@@ -847,6 +870,15 @@ matches an existing entry **keeps its ref**. `e12` on read one is still `e12` on
 read three if it is still the same element. New elements get new refs. Removed
 elements keep their entry marked gone, so a later error can say what `e12` used
 to be rather than just that it is missing.
+
+**S2 measured the property rather than assuming it, and the number that
+settles the argument is a pair.** Forcing React to unmount and remount a route
+subtree destroyed 77 percent of the DOM nodes under it and 100 percent of
+distinguishable elements kept their refs. That is the whole case for content
+fingerprints over node identity in one line: the incumbent's key is precisely
+what the re-render destroyed. The same holds through a label change (the `id`
+key carries what the name does not), a list reorder, a same-URL reload where a
+`loaderId`-based scheme reissues every uid, and a virtualized scroll.
 
 That property is also what makes deltas expressible. `get_page_view(since=...)`
 returns only what changed: new refs, gone refs, changed names and states, and a
@@ -870,11 +902,34 @@ first, in this order, and none of them enters the fuzzy tier:
 | Ref exists but belongs to a different page handle than the one passed | `BAD_PARAMS`, naming both handles, never silently retargeting |
 | Ref's entry is marked gone | Skip to (b) and re-resolve the stored anchor, carrying the gone record into any resulting message so the error can say what `e12` used to be |
 | Page URL changed since the ref was minted and `allow_cross_page_rebind=false` | `STALE_ANCHOR` directly, with no fuzzy tier, because a fuzzy match on a different URL IS a cross-page rebind under another name |
+| Ref is TURN-LOCAL: it was minted by a read in this session for an element nothing in the key ladder could distinguish from its siblings | `AMBIGUOUS_LOCATION` with the candidate list, naming a narrower locator as the recovery. **Added after S2**, which found the obvious implementation refusing `NOT_FOUND` here. That is a lie, since the ref WAS minted this session, and it sends the caller to re-read the page when re-reading is exactly what will not help |
+
+**The URL test is literal, and the plausible refinement is measurably worse.**
+S2 tested document identity as the alternative, on the reasoning that an SPA
+moves the URL with `pushState` without navigating. It fails in both directions
+at once: a route change rebinds onto a same-named control on the new route, and
+a reload that returns to exactly the same page refuses every ref. URL changed
+means cross-page, full stop.
+
+**The cost of the page key is real and it is stated rather than buried.** A
+persistent app shell loses its refs on a hash route change, measured at five of
+twenty-two elements on the S2 fixture. Dropping the hash from the key buys
+those five back and costs a false rebind, because two routes each carried a
+"Save" button inside a form labelled "Profile" and nothing else told them
+apart. The harder gate settles it: a route change costs a re-read, which is
+what a navigation costs anyway.
 
 - **a.** Ref found, handle still attached, fingerprint still matches. Proceed.
 - **b.** Handle detached or fingerprint changed. Re-resolve the stored anchor:
   exact role plus name within the original landmark, then role plus name
-  anywhere, then name-only fuzzy.
+  anywhere. **The name-only fuzzy tier is CUT from v1 on S2's measurement**: run
+  on and off across every scenario it changed no resolution's correctness, its
+  entire effect was to convert eight `STALE_ANCHOR` refusals into eight
+  `AMBIGUOUS_LOCATION` refusals, and it is the tier most able to produce a wrong
+  answer on a page of near-duplicate labels. A tier that contributes no correct
+  rebinds and owns the largest share of the risk is not a tier worth shipping.
+  If it returns later it arrives behind an explicit parameter with that
+  measurement printed next to it.
 - **c.** Exactly one match. Proceed, and report `rebound: true` in the envelope
   with the old and new identity. **Never silently.** A rebind the transcript
   cannot see is the same disease as a silent false success.
@@ -886,7 +941,10 @@ first, in this order, and none of them enters the fuzzy tier:
 
 Cross-page rebinding is **off by default** (`allow_cross_page_rebind=false`).
 Silently clicking a same-named button on a different page is exactly the
-confused-deputy failure the whole safety layer exists to reduce.
+confused-deputy failure the whole safety layer exists to reduce, **and S2 priced
+it: turning it on produced six false rebinds in twenty-two attempts, 27 percent,
+on a page carrying the same landmarks and the same control names.** The
+limitations page publishes that figure rather than the principle alone.
 
 **Batch actions have their own semantics, because per-action rules do not cover
 them.** Typing into field one of a real form routinely re-renders its siblings

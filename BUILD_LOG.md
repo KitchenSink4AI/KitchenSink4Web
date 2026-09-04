@@ -1176,3 +1176,132 @@ encoder finding recorded in its place.
 
 **Suite: 218 tests, all passing** (194 unit, 24 browser), up from 213 by the
 corpus digest checks and the named-property regression.
+
+## Part IX: Spike S2, anchor durability. The spike gate closes (2026-09-05 02:52 KST)
+
+**GREEN. Zero false rebinds and zero false stickiness across 396 resolutions in
+18 scenarios, against real React 18.3.1 and real react-window 1.8.10.** Neither
+of PLAN's two gates tripped and the fallback is not needed. **The spike gate is
+now passable and the architecture freezes.**
+
+Report: `internal notes/20260905_ks4web_spike_s2.md`.
+Code: `spikes/s2/`. Raw: `spikes/s2/out/s2.json`.
+
+### The headline pair
+
+| scenario | DOM nodes surviving | refs surviving |
+|---|---|---|
+| React remount, subtree unmounted and remounted with identical content | **22.7%** | **100%** |
+
+DESIGN 3.5 argues that chrome-devtools-mcp's `loaderId_backendNodeId` scheme is
+the design in the field most worth copying and then cannot be copied, because a
+backend node id does not survive a re-render that replaces the node. That was
+an argument; it is now a measurement. The re-render destroyed 77 percent of the
+nodes and every distinguishable element kept its ref, because the fingerprint
+is made of role, name, and scope rather than of node identity. Same-URL reload,
+label change, list reorder, and virtualized scroll all hold at 100 percent.
+
+### Ground truth is an instrument and it is enforced
+
+Every interactive element in the fixtures carries `data-truth`, a stable
+semantic identity the fixture preserves across every mutation, and the anchor
+scheme is forbidden to read it by an assertion over the key ladder. Scoring
+compares what a ref landed on against what it was minted on. Without that,
+"the right element" is not a measurable claim, **and a scheme that quietly
+fingerprinted ground truth would score a perfect run and prove nothing.** A
+second instrument, a `WeakMap` serial that outlives the evaluate, separates
+"this DOM node survived" from "this element survived", which is the distinction
+the whole design turns on and the source of the headline pair.
+
+### It was not zero on the first run, and that is the substance
+
+114 false stickiness events and 44 false rebinds, in three classes with one
+shared shape: a fingerprint that omits the page it was minted on, or includes a
+field the page can recycle. All three are now DESIGN 3.5 rules.
+
+**1. The page key belongs in the KEY, not only in the descriptor.** DESIGN 3.5
+says an anchor carries the origin and path pattern it was minted on. The
+prototype put those fields in the descriptor and left them out of the key,
+which is a distinction the design text does not force, and a ref minted on
+`app.html` came back bound to a same-named control on `other.html`: `nav-home`
+to `other-nav-home`, `btn-save` to `other-btn-save`, seven per run. **Silently,
+at the STRONGEST tier of the ladder**, rather than in the fuzzy tail where
+anybody would look for it. Scoping every rung by origin, path, and hash took
+the class to zero.
+
+**2. An ordinal may scope a lookup and may never bind a ref.** On the
+react-window fixture, scrolling from row 0 to row 4,000 recycles about twenty
+DOM nodes, and with ordinal rungs enabled row 0's ref landed on row 3,998 and
+twenty-one neighbours did the same. An ordinal is a property of the rendered
+window and a virtualized list rewrites the window while keeping every ordinal.
+Cost of the rule, stated exactly: two deliberately indistinguishable Delete
+buttons stop being sticky, 20 of 22 rather than 22. That is barely a cost, since
+an element nothing can tell apart cannot be durably addressed, and pretending
+otherwise is what produced the 22 wrong answers.
+
+**3. Register every unique key an element offers, look up strongest first.**
+Not only the cheapest. This is what let the Save button survive its own
+accessible name changing from "Save" to "Save (updated)": its `id` key held
+where its role-plus-name key did not. It is not derivable from a list of
+fields, which is why it is now written down.
+
+### Three more findings, all absorbed
+
+**The URL test is literal and the plausible refinement is measurably worse.**
+An SPA moves the URL with `pushState` without navigating, so document identity
+looked like the truer test. It fails in both directions at once: the route
+change rebinds onto a same-named control on the new route (1 false rebind), and
+a reload that returns to exactly the same page refuses all 22 refs. The design's
+literal wording wins. Recorded because the refinement is the obvious idea and
+somebody will have it again.
+
+**The name-only fuzzy tier is cut from v1.** Run on and off across every
+scenario, it changed no resolution's correctness anywhere. Its entire effect
+was converting eight `STALE_ANCHOR` refusals into eight `AMBIGUOUS_LOCATION`
+refusals on the virtualized list, where 0.85 similarity matches "Open record
+3998" against "Open record 0". Zero correct rebinds contributed, largest share
+of the wrong-answer risk owned.
+
+**The entry-condition table gained a sixth row.** A turn-local ref, minted this
+session for an element the ladder cannot distinguish, originally refused
+`NOT_FOUND`. That is a lie and it sends the caller to re-read the page when
+re-reading is exactly what will not help. It now refuses `AMBIGUOUS_LOCATION`
+with the candidate list and a recovery naming a narrower locator.
+
+### The cost, stated rather than buried
+
+Scoping the key by origin, path, and hash means **a persistent app shell loses
+its refs on a hash route change**, five of twenty-two elements on the fixture.
+Dropping the hash buys those five back and costs one false rebind, because both
+routes carry a "Save" button inside a form labelled "Profile" and nothing else
+tells them apart. The harder gate settles it, and the user-visible consequence
+is that a route change costs a re-read, which is what a navigation costs
+anyway. Flagged for the author because it is a real product cost that the
+pass/fail line hides.
+
+### Cross-page rebinding now has a number
+
+Off by default was a principle. Turning it on produced **6 false rebinds in 22
+attempts, 27 percent**, on a page carrying the same landmarks and the same
+control names. The limitations page publishes the figure rather than the
+principle alone.
+
+### The corpus B subset, built
+
+`spikes/s2/fixtures/` holds the React re-render page, the react-window
+virtualized list, the client-side route change, and a look-alike page for the
+cross-navigation case, with React 18.3.1 and react-window 1.8.10 vendored as
+UMD builds so there is no build step and no network at run time. PLAN 1.3's
+S1/S2 subset row is discharged. They move into corpus B proper before Phase 2
+closes; they live under `spikes/` today because S2 built them.
+
+### Documents
+
+DESIGN 3.5 carries the three key rules, the sixth entry condition, the URL
+ruling, the fuzzy cut, the stickiness measurement, and the cross-page figure.
+PLAN's S2 section is written up with the original definition kept underneath,
+the spike-gate table reads GREEN, and the gate paragraph now says the
+architecture freezes with S8, S9, and S10 named as delivery decisions rather
+than blockers.
+
+**Suite unchanged and green, 218 tests.** The spike touches no shipped code.

@@ -1,0 +1,2648 @@
+{
+ "measured_kst": "2026-09-05 02:42",
+ "summary": {
+  "recommended_config": "weak_keys=off (no ordinal rungs), cross-page test = URL, allow_cross_page_rebind=false",
+  "scenarios": 18,
+  "resolutions_attempted": 396,
+  "false_rebinds": 0,
+  "false_stickiness": 0,
+  "cost_of_allowing_cross_page": 14,
+  "cost_of_document_identity_policy": 2,
+  "cost_of_ordinal_key_rungs": 44
+ },
+ "scenarios": [
+  {
+   "scenario": "re-read, no mutation [fuzzy=on,weak_keys=on]",
+   "elements_before": 22,
+   "elements_after": 22,
+   "url_before": "http://127.0.0.1:50557/app.html",
+   "url_after": "http://127.0.0.1:50557/app.html",
+   "same_document": true,
+   "stickiness": {
+    "present_in_both": 22,
+    "kept_ref": 22,
+    "survival_pct": 100.0,
+    "lost": [],
+    "false_sticky": [],
+    "dom_node_survived": 22,
+    "dom_node_survival_pct": 100.0
+   },
+   "rebind": {
+    "proceeded_correct": 22,
+    "false_rebind": [],
+    "refused_present": [],
+    "refused_absent": 0,
+    "outcomes": {
+     "ok": 22
+    },
+    "attempts": 22,
+    "rebind_survival_pct": 100.0,
+    "false_rebind_pct": 0.0
+   }
+  },
+  {
+   "scenario": "React remount (nodes replaced) [fuzzy=on,weak_keys=on]",
+   "elements_before": 22,
+   "elements_after": 22,
+   "url_before": "http://127.0.0.1:50557/app.html",
+   "url_after": "http://127.0.0.1:50557/app.html",
+   "same_document": true,
+   "stickiness": {
+    "present_in_both": 22,
+    "kept_ref": 22,
+    "survival_pct": 100.0,
+    "lost": [],
+    "false_sticky": [],
+    "dom_node_survived": 5,
+    "dom_node_survival_pct": 22.7
+   },
+   "rebind": {
+    "proceeded_correct": 22,
+    "false_rebind": [],
+    "refused_present": [],
+    "refused_absent": 0,
+    "outcomes": {
+     "ok": 22
+    },
+    "attempts": 22,
+    "rebind_survival_pct": 100.0,
+    "false_rebind_pct": 0.0
+   }
+  },
+  {
+   "scenario": "React re-render, labels change [fuzzy=on,weak_keys=on]",
+   "elements_before": 22,
+   "elements_after": 22,
+   "url_before": "http://127.0.0.1:50557/app.html",
+   "url_after": "http://127.0.0.1:50557/app.html",
+   "same_document": true,
+   "stickiness": {
+    "present_in_both": 22,
+    "kept_ref": 22,
+    "survival_pct": 100.0,
+    "lost": [],
+    "false_sticky": [],
+    "dom_node_survived": 22,
+    "dom_node_survival_pct": 100.0
+   },
+   "rebind": {
+    "proceeded_correct": 22,
+    "false_rebind": [],
+    "refused_present": [],
+    "refused_absent": 0,
+    "outcomes": {
+     "ok": 22
+    },
+    "attempts": 22,
+    "rebind_survival_pct": 100.0,
+    "false_rebind_pct": 0.0
+   }
+  },
+  {
+   "scenario": "list reorder (reversed) [fuzzy=on,weak_keys=on]",
+   "elements_before": 22,
+   "elements_after": 22,
+   "url_before": "http://127.0.0.1:50557/app.html",
+   "url_after": "http://127.0.0.1:50557/app.html",
+   "same_document": true,
+   "stickiness": {
+    "present_in_both": 22,
+    "kept_ref": 22,
+    "survival_pct": 100.0,
+    "lost": [],
+    "false_sticky": [],
+    "dom_node_survived": 22,
+    "dom_node_survival_pct": 100.0
+   },
+   "rebind": {
+    "proceeded_correct": 22,
+    "false_rebind": [],
+    "refused_present": [],
+    "refused_absent": 0,
+    "outcomes": {
+     "ok": 22
+    },
+    "attempts": 22,
+    "rebind_survival_pct": 100.0,
+    "false_rebind_pct": 0.0
+   }
+  },
+  {
+   "scenario": "SPA route change, url policy [fuzzy=on,weak_keys=on]",
+   "elements_before": 22,
+   "elements_after": 7,
+   "url_before": "http://127.0.0.1:50557/app.html",
+   "url_after": "http://127.0.0.1:50557/app.html#/settings",
+   "same_document": true,
+   "stickiness": {
+    "present_in_both": 5,
+    "kept_ref": 0,
+    "survival_pct": 0.0,
+    "lost": [
+     "btn-delete-side",
+     "btn-help",
+     "nav-away",
+     "nav-home",
+     "nav-settings"
+    ],
+    "false_sticky": [],
+    "dom_node_survived": 5,
+    "dom_node_survival_pct": 100.0
+   },
+   "rebind": {
+    "proceeded_correct": 0,
+    "false_rebind": [],
+    "refused_present": [
+     {
+      "ref": "e1",
+      "truth": "nav-home",
+      "outcome": "STALE_ANCHOR"
+     },
+     {
+      "ref": "e2",
+      "truth": "nav-settings",
+      "outcome": "STALE_ANCHOR"
+     },
+     {
+      "ref": "e3",
+      "truth": "nav-away",
+      "outcome": "STALE_ANCHOR"
+     },
+     {
+      "ref": "e21",
+      "truth": "btn-delete-side",
+      "outcome": "STALE_ANCHOR"
+     },
+     {
+      "ref": "e22",
+      "truth": "btn-help",
+      "outcome": "STALE_ANCHOR"
+     }
+    ],
+    "refused_absent": 17,
+    "outcomes": {
+     "STALE_ANCHOR": 22
+    },
+    "attempts": 22,
+    "rebind_survival_pct": 0.0,
+    "false_rebind_pct": 0.0
+   }
+  },
+  {
+   "scenario": "SPA route change, document policy [fuzzy=on,weak_keys=on]",
+   "elements_before": 22,
+   "elements_after": 7,
+   "url_before": "http://127.0.0.1:50557/app.html",
+   "url_after": "http://127.0.0.1:50557/app.html#/settings",
+   "same_document": true,
+   "stickiness": {
+    "present_in_both": 5,
+    "kept_ref": 0,
+    "survival_pct": 0.0,
+    "lost": [
+     "btn-delete-side",
+     "btn-help",
+     "nav-away",
+     "nav-home",
+     "nav-settings"
+    ],
+    "false_sticky": [],
+    "dom_node_survived": 5,
+    "dom_node_survival_pct": 100.0
+   },
+   "rebind": {
+    "proceeded_correct": 5,
+    "false_rebind": [
+     {
+      "ref": "e6",
+      "asked_for": "btn-save",
+      "landed_on": "btn-save-settings",
+      "tier": "role+name in landmark"
+     },
+     {
+      "ref": "e7",
+      "asked_for": "btn-delete-a",
+      "landed_on": "btn-delete-side",
+      "tier": "role+name anywhere"
+     },
+     {
+      "ref": "e8",
+      "asked_for": "btn-delete-b",
+      "landed_on": "btn-delete-side",
+      "tier": "role+name anywhere"
+     }
+    ],
+    "refused_present": [],
+    "refused_absent": 14,
+    "outcomes": {
+     "rebound": 8,
+     "STALE_ANCHOR": 14
+    },
+    "attempts": 22,
+    "rebind_survival_pct": 100.0,
+    "false_rebind_pct": 13.64
+   }
+  },
+  {
+   "scenario": "SPA route change, document policy, cross-page ALLOWED [fuzzy=on,weak_keys=on]",
+   "elements_before": 22,
+   "elements_after": 7,
+   "url_before": "http://127.0.0.1:50557/app.html",
+   "url_after": "http://127.0.0.1:50557/app.html#/settings",
+   "same_document": true,
+   "stickiness": {
+    "present_in_both": 5,
+    "kept_ref": 0,
+    "survival_pct": 0.0,
+    "lost": [
+     "btn-delete-side",
+     "btn-help",
+     "nav-away",
+     "nav-home",
+     "nav-settings"
+    ],
+    "false_sticky": [],
+    "dom_node_survived": 5,
+    "dom_node_survival_pct": 100.0
+   },
+   "rebind": {
+    "proceeded_correct": 5,
+    "false_rebind": [
+     {
+      "ref": "e6",
+      "asked_for": "btn-save",
+      "landed_on": "btn-save-settings",
+      "tier": "role+name in landmark"
+     },
+     {
+      "ref": "e7",
+      "asked_for": "btn-delete-a",
+      "landed_on": "btn-delete-side",
+      "tier": "role+name anywhere"
+     },
+     {
+      "ref": "e8",
+      "asked_for": "btn-delete-b",
+      "landed_on": "btn-delete-side",
+      "tier": "role+name anywhere"
+     }
+    ],
+    "refused_present": [],
+    "refused_absent": 14,
+    "outcomes": {
+     "rebound": 8,
+     "STALE_ANCHOR": 14
+    },
+    "attempts": 22,
+    "rebind_survival_pct": 100.0,
+    "false_rebind_pct": 13.64
+   }
+  },
+  {
+   "scenario": "full navigation to a look-alike page [fuzzy=on,weak_keys=on]",
+   "elements_before": 22,
+   "elements_after": 7,
+   "url_before": "http://127.0.0.1:50557/app.html",
+   "url_after": "http://127.0.0.1:50557/other.html",
+   "same_document": false,
+   "stickiness": {
+    "present_in_both": 0,
+    "kept_ref": 0,
+    "survival_pct": null,
+    "lost": [],
+    "false_sticky": [],
+    "dom_node_survived": 0,
+    "dom_node_survival_pct": null
+   },
+   "rebind": {
+    "proceeded_correct": 0,
+    "false_rebind": [],
+    "refused_present": [],
+    "refused_absent": 22,
+    "outcomes": {
+     "STALE_ANCHOR": 22
+    },
+    "attempts": 22,
+    "rebind_survival_pct": null,
+    "false_rebind_pct": 0.0
+   }
+  },
+  {
+   "scenario": "full navigation to a look-alike page, cross-page ALLOWED [fuzzy=on,weak_keys=on]",
+   "elements_before": 22,
+   "elements_after": 7,
+   "url_before": "http://127.0.0.1:50557/app.html",
+   "url_after": "http://127.0.0.1:50557/other.html",
+   "same_document": false,
+   "stickiness": {
+    "present_in_both": 0,
+    "kept_ref": 0,
+    "survival_pct": null,
+    "lost": [],
+    "false_sticky": [],
+    "dom_node_survived": 0,
+    "dom_node_survival_pct": null
+   },
+   "rebind": {
+    "proceeded_correct": 0,
+    "false_rebind": [
+     {
+      "ref": "e1",
+      "asked_for": "nav-home",
+      "landed_on": "other-nav-home",
+      "tier": "role+name in landmark"
+     },
+     {
+      "ref": "e2",
+      "asked_for": "nav-settings",
+      "landed_on": "other-nav-settings",
+      "tier": "role+name in landmark"
+     },
+     {
+      "ref": "e4",
+      "asked_for": "field-email",
+      "landed_on": "other-field-email",
+      "tier": "role+name in landmark"
+     },
+     {
+      "ref": "e6",
+      "asked_for": "btn-save",
+      "landed_on": "other-btn-save",
+      "tier": "role+name in landmark"
+     },
+     {
+      "ref": "e7",
+      "asked_for": "btn-delete-a",
+      "landed_on": "other-btn-delete",
+      "tier": "role+name in landmark"
+     },
+     {
+      "ref": "e8",
+      "asked_for": "btn-delete-b",
+      "landed_on": "other-btn-delete",
+      "tier": "role+name in landmark"
+     },
+     {
+      "ref": "e21",
+      "asked_for": "btn-delete-side",
+      "landed_on": "other-btn-delete-side",
+      "tier": "role+name in landmark"
+     },
+     {
+      "ref": "e22",
+      "asked_for": "btn-help",
+      "landed_on": "other-btn-help",
+      "tier": "role+name in landmark"
+     }
+    ],
+    "refused_present": [],
+    "refused_absent": 14,
+    "outcomes": {
+     "rebound": 8,
+     "STALE_ANCHOR": 14
+    },
+    "attempts": 22,
+    "rebind_survival_pct": null,
+    "false_rebind_pct": 36.36
+   }
+  },
+  {
+   "scenario": "reload, document policy [fuzzy=on,weak_keys=on]",
+   "elements_before": 22,
+   "elements_after": 22,
+   "url_before": "http://127.0.0.1:50557/app.html",
+   "url_after": "http://127.0.0.1:50557/app.html",
+   "same_document": false,
+   "stickiness": {
+    "present_in_both": 22,
+    "kept_ref": 22,
+    "survival_pct": 100.0,
+    "lost": [],
+    "false_sticky": [],
+    "dom_node_survived": 22,
+    "dom_node_survival_pct": 100.0
+   },
+   "rebind": {
+    "proceeded_correct": 0,
+    "false_rebind": [],
+    "refused_present": [
+     {
+      "ref": "e1",
+      "truth": "nav-home",
+      "outcome": "STALE_ANCHOR"
+     },
+     {
+      "ref": "e2",
+      "truth": "nav-settings",
+      "outcome": "STALE_ANCHOR"
+     },
+     {
+      "ref": "e3",
+      "truth": "nav-away",
+      "outcome": "STALE_ANCHOR"
+     },
+     {
+      "ref": "e4",
+      "truth": "field-email",
+      "outcome": "STALE_ANCHOR"
+     },
+     {
+      "ref": "e5",
+      "truth": "field-nick",
+      "outcome": "STALE_ANCHOR"
+     },
+     {
+      "ref": "e6",
+      "truth": "btn-save",
+      "outcome": "STALE_ANCHOR"
+     },
+     {
+      "ref": "e7",
+      "truth": "btn-delete-a",
+      "outcome": "STALE_ANCHOR"
+     },
+     {
+      "ref": "e8",
+      "truth": "btn-delete-b",
+      "outcome": "STALE_ANCHOR"
+     }
+    ],
+    "refused_absent": 0,
+    "outcomes": {
+     "STALE_ANCHOR": 22
+    },
+    "attempts": 22,
+    "rebind_survival_pct": 0.0,
+    "false_rebind_pct": 0.0
+   }
+  },
+  {
+   "scenario": "reload, url policy [fuzzy=on,weak_keys=on]",
+   "elements_before": 22,
+   "elements_after": 22,
+   "url_before": "http://127.0.0.1:50557/app.html",
+   "url_after": "http://127.0.0.1:50557/app.html",
+   "same_document": false,
+   "stickiness": {
+    "present_in_both": 22,
+    "kept_ref": 22,
+    "survival_pct": 100.0,
+    "lost": [],
+    "false_sticky": [],
+    "dom_node_survived": 22,
+    "dom_node_survival_pct": 100.0
+   },
+   "rebind": {
+    "proceeded_correct": 22,
+    "false_rebind": [],
+    "refused_present": [],
+    "refused_absent": 0,
+    "outcomes": {
+     "ok": 22
+    },
+    "attempts": 22,
+    "rebind_survival_pct": 100.0,
+    "false_rebind_pct": 0.0
+   }
+  },
+  {
+   "scenario": "virtualized list, small scroll [fuzzy=on,weak_keys=on]",
+   "elements_before": 22,
+   "elements_after": 24,
+   "url_before": "http://127.0.0.1:50557/virtual.html",
+   "url_after": "http://127.0.0.1:50557/virtual.html",
+   "same_document": true,
+   "stickiness": {
+    "present_in_both": 14,
+    "kept_ref": 14,
+    "survival_pct": 100.0,
+    "lost": [],
+    "false_sticky": [],
+    "dom_node_survived": 14,
+    "dom_node_survival_pct": 100.0
+   },
+   "rebind": {
+    "proceeded_correct": 14,
+    "false_rebind": [],
+    "refused_present": [],
+    "refused_absent": 8,
+    "outcomes": {
+     "AMBIGUOUS_LOCATION": 8,
+     "ok": 14
+    },
+    "attempts": 22,
+    "rebind_survival_pct": 100.0,
+    "false_rebind_pct": 0.0
+   }
+  },
+  {
+   "scenario": "virtualized list, recycle to row 4000 [fuzzy=on,weak_keys=on]",
+   "elements_before": 22,
+   "elements_after": 24,
+   "url_before": "http://127.0.0.1:50557/virtual.html",
+   "url_after": "http://127.0.0.1:50557/virtual.html",
+   "same_document": true,
+   "stickiness": {
+    "present_in_both": 0,
+    "kept_ref": 0,
+    "survival_pct": null,
+    "lost": [],
+    "false_sticky": [
+     {
+      "ref": "e1",
+      "was": "row-0",
+      "now": "row-3998"
+     },
+     {
+      "ref": "e2",
+      "was": "row-1",
+      "now": "row-3999"
+     },
+     {
+      "ref": "e3",
+      "was": "row-2",
+      "now": "row-4000"
+     },
+     {
+      "ref": "e4",
+      "was": "row-3",
+      "now": "row-4001"
+     },
+     {
+      "ref": "e5",
+      "was": "row-4",
+      "now": "row-4002"
+     },
+     {
+      "ref": "e6",
+      "was": "row-5",
+      "now": "row-4003"
+     },
+     {
+      "ref": "e7",
+      "was": "row-6",
+      "now": "row-4004"
+     },
+     {
+      "ref": "e8",
+      "was": "row-7",
+      "now": "row-4005"
+     },
+     {
+      "ref": "e9",
+      "was": "row-8",
+      "now": "row-4006"
+     },
+     {
+      "ref": "e10",
+      "was": "row-9",
+      "now": "row-4007"
+     },
+     {
+      "ref": "e11",
+      "was": "row-10",
+      "now": "row-4008"
+     },
+     {
+      "ref": "e12",
+      "was": "row-11",
+      "now": "row-4009"
+     },
+     {
+      "ref": "e13",
+      "was": "row-12",
+      "now": "row-4010"
+     },
+     {
+      "ref": "e14",
+      "was": "row-13",
+      "now": "row-4011"
+     },
+     {
+      "ref": "e15",
+      "was": "row-14",
+      "now": "row-4012"
+     },
+     {
+      "ref": "e16",
+      "was": "row-15",
+      "now": "row-4013"
+     },
+     {
+      "ref": "e17",
+      "was": "row-16",
+      "now": "row-4014"
+     },
+     {
+      "ref": "e18",
+      "was": "row-17",
+      "now": "row-4015"
+     },
+     {
+      "ref": "e19",
+      "was": "row-18",
+      "now": "row-4016"
+     },
+     {
+      "ref": "e20",
+      "was": "row-19",
+      "now": "row-4017"
+     },
+     {
+      "ref": "e21",
+      "was": "row-20",
+      "now": "row-4018"
+     },
+     {
+      "ref": "e22",
+      "was": "row-21",
+      "now": "row-4019"
+     }
+    ],
+    "dom_node_survived": 0,
+    "dom_node_survival_pct": null
+   },
+   "rebind": {
+    "proceeded_correct": 0,
+    "false_rebind": [],
+    "refused_present": [],
+    "refused_absent": 22,
+    "outcomes": {
+     "AMBIGUOUS_LOCATION": 22
+    },
+    "attempts": 22,
+    "rebind_survival_pct": null,
+    "false_rebind_pct": 0.0
+   }
+  },
+  {
+   "scenario": "re-read, no mutation [fuzzy=on,weak_keys=off]",
+   "elements_before": 22,
+   "elements_after": 22,
+   "url_before": "http://127.0.0.1:50557/app.html",
+   "url_after": "http://127.0.0.1:50557/app.html",
+   "same_document": true,
+   "stickiness": {
+    "present_in_both": 22,
+    "kept_ref": 20,
+    "survival_pct": 90.9,
+    "lost": [
+     "btn-delete-a",
+     "btn-delete-b"
+    ],
+    "false_sticky": [],
+    "dom_node_survived": 22,
+    "dom_node_survival_pct": 100.0
+   },
+   "rebind": {
+    "proceeded_correct": 20,
+    "false_rebind": [],
+    "refused_present": [
+     {
+      "ref": "e7",
+      "truth": "btn-delete-a",
+      "outcome": "AMBIGUOUS_LOCATION"
+     },
+     {
+      "ref": "e8",
+      "truth": "btn-delete-b",
+      "outcome": "AMBIGUOUS_LOCATION"
+     }
+    ],
+    "refused_absent": 0,
+    "outcomes": {
+     "ok": 20,
+     "AMBIGUOUS_LOCATION": 2
+    },
+    "attempts": 22,
+    "rebind_survival_pct": 90.9,
+    "false_rebind_pct": 0.0
+   }
+  },
+  {
+   "scenario": "React remount (nodes replaced) [fuzzy=on,weak_keys=off]",
+   "elements_before": 22,
+   "elements_after": 22,
+   "url_before": "http://127.0.0.1:50557/app.html",
+   "url_after": "http://127.0.0.1:50557/app.html",
+   "same_document": true,
+   "stickiness": {
+    "present_in_both": 22,
+    "kept_ref": 20,
+    "survival_pct": 90.9,
+    "lost": [
+     "btn-delete-a",
+     "btn-delete-b"
+    ],
+    "false_sticky": [],
+    "dom_node_survived": 5,
+    "dom_node_survival_pct": 22.7
+   },
+   "rebind": {
+    "proceeded_correct": 20,
+    "false_rebind": [],
+    "refused_present": [
+     {
+      "ref": "e7",
+      "truth": "btn-delete-a",
+      "outcome": "AMBIGUOUS_LOCATION"
+     },
+     {
+      "ref": "e8",
+      "truth": "btn-delete-b",
+      "outcome": "AMBIGUOUS_LOCATION"
+     }
+    ],
+    "refused_absent": 0,
+    "outcomes": {
+     "ok": 20,
+     "AMBIGUOUS_LOCATION": 2
+    },
+    "attempts": 22,
+    "rebind_survival_pct": 90.9,
+    "false_rebind_pct": 0.0
+   }
+  },
+  {
+   "scenario": "React re-render, labels change [fuzzy=on,weak_keys=off]",
+   "elements_before": 22,
+   "elements_after": 22,
+   "url_before": "http://127.0.0.1:50557/app.html",
+   "url_after": "http://127.0.0.1:50557/app.html",
+   "same_document": true,
+   "stickiness": {
+    "present_in_both": 22,
+    "kept_ref": 20,
+    "survival_pct": 90.9,
+    "lost": [
+     "btn-delete-a",
+     "btn-delete-b"
+    ],
+    "false_sticky": [],
+    "dom_node_survived": 22,
+    "dom_node_survival_pct": 100.0
+   },
+   "rebind": {
+    "proceeded_correct": 20,
+    "false_rebind": [],
+    "refused_present": [
+     {
+      "ref": "e7",
+      "truth": "btn-delete-a",
+      "outcome": "AMBIGUOUS_LOCATION"
+     },
+     {
+      "ref": "e8",
+      "truth": "btn-delete-b",
+      "outcome": "AMBIGUOUS_LOCATION"
+     }
+    ],
+    "refused_absent": 0,
+    "outcomes": {
+     "ok": 20,
+     "AMBIGUOUS_LOCATION": 2
+    },
+    "attempts": 22,
+    "rebind_survival_pct": 90.9,
+    "false_rebind_pct": 0.0
+   }
+  },
+  {
+   "scenario": "list reorder (reversed) [fuzzy=on,weak_keys=off]",
+   "elements_before": 22,
+   "elements_after": 22,
+   "url_before": "http://127.0.0.1:50557/app.html",
+   "url_after": "http://127.0.0.1:50557/app.html",
+   "same_document": true,
+   "stickiness": {
+    "present_in_both": 22,
+    "kept_ref": 20,
+    "survival_pct": 90.9,
+    "lost": [
+     "btn-delete-a",
+     "btn-delete-b"
+    ],
+    "false_sticky": [],
+    "dom_node_survived": 22,
+    "dom_node_survival_pct": 100.0
+   },
+   "rebind": {
+    "proceeded_correct": 20,
+    "false_rebind": [],
+    "refused_present": [
+     {
+      "ref": "e7",
+      "truth": "btn-delete-a",
+      "outcome": "AMBIGUOUS_LOCATION"
+     },
+     {
+      "ref": "e8",
+      "truth": "btn-delete-b",
+      "outcome": "AMBIGUOUS_LOCATION"
+     }
+    ],
+    "refused_absent": 0,
+    "outcomes": {
+     "ok": 20,
+     "AMBIGUOUS_LOCATION": 2
+    },
+    "attempts": 22,
+    "rebind_survival_pct": 90.9,
+    "false_rebind_pct": 0.0
+   }
+  },
+  {
+   "scenario": "SPA route change, url policy [fuzzy=on,weak_keys=off]",
+   "elements_before": 22,
+   "elements_after": 7,
+   "url_before": "http://127.0.0.1:50557/app.html",
+   "url_after": "http://127.0.0.1:50557/app.html#/settings",
+   "same_document": true,
+   "stickiness": {
+    "present_in_both": 5,
+    "kept_ref": 0,
+    "survival_pct": 0.0,
+    "lost": [
+     "btn-delete-side",
+     "btn-help",
+     "nav-away",
+     "nav-home",
+     "nav-settings"
+    ],
+    "false_sticky": [],
+    "dom_node_survived": 5,
+    "dom_node_survival_pct": 100.0
+   },
+   "rebind": {
+    "proceeded_correct": 0,
+    "false_rebind": [],
+    "refused_present": [
+     {
+      "ref": "e1",
+      "truth": "nav-home",
+      "outcome": "STALE_ANCHOR"
+     },
+     {
+      "ref": "e2",
+      "truth": "nav-settings",
+      "outcome": "STALE_ANCHOR"
+     },
+     {
+      "ref": "e3",
+      "truth": "nav-away",
+      "outcome": "STALE_ANCHOR"
+     },
+     {
+      "ref": "e21",
+      "truth": "btn-delete-side",
+      "outcome": "STALE_ANCHOR"
+     },
+     {
+      "ref": "e22",
+      "truth": "btn-help",
+      "outcome": "STALE_ANCHOR"
+     }
+    ],
+    "refused_absent": 17,
+    "outcomes": {
+     "STALE_ANCHOR": 22
+    },
+    "attempts": 22,
+    "rebind_survival_pct": 0.0,
+    "false_rebind_pct": 0.0
+   }
+  },
+  {
+   "scenario": "SPA route change, document policy [fuzzy=on,weak_keys=off]",
+   "elements_before": 22,
+   "elements_after": 7,
+   "url_before": "http://127.0.0.1:50557/app.html",
+   "url_after": "http://127.0.0.1:50557/app.html#/settings",
+   "same_document": true,
+   "stickiness": {
+    "present_in_both": 5,
+    "kept_ref": 0,
+    "survival_pct": 0.0,
+    "lost": [
+     "btn-delete-side",
+     "btn-help",
+     "nav-away",
+     "nav-home",
+     "nav-settings"
+    ],
+    "false_sticky": [],
+    "dom_node_survived": 5,
+    "dom_node_survival_pct": 100.0
+   },
+   "rebind": {
+    "proceeded_correct": 5,
+    "false_rebind": [
+     {
+      "ref": "e6",
+      "asked_for": "btn-save",
+      "landed_on": "btn-save-settings",
+      "tier": "role+name in landmark"
+     }
+    ],
+    "refused_present": [],
+    "refused_absent": 16,
+    "outcomes": {
+     "rebound": 6,
+     "STALE_ANCHOR": 14,
+     "AMBIGUOUS_LOCATION": 2
+    },
+    "attempts": 22,
+    "rebind_survival_pct": 100.0,
+    "false_rebind_pct": 4.55
+   }
+  },
+  {
+   "scenario": "SPA route change, document policy, cross-page ALLOWED [fuzzy=on,weak_keys=off]",
+   "elements_before": 22,
+   "elements_after": 7,
+   "url_before": "http://127.0.0.1:50557/app.html",
+   "url_after": "http://127.0.0.1:50557/app.html#/settings",
+   "same_document": true,
+   "stickiness": {
+    "present_in_both": 5,
+    "kept_ref": 0,
+    "survival_pct": 0.0,
+    "lost": [
+     "btn-delete-side",
+     "btn-help",
+     "nav-away",
+     "nav-home",
+     "nav-settings"
+    ],
+    "false_sticky": [],
+    "dom_node_survived": 5,
+    "dom_node_survival_pct": 100.0
+   },
+   "rebind": {
+    "proceeded_correct": 5,
+    "false_rebind": [
+     {
+      "ref": "e6",
+      "asked_for": "btn-save",
+      "landed_on": "btn-save-settings",
+      "tier": "role+name in landmark"
+     }
+    ],
+    "refused_present": [],
+    "refused_absent": 16,
+    "outcomes": {
+     "rebound": 6,
+     "STALE_ANCHOR": 14,
+     "AMBIGUOUS_LOCATION": 2
+    },
+    "attempts": 22,
+    "rebind_survival_pct": 100.0,
+    "false_rebind_pct": 4.55
+   }
+  },
+  {
+   "scenario": "full navigation to a look-alike page [fuzzy=on,weak_keys=off]",
+   "elements_before": 22,
+   "elements_after": 7,
+   "url_before": "http://127.0.0.1:50557/app.html",
+   "url_after": "http://127.0.0.1:50557/other.html",
+   "same_document": false,
+   "stickiness": {
+    "present_in_both": 0,
+    "kept_ref": 0,
+    "survival_pct": null,
+    "lost": [],
+    "false_sticky": [],
+    "dom_node_survived": 0,
+    "dom_node_survival_pct": null
+   },
+   "rebind": {
+    "proceeded_correct": 0,
+    "false_rebind": [],
+    "refused_present": [],
+    "refused_absent": 22,
+    "outcomes": {
+     "STALE_ANCHOR": 22
+    },
+    "attempts": 22,
+    "rebind_survival_pct": null,
+    "false_rebind_pct": 0.0
+   }
+  },
+  {
+   "scenario": "full navigation to a look-alike page, cross-page ALLOWED [fuzzy=on,weak_keys=off]",
+   "elements_before": 22,
+   "elements_after": 7,
+   "url_before": "http://127.0.0.1:50557/app.html",
+   "url_after": "http://127.0.0.1:50557/other.html",
+   "same_document": false,
+   "stickiness": {
+    "present_in_both": 0,
+    "kept_ref": 0,
+    "survival_pct": null,
+    "lost": [],
+    "false_sticky": [],
+    "dom_node_survived": 0,
+    "dom_node_survival_pct": null
+   },
+   "rebind": {
+    "proceeded_correct": 0,
+    "false_rebind": [
+     {
+      "ref": "e1",
+      "asked_for": "nav-home",
+      "landed_on": "other-nav-home",
+      "tier": "role+name in landmark"
+     },
+     {
+      "ref": "e2",
+      "asked_for": "nav-settings",
+      "landed_on": "other-nav-settings",
+      "tier": "role+name in landmark"
+     },
+     {
+      "ref": "e4",
+      "asked_for": "field-email",
+      "landed_on": "other-field-email",
+      "tier": "role+name in landmark"
+     },
+     {
+      "ref": "e6",
+      "asked_for": "btn-save",
+      "landed_on": "other-btn-save",
+      "tier": "role+name in landmark"
+     },
+     {
+      "ref": "e21",
+      "asked_for": "btn-delete-side",
+      "landed_on": "other-btn-delete-side",
+      "tier": "role+name in landmark"
+     },
+     {
+      "ref": "e22",
+      "asked_for": "btn-help",
+      "landed_on": "other-btn-help",
+      "tier": "role+name in landmark"
+     }
+    ],
+    "refused_present": [],
+    "refused_absent": 16,
+    "outcomes": {
+     "rebound": 6,
+     "STALE_ANCHOR": 14,
+     "AMBIGUOUS_LOCATION": 2
+    },
+    "attempts": 22,
+    "rebind_survival_pct": null,
+    "false_rebind_pct": 27.27
+   }
+  },
+  {
+   "scenario": "reload, document policy [fuzzy=on,weak_keys=off]",
+   "elements_before": 22,
+   "elements_after": 22,
+   "url_before": "http://127.0.0.1:50557/app.html",
+   "url_after": "http://127.0.0.1:50557/app.html",
+   "same_document": false,
+   "stickiness": {
+    "present_in_both": 22,
+    "kept_ref": 20,
+    "survival_pct": 90.9,
+    "lost": [
+     "btn-delete-a",
+     "btn-delete-b"
+    ],
+    "false_sticky": [],
+    "dom_node_survived": 22,
+    "dom_node_survival_pct": 100.0
+   },
+   "rebind": {
+    "proceeded_correct": 0,
+    "false_rebind": [],
+    "refused_present": [
+     {
+      "ref": "e1",
+      "truth": "nav-home",
+      "outcome": "STALE_ANCHOR"
+     },
+     {
+      "ref": "e2",
+      "truth": "nav-settings",
+      "outcome": "STALE_ANCHOR"
+     },
+     {
+      "ref": "e3",
+      "truth": "nav-away",
+      "outcome": "STALE_ANCHOR"
+     },
+     {
+      "ref": "e4",
+      "truth": "field-email",
+      "outcome": "STALE_ANCHOR"
+     },
+     {
+      "ref": "e5",
+      "truth": "field-nick",
+      "outcome": "STALE_ANCHOR"
+     },
+     {
+      "ref": "e6",
+      "truth": "btn-save",
+      "outcome": "STALE_ANCHOR"
+     },
+     {
+      "ref": "e7",
+      "truth": "btn-delete-a",
+      "outcome": "STALE_ANCHOR"
+     },
+     {
+      "ref": "e8",
+      "truth": "btn-delete-b",
+      "outcome": "STALE_ANCHOR"
+     }
+    ],
+    "refused_absent": 0,
+    "outcomes": {
+     "STALE_ANCHOR": 22
+    },
+    "attempts": 22,
+    "rebind_survival_pct": 0.0,
+    "false_rebind_pct": 0.0
+   }
+  },
+  {
+   "scenario": "reload, url policy [fuzzy=on,weak_keys=off]",
+   "elements_before": 22,
+   "elements_after": 22,
+   "url_before": "http://127.0.0.1:50557/app.html",
+   "url_after": "http://127.0.0.1:50557/app.html",
+   "same_document": false,
+   "stickiness": {
+    "present_in_both": 22,
+    "kept_ref": 20,
+    "survival_pct": 90.9,
+    "lost": [
+     "btn-delete-a",
+     "btn-delete-b"
+    ],
+    "false_sticky": [],
+    "dom_node_survived": 22,
+    "dom_node_survival_pct": 100.0
+   },
+   "rebind": {
+    "proceeded_correct": 20,
+    "false_rebind": [],
+    "refused_present": [
+     {
+      "ref": "e7",
+      "truth": "btn-delete-a",
+      "outcome": "AMBIGUOUS_LOCATION"
+     },
+     {
+      "ref": "e8",
+      "truth": "btn-delete-b",
+      "outcome": "AMBIGUOUS_LOCATION"
+     }
+    ],
+    "refused_absent": 0,
+    "outcomes": {
+     "ok": 20,
+     "AMBIGUOUS_LOCATION": 2
+    },
+    "attempts": 22,
+    "rebind_survival_pct": 90.9,
+    "false_rebind_pct": 0.0
+   }
+  },
+  {
+   "scenario": "virtualized list, small scroll [fuzzy=on,weak_keys=off]",
+   "elements_before": 22,
+   "elements_after": 24,
+   "url_before": "http://127.0.0.1:50557/virtual.html",
+   "url_after": "http://127.0.0.1:50557/virtual.html",
+   "same_document": true,
+   "stickiness": {
+    "present_in_both": 14,
+    "kept_ref": 14,
+    "survival_pct": 100.0,
+    "lost": [],
+    "false_sticky": [],
+    "dom_node_survived": 14,
+    "dom_node_survival_pct": 100.0
+   },
+   "rebind": {
+    "proceeded_correct": 14,
+    "false_rebind": [],
+    "refused_present": [],
+    "refused_absent": 8,
+    "outcomes": {
+     "AMBIGUOUS_LOCATION": 8,
+     "ok": 14
+    },
+    "attempts": 22,
+    "rebind_survival_pct": 100.0,
+    "false_rebind_pct": 0.0
+   }
+  },
+  {
+   "scenario": "virtualized list, recycle to row 4000 [fuzzy=on,weak_keys=off]",
+   "elements_before": 22,
+   "elements_after": 24,
+   "url_before": "http://127.0.0.1:50557/virtual.html",
+   "url_after": "http://127.0.0.1:50557/virtual.html",
+   "same_document": true,
+   "stickiness": {
+    "present_in_both": 0,
+    "kept_ref": 0,
+    "survival_pct": null,
+    "lost": [],
+    "false_sticky": [],
+    "dom_node_survived": 0,
+    "dom_node_survival_pct": null
+   },
+   "rebind": {
+    "proceeded_correct": 0,
+    "false_rebind": [],
+    "refused_present": [],
+    "refused_absent": 22,
+    "outcomes": {
+     "AMBIGUOUS_LOCATION": 22
+    },
+    "attempts": 22,
+    "rebind_survival_pct": null,
+    "false_rebind_pct": 0.0
+   }
+  },
+  {
+   "scenario": "re-read, no mutation [fuzzy=off,weak_keys=on]",
+   "elements_before": 22,
+   "elements_after": 22,
+   "url_before": "http://127.0.0.1:50557/app.html",
+   "url_after": "http://127.0.0.1:50557/app.html",
+   "same_document": true,
+   "stickiness": {
+    "present_in_both": 22,
+    "kept_ref": 22,
+    "survival_pct": 100.0,
+    "lost": [],
+    "false_sticky": [],
+    "dom_node_survived": 22,
+    "dom_node_survival_pct": 100.0
+   },
+   "rebind": {
+    "proceeded_correct": 22,
+    "false_rebind": [],
+    "refused_present": [],
+    "refused_absent": 0,
+    "outcomes": {
+     "ok": 22
+    },
+    "attempts": 22,
+    "rebind_survival_pct": 100.0,
+    "false_rebind_pct": 0.0
+   }
+  },
+  {
+   "scenario": "React remount (nodes replaced) [fuzzy=off,weak_keys=on]",
+   "elements_before": 22,
+   "elements_after": 22,
+   "url_before": "http://127.0.0.1:50557/app.html",
+   "url_after": "http://127.0.0.1:50557/app.html",
+   "same_document": true,
+   "stickiness": {
+    "present_in_both": 22,
+    "kept_ref": 22,
+    "survival_pct": 100.0,
+    "lost": [],
+    "false_sticky": [],
+    "dom_node_survived": 5,
+    "dom_node_survival_pct": 22.7
+   },
+   "rebind": {
+    "proceeded_correct": 22,
+    "false_rebind": [],
+    "refused_present": [],
+    "refused_absent": 0,
+    "outcomes": {
+     "ok": 22
+    },
+    "attempts": 22,
+    "rebind_survival_pct": 100.0,
+    "false_rebind_pct": 0.0
+   }
+  },
+  {
+   "scenario": "React re-render, labels change [fuzzy=off,weak_keys=on]",
+   "elements_before": 22,
+   "elements_after": 22,
+   "url_before": "http://127.0.0.1:50557/app.html",
+   "url_after": "http://127.0.0.1:50557/app.html",
+   "same_document": true,
+   "stickiness": {
+    "present_in_both": 22,
+    "kept_ref": 22,
+    "survival_pct": 100.0,
+    "lost": [],
+    "false_sticky": [],
+    "dom_node_survived": 22,
+    "dom_node_survival_pct": 100.0
+   },
+   "rebind": {
+    "proceeded_correct": 22,
+    "false_rebind": [],
+    "refused_present": [],
+    "refused_absent": 0,
+    "outcomes": {
+     "ok": 22
+    },
+    "attempts": 22,
+    "rebind_survival_pct": 100.0,
+    "false_rebind_pct": 0.0
+   }
+  },
+  {
+   "scenario": "list reorder (reversed) [fuzzy=off,weak_keys=on]",
+   "elements_before": 22,
+   "elements_after": 22,
+   "url_before": "http://127.0.0.1:50557/app.html",
+   "url_after": "http://127.0.0.1:50557/app.html",
+   "same_document": true,
+   "stickiness": {
+    "present_in_both": 22,
+    "kept_ref": 22,
+    "survival_pct": 100.0,
+    "lost": [],
+    "false_sticky": [],
+    "dom_node_survived": 22,
+    "dom_node_survival_pct": 100.0
+   },
+   "rebind": {
+    "proceeded_correct": 22,
+    "false_rebind": [],
+    "refused_present": [],
+    "refused_absent": 0,
+    "outcomes": {
+     "ok": 22
+    },
+    "attempts": 22,
+    "rebind_survival_pct": 100.0,
+    "false_rebind_pct": 0.0
+   }
+  },
+  {
+   "scenario": "SPA route change, url policy [fuzzy=off,weak_keys=on]",
+   "elements_before": 22,
+   "elements_after": 7,
+   "url_before": "http://127.0.0.1:50557/app.html",
+   "url_after": "http://127.0.0.1:50557/app.html#/settings",
+   "same_document": true,
+   "stickiness": {
+    "present_in_both": 5,
+    "kept_ref": 0,
+    "survival_pct": 0.0,
+    "lost": [
+     "btn-delete-side",
+     "btn-help",
+     "nav-away",
+     "nav-home",
+     "nav-settings"
+    ],
+    "false_sticky": [],
+    "dom_node_survived": 5,
+    "dom_node_survival_pct": 100.0
+   },
+   "rebind": {
+    "proceeded_correct": 0,
+    "false_rebind": [],
+    "refused_present": [
+     {
+      "ref": "e1",
+      "truth": "nav-home",
+      "outcome": "STALE_ANCHOR"
+     },
+     {
+      "ref": "e2",
+      "truth": "nav-settings",
+      "outcome": "STALE_ANCHOR"
+     },
+     {
+      "ref": "e3",
+      "truth": "nav-away",
+      "outcome": "STALE_ANCHOR"
+     },
+     {
+      "ref": "e21",
+      "truth": "btn-delete-side",
+      "outcome": "STALE_ANCHOR"
+     },
+     {
+      "ref": "e22",
+      "truth": "btn-help",
+      "outcome": "STALE_ANCHOR"
+     }
+    ],
+    "refused_absent": 17,
+    "outcomes": {
+     "STALE_ANCHOR": 22
+    },
+    "attempts": 22,
+    "rebind_survival_pct": 0.0,
+    "false_rebind_pct": 0.0
+   }
+  },
+  {
+   "scenario": "SPA route change, document policy [fuzzy=off,weak_keys=on]",
+   "elements_before": 22,
+   "elements_after": 7,
+   "url_before": "http://127.0.0.1:50557/app.html",
+   "url_after": "http://127.0.0.1:50557/app.html#/settings",
+   "same_document": true,
+   "stickiness": {
+    "present_in_both": 5,
+    "kept_ref": 0,
+    "survival_pct": 0.0,
+    "lost": [
+     "btn-delete-side",
+     "btn-help",
+     "nav-away",
+     "nav-home",
+     "nav-settings"
+    ],
+    "false_sticky": [],
+    "dom_node_survived": 5,
+    "dom_node_survival_pct": 100.0
+   },
+   "rebind": {
+    "proceeded_correct": 5,
+    "false_rebind": [
+     {
+      "ref": "e6",
+      "asked_for": "btn-save",
+      "landed_on": "btn-save-settings",
+      "tier": "role+name in landmark"
+     },
+     {
+      "ref": "e7",
+      "asked_for": "btn-delete-a",
+      "landed_on": "btn-delete-side",
+      "tier": "role+name anywhere"
+     },
+     {
+      "ref": "e8",
+      "asked_for": "btn-delete-b",
+      "landed_on": "btn-delete-side",
+      "tier": "role+name anywhere"
+     }
+    ],
+    "refused_present": [],
+    "refused_absent": 14,
+    "outcomes": {
+     "rebound": 8,
+     "STALE_ANCHOR": 14
+    },
+    "attempts": 22,
+    "rebind_survival_pct": 100.0,
+    "false_rebind_pct": 13.64
+   }
+  },
+  {
+   "scenario": "SPA route change, document policy, cross-page ALLOWED [fuzzy=off,weak_keys=on]",
+   "elements_before": 22,
+   "elements_after": 7,
+   "url_before": "http://127.0.0.1:50557/app.html",
+   "url_after": "http://127.0.0.1:50557/app.html#/settings",
+   "same_document": true,
+   "stickiness": {
+    "present_in_both": 5,
+    "kept_ref": 0,
+    "survival_pct": 0.0,
+    "lost": [
+     "btn-delete-side",
+     "btn-help",
+     "nav-away",
+     "nav-home",
+     "nav-settings"
+    ],
+    "false_sticky": [],
+    "dom_node_survived": 5,
+    "dom_node_survival_pct": 100.0
+   },
+   "rebind": {
+    "proceeded_correct": 5,
+    "false_rebind": [
+     {
+      "ref": "e6",
+      "asked_for": "btn-save",
+      "landed_on": "btn-save-settings",
+      "tier": "role+name in landmark"
+     },
+     {
+      "ref": "e7",
+      "asked_for": "btn-delete-a",
+      "landed_on": "btn-delete-side",
+      "tier": "role+name anywhere"
+     },
+     {
+      "ref": "e8",
+      "asked_for": "btn-delete-b",
+      "landed_on": "btn-delete-side",
+      "tier": "role+name anywhere"
+     }
+    ],
+    "refused_present": [],
+    "refused_absent": 14,
+    "outcomes": {
+     "rebound": 8,
+     "STALE_ANCHOR": 14
+    },
+    "attempts": 22,
+    "rebind_survival_pct": 100.0,
+    "false_rebind_pct": 13.64
+   }
+  },
+  {
+   "scenario": "full navigation to a look-alike page [fuzzy=off,weak_keys=on]",
+   "elements_before": 22,
+   "elements_after": 7,
+   "url_before": "http://127.0.0.1:50557/app.html",
+   "url_after": "http://127.0.0.1:50557/other.html",
+   "same_document": false,
+   "stickiness": {
+    "present_in_both": 0,
+    "kept_ref": 0,
+    "survival_pct": null,
+    "lost": [],
+    "false_sticky": [],
+    "dom_node_survived": 0,
+    "dom_node_survival_pct": null
+   },
+   "rebind": {
+    "proceeded_correct": 0,
+    "false_rebind": [],
+    "refused_present": [],
+    "refused_absent": 22,
+    "outcomes": {
+     "STALE_ANCHOR": 22
+    },
+    "attempts": 22,
+    "rebind_survival_pct": null,
+    "false_rebind_pct": 0.0
+   }
+  },
+  {
+   "scenario": "full navigation to a look-alike page, cross-page ALLOWED [fuzzy=off,weak_keys=on]",
+   "elements_before": 22,
+   "elements_after": 7,
+   "url_before": "http://127.0.0.1:50557/app.html",
+   "url_after": "http://127.0.0.1:50557/other.html",
+   "same_document": false,
+   "stickiness": {
+    "present_in_both": 0,
+    "kept_ref": 0,
+    "survival_pct": null,
+    "lost": [],
+    "false_sticky": [],
+    "dom_node_survived": 0,
+    "dom_node_survival_pct": null
+   },
+   "rebind": {
+    "proceeded_correct": 0,
+    "false_rebind": [
+     {
+      "ref": "e1",
+      "asked_for": "nav-home",
+      "landed_on": "other-nav-home",
+      "tier": "role+name in landmark"
+     },
+     {
+      "ref": "e2",
+      "asked_for": "nav-settings",
+      "landed_on": "other-nav-settings",
+      "tier": "role+name in landmark"
+     },
+     {
+      "ref": "e4",
+      "asked_for": "field-email",
+      "landed_on": "other-field-email",
+      "tier": "role+name in landmark"
+     },
+     {
+      "ref": "e6",
+      "asked_for": "btn-save",
+      "landed_on": "other-btn-save",
+      "tier": "role+name in landmark"
+     },
+     {
+      "ref": "e7",
+      "asked_for": "btn-delete-a",
+      "landed_on": "other-btn-delete",
+      "tier": "role+name in landmark"
+     },
+     {
+      "ref": "e8",
+      "asked_for": "btn-delete-b",
+      "landed_on": "other-btn-delete",
+      "tier": "role+name in landmark"
+     },
+     {
+      "ref": "e21",
+      "asked_for": "btn-delete-side",
+      "landed_on": "other-btn-delete-side",
+      "tier": "role+name in landmark"
+     },
+     {
+      "ref": "e22",
+      "asked_for": "btn-help",
+      "landed_on": "other-btn-help",
+      "tier": "role+name in landmark"
+     }
+    ],
+    "refused_present": [],
+    "refused_absent": 14,
+    "outcomes": {
+     "rebound": 8,
+     "STALE_ANCHOR": 14
+    },
+    "attempts": 22,
+    "rebind_survival_pct": null,
+    "false_rebind_pct": 36.36
+   }
+  },
+  {
+   "scenario": "reload, document policy [fuzzy=off,weak_keys=on]",
+   "elements_before": 22,
+   "elements_after": 22,
+   "url_before": "http://127.0.0.1:50557/app.html",
+   "url_after": "http://127.0.0.1:50557/app.html",
+   "same_document": false,
+   "stickiness": {
+    "present_in_both": 22,
+    "kept_ref": 22,
+    "survival_pct": 100.0,
+    "lost": [],
+    "false_sticky": [],
+    "dom_node_survived": 22,
+    "dom_node_survival_pct": 100.0
+   },
+   "rebind": {
+    "proceeded_correct": 0,
+    "false_rebind": [],
+    "refused_present": [
+     {
+      "ref": "e1",
+      "truth": "nav-home",
+      "outcome": "STALE_ANCHOR"
+     },
+     {
+      "ref": "e2",
+      "truth": "nav-settings",
+      "outcome": "STALE_ANCHOR"
+     },
+     {
+      "ref": "e3",
+      "truth": "nav-away",
+      "outcome": "STALE_ANCHOR"
+     },
+     {
+      "ref": "e4",
+      "truth": "field-email",
+      "outcome": "STALE_ANCHOR"
+     },
+     {
+      "ref": "e5",
+      "truth": "field-nick",
+      "outcome": "STALE_ANCHOR"
+     },
+     {
+      "ref": "e6",
+      "truth": "btn-save",
+      "outcome": "STALE_ANCHOR"
+     },
+     {
+      "ref": "e7",
+      "truth": "btn-delete-a",
+      "outcome": "STALE_ANCHOR"
+     },
+     {
+      "ref": "e8",
+      "truth": "btn-delete-b",
+      "outcome": "STALE_ANCHOR"
+     }
+    ],
+    "refused_absent": 0,
+    "outcomes": {
+     "STALE_ANCHOR": 22
+    },
+    "attempts": 22,
+    "rebind_survival_pct": 0.0,
+    "false_rebind_pct": 0.0
+   }
+  },
+  {
+   "scenario": "reload, url policy [fuzzy=off,weak_keys=on]",
+   "elements_before": 22,
+   "elements_after": 22,
+   "url_before": "http://127.0.0.1:50557/app.html",
+   "url_after": "http://127.0.0.1:50557/app.html",
+   "same_document": false,
+   "stickiness": {
+    "present_in_both": 22,
+    "kept_ref": 22,
+    "survival_pct": 100.0,
+    "lost": [],
+    "false_sticky": [],
+    "dom_node_survived": 22,
+    "dom_node_survival_pct": 100.0
+   },
+   "rebind": {
+    "proceeded_correct": 22,
+    "false_rebind": [],
+    "refused_present": [],
+    "refused_absent": 0,
+    "outcomes": {
+     "ok": 22
+    },
+    "attempts": 22,
+    "rebind_survival_pct": 100.0,
+    "false_rebind_pct": 0.0
+   }
+  },
+  {
+   "scenario": "virtualized list, small scroll [fuzzy=off,weak_keys=on]",
+   "elements_before": 22,
+   "elements_after": 24,
+   "url_before": "http://127.0.0.1:50557/virtual.html",
+   "url_after": "http://127.0.0.1:50557/virtual.html",
+   "same_document": true,
+   "stickiness": {
+    "present_in_both": 14,
+    "kept_ref": 14,
+    "survival_pct": 100.0,
+    "lost": [],
+    "false_sticky": [],
+    "dom_node_survived": 14,
+    "dom_node_survival_pct": 100.0
+   },
+   "rebind": {
+    "proceeded_correct": 14,
+    "false_rebind": [],
+    "refused_present": [],
+    "refused_absent": 8,
+    "outcomes": {
+     "STALE_ANCHOR": 8,
+     "ok": 14
+    },
+    "attempts": 22,
+    "rebind_survival_pct": 100.0,
+    "false_rebind_pct": 0.0
+   }
+  },
+  {
+   "scenario": "virtualized list, recycle to row 4000 [fuzzy=off,weak_keys=on]",
+   "elements_before": 22,
+   "elements_after": 24,
+   "url_before": "http://127.0.0.1:50557/virtual.html",
+   "url_after": "http://127.0.0.1:50557/virtual.html",
+   "same_document": true,
+   "stickiness": {
+    "present_in_both": 0,
+    "kept_ref": 0,
+    "survival_pct": null,
+    "lost": [],
+    "false_sticky": [
+     {
+      "ref": "e1",
+      "was": "row-0",
+      "now": "row-3998"
+     },
+     {
+      "ref": "e2",
+      "was": "row-1",
+      "now": "row-3999"
+     },
+     {
+      "ref": "e3",
+      "was": "row-2",
+      "now": "row-4000"
+     },
+     {
+      "ref": "e4",
+      "was": "row-3",
+      "now": "row-4001"
+     },
+     {
+      "ref": "e5",
+      "was": "row-4",
+      "now": "row-4002"
+     },
+     {
+      "ref": "e6",
+      "was": "row-5",
+      "now": "row-4003"
+     },
+     {
+      "ref": "e7",
+      "was": "row-6",
+      "now": "row-4004"
+     },
+     {
+      "ref": "e8",
+      "was": "row-7",
+      "now": "row-4005"
+     },
+     {
+      "ref": "e9",
+      "was": "row-8",
+      "now": "row-4006"
+     },
+     {
+      "ref": "e10",
+      "was": "row-9",
+      "now": "row-4007"
+     },
+     {
+      "ref": "e11",
+      "was": "row-10",
+      "now": "row-4008"
+     },
+     {
+      "ref": "e12",
+      "was": "row-11",
+      "now": "row-4009"
+     },
+     {
+      "ref": "e13",
+      "was": "row-12",
+      "now": "row-4010"
+     },
+     {
+      "ref": "e14",
+      "was": "row-13",
+      "now": "row-4011"
+     },
+     {
+      "ref": "e15",
+      "was": "row-14",
+      "now": "row-4012"
+     },
+     {
+      "ref": "e16",
+      "was": "row-15",
+      "now": "row-4013"
+     },
+     {
+      "ref": "e17",
+      "was": "row-16",
+      "now": "row-4014"
+     },
+     {
+      "ref": "e18",
+      "was": "row-17",
+      "now": "row-4015"
+     },
+     {
+      "ref": "e19",
+      "was": "row-18",
+      "now": "row-4016"
+     },
+     {
+      "ref": "e20",
+      "was": "row-19",
+      "now": "row-4017"
+     },
+     {
+      "ref": "e21",
+      "was": "row-20",
+      "now": "row-4018"
+     },
+     {
+      "ref": "e22",
+      "was": "row-21",
+      "now": "row-4019"
+     }
+    ],
+    "dom_node_survived": 0,
+    "dom_node_survival_pct": null
+   },
+   "rebind": {
+    "proceeded_correct": 0,
+    "false_rebind": [],
+    "refused_present": [],
+    "refused_absent": 22,
+    "outcomes": {
+     "STALE_ANCHOR": 22
+    },
+    "attempts": 22,
+    "rebind_survival_pct": null,
+    "false_rebind_pct": 0.0
+   }
+  },
+  {
+   "scenario": "re-read, no mutation [fuzzy=off,weak_keys=off]",
+   "elements_before": 22,
+   "elements_after": 22,
+   "url_before": "http://127.0.0.1:50557/app.html",
+   "url_after": "http://127.0.0.1:50557/app.html",
+   "same_document": true,
+   "stickiness": {
+    "present_in_both": 22,
+    "kept_ref": 20,
+    "survival_pct": 90.9,
+    "lost": [
+     "btn-delete-a",
+     "btn-delete-b"
+    ],
+    "false_sticky": [],
+    "dom_node_survived": 22,
+    "dom_node_survival_pct": 100.0
+   },
+   "rebind": {
+    "proceeded_correct": 20,
+    "false_rebind": [],
+    "refused_present": [
+     {
+      "ref": "e7",
+      "truth": "btn-delete-a",
+      "outcome": "AMBIGUOUS_LOCATION"
+     },
+     {
+      "ref": "e8",
+      "truth": "btn-delete-b",
+      "outcome": "AMBIGUOUS_LOCATION"
+     }
+    ],
+    "refused_absent": 0,
+    "outcomes": {
+     "ok": 20,
+     "AMBIGUOUS_LOCATION": 2
+    },
+    "attempts": 22,
+    "rebind_survival_pct": 90.9,
+    "false_rebind_pct": 0.0
+   }
+  },
+  {
+   "scenario": "React remount (nodes replaced) [fuzzy=off,weak_keys=off]",
+   "elements_before": 22,
+   "elements_after": 22,
+   "url_before": "http://127.0.0.1:50557/app.html",
+   "url_after": "http://127.0.0.1:50557/app.html",
+   "same_document": true,
+   "stickiness": {
+    "present_in_both": 22,
+    "kept_ref": 20,
+    "survival_pct": 90.9,
+    "lost": [
+     "btn-delete-a",
+     "btn-delete-b"
+    ],
+    "false_sticky": [],
+    "dom_node_survived": 5,
+    "dom_node_survival_pct": 22.7
+   },
+   "rebind": {
+    "proceeded_correct": 20,
+    "false_rebind": [],
+    "refused_present": [
+     {
+      "ref": "e7",
+      "truth": "btn-delete-a",
+      "outcome": "AMBIGUOUS_LOCATION"
+     },
+     {
+      "ref": "e8",
+      "truth": "btn-delete-b",
+      "outcome": "AMBIGUOUS_LOCATION"
+     }
+    ],
+    "refused_absent": 0,
+    "outcomes": {
+     "ok": 20,
+     "AMBIGUOUS_LOCATION": 2
+    },
+    "attempts": 22,
+    "rebind_survival_pct": 90.9,
+    "false_rebind_pct": 0.0
+   }
+  },
+  {
+   "scenario": "React re-render, labels change [fuzzy=off,weak_keys=off]",
+   "elements_before": 22,
+   "elements_after": 22,
+   "url_before": "http://127.0.0.1:50557/app.html",
+   "url_after": "http://127.0.0.1:50557/app.html",
+   "same_document": true,
+   "stickiness": {
+    "present_in_both": 22,
+    "kept_ref": 20,
+    "survival_pct": 90.9,
+    "lost": [
+     "btn-delete-a",
+     "btn-delete-b"
+    ],
+    "false_sticky": [],
+    "dom_node_survived": 22,
+    "dom_node_survival_pct": 100.0
+   },
+   "rebind": {
+    "proceeded_correct": 20,
+    "false_rebind": [],
+    "refused_present": [
+     {
+      "ref": "e7",
+      "truth": "btn-delete-a",
+      "outcome": "AMBIGUOUS_LOCATION"
+     },
+     {
+      "ref": "e8",
+      "truth": "btn-delete-b",
+      "outcome": "AMBIGUOUS_LOCATION"
+     }
+    ],
+    "refused_absent": 0,
+    "outcomes": {
+     "ok": 20,
+     "AMBIGUOUS_LOCATION": 2
+    },
+    "attempts": 22,
+    "rebind_survival_pct": 90.9,
+    "false_rebind_pct": 0.0
+   }
+  },
+  {
+   "scenario": "list reorder (reversed) [fuzzy=off,weak_keys=off]",
+   "elements_before": 22,
+   "elements_after": 22,
+   "url_before": "http://127.0.0.1:50557/app.html",
+   "url_after": "http://127.0.0.1:50557/app.html",
+   "same_document": true,
+   "stickiness": {
+    "present_in_both": 22,
+    "kept_ref": 20,
+    "survival_pct": 90.9,
+    "lost": [
+     "btn-delete-a",
+     "btn-delete-b"
+    ],
+    "false_sticky": [],
+    "dom_node_survived": 22,
+    "dom_node_survival_pct": 100.0
+   },
+   "rebind": {
+    "proceeded_correct": 20,
+    "false_rebind": [],
+    "refused_present": [
+     {
+      "ref": "e7",
+      "truth": "btn-delete-a",
+      "outcome": "AMBIGUOUS_LOCATION"
+     },
+     {
+      "ref": "e8",
+      "truth": "btn-delete-b",
+      "outcome": "AMBIGUOUS_LOCATION"
+     }
+    ],
+    "refused_absent": 0,
+    "outcomes": {
+     "ok": 20,
+     "AMBIGUOUS_LOCATION": 2
+    },
+    "attempts": 22,
+    "rebind_survival_pct": 90.9,
+    "false_rebind_pct": 0.0
+   }
+  },
+  {
+   "scenario": "SPA route change, url policy [fuzzy=off,weak_keys=off]",
+   "elements_before": 22,
+   "elements_after": 7,
+   "url_before": "http://127.0.0.1:50557/app.html",
+   "url_after": "http://127.0.0.1:50557/app.html#/settings",
+   "same_document": true,
+   "stickiness": {
+    "present_in_both": 5,
+    "kept_ref": 0,
+    "survival_pct": 0.0,
+    "lost": [
+     "btn-delete-side",
+     "btn-help",
+     "nav-away",
+     "nav-home",
+     "nav-settings"
+    ],
+    "false_sticky": [],
+    "dom_node_survived": 5,
+    "dom_node_survival_pct": 100.0
+   },
+   "rebind": {
+    "proceeded_correct": 0,
+    "false_rebind": [],
+    "refused_present": [
+     {
+      "ref": "e1",
+      "truth": "nav-home",
+      "outcome": "STALE_ANCHOR"
+     },
+     {
+      "ref": "e2",
+      "truth": "nav-settings",
+      "outcome": "STALE_ANCHOR"
+     },
+     {
+      "ref": "e3",
+      "truth": "nav-away",
+      "outcome": "STALE_ANCHOR"
+     },
+     {
+      "ref": "e21",
+      "truth": "btn-delete-side",
+      "outcome": "STALE_ANCHOR"
+     },
+     {
+      "ref": "e22",
+      "truth": "btn-help",
+      "outcome": "STALE_ANCHOR"
+     }
+    ],
+    "refused_absent": 17,
+    "outcomes": {
+     "STALE_ANCHOR": 22
+    },
+    "attempts": 22,
+    "rebind_survival_pct": 0.0,
+    "false_rebind_pct": 0.0
+   }
+  },
+  {
+   "scenario": "SPA route change, document policy [fuzzy=off,weak_keys=off]",
+   "elements_before": 22,
+   "elements_after": 7,
+   "url_before": "http://127.0.0.1:50557/app.html",
+   "url_after": "http://127.0.0.1:50557/app.html#/settings",
+   "same_document": true,
+   "stickiness": {
+    "present_in_both": 5,
+    "kept_ref": 0,
+    "survival_pct": 0.0,
+    "lost": [
+     "btn-delete-side",
+     "btn-help",
+     "nav-away",
+     "nav-home",
+     "nav-settings"
+    ],
+    "false_sticky": [],
+    "dom_node_survived": 5,
+    "dom_node_survival_pct": 100.0
+   },
+   "rebind": {
+    "proceeded_correct": 5,
+    "false_rebind": [
+     {
+      "ref": "e6",
+      "asked_for": "btn-save",
+      "landed_on": "btn-save-settings",
+      "tier": "role+name in landmark"
+     }
+    ],
+    "refused_present": [],
+    "refused_absent": 16,
+    "outcomes": {
+     "rebound": 6,
+     "STALE_ANCHOR": 14,
+     "AMBIGUOUS_LOCATION": 2
+    },
+    "attempts": 22,
+    "rebind_survival_pct": 100.0,
+    "false_rebind_pct": 4.55
+   }
+  },
+  {
+   "scenario": "SPA route change, document policy, cross-page ALLOWED [fuzzy=off,weak_keys=off]",
+   "elements_before": 22,
+   "elements_after": 7,
+   "url_before": "http://127.0.0.1:50557/app.html",
+   "url_after": "http://127.0.0.1:50557/app.html#/settings",
+   "same_document": true,
+   "stickiness": {
+    "present_in_both": 5,
+    "kept_ref": 0,
+    "survival_pct": 0.0,
+    "lost": [
+     "btn-delete-side",
+     "btn-help",
+     "nav-away",
+     "nav-home",
+     "nav-settings"
+    ],
+    "false_sticky": [],
+    "dom_node_survived": 5,
+    "dom_node_survival_pct": 100.0
+   },
+   "rebind": {
+    "proceeded_correct": 5,
+    "false_rebind": [
+     {
+      "ref": "e6",
+      "asked_for": "btn-save",
+      "landed_on": "btn-save-settings",
+      "tier": "role+name in landmark"
+     }
+    ],
+    "refused_present": [],
+    "refused_absent": 16,
+    "outcomes": {
+     "rebound": 6,
+     "STALE_ANCHOR": 14,
+     "AMBIGUOUS_LOCATION": 2
+    },
+    "attempts": 22,
+    "rebind_survival_pct": 100.0,
+    "false_rebind_pct": 4.55
+   }
+  },
+  {
+   "scenario": "full navigation to a look-alike page [fuzzy=off,weak_keys=off]",
+   "elements_before": 22,
+   "elements_after": 7,
+   "url_before": "http://127.0.0.1:50557/app.html",
+   "url_after": "http://127.0.0.1:50557/other.html",
+   "same_document": false,
+   "stickiness": {
+    "present_in_both": 0,
+    "kept_ref": 0,
+    "survival_pct": null,
+    "lost": [],
+    "false_sticky": [],
+    "dom_node_survived": 0,
+    "dom_node_survival_pct": null
+   },
+   "rebind": {
+    "proceeded_correct": 0,
+    "false_rebind": [],
+    "refused_present": [],
+    "refused_absent": 22,
+    "outcomes": {
+     "STALE_ANCHOR": 22
+    },
+    "attempts": 22,
+    "rebind_survival_pct": null,
+    "false_rebind_pct": 0.0
+   }
+  },
+  {
+   "scenario": "full navigation to a look-alike page, cross-page ALLOWED [fuzzy=off,weak_keys=off]",
+   "elements_before": 22,
+   "elements_after": 7,
+   "url_before": "http://127.0.0.1:50557/app.html",
+   "url_after": "http://127.0.0.1:50557/other.html",
+   "same_document": false,
+   "stickiness": {
+    "present_in_both": 0,
+    "kept_ref": 0,
+    "survival_pct": null,
+    "lost": [],
+    "false_sticky": [],
+    "dom_node_survived": 0,
+    "dom_node_survival_pct": null
+   },
+   "rebind": {
+    "proceeded_correct": 0,
+    "false_rebind": [
+     {
+      "ref": "e1",
+      "asked_for": "nav-home",
+      "landed_on": "other-nav-home",
+      "tier": "role+name in landmark"
+     },
+     {
+      "ref": "e2",
+      "asked_for": "nav-settings",
+      "landed_on": "other-nav-settings",
+      "tier": "role+name in landmark"
+     },
+     {
+      "ref": "e4",
+      "asked_for": "field-email",
+      "landed_on": "other-field-email",
+      "tier": "role+name in landmark"
+     },
+     {
+      "ref": "e6",
+      "asked_for": "btn-save",
+      "landed_on": "other-btn-save",
+      "tier": "role+name in landmark"
+     },
+     {
+      "ref": "e21",
+      "asked_for": "btn-delete-side",
+      "landed_on": "other-btn-delete-side",
+      "tier": "role+name in landmark"
+     },
+     {
+      "ref": "e22",
+      "asked_for": "btn-help",
+      "landed_on": "other-btn-help",
+      "tier": "role+name in landmark"
+     }
+    ],
+    "refused_present": [],
+    "refused_absent": 16,
+    "outcomes": {
+     "rebound": 6,
+     "STALE_ANCHOR": 14,
+     "AMBIGUOUS_LOCATION": 2
+    },
+    "attempts": 22,
+    "rebind_survival_pct": null,
+    "false_rebind_pct": 27.27
+   }
+  },
+  {
+   "scenario": "reload, document policy [fuzzy=off,weak_keys=off]",
+   "elements_before": 22,
+   "elements_after": 22,
+   "url_before": "http://127.0.0.1:50557/app.html",
+   "url_after": "http://127.0.0.1:50557/app.html",
+   "same_document": false,
+   "stickiness": {
+    "present_in_both": 22,
+    "kept_ref": 20,
+    "survival_pct": 90.9,
+    "lost": [
+     "btn-delete-a",
+     "btn-delete-b"
+    ],
+    "false_sticky": [],
+    "dom_node_survived": 22,
+    "dom_node_survival_pct": 100.0
+   },
+   "rebind": {
+    "proceeded_correct": 0,
+    "false_rebind": [],
+    "refused_present": [
+     {
+      "ref": "e1",
+      "truth": "nav-home",
+      "outcome": "STALE_ANCHOR"
+     },
+     {
+      "ref": "e2",
+      "truth": "nav-settings",
+      "outcome": "STALE_ANCHOR"
+     },
+     {
+      "ref": "e3",
+      "truth": "nav-away",
+      "outcome": "STALE_ANCHOR"
+     },
+     {
+      "ref": "e4",
+      "truth": "field-email",
+      "outcome": "STALE_ANCHOR"
+     },
+     {
+      "ref": "e5",
+      "truth": "field-nick",
+      "outcome": "STALE_ANCHOR"
+     },
+     {
+      "ref": "e6",
+      "truth": "btn-save",
+      "outcome": "STALE_ANCHOR"
+     },
+     {
+      "ref": "e7",
+      "truth": "btn-delete-a",
+      "outcome": "STALE_ANCHOR"
+     },
+     {
+      "ref": "e8",
+      "truth": "btn-delete-b",
+      "outcome": "STALE_ANCHOR"
+     }
+    ],
+    "refused_absent": 0,
+    "outcomes": {
+     "STALE_ANCHOR": 22
+    },
+    "attempts": 22,
+    "rebind_survival_pct": 0.0,
+    "false_rebind_pct": 0.0
+   }
+  },
+  {
+   "scenario": "reload, url policy [fuzzy=off,weak_keys=off]",
+   "elements_before": 22,
+   "elements_after": 22,
+   "url_before": "http://127.0.0.1:50557/app.html",
+   "url_after": "http://127.0.0.1:50557/app.html",
+   "same_document": false,
+   "stickiness": {
+    "present_in_both": 22,
+    "kept_ref": 20,
+    "survival_pct": 90.9,
+    "lost": [
+     "btn-delete-a",
+     "btn-delete-b"
+    ],
+    "false_sticky": [],
+    "dom_node_survived": 22,
+    "dom_node_survival_pct": 100.0
+   },
+   "rebind": {
+    "proceeded_correct": 20,
+    "false_rebind": [],
+    "refused_present": [
+     {
+      "ref": "e7",
+      "truth": "btn-delete-a",
+      "outcome": "AMBIGUOUS_LOCATION"
+     },
+     {
+      "ref": "e8",
+      "truth": "btn-delete-b",
+      "outcome": "AMBIGUOUS_LOCATION"
+     }
+    ],
+    "refused_absent": 0,
+    "outcomes": {
+     "ok": 20,
+     "AMBIGUOUS_LOCATION": 2
+    },
+    "attempts": 22,
+    "rebind_survival_pct": 90.9,
+    "false_rebind_pct": 0.0
+   }
+  },
+  {
+   "scenario": "virtualized list, small scroll [fuzzy=off,weak_keys=off]",
+   "elements_before": 22,
+   "elements_after": 24,
+   "url_before": "http://127.0.0.1:50557/virtual.html",
+   "url_after": "http://127.0.0.1:50557/virtual.html",
+   "same_document": true,
+   "stickiness": {
+    "present_in_both": 14,
+    "kept_ref": 14,
+    "survival_pct": 100.0,
+    "lost": [],
+    "false_sticky": [],
+    "dom_node_survived": 14,
+    "dom_node_survival_pct": 100.0
+   },
+   "rebind": {
+    "proceeded_correct": 14,
+    "false_rebind": [],
+    "refused_present": [],
+    "refused_absent": 8,
+    "outcomes": {
+     "STALE_ANCHOR": 8,
+     "ok": 14
+    },
+    "attempts": 22,
+    "rebind_survival_pct": 100.0,
+    "false_rebind_pct": 0.0
+   }
+  },
+  {
+   "scenario": "virtualized list, recycle to row 4000 [fuzzy=off,weak_keys=off]",
+   "elements_before": 22,
+   "elements_after": 24,
+   "url_before": "http://127.0.0.1:50557/virtual.html",
+   "url_after": "http://127.0.0.1:50557/virtual.html",
+   "same_document": true,
+   "stickiness": {
+    "present_in_both": 0,
+    "kept_ref": 0,
+    "survival_pct": null,
+    "lost": [],
+    "false_sticky": [],
+    "dom_node_survived": 0,
+    "dom_node_survival_pct": null
+   },
+   "rebind": {
+    "proceeded_correct": 0,
+    "false_rebind": [],
+    "refused_present": [],
+    "refused_absent": 22,
+    "outcomes": {
+     "STALE_ANCHOR": 22
+    },
+    "attempts": 22,
+    "rebind_survival_pct": null,
+    "false_rebind_pct": 0.0
+   }
+  }
+ ],
+ "entry_conditions": {
+  "never_minted": {
+   "outcome": "NOT_FOUND",
+   "recovery": "refs are minted only by a read in this session; call get_page_view first"
+  },
+  "wrong_handle": {
+   "outcome": "BAD_PARAMS",
+   "minted_on": "p1",
+   "asked_for": "p2"
+  },
+  "modal_blocks_first": {
+   "outcome": "MODAL_BLOCKED",
+   "dialog": "Confirm",
+   "recovery": "click the dialog's own control, or manage_session(action='dismiss_dialog')"
+  },
+  "modal_blocks_valid_ref": {
+   "outcome": "MODAL_BLOCKED",
+   "dialog": "Confirm",
+   "recovery": "click the dialog's own control, or manage_session(action='dismiss_dialog')"
+  },
+  "gone_entry_url_policy": {
+   "outcome": "STALE_ANCHOR",
+   "reason": "url-changed",
+   "was": "http://127.0.0.1:50557/app.html",
+   "now": "http://127.0.0.1:50557/app.html#/settings",
+   "gone_as": "button \"Save\"",
+   "recovery": "re-read the page, or pass allow_cross_page_rebind=true"
+  },
+  "gone_entry_document_policy": {
+   "outcome": "rebound",
+   "element": {
+    "truth": "btn-save-settings",
+    "node_uid": 26,
+    "tag": "BUTTON",
+    "role": "button",
+    "name": "Save",
+    "landmark": "form",
+    "landmark_label": "Profile",
+    "labelled_ancestor": "",
+    "ordinal": 1,
+    "attr_id": "",
+    "attr_testid": "",
+    "attr_name": "",
+    "href_path": "",
+    "origin": "http://127.0.0.1:50557",
+    "path": "/app.html",
+    "page_key": "http://127.0.0.1:50557/app.html#/settings"
+   },
+   "tier": "role+name in landmark",
+   "was": "button \"Save\""
+  },
+  "gone_entry_cross_page_allowed": {
+   "outcome": "rebound",
+   "element": {
+    "truth": "btn-save-settings",
+    "node_uid": 26,
+    "tag": "BUTTON",
+    "role": "button",
+    "name": "Save",
+    "landmark": "form",
+    "landmark_label": "Profile",
+    "labelled_ancestor": "",
+    "ordinal": 1,
+    "attr_id": "",
+    "attr_testid": "",
+    "attr_name": "",
+    "href_path": "",
+    "origin": "http://127.0.0.1:50557",
+    "path": "/app.html",
+    "page_key": "http://127.0.0.1:50557/app.html#/settings"
+   },
+   "tier": "role+name in landmark",
+   "was": "button \"Save\""
+  },
+  "duplicate_names_after_rename": {
+   "outcome": "AMBIGUOUS_LOCATION",
+   "tier": "turn-local ref",
+   "reason": "nothing in the anchor ladder distinguishes this element from its siblings, so its ref was never sticky",
+   "candidates": [
+    {
+     "name": "Delete",
+     "role": "button",
+     "landmark": "form",
+     "ordinal": 2
+    },
+    {
+     "name": "Delete",
+     "role": "button",
+     "landmark": "form",
+     "ordinal": 3
+    },
+    {
+     "name": "Delete",
+     "role": "button",
+     "landmark": "complementary",
+     "ordinal": 1
+    }
+   ]
+  }
+ },
+ "key_ladder": [
+  "testid",
+  "id",
+  "named-control",
+  "role-name-scoped",
+  "role-name-landmark",
+  "role-name-ordinal",
+  "role-ordinal"
+ ]
+}
