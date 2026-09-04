@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Corpus B: nested iframe, level 3</title>
+<style>
+  body { font: 12px system-ui, sans-serif; margin: 0; padding: 6px;
+         background: #fff8f4; }
+  iframe { width: 480px; height: 60px; border: 2px dotted #777; }
+</style>
+</head>
+<body>
+<h3>Level 3 document</h3>
+<p>Three frames down and still same origin. The deepest content on the page
+lives here.</p>
+<button id="l3-action">Level three button</button>
+
+<!-- The cross-origin frame at the BOTTOM of the chain. Offline it fails to
+     load, which is fine and expected: the element is the fixture, not the
+     content. -->
+<iframe id="xo-deep" src="https://example.com/deep"
+        title="A cross-origin frame three levels down"></iframe>
+</body>
+</html>

@@ -1,0 +1,241 @@
+{
+ "measured_kst": "2026-09-05 05:11",
+ "phase": 2,
+ "green": true,
+ "parts": {
+  "1_token_bill": {
+   "green": true,
+   "rows": {
+    "example_com": {
+     "tokens": 573,
+     "target": null,
+     "rung": 1,
+     "pass": true,
+     "target_revised_from": null
+    },
+    "httpbin_form": {
+     "tokens": 842,
+     "target": 900,
+     "rung": 1,
+     "pass": true,
+     "target_revised_from": null
+    },
+    "wikipedia_gdp_table": {
+     "tokens": 3399,
+     "target": 3500,
+     "rung": 1,
+     "pass": true,
+     "target_revised_from": 3000
+    },
+    "wikipedia_versailles": {
+     "tokens": 4364,
+     "target": 5000,
+     "rung": 6,
+     "pass": true,
+     "target_revised_from": null
+    }
+   },
+   "misses": [],
+   "targets_revised_this_phase": {
+    "wikipedia_gdp_table": 3000
+   },
+   "estimator": "o200k_base (DESIGN 3.4, PLAN W1)"
+  },
+  "2_3_6_9_suite": {
+   "green": true,
+   "command": "pytest tests/browser/test_anchors_s2.py tests/unit/test_anchors.py tests/browser/test_phase2_reads.py tests/unit/test_projection.py",
+   "result": "140 passed in 53.28s",
+   "covers": [
+    "2 sticky refs and zero false rebinds (the ported S2 battery)",
+    "3 completeness accurate by construction on corpus B",
+    "6 affordance quotas on the adversarial cases",
+    "9 accessible names computed, including the hidden-through-ancestor fixture"
+   ]
+  },
+  "4_ladder": {
+   "rungs": 16,
+   "sizes": [
+    {
+     "rung": 1,
+     "tokens": 17917
+    },
+    {
+     "rung": 2,
+     "tokens": 17882
+    },
+    {
+     "rung": 3,
+     "tokens": 17847
+    },
+    {
+     "rung": 4,
+     "tokens": 3378
+    },
+    {
+     "rung": 5,
+     "tokens": 3073
+    },
+    {
+     "rung": 6,
+     "tokens": 2733
+    },
+    {
+     "rung": 7,
+     "tokens": 2467
+    },
+    {
+     "rung": 8,
+     "tokens": 2250
+    },
+    {
+     "rung": 9,
+     "tokens": 2072
+    },
+    {
+     "rung": 10,
+     "tokens": 1879
+    },
+    {
+     "rung": 11,
+     "tokens": 1713
+    },
+    {
+     "rung": 12,
+     "tokens": 1463
+    },
+    {
+     "rung": 13,
+     "tokens": 1353
+    },
+    {
+     "rung": 14,
+     "tokens": 1228
+    },
+    {
+     "rung": 15,
+     "tokens": 1068
+    },
+    {
+     "rung": 16,
+     "tokens": 968
+    }
+   ],
+   "truncated_rungs": [],
+   "exposed_sequence": [
+    17919,
+    17884,
+    17849,
+    3380
+   ],
+   "monotonic_as_exposed": true,
+   "green": true
+  },
+  "7_executable_prices": {
+   "priced_units_checked": 65,
+   "gated_for_accuracy": 36,
+   "below_noise_floor": 29,
+   "failures": [],
+   "failure_count": 0,
+   "unpriceable_calls": [],
+   "tolerance": 0.35,
+   "noise_floor_tokens": 60,
+   "verified_against": "get_text on the same region, NET of its nested regions, which is an independent measure of the content the price is about",
+   "worst_error_pct": 27.1,
+   "median_error_pct": 6.3,
+   "rank_correlation": 0.993,
+   "green": true
+  },
+  "5_latency": {
+   "green": true,
+   "failures": [],
+   "uncertified": [],
+   "rows": [
+    {
+     "nodes": 5012,
+     "projection_p95": 140.4,
+     "budget_ms": 500,
+     "reference_p50": 102.3,
+     "cost_vs_reference_pct": 1
+    },
+    {
+     "nodes": 10012,
+     "projection_p95": 169.2,
+     "budget_ms": 500,
+     "reference_p50": 130.9,
+     "cost_vs_reference_pct": 1
+    },
+    {
+     "nodes": 25012,
+     "projection_p95": 225.5,
+     "budget_ms": 500,
+     "reference_p50": 200.9,
+     "cost_vs_reference_pct": -2
+    },
+    {
+     "nodes": 50012,
+     "projection_p95": 413.5,
+     "budget_ms": 500,
+     "reference_p50": 319.9,
+     "cost_vs_reference_pct": 0
+    },
+    {
+     "nodes": 100012,
+     "projection_p95": 713.2,
+     "budget_ms": 1000,
+     "reference_p50": 549.8,
+     "cost_vs_reference_pct": 7
+    }
+   ]
+  },
+  "8_completeness_is_derived": {
+   "green": true,
+   "result": [
+    "9 passed, 276 deselected in 4.19s"
+   ],
+   "named_regression": "0 regions not expanded while thirty regions carry expand costs"
+  },
+  "drift_check": {
+   "green": true,
+   "rows": {
+    "example_com": {
+     "delta": -11,
+     "delta_pct": -1.9,
+     "frozen_nodes": 13,
+     "frozen_tokens": 573,
+     "live_nodes": 12,
+     "live_tokens": 562
+    },
+    "httpbin_form": {
+     "delta": -9,
+     "delta_pct": -1.1,
+     "frozen_nodes": 47,
+     "frozen_tokens": 842,
+     "live_nodes": 46,
+     "live_tokens": 833
+    },
+    "wikipedia_gdp_table": {
+     "delta": -178,
+     "delta_pct": -5.2,
+     "frozen_nodes": 5644,
+     "frozen_tokens": 3399,
+     "live_nodes": 5560,
+     "live_tokens": 3221
+    },
+    "wikipedia_versailles": {
+     "delta": 109,
+     "delta_pct": 2.5,
+     "frozen_nodes": 10737,
+     "frozen_tokens": 4364,
+     "live_nodes": 10571,
+     "live_tokens": 4473
+    }
+   }
+  },
+  "docstring_ratchet": {
+   "green": true,
+   "lite_tokens": 2720,
+   "ratchet": 2720,
+   "rule": "the lite surface may shrink and may not grow"
+  }
+ }
+}

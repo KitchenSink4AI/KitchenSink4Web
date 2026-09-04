@@ -88,6 +88,20 @@ def ntok_line(line: str) -> int:
     return _ntok_cached(line)
 
 
+@lru_cache(maxsize=1024)
+def _measured_rate(sample: str) -> float:
+    """Characters per token on one sample, measured once.
+
+    The ladder prices the same unit on every rung and on every fixpoint pass
+    inside a rung, and the refusal path builds fresh meters to verify the
+    budget it names, so a page's samples are asked for their rate on the
+    order of a hundred times. Measuring them once is the difference between
+    a Python assembly bill inside its 10 ms budget and one over it; the
+    answer is identical either way, which is what makes the cache safe."""
+    tokens = ntok(sample)
+    return max(1.0, len(sample) / tokens) if tokens else 0.0
+
+
 #: What happened to a unit. The completeness block is a view over these, and
 #: the distinctions are the ones S1 conflated: a region LISTED but not
 #: expanded is a different fact from a region DROPPED by a degradation rung,
@@ -98,6 +112,13 @@ SUPPRESSED_QUOTA = "suppressed_by_quota"
 DROPPED_RUNG = "dropped_by_rung"
 LISTED_NOT_EXPANDED = "listed_not_expanded"
 NOT_REACHED = "not_reached"
+#: A landmark that owns nothing of its own and exists to hold nested regions.
+#: Listed, because the structure is real, but with NO price: expanding it
+#: returns nothing that expanding its children would not.
+CONTAINER_ONLY = "listed_container_only"
+#: A landmark that owns nothing and holds no nested region either. Not listed
+#: at all, and counted here so the completeness block can say so.
+NO_CONTENT = "no_content"
 
 
 @dataclass
@@ -171,11 +192,23 @@ class Rates:
     affordance: float = 15.0
     heading: float = 12.0
     text_block: float = 3.0
+    #: The PAGE's rate, and the fallback for a unit that sent no sample of
+    #: its own. It is never the whole story: see `BudgetMeter.rate_for`.
     chars_per_token: float = 3.7
-    call_overhead: float = 40.0
+    #: Kept because the walk counts it and it is a real content statistic,
+    #: and because the experiment that produced it is worth not repeating: a
+    #: words-based price was measured against the same 37 regions and came
+    #: out WORSE than characters (17.8 percent median error against 13.6),
+    #: so characters stayed. The intuition that tokens track words more
+    #: closely than characters is right about prose and wrong about the
+    #: mixed content a landmark actually holds.
+    tokens_per_word: float = 1.45
 
-    def from_chars(self, chars: int) -> int:
-        return int(chars / self.chars_per_token)
+    def from_chars(self, chars: int, rate: float | None = None) -> int:
+        return int(chars / (rate or self.chars_per_token))
+
+    def from_words(self, words: int) -> int:
+        return int(words * self.tokens_per_word)
 
 
 class BudgetMeter:
@@ -207,8 +240,39 @@ class BudgetMeter:
             tokens = ntok(sample_text)
             if tokens:
                 self.rates.chars_per_token = max(2.0, len(sample_text) / tokens)
+                words = len(sample_text.split())
+                if words:
+                    self.rates.tokens_per_word = min(
+                        3.0, max(1.0, tokens / words))
 
     # -------------------------------------------------------------- pricing
+
+    def rate_for(self, sample: str | None) -> float:
+        """Characters per token for ONE unit, measured on its own text.
+
+        A page does not have a characters-per-token rate. The frozen GDP
+        article runs 5.3 characters to the token in its prose and 1.8 in its
+        own data table, a factor of three, and the single page-level rate
+        that priced both was the residual under-pricing gate part 7 spent a
+        phase on: four of its five outliers were the page's most numeric or
+        most link-dense regions.
+
+        The walk sends back a bounded, decimated sample of each unit's own
+        text (extract.js, `sampleInto`) and this measures the rate on it with
+        `tiktoken`, the same tokenizer that enforces the budget. It is the
+        one-arithmetic rule of DESIGN 3.3a applied to the character-to-token
+        conversion rather than only to the counting, and it introduces no
+        content-class constants: a table of numbers, a navbox of link labels
+        and a paragraph of prose are each described by their own text rather
+        than by a category somebody assigned them.
+
+        A unit that sent no sample (nothing sampleable, or the read's sample
+        budget was already spent) falls back to the page rate, which is the
+        behaviour that shipped before this and is still better than nothing.
+        """
+        if not sample or len(sample) < 40:
+            return self.rates.chars_per_token
+        return _measured_rate(sample) or self.rates.chars_per_token
 
     def price_region(self, region: dict) -> int:
         """What expanding this region would cost, NET of its children.
@@ -216,15 +280,30 @@ class BudgetMeter:
         DESIGN 3.3a rule 2. The extractor's counts are already net, because
         region ownership is assigned to the INNERMOST region during the walk,
         so a parent that is genuinely just a container prices as one and says
-        so rather than inheriting the sum of everything it wraps."""
+        so rather than inheriting the sum of everything it wraps.
+
+        **It counts the region's characters ONCE.** The first version added a
+        per-affordance rate, a per-heading rate, and a per-text-block rate on
+        top of the character count, and every one of those units contributes
+        its own text to that same character count, so the price was two to
+        three times the content. Measured against `get_text` on the same
+        region across four frozen pages, the median error was 96 percent; on
+        characters plus the call overhead alone it is 23 percent. That is the
+        difference between a menu with prices and a menu with plausible
+        numbers on it, and DESIGN 3.3a makes it a correctness requirement
+        rather than a nicety.
+
+        **And it counts CONTENT, not a call.** The price used to carry a
+        40-token call overhead, from the days when the number meant "what
+        this call will cost you". Phase 2 corrected that contract, because
+        expanding a region returns another budgeted projection rather than
+        the region: the number now answers "how much is in there", and a
+        scaffold the caller pays regardless has no place inside it. The
+        constant was also most of the residual error on small regions, which
+        it over-priced by exactly itself."""
         net = region["net"]
-        return int(
-            net["interactive"] * self.rates.affordance
-            + net["headings"] * self.rates.heading
-            + net["text_blocks"] * self.rates.text_block
-            + self.rates.from_chars(net["chars"])
-            + self.rates.call_overhead
-        )
+        return int(self.rates.from_chars(net["chars"],
+                                         self.rate_for(region.get("sample"))))
 
     def price_section(self, heading: dict) -> int | None:
         """What reading one named section would cost.
@@ -233,18 +312,27 @@ class BudgetMeter:
         extractor attributes in document order from the heading to the next
         heading of the same or higher level. Where the extent cannot be
         determined, this returns None and the projection prints no price
-        rather than a number derived from a walk that found nothing."""
+        rather than a number derived from a walk that found nothing.
+
+        The section's characters are counted ONCE, for the same reason the
+        region price counts its own once: an affordance inside the section
+        contributes its accessible name to that character total already."""
         if not heading.get("section_known"):
             return None
-        return int(
-            self.rates.from_chars(heading["section_chars"])
-            + heading.get("section_affordances", 0) * self.rates.affordance
-            + self.rates.call_overhead
-        )
+        return int(self.rates.from_chars(
+            heading["section_chars"],
+            self.rate_for(heading.get("section_sample"))))
 
     def price_table(self, table: dict) -> int:
-        return int(self.rates.from_chars(table["chars"])
-                   + self.rates.call_overhead)
+        """What the table's cells hold, at the table's OWN rate.
+
+        This is the unit the page-level rate was worst about. A table of
+        formatted numbers tokenizes at roughly half the characters per token
+        of the prose around it, so on a statistical article the two most
+        expensive calls on the page were the two the old price understated
+        most."""
+        return int(self.rates.from_chars(table["chars"],
+                                         self.rate_for(table.get("sample"))))
 
     # -------------------------------------------------------- the accounting
 

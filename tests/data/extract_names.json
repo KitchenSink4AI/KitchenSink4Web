@@ -6,6 +6,18 @@
  "affordance_total": 4,
  "affordances": [
   {
+   "anchor": {
+    "attr_id": "",
+    "attr_name": "",
+    "attr_testid": "",
+    "labelled_ancestor": "",
+    "landmark": "region",
+    "landmark_label": "General4",
+    "name": "Save 18",
+    "ordinal": 1,
+    "page_key": "nullblank",
+    "role": "button"
+   },
    "area": 1286,
    "cls": "other",
    "external": false,
@@ -28,6 +40,18 @@
    "type": null
   },
   {
+   "anchor": {
+    "attr_id": "",
+    "attr_name": "",
+    "attr_testid": "",
+    "labelled_ancestor": "",
+    "landmark": "main",
+    "landmark_label": "",
+    "name": "",
+    "ordinal": 1,
+    "page_key": "nullblank",
+    "role": "link"
+   },
    "area": 0,
    "cls": "other",
    "external": false,
@@ -50,6 +74,18 @@
    "type": null
   },
   {
+   "anchor": {
+    "attr_id": "",
+    "attr_name": "",
+    "attr_testid": "",
+    "labelled_ancestor": "",
+    "landmark": "main",
+    "landmark_label": "",
+    "name": "A control whose accessible name is long enough that it has to be cut somewhere...",
+    "ordinal": 1,
+    "page_key": "nullblank",
+    "role": "button"
+   },
    "area": 26085,
    "cls": "primary",
    "external": false,
@@ -72,6 +108,18 @@
    "type": null
   },
   {
+   "anchor": {
+    "attr_id": "",
+    "attr_name": "",
+    "attr_testid": "",
+    "labelled_ancestor": "",
+    "landmark": "main",
+    "landmark_label": "",
+    "name": "Close dialog",
+    "ordinal": 2,
+    "page_key": "nullblank",
+    "role": "button"
+   },
    "area": 476,
    "cls": "primary",
    "external": false,
@@ -117,6 +165,7 @@
   "name_fallbacks": 2,
   "open_shadow_roots": 0,
   "region_cap_hit": false,
+  "scope": null,
   "text_chars": 219,
   "total_elements": 19,
   "viewport_height": 900,
@@ -128,6 +177,18 @@
  "forms": [],
  "headings": [
   {
+   "anchor": {
+    "attr_id": "sec1",
+    "attr_name": "",
+    "attr_testid": "",
+    "labelled_ancestor": "",
+    "landmark": "region",
+    "landmark_label": "General4",
+    "name": "General 4",
+    "ordinal": 1,
+    "page_key": "nullblank",
+    "role": "heading"
+   },
    "level": 2,
    "name_quality": "computed",
    "ref": "h1",
@@ -135,21 +196,39 @@
    "section_affordances": 4,
    "section_chars": 212,
    "section_known": true,
+   "section_sample": "4 Save 18 A control whose accessible name is long enough that it has to be cut somewhere and the cut has to land on a word boundary rather than inside a word because a name cut mid token reads as a di",
+   "section_words": 45,
    "text": "General 4"
   }
  ],
  "headings_total": 1,
  "identity": {
+  "doc_epoch": "1788552153172:0.27864755166908994",
   "lang": "en",
   "origin": "null",
+  "page_key": "nullblank",
   "screens": 1,
   "title": "Accessible name fixture",
   "url": "https://fixture.invalid/names",
   "viewport": "1280x900"
  },
  "lead": "",
+ "modal": null,
+ "nav_regions_demoted": [],
  "regions": [
   {
+   "anchor": {
+    "attr_id": "",
+    "attr_name": "",
+    "attr_testid": "",
+    "labelled_ancestor": "",
+    "landmark": "document",
+    "landmark_label": "",
+    "name": "General 4",
+    "ordinal": 1,
+    "page_key": "nullblank",
+    "role": "main"
+   },
    "children": [
     "r2"
    ],
@@ -164,14 +243,29 @@
     "headings": 0,
     "images": 2,
     "interactive": 3,
-    "text_blocks": 0
+    "prose_links": 0,
+    "text_blocks": 0,
+    "words": 42
    },
    "parent": null,
    "ref": "r1",
+   "sample": "A control whose accessible name is long enough that it has to be cut somewhere and the cut has to land on a word boundary rather than inside a word because a name cut mid token reads as a different st",
    "tag": "main",
    "top": 20
   },
   {
+   "anchor": {
+    "attr_id": "",
+    "attr_name": "",
+    "attr_testid": "",
+    "labelled_ancestor": "",
+    "landmark": "main",
+    "landmark_label": "",
+    "name": "General 4",
+    "ordinal": 1,
+    "page_key": "nullblank",
+    "role": "region"
+   },
    "children": [],
    "depth": 1,
    "in_viewport": true,
@@ -184,10 +278,13 @@
     "headings": 1,
     "images": 0,
     "interactive": 1,
-    "text_blocks": 0
+    "prose_links": 0,
+    "text_blocks": 0,
+    "words": 4
    },
    "parent": "r1",
    "ref": "r2",
+   "sample": "General 4 Save 18",
    "tag": "section",
    "top": 20
   }

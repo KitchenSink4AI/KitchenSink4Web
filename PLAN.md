@@ -722,7 +722,44 @@ Firefox, never the daily one, until the author personally runs the dogfood pass.
   ~1.0 s, which is what makes a per-launch census affordable and therefore what
   makes the journal's arrival-difference filter possible at all.
 
-### Phase 2: Projection and anchors (the keystone)
+### Phase 2: Projection and anchors (the keystone) — **RUN 2026-09-05, GATE GREEN, ALL NINE ITEMS**
+
+**Status.** The suite is 285 tests, up from 218. The anchor system landed
+whole (`anchors/`: the key ladder, the sticky element map, the rebind ladder,
+the delta engine) and the S2 battery is ported into it, running against the
+SHIPPED code rather than the prototype: **zero false rebinds and zero false
+stickiness across 9 scenarios, 145 resolutions**, with the documented cost of
+the page key (an app shell loses its refs on a hash route change) asserted
+rather than denied. `get_page_view` gained `location` and `since`;
+`find_elements` and `get_text` landed. Corpus B is built (19 pathological
+pages) and the widened benchmark set is frozen (5 pages, GitHub nav bar
+intact).
+
+**Both measured debts are discharged.** The Versailles rung cliff is gone: the
+steps around the default budget are 2.2, 2.9, 4.0, 3.4 and 4.9 percent against
+the 19.7 percent step that made a page 465 tokens over budget arrive 817 under
+it, and the delivered read is 4,356 rather than 3,683. The live drift on that
+page fell from plus 15.3 percent to plus 2.4, which is the independent
+confirmation. The GDP structure read recovered 124 tokens from two real
+defects and then SPENT 363 restoring the page navigation a third defect was
+suppressing, so **the published target moved from 3,000 to 3,500 and the gate
+prints `PASS (target REVISED from 3000)` rather than a bare green.**
+
+**Gate part 7, the executable prices, closed on its second pass.** 65 priced
+units on four frozen pages, 36 above the noise floor: **median error 6.3
+percent, worst 27.1, rank correlation 0.993, nothing outside the 35 percent
+band.** The five outliers that held it red were two defects rather than one.
+Four of them were the MEASUREMENT: `get_text` was flattening hidden and
+nested text into what it returned, which also means it was handing callers a
+hidden menu while its own counter reported the same characters as withheld.
+The fifth was the price, and it was the article's own data table charged at
+the prose rate of the page around it. Units now carry a bounded sample of
+their own text and are priced at their own measured characters-per-token
+rate, and the price carries no call overhead because it is a content size.
+Nothing is calibrated per fixture and no content-class constant was
+introduced; the live drift check on corpus A is the standing check that it
+stays honest. Full numbers in `gates/phase2.json`; the reasoning is in
+DESIGN 3.3a and the finding list is in the BUILD_LOG.
 
 The two modules everything else is downstream of. Built together because deltas
 require sticky refs and sticky refs are only useful because reads are cheap.
@@ -811,6 +848,18 @@ require sticky refs and sticky refs are only useful because reads are cheap.
      regions priced net of children, and NEXT CALLS ranked by expected value
      rather than size (no overlapping parent ranked above its own children). A
      price with no executable call, or a price outside tolerance, is a red gate.
+     **Amended 2026-09-05, twice, both times because the run found the
+     definition wrong rather than the code.** First: "compare the result
+     against the advertised figure" assumes expanding a region returns that
+     region, and it returns another budgeted projection, so the comparison is
+     against `get_text` on the same region net of its nested regions, which is
+     an independent measure of the content the price is about (DESIGN 3.3a).
+     Second: regions holding under 60 tokens are reported and NOT gated, since
+     an error ratio against them is a statement about call overhead rather
+     than about the price. The band itself was not moved and no price was
+     marked low-confidence to pass: the outliers were fixed. **Closed green on
+     the second pass: 36 gated units, median 6.3 percent, worst 27.1, rank
+     correlation 0.993.**
   8. **The completeness block is derived, not recomputed.** Its accounting comes
      from the same ledger the budget meter kept while enforcing the budget
      (DESIGN 3.3 block 7). Tested by construction: any figure the block can

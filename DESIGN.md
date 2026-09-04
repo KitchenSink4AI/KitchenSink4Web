@@ -283,14 +283,14 @@ because they are correct, not because they are unclaimed.
 | Tool-schema bill (lite) | 4,637 / 6,460 | **under 1,500** | **2,720** (Phase 0, unchanged) | 1.7x / 2.4x |
 | Full-surface ceiling | n/a | under 4,000 | not yet built | undercuts the incumbent DEFAULT |
 | Largest single schema | 413 / 459 | under 250 | **148** (`get_page_view`) | |
-| Article page (Wikipedia, Treaty of Versailles) | 156,347 / 177,168 | **under 5,000, regardless of page size** | **3,683 at rung 3**; the undegraded read is 4,965 | 42x / 48x at the delivered rung, 31x / 36x undegraded |
-| Data-table page (GDP nominal) | 66,146 / 64,635 | under 3,000 for the page structure, **the first row page priced separately as its own `get_table` call** | **3,166 structure. FAILS the target by 166** | 21x |
-| Form page (httpbin) | 440 / 314 | **under 900**, and hold it on a real app form where incumbents balloon with shell chrome | **809** | a deliberate loss, 1.8x the incumbent |
-| Minimal page (example.com) | 105 / 90 | the scaffold floor, measured rather than targeted | **570** | a deliberate loss, 5.4x the incumbent |
+| Article page (Wikipedia, Treaty of Versailles) | 156,347 / 177,168 | **under 5,000, regardless of page size** | **4,356 at rung 6**; the undegraded read is 4,846 | 36x / 41x at the delivered rung |
+| Data-table page (GDP nominal) | 66,146 / 64,635 | **under 3,500** for the page structure (REVISED in Phase 2 from 3,000; see below), **the first row page priced separately as its own `get_table` call** | **3,399 structure** | 19x |
+| Form page (httpbin) | 440 / 314 | **under 900**, and hold it on a real app form where incumbents balloon with shell chrome | **842** | a deliberate loss, 1.9x the incumbent |
+| Minimal page (example.com) | 105 / 90 | the scaffold floor, measured rather than targeted | **573** | a deliberate loss, 5.5x the incumbent |
 
 **Every number in that column is the SHIPPED projector against FROZEN pages
-under `o200k_base`, measured 2026-09-05** (`gates/corpus_a.json`,
-`corpus/a/MANIFEST.json`). It replaces S1's column, which was a prototype
+under `o200k_base`, re-measured at the close of Phase 2, 2026-09-05**
+(`gates/corpus_a.json`, `corpus/a/MANIFEST.json`). It replaces S1's column, which was a prototype
 against live pages under `cl100k_base`. Both halves of that sentence moved at
 once, so the paragraphs below separate them rather than letting one hide inside
 the other.
@@ -345,19 +345,39 @@ measured the structure alone at 2,854, leaving 146 tokens for a row page, which
 is not a row page. The two reads are now priced separately, which is also the
 truer shape: the structure comes from `get_page_view` and the rows come from
 `get_table` with row-range paging, and conflating them into one number was
-comparing a KS4Web pair against a single incumbent dump. **The frozen
-measurement is 3,166 and the target is 3,000, so this row FAILS by 166 tokens,
-5.5 percent.** It is recorded as a failure rather than quietly restated,
-because the target was set at S1 from a 2,854 measurement and the shipped
-projector is a rebuild rather than a regression of that prototype. The
-arithmetic the ruling needs: the page carries 300 collected affordances against
-5,644 nodes, the read lands on rung 1 with the ladder never engaging, and
-lowering the number means either dropping the affordance quota on a
-table-of-links page or moving the target to something the structure read
-actually costs. **Author call, and the design does not make it here.**
+comparing a KS4Web pair against a single incumbent dump. The frozen measurement was 3,166 against a 3,000 target, a 5.5 percent miss
+recorded as a failure rather than quietly restated.
 
-**The Versailles row no longer holds with 25 percent of margin, and the reason
-is a ladder cliff rather than a size problem.** The frozen page's undegraded
+**Phase 2 worked that miss and the target moved to 3,500. Both halves of that
+sentence matter and neither is a pass against the old number.** Two real
+defects were found and fixed, recovering 124 tokens: an empty landmark was
+advertising `~40 tok to expand` for a call that returns nothing (the same
+class of lie 3.3a exists to stop, so those regions are now counted in the
+completeness block rather than listed), and a table's column headers were
+being scraped from every `th` in its subtree including nested tables, so the
+GDP page printed `cols: show Lists of countries by... | Trade | Investment`
+for a one-column layout table. Then a THIRD defect was found by the gate
+itself and fixing it COST 363 tokens: every link inside an `<li>` was
+classified in-prose and suppressed by the zero quota, and navigation menus are
+`<ul><li><a>` by universal convention, so the projection was discarding the
+page's own navigation on every site that builds one normally. The read got
+more useful and more expensive, in that order, and 3,500 is where the
+structure read actually lands with its navigation restored. The superseded
+target is carried in `scripts/measure_corpus_a.py` so the gate prints
+`PASS (target REVISED from 3000)` rather than a bare green.
+
+**RESOLVED IN PHASE 2, and the paragraph below is kept because the finding is
+the reason the ladder has sixteen rungs.** The cliff was the region cap
+stepping from "all of them" straight to twenty; the rungs now shed the
+lowest-priority regions a few at a time and the measured steps on this page
+are 2.2, 2.9, 4.0, 3.4 and 4.9 percent, against the 19.7 percent step
+described below. The delivered read is 4,356 at rung 6 rather than 3,683 at
+rung 3: the same guarantee, 673 more tokens of page. The live drift check
+moved with it, from plus 15.3 percent to plus 2.4 percent, which is the
+independent confirmation that the discontinuity was the rung boundary and not
+the page.
+
+**The finding as it stood:** The frozen page's undegraded
 read is 4,965 against an effective budget of 4,500 (5,000 less the 10 percent
 drift margin), rung 2 is 4,589, and rung 3 is 3,683. So the delivered read is
 rung 3 and the ladder ENGAGES on the flagship page at the default budget, where
@@ -378,7 +398,7 @@ reason PLAN 1.3 asks for one.** Run against the live pages immediately after
 the freeze, three of the four sit within 2 percent of their frozen twins
 (example.com minus 1.9 percent, httpbin minus 1.1, the GDP table minus 1.8),
 which is the answer a freeze wants: the frozen copy still tells the truth about
-the real page. Versailles reads **plus 15.3 percent**, 4,246 live against 3,683
+the real page. Versailles read **plus 15.3 percent**, 4,246 live against 3,683
 frozen, and the underlying content differs by 1.5 percent (10,572 nodes against
 10,737). The whole gap is the cliff: the live page's rung 2 lands at 4,246,
 which is under the 4,500 effective budget, and the frozen page's rung 2 lands at
@@ -427,8 +447,16 @@ engine lane, page handle, read token (for deltas), and a timestamp.
 **2. Page shape.** Landmark regions (header, nav, main, aside, footer, dialog,
 form, plus unlabeled major containers) each carrying a ref, a one-line label,
 counts of interactive elements and text blocks and images, and **an estimated
-token cost to expand.** The regions are a menu with prices, so the model can
-budget instead of guess. Nothing in the field does this, and the prices are
+token cost of the CONTENT it holds.** The regions are a menu with prices, so
+the model can budget instead of guess.
+
+**The price is a content size and not a bill, and Phase 2's gate found that
+the two had been conflated.** Expanding a region does not return that region:
+it returns another budgeted projection of it, so a region holding 46,320
+tokens of content came back as a 4,917-token orientation and the advertised
+figure looked wrong by 845 percent while being exactly right about the page.
+The number answers "how much is in there", which is what a caller deciding
+whether to look actually needs, and the block header says so in the payload. Nothing in the field does this, and the prices are
 therefore the design's genuine novelty, which is why Section 3.3a makes them a
 correctness requirement rather than a nicety.
 
@@ -478,6 +506,34 @@ prevent, which is the same failure as the ranker burying the tab bar, arriving
 from the opposite direction. Loose controls are not dropped; they compete in
 the primary-actions class on their merits like everything else, and they lose
 only the exemption from sampling.
+
+**A LIST ITEM IS NOT PROSE, and Phase 2 found that one by suppressing every
+navigation bar on the web.** The in-prose test climbed ancestors looking for a
+prose element and counted `LI` as one, which is correct inside an article and
+catastrophic everywhere else, because navigation menus are `<ul><li><a>` by
+universal convention. On the frozen GitHub repository page it removed all six
+repository tabs, Issues included: S1's original failure arriving through a
+different door, buried by a quota this time instead of by a proximity score.
+So an `LI` counts as prose only when the link sits INSIDE A SENTENCE, measured
+as the item carrying substantially more text than the link itself, and the
+climb stops at a navigation ancestor rather than inheriting prose from a
+paragraph far above it.
+
+**A CITATION MARKER is recognised by its own shape, not by its ancestor.** The
+ancestor test misses every marker sitting in an infobox cell or a caption
+rather than a paragraph, which is how `[ 1 ]`, `[ 2 ]` and `[ n. 1 ]` came
+back among the top affordances on the flagship article with the prose rule
+otherwise working. A link whose whole name is a short bracketed token and
+whose href points at a fragment of the same page is a footnote by
+construction, and it carries the zero quota wherever it lives.
+
+**The navigation floor is guaranteed because navigation is SMALL, and Phase 2
+made that premise mechanical rather than assumed.** A Wikipedia navbox is a
+nav-shaped landmark holding 155 links, and a floor sized for a tab bar becomes
+a flood when a related-links block claims it, which is the form-control
+failure again from a third direction. A navigation region holding more than
+thirty controls is a link collection rather than the page's navigation, and
+its members compete in `other` on their merits.
 
 Two corollaries, both cheap and both answering a specific blind-trial failure:
 
@@ -672,12 +728,76 @@ advertises is the meter's own estimate for the unit that call would produce, not
 a separate heuristic that happens to live nearby. Two estimators mean two
 answers, and the one the user sees would be the one nothing tested.
 
-**Phase 2 tests this by construction, not by inspection.** For each priced unit
-on the fixture set, the harness issues the exact call the projection advertised,
-measures the result under the same estimator, and compares. A price that is wrong
-by more than a stated tolerance is a red gate, and a price with no corresponding
-executable call is a red gate too, because an unpriceable call should print no
-price rather than a plausible one.
+**Phase 2 tested this by construction and the contract needed correcting
+before it could be tested at all.** "Issue the call and compare the result
+against the advertised figure" assumes expanding a region RETURNS that
+region's content, and it does not (block 2 above). So the harness
+(`scripts/gate_phase2.py`) checks the three things that are true:
+
+- **EXECUTABLE.** Every advertised call runs. A price with no working call is
+  a red gate, and this is the part that earned its place immediately: it
+  caught a scoped read replacing the page's ref map, so expanding a second
+  region from the same read refused, which breaks the read-once-expand-many
+  flow this design sells.
+- **BOUNDED.** The call returns under the budget passed rather than refusing.
+- **MEANINGFUL.** The advertised figure is compared against an independent
+  measure of the same content, `get_text` on the same region NET of its
+  nested regions, since the price is net of them. Regions holding less than
+  60 tokens are reported and not gated, because an error ratio against them
+  is a statement about the call overhead rather than about the price.
+
+**The measurement.** Across 65 priced units on four frozen pages, 36 above
+the noise floor: **median error 6.3 percent, worst 27.1, rank correlation
+0.993, and every gated unit inside the 35 percent band.** Getting there took
+three corrections, in the order they were found.
+
+**One: count each region's characters ONCE.** The first version added a
+per-affordance, a per-heading and a per-text-block rate on top of the
+character count, and every one of those units contributes its own text to
+that same count. That alone took the median from 96 percent to 13.6. A
+words-based estimate was then tried against the same regions on the theory
+that tokens track words more closely than characters, and it measured WORSE
+(17.8 percent), so characters stand and the experiment is recorded so nobody
+repeats it.
+
+**Two: four of the five residual outliers were the MEASUREMENT, not the
+price.** `get_text` read a block's own text as the `textContent` of its
+inline children, and `textContent` knows nothing about hiding and nothing
+about nesting. It flattened hidden descendants back into the payload the
+hygiene layer had just counted as withheld (1,426 characters of a
+`visibility:hidden` menu on the frozen GitHub page, 666 of a `display:none`
+sidebar on the frozen article), and it flattened nested blocks that the walk
+then emitted again, so a navbox came back at two and a half times its true
+length. **A tool whose own hidden-content counter contradicts its output is
+the more serious half of that finding**, and it is why 3.6's rule is now
+tested one level down, under an inline wrapper, rather than only at the top
+of a block.
+
+**Three: a page does not have a characters-per-token rate.** The fifth
+outlier was the price, and it was the statistical article's own data table,
+priced at the rate of the prose around it. That page runs 5.3 characters to
+the token in its lead and 1.8 in the table, a factor of three, and one
+page-level rate cannot describe both. **RULE: every priced unit carries a
+bounded, decimated sample of its OWN text, and the meter measures that unit's
+rate on it with the same tokenizer that enforces the budget.** No
+content-class constants are introduced and nothing is calibrated per fixture:
+a table of numbers, a navbox of link labels and a paragraph of prose are each
+described by their own characters. The sample is bounded twice, at 1,500
+characters per unit and 40,000 per read, and a unit that carries none falls
+back to the page rate. Two properties of the sample are load-bearing and both
+were measured rather than assumed: it is taken in runs of 200 characters,
+because 50-character pieces pay a token boundary at each end and measured
+prose at 2.9 characters to the token that really runs 4.8; and it breaks its
+runs where `get_text` breaks its lines, because a navbox of 150 one-word
+links costs a line boundary per link and a sample that glues them into
+sentences describes a page that does not exist.
+
+**And a price is a CONTENT SIZE, so it carries no call overhead.** The
+estimator kept a 40-token per-call constant from before the contract was
+corrected. Under the corrected contract the number answers "how much is in
+there", a scaffold the caller pays either way is not part of that, and the
+constant was most of the residual error on every region small enough for it
+to matter.
 
 ### 3.4 The projection parameter, and the degradation ladder
 
@@ -743,6 +863,28 @@ never more than one line each. With inventories capped, the floor is bounded and
 a page view never refuses; the full field listing is one
 `get_page_view(view="forms")` away and the floor says so.**
 
+**"Tables were never more than one line each" was true and insufficient, and
+Phase 2 found the hole by measuring the floor on every corpus page.** One line
+each is unbounded in the NUMBER of tables: the 50,000-node fixture carries 595
+of them, its floor came to 12,727 tokens, and a default read REFUSED that page
+rather than degrading it, which is the one thing the ladder exists to prevent.
+So the rungs cap how many forms and tables are LISTED as well as how much each
+one prints, stepping 60, 50, 40 down to 4 at the floor, and the completeness
+block reports `forms omitted: N of M` and `tables omitted: N of M` from the
+ledger instead of the two hardcoded zeros it used to print.
+
+**And the content-aware override needed the same qualifier.** "On a form page
+the field listing survives the floor" was applied unconditionally, so a
+320-field fixture reinstated exactly the unbounded floor the caps close. The
+override now applies only where the listing FITS, which is what DESIGN's own
+"when the field-level listing would breach budget" already said.
+
+**One more executable-price consequence.** The collapsed-form line advertises
+`get_page_view(view="forms") lists them`, and that call was listing forty of
+three hundred and twenty. A recovery route is a printed promise under the same
+contract as a printed price, so the forms view scales its field cap rather
+than inheriting a cap sized for a mixed page.
+
 **S1 confirmed the floor problem empirically and added two more ladder
 requirements.** The prototype's uncapped floor refused Versailles at a 1,500
 budget (floor 1,629) and refused eight of eleven pages at 900, which is exactly
@@ -769,7 +911,14 @@ defects the prototype exposed, both stated as requirements rather than notes:
   defect the domination check exposed rather than papered over, a suppression
   line that explained the in-prose rule even on pages where nothing in prose
   had been suppressed, so the check earns its place twice.
-- **The rungs are finer than five and less correlated.** Measured steps on
+- **The rungs are finer than five and less correlated. Sixteen of them as of
+  Phase 2**, after the frozen re-measure found the same defect recurring at the
+  TOP of the ladder: the flagship article was 465 tokens over budget and was
+  delivered 817 tokens under it, because the step that fit was 906 tokens
+  below the step that did not, a 20 percent drop where a 3 percent one would
+  have fit. The cliff was the region cap going from "all of them" straight to
+  twenty. It now sheds the lowest-priority regions a few at a time and the
+  measured steps on that page are 2.2, 2.9, 4.0, 3.4 and 4.9 percent. Measured steps on
   Versailles bought 20 percent, then 9 percent, then 17 percent, so a 2,500
   budget skipped the projection from 3,711 straight to 2,182, dropping 22
   regions and the entire lead paragraph when a smaller step would have fit.
@@ -900,9 +1049,18 @@ first, in this order, and none of them enters the fuzzy tier:
 | A pending modal or dialog blocks interaction | `MODAL_BLOCKED` before any resolution is attempted, naming the dialog and the call that dismisses it |
 | Ref was never minted in this session (model typo, or a ref quoted from another session or a saved workflow) | `NOT_FOUND`, stating the mint rule (refs are minted only by a read in this session) and naming the read that mints one |
 | Ref exists but belongs to a different page handle than the one passed | `BAD_PARAMS`, naming both handles, never silently retargeting |
-| Ref's entry is marked gone | Skip to (b) and re-resolve the stored anchor, carrying the gone record into any resulting message so the error can say what `e12` used to be |
 | Page URL changed since the ref was minted and `allow_cross_page_rebind=false` | `STALE_ANCHOR` directly, with no fuzzy tier, because a fuzzy match on a different URL IS a cross-page rebind under another name |
+| Ref's entry is marked gone | Skip to (b) and re-resolve the stored anchor, carrying the gone record into any resulting message so the error can say what `e12` used to be |
 | Ref is TURN-LOCAL: it was minted by a read in this session for an element nothing in the key ladder could distinguish from its siblings | `AMBIGUOUS_LOCATION` with the candidate list, naming a narrower locator as the recovery. **Added after S2**, which found the obvious implementation refusing `NOT_FOUND` here. That is a lie, since the ref WAS minted this session, and it sends the caller to re-read the page when re-reading is exactly what will not help |
+
+**The gone row and the URL row are in this order for a reason, and the reason
+was found in Phase 2 by building it the other way.** The table used to list
+gone above URL-changed. Evaluated in that printed order a gone-marked ref
+skips straight to re-resolution (b), and after a navigation EVERY ref on the
+page is gone-marked by the next read, so the URL test below it would never
+run and cross-page rebinding would be ON BY DEFAULT for exactly the refs most
+likely to rebind wrongly. The outcomes are unchanged; only the order is, and
+the order is now the one S2 measured zero false rebinds under.
 
 **The URL test is literal, and the plausible refinement is measurably worse.**
 S2 tested document identity as the alternative, on the reasoning that an SPA
@@ -983,7 +1141,27 @@ bounded LRU (the most recent N reads per page, N small and stated in the tool
 docstring), and they invalidate on navigation of that page, on close of the page
 handle, and on session end. A token that has aged out or been invalidated is not
 an error the model has to guess at: the delta call refuses with the reason and
-falls back by naming the full read that re-establishes a baseline.
+falls back by naming the full read that re-establishes a baseline. The
+retention is five reads per page.
+
+**Two things a delta has to say that the design did not anticipate, both found
+building it.** A control nothing in the key ladder can distinguish gets a
+fresh ref on every read by design, so a no-op delta would report it as both
+gone and new: that is true, it is not news, and a delta that fills with it is
+a delta nobody reads. Those are counted on their own line as re-minted rather
+than listed as churn, because the churn IS the stated cost of never binding an
+ordinal and hiding it entirely would be the other kind of dishonesty. And a
+delta between a whole-page read and a SCOPED one is refused rather than
+answered, since it would report everything outside the narrower scope as
+removed, which is a lie about the page rather than a delta.
+
+**A scoped read never marks anything gone, either.** It looked at one region,
+so "not in this read" says nothing about the rest of the page, and treating it
+as evidence would mark most of the page dead every time a caller expanded a
+section. The same reasoning fixed a harder bug the executable-price gate
+caught: a scoped read was REPLACING the page's map of live elements, so the
+NEXT call the projection had just advertised refused. The map merges across
+reads instead.
 
 **Why this matters beyond convenience.** The measurement's structural insight is
 that actions are already cheap (9 to 56 tokens) and refs are the toll gate. If
@@ -1012,6 +1190,16 @@ between KS4Web's read layer and the incumbents'.
   (console logging shipped as an improvement and became a 6x token regression).
 - It never silently omits. Everything not returned is counted in the
   completeness block.
+- **It never returns hidden text, and "never" reaches under the wrappers.**
+  Phase 2 found `get_text` handing back a `visibility:hidden` navigation menu
+  and a `display:none` sidebar because a block's own text was read as the
+  `textContent` of its inline children, which reports every hidden descendant
+  underneath them. The hygiene counter, walking separately, recorded the same
+  characters as withheld, so the read was counted clean and was not: an
+  injected instruction parked one wrapper down travelled straight through the
+  defence that exists to stop it. A block's own text is now the inline run it
+  contains, stopping wherever a nested block begins and wherever a hidden
+  element begins, and two tests are named for the two halves of it.
 
 ### 3.6a The projection's wall-clock cost, measured
 
@@ -1046,8 +1234,37 @@ optimizing the wrong thing.
 **The Phase 2 latency budget, set from measurement:** projection p95 at or
 under **500 ms up to 50,000 nodes** and at or under **1.0 s up to 100,000
 nodes**, with Python-side assembly at or under 10 ms. The prototype passes
-both with margin, and so does the shipped projector: 417 ms p95 at 50,012
-nodes and 676 ms at 100,012, with Python assembly at 5.9 ms.
+both with margin, and so did the Phase 1 projector: 417 ms p95 at 50,012
+nodes and 676 ms at 100,012, with Python assembly at 5.9 ms. **With the whole
+anchor system added, Phase 2 measures 386 ms p95 at 50,012 and 650 ms at
+100,012, at a cost of 9 percent over the Phase 1 extractor at 50,000 nodes.**
+
+**The gate needed a LOAD CONTROL before any of those numbers meant anything,
+and that is the same discipline the orphan gate needed for the opposite
+reason.** That gate had to prove it could FAIL; this one has to prove a
+failure is the CODE'S. Wall-clock on a shared machine is not a property of the
+code: a Phase 2 run measured 798 ms p95 at 50,000 nodes, and the COMMITTED
+PHASE 1 EXTRACTOR measured 963 ms on the same machine minutes later against
+the 417 ms it had recorded when the machine was quiet. A gate reporting RED
+under those conditions is reporting on the machine and calling it a code
+regression. So every run interleaves a reference arm, the extractor exactly as
+committed at HEAD, and a miss with the reference also above 80 percent of the
+same budget is reported UNCERTIFIED rather than RED. It still exits non-zero;
+it never turns a red into a green.
+
+**And the p95 was not a p95.** With ten repetitions `pct(values, 0.95)`
+selects the last index, which is the MAXIMUM, so the gate failed on any single
+scheduling hiccup. Twenty repetitions put it at the second-slowest, which is
+what the number claims to be.
+
+**The cost the anchor system added was mostly one rule broken twice**, and it
+is the rule this section already states: cap what you RETURN, tally what you
+COUNT. The walk was minting an anchor descriptor for every heading on a
+5,000-heading page when 150 are ever returned, and calling `new URL()` on
+every one of six thousand links to build a path string that 300 of them print.
+Computing display detail only for units that will be returned, while keeping
+every classification the tallies depend on, took the overhead from 20 percent
+to 9.
 
 **The hand-back is a term of its own, and on a wide page it is the dominant
 one.** Phase 1 built the projector against a fixture carrying 5,000 headings

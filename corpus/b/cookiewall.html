@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Corpus B: a cookie banner and a modal that own the first read</title>
+<style>
+  body { font: 14px system-ui, sans-serif; margin: 0; padding: 12px; }
+  #consent {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 9000;
+    background: #1d2733; color: #fff; padding: 20px; font-size: 15px;
+  }
+  #consent button { margin-right: 8px; padding: 8px 14px; }
+  #scrim {
+    position: fixed; inset: 0; z-index: 9500; background: rgba(0,0,0,.55);
+  }
+  #promo {
+    position: fixed; z-index: 9600; top: 12%; left: 50%;
+    transform: translateX(-50%); width: 560px; background: #fff;
+    border: 1px solid #999; padding: 24px;
+  }
+  main { max-width: 620px; }
+</style>
+</head>
+<body>
+<!-- The failure this page reproduces: on a real site the first read comes
+     back as a consent notice and a newsletter modal, the article is three
+     screens down behind a scrim, and the caller is told the page is about
+     cookies. Both blockers sit above the content in the DOM as well as on
+     screen, so a reader that walks in document order hits them first and a
+     ranker that weighs visible area hands them the whole budget. The article
+     underneath is ordinary and is what the page is actually for. -->
+
+<div id="consent" role="region" aria-label="Cookie consent">
+  <h2>We value your privacy</h2>
+  <p>We and our 847 partners store and access information on a device, such as
+  cookies, and process personal data, such as unique identifiers and standard
+  information sent by a device, for personalised advertising and content, ad
+  and content measurement, audience research and services development. With
+  your permission we and our partners may use precise geolocation data and
+  identification through device scanning.</p>
+  <button id="accept-all">Accept all</button>
+  <button id="reject-all">Reject all</button>
+  <button id="manage">Manage preferences</button>
+</div>
+
+<div id="scrim"></div>
+<div id="promo" role="dialog" aria-modal="true" aria-label="Subscribe">
+  <h2>Get the weekly briefing</h2>
+  <p>Join 240,000 readers. One email a week, no spam, unsubscribe whenever you
+  like.</p>
+  <label for="promo-email">Email address</label>
+  <input id="promo-email" name="email" type="email">
+  <button id="promo-sub">Subscribe</button>
+  <button id="promo-close" aria-label="Close">No thanks</button>
+</div>
+
+<main>
+  <h1>The article underneath</h1>
+  <p>An ordinary piece of writing, several paragraphs long, which is the
+  reason anybody opened this page. It is behind a scrim and below two blockers
+  in the document, and a first read that does not surface it has answered the
+  wrong question.</p>
+  <p>The projection is expected to name the consent notice and the modal as
+  blockers, keep them cheap, and still return the article. Naming them matters
+  as much as skipping them: a caller who is told a modal is present can decide
+  to dismiss it, and a caller who is handed silently filtered content cannot.</p>
+  <h2>A section with a real affordance</h2>
+  <p>More prose, so the readable gate has something to weigh against the
+  blockers.</p>
+  <a href="/article/full">Read the full article</a>
+  <button id="save-article">Save for later</button>
+</main>
+</body>
+</html>

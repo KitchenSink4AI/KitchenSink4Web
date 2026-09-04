@@ -35,9 +35,9 @@ from dataclasses import dataclass, field
 
 from ..errors import RangeOutOfBounds
 from . import ranker
-from .meter import (DROPPED_RUNG, LISTED_NOT_EXPANDED, PRINTED,
-                    SUPPRESSED_QUOTA, SUMMARIZED, BudgetMeter, ntok,
-                    ntok_line)
+from .meter import (CONTAINER_ONLY, DROPPED_RUNG, LISTED_NOT_EXPANDED,
+                    NO_CONTENT, PRINTED, SAFETY_MARGIN, SUPPRESSED_QUOTA,
+                    SUMMARIZED, BudgetMeter, ntok, ntok_line)
 
 
 @dataclass(frozen=True)
@@ -53,6 +53,15 @@ class Rung:
     forms_detail: str      # fields | summary
     tables_detail: str     # full | summary
     next_calls: int
+    #: How many forms and tables are LISTED at all. These exist because the
+    #: floor was not bounded by construction the way DESIGN 3.4 argued it
+    #: was: "tables were never more than one line each" is true and
+    #: insufficient, since one line each is unbounded in the number of
+    #: tables. The 50,000-node fixture carries 595 of them and its floor came
+    #: to 12,727 tokens, so a default read REFUSED a page instead of
+    #: degrading it, which is the one thing the ladder exists to prevent.
+    forms_cap: int = 10 ** 6
+    tables_cap: int = 10 ** 6
 
 
 def _q(nav: int, form: int, primary: int, other: int) -> dict[str, int]:
@@ -61,16 +70,73 @@ def _q(nav: int, form: int, primary: int, other: int) -> dict[str, int]:
             "other": other, "prose_link": 0}
 
 
+#: Fourteen rungs, and the granularity between the top few is the point.
+#:
+#: The frozen corpus A re-measure found the flagship page engaging the ladder
+#: at the DEFAULT budget through a cliff rather than a size problem: the
+#: Treaty of Versailles read was 4,965 undegraded, 4,589 at the old rung 2 and
+#: 3,683 at the old rung 3, against an effective budget of 4,500. So a page
+#: 465 tokens over budget was delivered 817 tokens under it, because the step
+#: that fit was 906 tokens below the step that did not. **A 20 percent drop
+#: where a 3 percent one would have fit** is exactly the defect S1 named at
+#: the bottom of the ladder, recurring at the top after the rungs had already
+#: gone from five to eight.
+#:
+#: The cliff was the region cap moving from "all of them" straight to twenty,
+#: because a region line costs roughly 40 tokens and a long Wikipedia article
+#: carries forty regions. So the region cap now sheds the lowest-priority
+#: regions a few at a time (40, 34, 30, 26, 23, 20, ...), which is what DESIGN
+#: 3.2 means by a partial-collapse step, and the other caps step alongside it
+#: rather than in one lurch. Degradation lands just under budget instead of
+#: jumping to the first rung that obviously fits.
+#:
+#: The dominated-rung rule still governs and is what actually guarantees the
+#: exposed ladder is monotonic: finer steps make a non-monotonic INTERNAL step
+#: more likely, not less, because shedding one region can cost more in
+#: completeness accounting than the line it saved.
 RUNGS: tuple[Rung, ...] = (
-    Rung(1, None, _q(60, 120, 32, 24), 420, 40, 40, "fields", "full", 6),
-    Rung(2, None, _q(48, 100, 26, 16), 360, 34, 32, "fields", "full", 5),
-    Rung(3, 20, _q(40, 80, 22, 12), 300, 28, 26, "fields", "full", 5),
-    Rung(4, 16, _q(32, 60, 18, 8), 240, 22, 20, "fields", "full", 4),
-    Rung(5, 12, _q(24, 40, 14, 4), 160, 18, 14, "fields", "summary", 4),
-    Rung(6, 10, _q(20, 28, 10, 2), 0, 14, 10, "fields", "summary", 3),
-    Rung(7, 8, _q(16, 20, 8, 0), 0, 10, 6, "summary", "summary", 3),
-    Rung(8, 6, _q(12, 12, 6, 0), 0, 6, 4, "summary", "summary", 2),
+    Rung(1, None, _q(60, 120, 32, 24), 420, 40, 40, "fields", "full", 6,
+         10**6, 10**6),
+    Rung(2, 36, _q(58, 118, 31, 23), 410, 39, 39, "fields", "full", 6,
+         10**6, 10**6),
+    Rung(3, 33, _q(55, 114, 30, 22), 395, 38, 38, "fields", "full", 6,
+         10**6, 10**6),
+    Rung(4, 30, _q(52, 110, 29, 21), 380, 36, 36, "fields", "full", 6,
+         60, 60),
+    Rung(5, 27, _q(49, 104, 28, 20), 365, 35, 35, "fields", "full", 5,
+         50, 50),
+    Rung(6, 24, _q(46, 98, 26, 18), 350, 33, 33, "fields", "full", 5,
+         40, 40),
+    Rung(7, 22, _q(43, 92, 25, 17), 330, 31, 31, "fields", "full", 5,
+         32, 32),
+    Rung(8, 20, _q(40, 86, 23, 15), 310, 30, 30, "fields", "full", 5,
+         26, 26),
+    Rung(9, 18, _q(36, 78, 21, 13), 280, 28, 27, "fields", "full", 5,
+         22, 22),
+    Rung(10, 16, _q(32, 68, 19, 11), 250, 25, 24, "fields", "full", 4,
+         18, 18),
+    Rung(11, 14, _q(28, 56, 17, 9), 220, 22, 21, "fields", "full", 4,
+         15, 15),
+    Rung(12, 12, _q(24, 44, 15, 7), 180, 19, 18, "fields", "summary", 4,
+         12, 12),
+    Rung(13, 11, _q(22, 36, 13, 5), 140, 17, 15, "fields", "summary", 4,
+         10, 10),
+    Rung(14, 10, _q(20, 28, 11, 3), 0, 14, 12, "fields", "summary", 3,
+         8, 8),
+    Rung(15, 8, _q(16, 20, 8, 0), 0, 10, 6, "summary", "summary", 3,
+         6, 6),
+    Rung(16, 6, _q(12, 12, 6, 0), 0, 6, 4, "summary", "summary", 2,
+         4, 4),
 )
+
+#: `view="forms"` asks for the forms, so its field cap is the rung's cap
+#: scaled up rather than the cap sized for a mixed page. Without this the
+#: collapsed-form line advertises `get_page_view(view="forms") lists them`
+#: and that call lists forty of three hundred and twenty, which is a printed
+#: promise that does not execute: DESIGN 3.3a's contract applied to a
+#: recovery route rather than to a price. The scaling is uniform, so the caps
+#: stay non-increasing down the ladder and the view still degrades.
+FORMS_VIEW_FIELD_SCALE = 12
 
 #: What each `view` prints. The deepest tiering in this design happens inside
 #: tools rather than between them (DESIGN 7.3 layer 3), and this is it.
@@ -99,6 +165,17 @@ class Projection:
 
 def _num(n) -> str:
     return f"{n:,}"
+
+
+def _owns(region: dict) -> bool:
+    """Does this landmark hold any content of its own?
+
+    Net counts, so a parent that is genuinely just a wrapper answers False
+    however much its children hold. That is the same net arithmetic the price
+    uses (DESIGN 3.3a rule 2), asked as a yes-or-no question."""
+    net = region["net"]
+    return bool(net["interactive"] or net["text_blocks"] or net["images"]
+                or net["headings"] or net["chars"])
 
 
 def _aff_line(aff: dict, discriminator: str | None) -> str:
@@ -182,31 +259,58 @@ class Renderer:
         if not regions:
             self.omitted_blocks.append("page shape (no landmark regions found)")
             return []
-        ranked = sorted(regions, key=lambda r: -self.meter.price_region(r))
+        # A region that owns nothing is not a menu item, and it is the same
+        # class of lie DESIGN 3.3a was written against. `~40 tok to expand` on
+        # an empty landmark is the meter's call overhead and nothing else, so
+        # the price is real arithmetic over an empty set: the call it advertises
+        # returns nothing at all. A landmark that owns nothing but holds nested
+        # regions is real STRUCTURE, so it is listed and says it is a container
+        # rather than quoting a price for a call its children already answer.
+        empty = [r for r in regions if not _owns(r) and not r["children"]]
+        empty_refs = {r["ref"] for r in empty}
+        listable = [r for r in regions if r["ref"] not in empty_refs]
+        ranked = sorted(listable, key=lambda r: -self.meter.price_region(r))
         keep = ranked if self.rung.regions is None else ranked[:self.rung.regions]
         keep_refs = {r["ref"] for r in keep}
-        self.listed_regions = [r for r in regions if r["ref"] in keep_refs]
+        self.listed_regions = [r for r in listable if r["ref"] in keep_refs]
         lines = [self.head(
             "PAGE SHAPE (regions, each priced with this read's own estimate "
-            "of what expanding it would return)")]
+            "of how much CONTENT it holds; expanding one returns a "
+            "projection of that content under whatever budget you pass, so a "
+            "large price means a lot is in there rather than a large bill)")]
         for r in self.listed_regions:
-            price = self.meter.price_region(r)
             where = "in-view" if r["in_viewport"] else f'y={r["top"]}'
             net = r["net"]
-            child_note = ""
-            if r["children"]:
-                child_note = (f' (net of {len(r["children"])} nested '
-                              f'region(s): {", ".join(r["children"])})')
-            line = (f'{r["ref"]} | {r["kind"]} | "{r["label"]}" | '
+            head = (f'{r["ref"]} | {r["kind"]} | "{r["label"]}" | '
                     f'{net["interactive"]} act, {net["text_blocks"]} blocks, '
-                    f'{net["images"]} img | {where} | ~{_num(price)} tok to '
-                    f'expand{child_note}')
+                    f'{net["images"]} img | {where}')
+            kids = r["children"]
+            if not _owns(r):
+                # No price, deliberately. Expanding a wrapper returns what
+                # expanding its children returns, so a number here would be a
+                # price for a call that answers nothing of its own.
+                line = (f'{head} | container of {", ".join(kids[:6])}'
+                        + (f' +{len(kids) - 6} more' if len(kids) > 6 else ''))
+                lines.append(line)
+                self.meter.ledger.add("region", r["ref"], CONTAINER_ONLY,
+                                      tokens=ntok_line(line))
+                continue
+            price = self.meter.price_region(r)
+            child_note = ""
+            if kids:
+                child_note = (f' (net of {len(kids)} nested region(s): '
+                              + ", ".join(kids[:6])
+                              + (f' +{len(kids) - 6} more' if len(kids) > 6
+                                 else '') + ')')
+            line = f'{head} | ~{_num(price)} tok of content{child_note}'
             lines.append(line)
             self.meter.ledger.add("region", r["ref"], LISTED_NOT_EXPANDED,
                                   tokens=ntok_line(line), price=price)
-        for r in regions:
+        for r in listable:
             if r["ref"] not in keep_refs:
                 self.meter.ledger.add("region", r["ref"], DROPPED_RUNG)
+        for r in empty:
+            self.meter.ledger.add("region", r["ref"], NO_CONTENT)
         return lines
 
     # ---------------------------------------------------------- affordances
@@ -281,18 +385,34 @@ class Renderer:
 
     # ---------------------------------------------------------------- forms
 
+    @property
+    def field_cap(self) -> int:
+        if self.view == "forms":
+            return self.rung.field_cap * FORMS_VIEW_FIELD_SCALE
+        return self.rung.field_cap
+
     def forms(self) -> list[str]:
         forms = self.d["forms"]
         if not forms:
             self.omitted_blocks.append("forms (page has none)")
             return []
         lines = [self.head("FORMS")]
-        detail = self.rung.forms_detail
-        # Content-aware floor: on a FORM page the field listing is what the
-        # page is for, so it survives a rung that would collapse it elsewhere.
-        if detail == "summary" and self.shape == "form":
-            detail = "fields"
-        for f in forms:
+        shown = forms[:self.rung.forms_cap]
+        omitted = forms[self.rung.forms_cap:]
+        for f in omitted:
+            self.meter.ledger.add("form", f["ref"], DROPPED_RUNG)
+        for f in shown:
+            detail = self.rung.forms_detail
+            # Content-aware floor: on a FORM page the field listing is what
+            # the page is for, so it survives a rung that would collapse it
+            # elsewhere. **Only where it FITS**, which is the half Phase 2
+            # had to add: DESIGN 3.4 says forms collapse to one line "when
+            # the field-level listing would breach budget", and an
+            # unconditional override on a 320-field fixture reinstates
+            # exactly the unbounded floor rung 5's caps exist to close.
+            if (detail == "summary" and self.shape == "form"
+                    and len(f["fields"]) <= self.field_cap):
+                detail = "fields"
             head = (f'{f["ref"]} | "{f["name"] or f["action"]}" | '
                     f'{f["method"]} {f["action"]} | {len(f["fields"])} fields'
                     + (f' | in {f["region"]}' if f["region"] else ""))
@@ -305,7 +425,7 @@ class Renderer:
                     f'   [{len(f["fields"])} fields not listed at this budget; '
                     f'get_page_view(view="forms") lists them]')
                 continue
-            for fl in f["fields"][:self.rung.field_cap]:
+            for fl in f["fields"][:self.field_cap]:
                 bits = [f'   {fl["ref"] or "-"}', fl["label"] or "(unlabeled)",
                         fl["type"]]
                 if fl["required"]:
@@ -326,11 +446,15 @@ class Renderer:
                 lines.append(line)
                 self.meter.ledger.add("field", fl["ref"] or fl["label"],
                                       PRINTED, tokens=ntok_line(line))
-            extra = f["fields"][self.rung.field_cap:]
+            extra = f["fields"][self.field_cap:]
             if extra:
                 self.meter.ledger.add("field", f'{f["ref"]}:dropped',
                                       DROPPED_RUNG, count=len(extra))
                 lines.append(f'   [{len(extra)} more fields in this form]')
+        if omitted:
+            lines.append(
+                f'[{len(omitted)} more form(s) on this page were not listed '
+                f'at this budget; get_page_view(view="forms") lists them]')
         return lines
 
     # --------------------------------------------------------------- tables
@@ -341,7 +465,11 @@ class Renderer:
             self.omitted_blocks.append("tables (page has none)")
             return []
         lines = [self.head("TABLES (structure only; cells come from get_table)")]
-        for t in tables:
+        shown = tables[:self.rung.tables_cap]
+        dropped_tables = tables[self.rung.tables_cap:]
+        for t in dropped_tables:
+            self.meter.ledger.add("table", t["ref"], DROPPED_RUNG)
+        for t in shown:
             spans = f', {t["spans"]} spanned cells' if t["spans"] else ""
             cols = " | ".join(t["headers"]) if t["headers"] else "(no th)"
             line = (f'{t["ref"]} | "{t["caption"] or "(unnamed)"}" | '
@@ -351,6 +479,11 @@ class Renderer:
                     + f' | ~{_num(self.meter.price_table(t))} tok if fully read')
             lines.append(line)
             self.meter.ledger.add("table", t["ref"], PRINTED, tokens=ntok_line(line))
+        if dropped_tables:
+            lines.append(
+                f'[{len(dropped_tables)} more table(s) on this page were not '
+                f'listed at this budget; get_page_view(view="tables") lists '
+                f'them]')
         if self.d["div_tables"]:
             lines.append(
                 f'[{self.d["div_tables"]} div-rendered grids (role=table or '
@@ -399,7 +532,8 @@ class Renderer:
                 lines.append(
                     f'virtualized or infinite container in '
                     f'{v["region"] or "(unowned)"}: {v["dom_count"]} rows in '
-                    f'the DOM{claimed}')
+                    f'the DOM{claimed}'
+                    + (f' [detected by {v["how"]}]' if v.get("how") else ''))
         else:
             lines.append("virtualized or infinite-scroll containers: none detected")
 
@@ -460,20 +594,30 @@ class Renderer:
             led.count(kind="field", status=SUMMARIZED)
         lines.append(
             f'form fields not listed: {fields_dropped} '
-            f'(of {led.count(kind="field")} found); forms omitted: 0')
+            f'(of {led.count(kind="field")} found); forms omitted: '
+            f'{led.count(kind="form", status=DROPPED_RUNG)} of '
+            f'{led.count(kind="form")}')
 
         headings_dropped = led.count(kind="heading", status=DROPPED_RUNG)
         lines.append(
             f'headings not listed: {headings_dropped} of '
-            f'{led.count(kind="heading")}; tables omitted: 0 of '
+            f'{led.count(kind="heading")}; tables omitted: '
+            f'{led.count(kind="table", status=DROPPED_RUNG)} of '
             f'{led.count(kind="table")}')
 
         listed = led.count(kind="region", status=LISTED_NOT_EXPANDED)
         dropped = led.count(kind="region", status=DROPPED_RUNG)
+        containers = led.count(kind="region", status=CONTAINER_ONLY)
+        empty = led.count(kind="region", status=NO_CONTENT)
         lines.append(
             f'regions listed but not expanded: {listed} (their expand costs '
             f'are printed above); regions dropped by the degradation rung: '
-            f'{dropped}')
+            f'{dropped}'
+            + (f'; {containers} listed as containers, priced at nothing '
+               f'because their content is their children'
+               if containers else '')
+            + (f'; {empty} region(s) own nothing at all and were not listed'
+               if empty else ''))
 
         if self.omitted_blocks:
             lines.append("blocks omitted entirely: " +
@@ -534,9 +678,15 @@ class Renderer:
         candidates = []
         for r in self.listed_regions:
             price = self.meter.price_region(r)
-            net = r["net"]
-            value = net["interactive"] * 2 + net["headings"] * 3 + \
-                min(40, net["text_blocks"])
+            net = r["net"]  # noqa: F841 (kept for the value arithmetic below)
+            # In-prose links carry a quota of zero, so counting them here
+            # ranks a region by exactly the affordances the projection has
+            # already decided not to print. On the GDP page that put the
+            # footnote block (446 citation links) above the article's own
+            # data table, which is the ranking-by-size defect wearing a
+            # different hat.
+            acts = max(0, net["interactive"] - net.get("prose_links", 0))
+            value = acts * 2 + net["headings"] * 3 + min(40, net["text_blocks"])
             if r["children"]:
                 value *= 0.4   # a parent that wraps its own children answers less
             candidates.append((value, price, r))
@@ -624,9 +774,32 @@ def project(data: dict, meta: dict, budget: int = 5000,
             f"navigation, one line per form and table, and the completeness "
             f"block, and it is what makes the read honest rather than "
             f"truncated. Raise budget_tokens to at least "
-            f"{int(floor / (1 - 0.10)) + 1}, or scope the read with "
-            f"view='outline'.")
+            f"{_smallest_budget_that_fits(data, meta, view, floor)}, or scope "
+            f"the read with view='outline'.")
     return chosen
+
+
+def _smallest_budget_that_fits(data: dict, meta: dict, view: str,
+                               floor: int) -> int:
+    """The budget the refusal names, VERIFIED rather than computed.
+
+    The obvious arithmetic is `floor / (1 - margin)`, and it is wrong often
+    enough to matter, because the budget line states the budget INSIDE the
+    payload it is measuring: raising the budget from 200 to 1,201 lengthens
+    that line and the floor grows by a token or two, so the number the
+    refusal quoted no longer fits when the caller uses it. A refusal that
+    names a number is making a claim, and DESIGN 3.3a's contract is that
+    every printed price is executable. So this renders the floor at the
+    candidate budget and walks the candidate up until the claim is true."""
+    candidate = int(floor / (1 - SAFETY_MARGIN)) + 1
+    for _ in range(6):
+        meter = BudgetMeter(candidate)
+        _calibrate(data, meter, view)
+        _, tokens = _render_to_fixpoint(data, meta, meter, RUNGS[-1], view)
+        if tokens <= meter.effective:
+            return candidate
+        candidate = int(tokens / (1 - SAFETY_MARGIN)) + 1
+    return candidate
 
 
 def _render_to_fixpoint(data: dict, meta: dict, meter: BudgetMeter,

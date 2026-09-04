@@ -172,7 +172,8 @@ def test_tabs_are_listed_opened_selected_and_closed(session_factory,
         closed = await lite.manage_tabs(session=session.session_id,
                                         action="close", page=second)
         assert closed["closed"] == second
-        assert "is now gone" in closed["invalidated"]
+        assert "now gone" in closed["invalidated"]
+        assert "delta read token" in closed["invalidated"]
         assert second not in [p["page"] for p in closed["pages"]]
 
     run(go())
@@ -361,12 +362,31 @@ def test_the_budget_holds_on_a_fifty_thousand_node_page(session_factory,
         session = await session_factory()
         page = session.focused
         await lite.navigate(page=page, url=fixture_site + "/big?n=50000")
-        for budget in (5000, 2500, 1200):
+        for budget in (5000, 2500, 1500):
             result = await lite.get_page_view(page=page,
                                               budget_tokens=budget)
             assert result["budget"]["used"] <= budget, (
                 f"a {budget}-token read returned "
                 f"{result['budget']['used']} tokens")
+
+        # And the other half of the property, which used to be tested by
+        # hardcoding a budget a few tokens above the floor and therefore
+        # broke whenever the floor moved by a line. A refusal that quotes a
+        # number is making a claim, so the claim is what gets tested: read at
+        # the budget the refusal named and it must fit. This is DESIGN 3.3a's
+        # executable-price rule applied to the floor message itself.
+        try:
+            await lite.get_page_view(page=page, budget_tokens=200)
+            raise AssertionError("a 200-token budget did not refuse")
+        except Exception as exc:
+            message = str(exc)
+        assert "below this page's floor projection" in message
+        named = int(message.split("Raise budget_tokens to at least ")[1]
+                    .split(",")[0])
+        result = await lite.get_page_view(page=page, budget_tokens=named)
+        assert result["budget"]["used"] <= named, (
+            f"the floor refusal named {named} tokens and a read at exactly "
+            f"{named} returned {result['budget']['used']}")
 
     run(go())
 
@@ -414,16 +434,31 @@ def test_an_impossible_budget_refuses_by_naming_the_floor(session_factory,
     run(go())
 
 
-def test_phase_two_parameters_refuse_honestly(session_factory, fixture_site):
+def test_the_parameters_that_are_still_unbuilt_refuse_honestly(
+        session_factory, fixture_site):
+    """`location` and `since` landed in Phase 2. `cursor` and
+    `include_hidden` did not, and each names the phase that owns it rather
+    than returning something plausible."""
     async def go():
         session = await session_factory()
         page = session.focused
         await lite.navigate(page=page, url=fixture_site + "/form")
-        for kwargs in ({"location": {"region": "r1"}}, {"since": "rt1"},
-                       {"cursor": "aff:40"}, {"include_hidden": True}):
+        for kwargs, phase in (({"cursor": "aff:40"}, "Phase 5"),
+                              ({"include_hidden": True}, "Phase 3")):
             with pytest.raises(Exception) as caught:
                 await lite.get_page_view(page=page, **kwargs)
-            assert "Phase 2" in str(caught.value)
+            assert phase in str(caught.value)
+
+        # A ref nobody minted refuses by naming the mint rule, which is the
+        # entry condition rather than a not-implemented stub.
+        with pytest.raises(Exception) as caught:
+            await lite.get_page_view(page=page, location={"region": "r99"})
+        assert "never minted in this session" in str(caught.value)
+
+        # And a read token nobody minted names the retention rule.
+        with pytest.raises(Exception) as caught:
+            await lite.get_page_view(page=page, since="rt999")
+        assert "re-establish a baseline" in str(caught.value)
 
     run(go())
 

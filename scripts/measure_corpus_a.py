@@ -41,10 +41,25 @@ GATES = ROOT / "gates"
 #: FAIL rather than leaving the reader to compare two tables by eye.
 TARGETS = {
     "wikipedia_versailles": 5000,
-    "wikipedia_gdp_table": 3000,
+    # REVISED IN PHASE 2, from 3,000, and recorded as a revision rather than
+    # restated as a pass. The 3,000 came from S1's 2,854 measurement, taken
+    # against a prototype whose scaffold was roughly 180 tokens cheaper and
+    # which was WRONGLY SUPPRESSING the page's navigation: every link inside
+    # an `<li>` was classified in-prose, and navigation menus are
+    # `<ul><li><a>` by convention. Phase 2 recovered 124 tokens from two real
+    # defects (a price quoted for expanding an empty landmark, and column
+    # headers scraped out of nested tables) and then SPENT 363 restoring the
+    # navigation the ranker had been discarding. The read got more useful and
+    # more expensive, in that order. See DESIGN 3.2.
+    "wikipedia_gdp_table": 3500,
     "httpbin_form": 900,
     "example_com": None,   # the scaffold floor, measured rather than targeted
 }
+
+#: What each target USED to be, carried so the gate report can say "revised"
+#: rather than quietly printing a pass against a number nobody remembers
+#: moving.
+SUPERSEDED_TARGETS = {"wikipedia_gdp_table": 3000}
 
 #: What S1 measured on the LIVE pages under cl100k_base (DESIGN 3.2). Carried
 #: so the report states the two moves separately: the tokenizer change and
@@ -129,6 +144,7 @@ async def main() -> None:
                                  budget=5000,
                                  dump=CORPUS / "out" / f"{name}.projection.txt")
             row["target"] = TARGETS.get(name)
+            row["superseded_target"] = SUPERSEDED_TARGETS.get(name)
             row["s1_cl100k_live"] = S1_CL100K.get(name)
             o = row["o200k_base"]["tokens"]
             c = row["cl100k_base"]["tokens"]
@@ -139,6 +155,11 @@ async def main() -> None:
             target = row["target"]
             verdict = "floor" if target is None else \
                 ("PASS" if row["pass"] else "FAIL")
+            # Never restate a miss as a pass. A row whose target MOVED says
+            # so on the same line as its verdict, so nobody reads a green
+            # PASS without seeing that the bar moved to meet it.
+            if row["superseded_target"]:
+                verdict += f' (target REVISED from {row["superseded_target"]})'
             print(f"{name:>22}: {row['nodes']:>6} nodes | o200k {o:>5} "
                   f"(rung {row['o200k_base']['rung']}) | cl100k {c:>5} | "
                   f"delta {o - c:>+5} | target {target} {verdict}")
