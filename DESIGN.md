@@ -41,7 +41,22 @@ docs use Garden. Glazing was considered and rejected by the author.
 
 **Every browser MCP server makes you pay six figures of tokens to look at a
 page before you can touch it, and KS4Web is the one that reads a page for
-under five thousand tokens and hands back references you can act on.**
+under five thousand tokens and hands back references you can act on, plus a
+targeted follow-up that costs tens of tokens when the thing you want was not
+in the first read.**
+
+**The companion clause is not decoration and it is required everywhere the
+claim appears.** Spike S1 measured the Treaty of Versailles article at 3,726
+tokens and put six blind agents against eleven projections; the read carried
+navigation, forms, controls, sections, and tables well enough for eleven of
+seventeen tasks to be actioned from the projection alone. It did not carry an
+arbitrary in-prose link, and no budget makes it. That page holds 2,858 in-prose
+links, so a first read that contained the one the task named would be a
+transcript, not an orientation. The honest pitch is therefore **cheap first
+read plus cheap targeted follow-up** (`get_page_view` then `find_elements`),
+and it is still a category win, because the incumbents' equivalent is a
+156,347-token dump followed by the same cheap find. Never write "one read and
+you can act on anything."
 
 ### 1.2 The measured gap
 
@@ -243,6 +258,17 @@ So the universal opening move on an unfamiliar page is still the full dump.
 **Nobody has a cheap first read.** That is the unserved row, and it is narrow
 enough to be true.
 
+**And the two halves are one product, which S1 made concrete.** The precondition
+the incumbents cannot meet is knowing what string to search for; the projection's
+job is to make the model know the string, and the blind trials showed it doing
+exactly that. On the one task the projection could not answer directly (the
+Fourteen Points link, buried among 2,858 in-prose links), the agent named
+`find_elements(page="p1", query="Fourteen Points")` unprompted and correctly
+priced it against the alternatives. That is the shape of the claim: the first
+read is what makes the second read cheap and targeted rather than a guess.
+Selling the first read alone overstates it, and selling the pair understates
+nothing.
+
 Two rows genuinely contested rather than unserved, and the design must not
 claim them: snapshot deltas and spill-to-disk are both shipped by Charlotte
 (`src/state/differ.ts`, `output_file`), and the delta idea is independently
@@ -251,15 +277,49 @@ because they are correct, not because they are unclaimed.
 
 ### 3.2 The targets, from the banked measurement
 
-| Read | Incumbents | KS4Web target | Multiple |
-|---|---|---|---|
-| Tool-schema bill (lite) | 4,637 / 6,460 | **under 1,500** | 3.1x / 4.3x |
-| Full-surface ceiling | n/a | under 4,000 | undercuts the incumbent DEFAULT |
-| Largest single schema | 413 / 459 | under 250 | |
-| Article page (Wikipedia, Treaty of Versailles) | 156,347 / 177,168 | **under 5,000, regardless of page size** | 31x to 35x |
-| Data-table page (GDP nominal) | 66,146 / 64,635 | under 3,000 for structure plus first row page | 22x |
-| Form page (httpbin) | 440 / 314 | under 300, and hold it on a real app form where incumbents balloon with shell chrome | |
-| Minimal page (example.com) | 105 / 90 | parity, do not chase | |
+| Read | Incumbents | KS4Web target | S1 measured | Multiple |
+|---|---|---|---|---|
+| Tool-schema bill (lite) | 4,637 / 6,460 | **under 1,500** | not yet built | 3.1x / 4.3x |
+| Full-surface ceiling | n/a | under 4,000 | not yet built | undercuts the incumbent DEFAULT |
+| Largest single schema | 413 / 459 | under 250 | not yet built | |
+| Article page (Wikipedia, Treaty of Versailles) | 156,347 / 177,168 | **under 5,000, regardless of page size** | **3,726** | 31x to 35x |
+| Data-table page (GDP nominal) | 66,146 / 64,635 | under 3,000 for the page structure, **the first row page priced separately as its own `get_table` call** | 2,854 structure | 22x |
+| Form page (httpbin) | 440 / 314 | **under 900**, and hold it on a real app form where incumbents balloon with shell chrome | 758 | |
+| Minimal page (example.com) | 105 / 90 | the scaffold floor, roughly 400, and do not chase parity | 404 | |
+
+**The scaffold floor is roughly 390 tokens and it is a property of the design,
+not a defect to optimize away.** S1 measured example.com, a page with one link,
+at 404 tokens. That is what the eight blocks cost when the page contributes
+almost nothing: identity, a page shape with one region, an affordance line, the
+completeness block, and the continuation protocol. **Any target below that floor
+is unreachable by construction**, which retires two numbers this table used to
+carry.
+
+The httpbin "under 300" is the first. Three hundred tokens does not buy a
+completeness block and a continuation protocol, so the old target was asking the
+design to drop the two blocks that make it honest in order to win a row against
+a 440-token incumbent read of a trivial page. The target is now under 900, and
+the row is documented as a **deliberate loss on tiny pages**: on httpbin the
+projection is roughly 1.7x the incumbent read, and on a 46-node page that is the
+correct trade, because the same scaffold is what caps the 574,200-token page at
+3,726. Say that plainly in the published benchmark rather than hiding the row.
+
+The GDP "under 3,000 for structure plus first row page" is the second. S1
+measured the structure alone at 2,854, leaving 146 tokens for a row page, which
+is not a row page. The two reads are now priced separately, which is also the
+truer shape: the structure comes from `get_page_view` and the rows come from
+`get_table` with row-range paging, and conflating them into one number was
+comparing a KS4Web pair against a single incumbent dump.
+
+The Versailles target holds with 25 percent of margin and it is the one that
+matters.
+
+**One tokenizer caveat carried forward from S1.** Its numbers are `tiktoken`
+`cl100k_base`; the fixed convention for this build is `o200k_base` (3.4, and
+PLAN's W1). The S1 figures above are therefore indicative rather than
+convention-conformant, and **the Phase 2 harness re-measures the frozen set under
+`o200k_base` before any of these numbers is published.** Conflict record #4 is
+the reason the distinction is worth a paragraph rather than a footnote.
 
 MEASURED is explicit that a 3-5x beat is the wrong ambition here: 156,347
 divided by 5 is still 31,269 tokens, which still ruins a session after six
@@ -283,7 +343,10 @@ would still fail inside the very workaround people use, so `get_page_view` takes
 `get_workflows` ships that recipe. The recipe survives, but 2,500 tracks a
 **movable limit**, which makes S8's empirical confirmation against the installed
 client the load-bearing check rather than any binary read, and makes the number a
-thing to re-measure rather than a constant to trust.
+thing to re-measure rather than a constant to trust. **S1 confirmed the recipe
+is real:** at `budget_tokens=2500` every one of eleven pages landed under budget
+and none was mutilated, with Versailles degrading to rung 4 at 2,184 and most
+pages never leaving rung 1.
 
 ### 3.3 What a page view returns
 
@@ -297,16 +360,69 @@ engine lane, page handle, read token (for deltas), and a timestamp.
 form, plus unlabeled major containers) each carrying a ref, a one-line label,
 counts of interactive elements and text blocks and images, and **an estimated
 token cost to expand.** The regions are a menu with prices, so the model can
-budget instead of guess. Nothing in the field does this.
+budget instead of guess. Nothing in the field does this, and the prices are
+therefore the design's genuine novelty, which is why Section 3.3a makes them a
+correctness requirement rather than a nicety.
 
-**3. Affordances.** The ranked interactive surface: `ref | role | accessible
-name | state`. Ranking is in-viewport first, then main-or-dialog landmark, then
-size and semantic weight (submit buttons, primary nav). Capped at N with an
-exact count of what was omitted and the call that gets the rest. The community
-measurement KS4Web is designing against is roughly 62 to 93 accessibility nodes
-per view of which about 9 are interactive, and the incumbent line counts are
-consistent with that ratio, which is the entire reason this fits in a few
-hundred tokens.
+**3. Affordances: quota-based by class, never a single proximity score.** The
+interactive surface as `ref | role | accessible name | href-or-target | state`,
+selected by **per-class quotas with guaranteed floors**, then ranked within each
+class. It is not one ranked list capped at N.
+
+S1 forced this, and the motivating case is worth stating exactly because it is
+the failure this rule exists to prevent. On `github.com/microsoft/playwright`,
+the prototype's single score (in-viewport +40, main-or-dialog +30, size,
+semantic weight) surfaced dozens of truncated commit-message links from the file
+listing and **buried all thirteen tabs of the repository navigation bar**,
+including Issues. A blind agent asked to open the repository's issues could not
+name a call. It was not a budget failure: the projection used 2,238 of 5,000
+tokens, the entire tab bar would have cost roughly 130, and 2,762 tokens of
+headroom went unused. **The ranker threw away the answer while under budget.**
+Proximity scoring on a 51-screen article does the same thing in the other
+direction, where "in-viewport" means the lead paragraph and the top forty
+affordances come back as citation markers (`[n. 1]`, `[ii]`, `[4]`).
+
+The classes and their quotas:
+
+| Class | Quota |
+|---|---|
+| Site and page navigation: nav landmarks, tab bars, menubars, breadcrumbs | **Guaranteed floor, filled before any other class.** This is what an agent asks for most and it is small. |
+| Form controls | **Complete whenever the form fits the budget, never sampled.** A half-listed form is not a form. |
+| Primary actions: submit controls, buttons in `main` or a dialog, anything with `aria-expanded` or `aria-haspopup` | High quota. |
+| In-prose links inside a readable region | **Quota of zero.** |
+
+The zero quota is the load-bearing one. On Versailles it removes roughly 2,700
+of 2,858 affordances and costs nothing, because no agent was ever going to find
+its link inside a forty-item sample of 2,858. Those links belong to the content
+digest, which names the sections they live in, and to `find_elements`, which
+retrieves one by name for tens of tokens. The completeness block states the
+suppressed count and the class it belongs to, so the absence is reported rather
+than implied.
+
+Two corollaries, both cheap and both answering a specific blind-trial failure:
+
+- **Print the href path for links.** The prototype extracted `href` and never
+  printed it, and a blind agent on CNN could not confirm that an affordance
+  labeled "Business" went to a business section rather than opening a menu. The
+  data was already in hand. Path only, not the full URL, when the origin matches
+  the page.
+- **Never collapse two elements onto one line without a distinguishing token.**
+  S1 emitted `e13` and `e42` as two buttons both labeled "Search (x2)" in the
+  same region, and `e216,e134 | link | "Apache-2.0 license" (x2)` out of numeric
+  order, so the grouping was not even positional. Duplicate labels are
+  disambiguated by the smallest sufficient discriminator: the containing region,
+  the ordinal within it, the href path, or the nearest labelled ancestor. If no
+  discriminator can be computed, the elements are listed separately rather than
+  grouped.
+
+The community measurement KS4Web is designing against is roughly 62 to 93
+accessibility nodes per view of which about 9 are interactive. **S1 measured the
+real range and the assumption holds only for app pages.** Interactive-to-total
+node ratio across eleven pages: 2.0 percent to 28.3 percent, median 9.0 percent.
+App shells and homepages sit at 8 to 15 percent as assumed; articles do not, and
+Versailles is 26.6 percent precisely because its interactive elements are inline
+citations. That single number is why quotas replaced a global cap: the class
+that explodes on articles is the class with quota zero.
 
 **4. Content digest.** For a readable page: a condensed lead plus the section
 headings, each heading carrying a ref so the model can expand exactly one
@@ -319,6 +435,24 @@ one representation for a whole session.
 count), then the fields as `ref | label | type | required | value-state`. Values
 of secret-typed fields are never present, not even redacted-in-place, and the
 field is marked `secret: true` (Section 5.3).
+
+**Select and combobox options are inlined under a size cap, and this is a known
+open item rather than a settled mechanism.** S1 recorded the only failure in its
+trial set that forced an EXPENSIVE second read, and it was this one: a blind
+agent planning a fill-and-submit on GitHub's advanced search reached
+`e17 | "Written in this language" | combobox` with no option values, wrote *"I
+am guessing the option label is exactly `Python`... this is the single most
+likely call to fail,"* and then priced its only recovery at roughly 4,757
+tokens, more than 2.5x the entire first read, because the projection offered no
+narrower call for one select's option list. **Options are cheap and their
+absence is expensive**, so a `<select>` whose option list fits a per-element cap
+(a small option count and a small token cost, both stated in the tool docstring)
+has its options printed inline. Over the cap, the inventory prints the option
+count and names the call that retrieves them. **TODO, Phase 2: set the cap from
+measurement rather than taste**, and decide whether a dedicated narrow retrieval
+call is warranted or whether `get_page_view(view="forms", location=...)` scoped
+to the one control is already the right answer. Recorded as the known
+forced-second-read case so the positioning does not quietly assume it away.
 
 **6. Tables inventory.** Each table as `ref | caption | rows x cols | column
 headers`. Never the cells. Cells come from `get_table` with row-range paging,
@@ -341,6 +475,59 @@ what it did NOT see and why:
 - canvas-rendered regions with no text projection, naming the `capture` pack
 - **budget accounting**: tokens used against budget, which degradation rung
   the projection landed on, and which regions were not expanded
+- **auth state** (signed-in / signed-out / unknown), and how it was determined.
+  Arguably block 1, kept here because it is a completeness fact. A blind agent
+  on the GitHub repo page reverse-engineered it from an affordance label to
+  correctly predict that a star click would fail, which is the right answer
+  reached the wrong way.
+- **unlisted affordances**, as a count and a group count, broken out by the
+  class quota that suppressed them
+- **omitted form fields and omitted forms**
+- **omitted tables and omitted headings**
+- **regions listed but not expanded**, stated distinctly from regions dropped
+  by the degradation ladder, because they are different facts
+- **blocks omitted entirely** because the page has none of that thing
+- **name-quality flag** when any accessible name was truncated or could not be
+  computed (Section 3.7)
+
+The two-layer phrasing on shadow roots is kept verbatim, on evidence: a blind
+agent singled out `shadow roots: 0 open (traversed=no), 0 closed (unreachable by
+any tool)` as the most useful line in the whole document, because it separates
+"I did not look" from "no one can look" where most tools collapse both into a
+confident zero. **Every completeness field carries that distinction where it
+applies.**
+
+**The accounting rule, and it is the important part of this block.** S1's
+completeness block printed `0 regions not expanded` while thirty regions carried
+expand costs and none had been expanded. Three independent blind agents caught
+it, and one of them put the general defect precisely: *"The completeness report
+is honest about the DOM boundaries it could not cross and silent about the
+content it chose not to print."* The cause was structural rather than a typo. The
+block recomputed its own numbers after the fact, so it reported on the
+degradation ladder (which had not engaged) instead of on the projection (which
+had omitted most of the page).
+
+**So the completeness block does not compute anything. It renders the ledger the
+budget meter already kept.** The meter measures as it builds (3.4), which means
+it necessarily knows, per unit, whether that unit was printed, summarized,
+suppressed by a class quota, dropped by a rung, or never reached. That ledger IS
+the accounting, and the completeness block is a view over it. A number that
+appears in the block and was not produced by the same pass that enforced the
+budget is a defect by construction, and the Phase 2 gate tests it as one: a
+projection is generated, the ledger is compared against ground truth from the
+fixture, and any figure the block can produce independently of the meter fails
+the gate.
+
+Two consequences fall out. The block **separates the two facts the old budget
+line conflated**: tokens used against budget is one statement, content
+deliberately not printed is another, and printing the first while implying the
+second is what produced "0 regions not expanded" on a page with thirty priced
+regions. And **section numbering is dynamic, or every block is always emitted
+with an explicit "none."** S1 hardcoded the numbering while omitting empty
+blocks, so a page with no forms and no tables jumped from section 4 to section 7,
+and a blind agent noted that two sections had vanished with no disclosure
+"including in the section that exists specifically to disclose what the read did
+not cover." Either fix is acceptable; silently renumbering is not.
 
 **8. The continuation protocol, taught inside the payload.** The reference MCP
 fetch server's idiom, stolen outright because it is the best idea in the
@@ -353,6 +540,64 @@ The tool teaches the model its own continuation protocol in the result. No
 extra schema, no documentation dependency. KS4Web's version names the exact
 next call for each unexpanded region, each unread table, each untraversed
 frame.
+
+**Next calls are ranked by expected value, never by size.** S1 put
+`expand r5 (main, ~73,716 tok)` at the top of its recommended-call list on
+Versailles. That region overlapped a dozen others and was simultaneously the
+most expensive and least useful call available on the page. Ranking by cost, in
+either direction, is what produced it. The ranking is by what the call is likely
+to answer, and an overlapping parent region is demoted below its own children
+rather than promoted above them.
+
+### 3.3a The cost-estimation contract
+
+Every price the projection prints must be a real price. This is stated as its
+own contract because "regions are a menu with prices" is the design's
+differentiator, and S1 caught three separate lies in one prototype, each of which
+a blind agent noticed unprompted. A wrong price is worse than no price: it does
+not merely fail to help, it routes the agent to the wrong call while looking
+authoritative.
+
+**The three caught lies, and the rule each one produces.**
+
+1. **Per-heading costs were `~10 tok` on almost every heading.** A blind agent
+   wrote: *"Every single content heading is priced identically... Read quickly,
+   that says a section costs ten tokens, when in fact the 'Reactions' region
+   alone is ~6,399 tok to expand. The one number an agent most needs, the price
+   of reading a named section, is the number the projection does not give."* The
+   cause was a `nextElementSibling` walk from the heading to the next heading,
+   which returns almost nothing on any site that wraps sections in containers,
+   which is most sites. **RULE: a section's cost is computed over its true
+   section container, from the heading to the next heading of the same or higher
+   level, spanning wrapper elements.** If the true container cannot be
+   determined, the projection prints no price for that heading and says so,
+   rather than printing a number derived from a walk that found nothing.
+
+2. **The `main` region was priced as the sum of every other region.** It
+   overlapped its own children, so the most expensive call on the page also
+   looked like the most complete one. **RULE: overlapping regions are priced NET
+   of their children.** A parent's advertised cost is what expanding it adds
+   beyond expanding its children, and where a parent is genuinely just a
+   container, its price says so.
+
+3. **`0 regions not expanded` was printed while thirty regions carried expand
+   costs.** Covered above: the completeness block renders the budget meter's
+   ledger and computes nothing of its own.
+
+**The general rule these three collapse into, and it is the one to enforce
+mechanically: a printed price and an enforced budget come from the same
+arithmetic, in the same pass, over the same units.** The budget meter estimates
+with `tiktoken` on `o200k_base` (3.4) as it builds. Any cost the projection
+advertises is the meter's own estimate for the unit that call would produce, not
+a separate heuristic that happens to live nearby. Two estimators mean two
+answers, and the one the user sees would be the one nothing tested.
+
+**Phase 2 tests this by construction, not by inspection.** For each priced unit
+on the fixture set, the harness issues the exact call the projection advertised,
+measures the result under the same estimator, and compares. A price that is wrong
+by more than a stated tolerance is a red gate, and a price with no corresponding
+executable call is a red gate too, because an unpriceable call should print no
+price rather than a plausible one.
 
 ### 3.4 The projection parameter, and the degradation ladder
 
@@ -417,6 +662,31 @@ field count) when the field-level listing would breach budget, and tables were
 never more than one line each. With inventories capped, the floor is bounded and
 a page view never refuses; the full field listing is one
 `get_page_view(view="forms")` away and the floor says so.**
+
+**S1 confirmed the floor problem empirically and added two more ladder
+requirements.** The prototype's uncapped floor refused Versailles at a 1,500
+budget (floor 1,629) and refused eight of eleven pages at 900, which is exactly
+the unbounded-floor case the capped inventories above now close. Two further
+defects the prototype exposed, both stated as requirements rather than notes:
+
+- **The ladder is monotonic.** On httpbin the prototype got BIGGER at rung 4
+  (743 to 793 tokens) because the digest switched from a short `lead:` line to a
+  heading list. A rung that costs more than the rung above it is a defect, and
+  the harness asserts monotonicity per page across every rung.
+- **The rungs are finer than five and less correlated.** Measured steps on
+  Versailles bought 20 percent, then 9 percent, then 17 percent, so a 2,500
+  budget skipped the projection from 3,711 straight to 2,182, dropping 22
+  regions and the entire lead paragraph when a smaller step would have fit.
+  Degradation is chosen to land just under budget, not to jump to the first rung
+  that fits.
+- **The floor's shape is content-aware.** The prototype's floor kept every table
+  row-count and every form field while dropping the digest, which on an article
+  is backwards. The floor keeps what the page is FOR: the digest survives on a
+  readable page, the form inventory survives on a form page.
+
+Not a defect and worth banking: **at the 5,000-token default the ladder never
+engaged on any of eleven pages spanning four orders of magnitude of raw size.**
+The ladder is the guarantee, not the normal path.
 
 **The budget is enforced against ESTIMATED tokens, and the estimator is named
 rather than assumed.** "A page view never exceeds its budget" is a hard-cap
@@ -588,6 +858,66 @@ between KS4Web's read layer and the incumbents'.
   (console logging shipped as an improvement and became a 6x token regression).
 - It never silently omits. Everything not returned is counted in the
   completeness block.
+
+### 3.7 Accessible names are computed, not scraped
+
+**REQUIREMENT: KS4Web computes accessible names by the W3C accname algorithm,
+or reads the driver's own computed names, and never falls back to
+`textContent`.** This is stated as a requirement because S1 used `textContent`
+on containers and the resulting failures were not cosmetic. An accessible name
+is most of the signal in a structured page read, so a wrong name is a wrong
+answer with a confident face on it.
+
+**The case that names the rule.** On `github.com/microsoft/playwright`, the
+prototype labeled the entire `main` region **`"Uh oh!"`**, a stray pickup from an
+error-state element that never rendered. The page returned HTTP 200 and that
+region demonstrably held the file listing, the README, and the sidebar. A blind
+agent triaging by region label said it plainly: an agent reading that would
+*"either panic or skip the only region that matters."* The single most valuable
+region on the page was labeled as an error, from a name computation that was a
+property access rather than an algorithm.
+
+The same defect produced a family of failures across the trial set: `"General4"`
+and `"Data Entry18"` where a heading was glued to its adjacent count badge, so a
+search for the literal string "Data Display" would miss and a report of the
+section title would be wrong; `"main179 Branches165 TagsGo to fileCode..."` as a
+single affordance name; `"Components OverviewChangelogv6.6.2GeneralButtonFloat
+ButtonIconTypographyLayout DividerFlexG"` as a menu name, an entire navigation
+run together and then cut mid-word; and commit messages truncated inside an open
+parenthesis.
+
+Four sub-rules follow, all mechanical:
+
+1. **Compute by accname, or use the driver's computed name.** Playwright exposes
+   correct computed names and they are cheap. The in-house BiDi client for Lane C
+   implements the algorithm or reports that it cannot, per lane, in
+   `manage_session(capabilities)`.
+2. **Separate inline text nodes with spaces** wherever a fallback is genuinely
+   unavoidable, so a heading and its badge never fuse into one token.
+3. **Truncate on word boundaries with an explicit ellipsis**, never mid-token.
+   A name cut inside a word reads as a different string than the page contains,
+   which is what breaks string matching downstream.
+4. **Refuse to emit a CSS class as a stand-in name.** S1 printed
+   `.mw-file-description` as an affordance name. The correct output is
+   `(unnamed)` plus one stable attribute (id, `data-testid`, or role plus
+   ordinal). Unnamed and honest beats named and wrong, and the completeness
+   block's name-quality flag counts how often it happened.
+
+**The digest gate needs the same treatment, and it is the same disease.** The
+prototype's `lead:` field took the first `<p>` over 80 characters anywhere in the
+document. On CNN that returned *"It looks like your browser doesn't support the
+Digital Rights Management (DRM) system required to play this content..."*, so a
+model trusting `lead:` as the top of the page would have reported a DRM failure
+as CNN's headline. **The lead comes from the readable region only**, extracted
+Readability-shaped rather than by document order, and if no readable region is
+identified there is no `lead:` line at all.
+
+The readability gate itself needs tuning against measurement rather than a
+threshold picked in advance: S1's gate (`prose_chars > 1200` and at least four
+paragraphs) gave CNN an article-shaped digest while reporting roughly 336
+characters of prose across a twenty-section homepage, which means the gate and
+the thing it gated disagreed inside one payload. Phase 2 sets the gate from the
+frozen corpus, and the projection states which shape it chose and why.
 
 ---
 
@@ -1673,6 +2003,24 @@ which phase each one blocks.
    Publish the harness, the pinned versions, the page set, and the tokenizer
    convention. The category is full of vendor multipliers with no methodology; a
    third party being able to re-run ours is the differentiator.
+
+   **Publish the losing rows too.** The measured set includes pages where the
+   projection is larger than the incumbent read: httpbin at roughly 1.7x and
+   example.com at roughly 4x, both because the scaffold floor is around 390
+   tokens and a trivial page cannot amortize it (Section 3.2). Those rows go in
+   the published table with the reason stated. A benchmark that shows only wins
+   is the kind of vendor multiplier this build exists to be distinguishable from,
+   and the losing rows are cheap to defend: the same scaffold that costs 390
+   tokens on a 46-node page is what caps a 574,200-token page at 3,726.
+
+2a. **The one-read claim never ships without its companion clause** (Section
+   1.1). Every public sentence about the cheap read pairs it with the cheap
+   targeted follow-up, and the honest limit is stated in the same breath: an
+   arbitrary in-prose link on a long article is not one-readable at any budget,
+   and `find_elements` is what retrieves it for tens of tokens. Blind-trial
+   result, for the record and for the copy: 11 ACT, 3 PARTIAL, 3 FAIL over 17
+   tasks from the projection alone, with two of the three failures recovering
+   through a cheap targeted call the agent named unprompted.
 3. **Never publish a percentage without the methodology.** If any safety
    resistance figure is ever quoted, the test set, the date, and the model are
    named in the same breath. Anthropic's own three figures (23.6/11.2, 1 percent,
@@ -1683,6 +2031,7 @@ which phase each one blocks.
 | Capability | KS4Web | playwright-mcp | chrome-devtools-mcp | charlotte | Skyvern |
 |---|---|---|---|---|---|
 | Cheap FIRST read of an unfamiliar page | yes | no (find needs the string) | no | partial | no |
+| Cheap TARGETED follow-up after that read | yes | yes (`browser_find`) | no | partial | no |
 | Hard budget with graceful degradation | yes | declined (#395/#889) | no (take_snapshot unbounded) | yes | partial |
 | Sticky refs across re-reads | yes | no | yes (CDP-only) | no | no |
 | Durable anchors that survive re-render | yes | partial (generate_locator) | no | no | no |

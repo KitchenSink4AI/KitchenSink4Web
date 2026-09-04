@@ -7,9 +7,17 @@ DESIGN.md first; this plan is how it gets built, not what it is.
 
 **The external success metric:** be the browser MCP that a working
 professional can point at an unfamiliar page and read for under five thousand
-tokens, act on with references that still work three turns later, run in
+tokens, follow up on for tens of tokens when the thing they wanted was not in
+that read, act on with references that still work three turns later, run in
 read-only mode when the task does not need to touch anything, and audit
 afterward. Plus a benchmark a stranger can re-run.
+
+The follow-up clause is not padding. S1 measured the first read as genuinely
+actionable for navigation, forms, controls, sections, and tables, and genuinely
+NOT actionable for an arbitrary in-prose link on a 2,858-link article, at any
+budget. **Cheap first read plus cheap targeted follow-up** is the claim
+everywhere it appears, in this plan and in every public surface (DESIGN 1.1,
+DESIGN 12 rule 2a).
 
 **The internal success metric:** the author dogfoods it daily on their own
 Firefox from Phase 4 onward, and field bugs outrank new features.
@@ -107,7 +115,7 @@ the spikes report" has one stated exception and this is it. The sequence:
 
 | Corpus work | Due |
 |---|---|
-| Corpus A: the four MEASURED pages fetched and frozen to disk as snapshots, with the fetch date and page revision recorded | **Before S1 starts.** S1 measures against the frozen copies, not the live pages. |
+| Corpus A: the four MEASURED pages fetched and frozen to disk as snapshots, with the fetch date and page revision recorded | **Before S1 starts.** S1 measures against the frozen copies, not the live pages. **NOT MET as run (2026-09-05):** S1 ran against live pages and froze the extraction outputs afterward (`spikes/s1/out/raw/*.extract.json`), plus the eleven blind-trial inputs byte-for-byte. Its ladder numbers re-derive offline and its per-page numbers do not. Corpus A is still owed as a real freeze before Phase 2's harness, and the S1 figures are indicative until it exists. |
 | Corpus B subset: React re-render page, react-window virtualized list, client-side route change, plus the 50,000-node DOM (S1 needs it for the degradation rungs and the latency measurement) | **Before S1 and S2 start.** |
 | The rest of corpus B: iframes, shadow roots, canvas, mutating page, rowspan tables, div-tables, lazy images, `isTrusted` control, `<div onclick>`, moving target, overlay, portal dropdown, console flood, secret fields | Before **Phase 2** opens, since the Phase 2 gate is verified against them. |
 | Corpus C in full | Before **Phase 3** opens, since the Phase 3 gate IS corpus C driven end to end. |
@@ -136,7 +144,59 @@ ahead of the engine spikes, because it tests the product thesis and every engine
 spike tests a delivery mechanism for it. If S1 fails, the engine questions stop
 mattering.
 
-### S1: The projection proof (THE spike, run first)
+### S1: The projection proof (THE spike, run first) — **DONE 2026-09-05, VALIDATED-WITH-CAVEATS**
+
+**Report:** `internal notes/20260905_ks4web_spike_s1.md`.
+**Code:** `spikes/s1/` on branch `spike-s1`, throwaway prototype, Lane A only.
+**Absorbed into DESIGN and PLAN 2026-09-05**; the edit list is in the BUILD_LOG.
+
+Eleven pages spanning four orders of magnitude of raw size, six blind agents,
+seventeen tasks. Headline: **Versailles projects to 3,726 tokens against a
+106,088-token unannotated accessibility snapshot on the same machine**, a 28.5x
+multiple that is conservative because the baseline lacks playwright-mcp's
+per-node ref annotations (the banked figure through playwright-mcp itself is
+156,347). Projection size proved essentially independent of page size: raw inputs
+spanning a factor of 11,000 projected into a band spanning a factor of 9.
+
+| S1 gate | Result |
+|---|---|
+| Versailles under 5,000 at `detail=standard` | **PASS**, 3,726 |
+| GDP table under 3,000 for structure plus first row page | **FAIL as written.** Structure alone is 2,854. Target restated in DESIGN 3.2: structure and row page priced as separate calls. |
+| httpbin form under 300 | **FAIL as written.** 758 measured against a ~390-token scaffold floor. Target replaced with under 900 in DESIGN 3.2. |
+| HARDER GATE: blind agent clicks "Fourteen Points" without a second full read | **SPLIT.** Passes the letter (no full re-read requested, cheap route named unprompted); fails the intent (no ref was available to click). Drives the positioning change. |
+| KILL: token target reachable only by dropping affordances below actionable | **NOT TRIGGERED.** The GitHub failure happened with 2,762 tokens of headroom unused. A ranking defect, not a budget defect. |
+| KILL: actionability needs more than 5,000 on an ordinary article | **NOT TRIGGERED.** |
+
+Blind trials: **11 ACT / 3 PARTIAL / 3 FAIL over 17 tasks.** Two of three
+failures recovered through a cheap targeted call the agent named unprompted,
+putting 82 percent of tasks inside a 5,000-token budget for the whole
+interaction. One task (select options on a form) forced an expensive second read
+and is recorded in DESIGN 3.3 block 5 as the known case with a Phase 2 TODO.
+
+**The three corrections the prototype forced, all now in DESIGN:** affordance
+ranking is quota-based by class with a zero quota for in-prose links (3.3 block
+3, motivated by the GitHub Issues-tab failure); every printed price is real and
+derived from the budget meter's own ledger (3.3a, the cost-estimation contract);
+accessible names are computed by accname rather than scraped from `textContent`
+(3.7, the `"Uh oh!"` case). Plus the ~390-token scaffold floor replacing the
+sub-300 target (3.2), ladder monotonicity and finer rungs (3.4), and the
+completeness field list extended with seven new fields (3.3 block 7).
+
+**One S1 obligation did not discharge and is transferred, not dropped. E11, the
+latency measurement, moves to the engine-spike round now running.** S1 reported
+no wall-clock table: cold and warm p50/p95 per projection over ten runs per
+fixture, including the 50,000-node fixture where the hidden-content normalizer's
+per-node style computation lands. That measurement is the bound Phase 2's gate
+part 5 asserts against, and **Phase 2 cannot open with the bound unset**, so the
+engine round owns it and reports it in the same register S1 would have. Nothing
+else about S1 is outstanding.
+
+**Tokenizer caveat, carried:** S1 counted with `tiktoken` `cl100k_base`, not the
+`o200k_base` convention this plan fixes (W1). Its figures are indicative and are
+re-measured under the convention by the Phase 2 harness before publication.
+
+The original spike definition follows, kept verbatim as the record of what was
+asked.
 
 Build a throwaway projector against the frozen benchmark set and measure it.
 Not production code, not integrated, no MCP server. Playwright script, page in,
@@ -362,6 +422,12 @@ measure resident memory for a headless Chromium page against a headed
 reported.** S1 green means the product exists. S2 green means it is cheap for a
 whole session and not just one call. Everything else is a delivery decision.
 
+**Status 2026-09-05: S1 is GREEN, with caveats absorbed into the design.** Its
+two failed numeric targets were the design's numbers rather than the design's
+thesis, and both are restated in DESIGN 3.2 from measurement. Neither kill
+criterion tripped. The gate is not yet passable, because S2 has not run and
+E11's latency table is outstanding with the engine round.
+
 Spike outputs are saved as permanent artifacts to `Draft/Working Files/Agent
 Results/` with DTG names, per house rule.
 
@@ -443,11 +509,17 @@ require sticky refs and sticky refs are only useful because reads are cheap.
 - `anchors/`: fingerprints, sticky element map, rebind ladder, delta engine.
 - `get_page_view`, `find_elements`, `get_text` land here as the first three
   tools.
-- **GATE, five parts, all required:**
+- **GATE, nine parts, all required.** Parts 6 through 9 are S1's corrections
+  promoted to gate items, because each one was a defect that a blind agent
+  caught while the projection was comfortably under budget, which is exactly the
+  failure class a token-only gate does not see.
   1. **The measured token bill meets every target in DESIGN 3.2** on the frozen
      benchmark set. Reported by the harness, not by hand, and counted with the
      named estimator (`tiktoken`, `o200k_base`) so the gate number and the
-     enforced budget are the same arithmetic.
+     enforced budget are the same arithmetic. **The revised targets bind**, not
+     the pre-S1 ones: under 900 on httpbin, structure and row page priced
+     separately on the GDP table, and the roughly 390-token scaffold floor
+     acknowledged rather than chased.
   2. **Refs are sticky** across re-reads on every fixture, and **zero false
      rebinds** on the pathological fixture.
   3. **The completeness block is accurate**, verified by construction: the
@@ -459,13 +531,47 @@ require sticky refs and sticky refs are only useful because reads are cheap.
      forcing every rung on the 50,000-node fixture. Rung 5's capped inventories
      (DESIGN 3.4) are exercised specifically: a fixture form with several hundred
      fields must collapse to the one-line form summary and stay under budget
-     rather than refusing.
+     rather than refusing. **The ladder is also asserted MONOTONIC** per page
+     across every rung, since S1's prototype got bigger at rung 4 on httpbin.
   5. **The latency budget holds.** Wall-clock p95 per projection across the
-     fixture set stays under the bound S1 measured, with the bound written into
-     the harness rather than remembered. Token-cheap and wall-clock-expensive is
+     fixture set stays under the bound measured by **E11, transferred from S1 to
+     the engine-spike round**, with the bound written into the harness rather
+     than remembered. Token-cheap and wall-clock-expensive is
      the same user pain by another route, and the projection pipeline's
      per-node style computation is where that bill lands, so latency is a gate
-     here and a tracked number at every phase gate afterward.
+     here and a tracked number at every phase gate afterward. **Phase 2 does not
+     open until that bound exists**; a gate asserting against an unset number is
+     not a gate.
+  6. **Affordance quotas hold on the adversarial cases.** On the frozen GitHub
+     repo page, every tab in the repository navigation bar appears in the
+     projection. On Versailles, in-prose citation links appear zero times in the
+     affordance list and their suppressed count appears in the completeness
+     block. Every link affordance prints an href path, and no two affordances
+     share a line without a distinguishing token. This part exists because S1's
+     proximity ranker buried thirteen navigation tabs with 2,762 tokens of
+     headroom unused.
+  7. **Every printed price is executable and accurate.** For each priced unit,
+     the harness issues the exact call the projection advertised, measures the
+     result under the same estimator, and compares against the advertised
+     figure. Section costs computed over true section containers, overlapping
+     regions priced net of children, and NEXT CALLS ranked by expected value
+     rather than size (no overlapping parent ranked above its own children). A
+     price with no executable call, or a price outside tolerance, is a red gate.
+  8. **The completeness block is derived, not recomputed.** Its accounting comes
+     from the same ledger the budget meter kept while enforcing the budget
+     (DESIGN 3.3 block 7). Tested by construction: any figure the block can
+     produce independently of the meter fails, and the "0 regions not expanded
+     while thirty regions carry expand costs" case is a named regression test.
+     Dynamic section numbering or always-emitted blocks with an explicit "none";
+     a silent jump from section 4 to section 7 fails.
+  9. **Accessible names are computed, not scraped.** Verified against fixtures
+     built from the S1 failures: a heading with an adjacent count badge must not
+     fuse (`General4`), a region must not take a name from a non-rendering
+     error element (`"Uh oh!"`), names truncate on word boundaries with an
+     explicit ellipsis, and a CSS class is never emitted as a name. The
+     name-quality flag in the completeness block counts every fallback. The
+     lead paragraph comes from the readable region only, tested against a
+     fixture carrying a DRM-style error string ahead of the real content.
 
 ### Phase 3: The policy layer (built BEFORE the action tools, deliberately)
 
@@ -662,6 +768,14 @@ third party can re-run ours and get the same answer. This is also an internal
 regression detector: a phase that quietly inflates the page bill gets caught the
 same day.
 
+**The published table includes the rows KS4Web loses**, per DESIGN 12 rule 2:
+httpbin and example.com, where the roughly 390-token scaffold floor makes the
+projection larger than an incumbent read of a trivial page, with the reason
+stated inline. A benchmark showing only wins is the thing this workstream exists
+to be distinguishable from. The harness also re-measures S1's figures under
+`o200k_base`, since S1 counted with `cl100k_base` and no S1 number is publishable
+as-is.
+
 **W2: The Known Limitations page**, written continuously as the build discovers
 limits rather than reconstructed at the end. Every `LANE_UNSUPPORTED` entry, the
 BiDi hole list, the closed-shadow-root case, the virtualized-list case, the
@@ -675,6 +789,15 @@ before degradation), because the pure cost pitch bounces off subscription users
 who say "more tokens is free for me." Rate limits are the bridge argument that
 reaches subscribers. Cost is secondary. Safety copy follows the Section 5
 grammar without exception.
+
+**Binding since S1: the one-read claim always carries its companion clause.**
+Cheap first read PLUS cheap targeted follow-up, with the limit stated in the
+same breath rather than in a footnote: an arbitrary in-prose link on a long
+article is not one-readable at any budget, and `find_elements` retrieves it for
+tens of tokens. "One read and you can act on anything" is banned copy. The pair
+is still the category win, since the incumbents' equivalent is a 156,347-token
+dump followed by the same cheap find, and stating the limit is what makes the
+rest of the claim survive a reader who tests it.
 
 **W4: Registry and packaging presence**, prepared in parallel and executed in
 Phase 9: PyPI, mcpb, mcp-publisher, Glama claim file, the `mcp-name` marker in
