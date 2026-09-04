@@ -1,0 +1,55 @@
+{
+ "job_context": {
+  "IsProcessInJob_call_ok": true,
+  "in_job": true,
+  "query_ok": true,
+  "LimitFlags_hex": "0x3000",
+  "KILL_ON_JOB_CLOSE": true,
+  "BREAKAWAY_OK": false,
+  "SILENT_BREAKAWAY_OK": true
+ },
+ "breakaway_kill": [
+  {
+   "lane": "chromium",
+   "breakaway": "granted",
+   "watched": 7,
+   "browser_pids": [
+    19812,
+    700,
+    114152,
+    99428
+   ],
+   "timeline": [
+    {
+     "t_s": 2.1,
+     "n_alive": 0
+    }
+   ],
+   "orphans": []
+  },
+  {
+   "lane": "moz-firefox",
+   "breakaway": "granted",
+   "watched": 14,
+   "browser_pids": [
+    102228,
+    104500,
+    102024,
+    115476,
+    118620,
+    106404,
+    97736,
+    121396,
+    40772,
+    114928
+   ],
+   "timeline": [
+    {
+     "t_s": 2.0,
+     "n_alive": 0
+    }
+   ],
+   "orphans": []
+  }
+ ]
+}

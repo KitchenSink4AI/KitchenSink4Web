@@ -1,0 +1,11 @@
+{
+ "launch_ms": 5331,
+ "marker": "FORM-OK",
+ "count": "1",
+ "value": "headed",
+ "screenshot_bytes": 12311,
+ "ff_exe": [
+  "C:\\Program Files\\Mozilla Firefox\\firefox.exe"
+ ],
+ "orphans": 0
+}

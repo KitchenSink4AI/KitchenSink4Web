@@ -1,0 +1,244 @@
+{
+ "env": {
+  "python": "3.14.3",
+  "playwright_python": "1.62.0",
+  "firefox_installed": "C:\\Program Files\\Mozilla Firefox\\firefox.exe",
+  "headless": true
+ },
+ "profile_dir": "C:\\Users\\user\\AppData\\Local\\Temp\\ks4web_spike_s3_ts1dlwgf",
+ "rows": [
+  {
+   "step": "launch_persistent(moz-firefox)",
+   "status": "OK",
+   "ms": 3442,
+   "detail": "<BrowserContext browser=<Browser type=<BrowserType name=firefox executable_path=C:\\Users\\user\\AppData\\Local\\ms-playwright\\firefox-1538\\firefox\\firefox.exe> version=154.0.1>>"
+  },
+  {
+   "step": "process is installed build",
+   "status": "OK",
+   "ms": 0,
+   "detail": "['C:\\\\Program Files\\\\Mozilla Firefox\\\\firefox.exe', 'C:\\\\Program Files\\\\Mozilla Firefox\\\\firefox.exe', 'C:\\\\Program Files\\\\Mozilla Firefox\\\\firefox.exe', 'C:\\\\Program Files\\\\Mozilla Firefox\\\\firefox.exe', 'C:\\\\Program Files\\\\Mozilla Firefox\\\\firefox.exe', 'C:\\\\Program Files\\\\Mozilla Firefox\\\\firefox.exe', 'C:\\\\Program Files\\\\Mozilla Firefox\\\\firefox.exe', 'C:\\\\Program Files\\\\Mozilla Firefox\\\\firef"
+  },
+  {
+   "step": "goto index",
+   "status": "OK",
+   "ms": 145,
+   "detail": "200"
+  },
+  {
+   "step": "read text",
+   "status": "OK",
+   "ms": 47,
+   "detail": "INDEX-OK"
+  },
+  {
+   "step": "click link -> nav",
+   "status": "OK",
+   "ms": 167,
+   "detail": "fixture form"
+  },
+  {
+   "step": "fill input",
+   "status": "OK",
+   "ms": 52,
+   "detail": "spike"
+  },
+  {
+   "step": "fill textarea",
+   "status": "OK",
+   "ms": 55,
+   "detail": "hello from bidi"
+  },
+  {
+   "step": "select_option",
+   "status": "OK",
+   "ms": 15,
+   "detail": "['b']"
+  },
+  {
+   "step": "check checkbox",
+   "status": "OK",
+   "ms": 94,
+   "detail": "True"
+  },
+  {
+   "step": "click button (js handler)",
+   "status": "OK",
+   "ms": 51,
+   "detail": "1"
+  },
+  {
+   "step": "evaluate",
+   "status": "OK",
+   "ms": 9,
+   "detail": "18"
+  },
+  {
+   "step": "aria_snapshot",
+   "status": "OK",
+   "ms": 38,
+   "detail": "268"
+  },
+  {
+   "step": "screenshot",
+   "status": "OK",
+   "ms": 100,
+   "detail": "13252"
+  },
+  {
+   "step": "form submit -> POST",
+   "status": "OK",
+   "ms": 130,
+   "detail": "{\"echo\": \"name=spike&msg=hello+from+bidi&color=b&chk=on\", \"ctype\": \"application/x-www-form-urlencoded\"}"
+  },
+  {
+   "step": "go_back",
+   "status": "FAIL",
+   "ms": 30011,
+   "error_type": "TimeoutError",
+   "error": "Page.go_back: Timeout 30000ms exceeded.\nCall log:\n  - waiting for navigation until \"load\"\n"
+  },
+  {
+   "step": "new_page in context",
+   "status": "OK",
+   "ms": 210,
+   "detail": "200"
+  },
+  {
+   "step": "user_agent",
+   "status": "OK",
+   "ms": 7,
+   "detail": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:154.0) Gecko/20100101 Firefox/154.0"
+  },
+  {
+   "step": "about:support",
+   "status": "FAIL",
+   "ms": 137,
+   "error_type": "Error",
+   "error": "Page.goto: Protocol error (browsingContext.navigate): unsupported operation\nMessage: Navigation to \"about:support\" is not allowed in this context at about:support\nCall log:\n  - navigating to \"about:support\", waiting until \"load\"\n"
+  },
+  {
+   "step": "launch() ephemeral profile",
+   "status": "OK",
+   "ms": 3668,
+   "detail": "INDEX-OK"
+  },
+  {
+   "step": "close context",
+   "status": "OK",
+   "ms": 578,
+   "detail": "None"
+  }
+ ],
+ "spawned": [
+  {
+   "pid": 118328,
+   "ppid": 9144,
+   "name": "node.exe",
+   "exe": "C:\\Users\\user\\Documents\\Projects\\MCP Servers\\web-mcp\\spikes\\s1\\.venv\\Lib\\site-packages\\playwright\\driver\\node.exe",
+   "cmd": "\"C:\\Users\\user\\Documents\\Projects\\MCP Servers\\web-mcp\\spikes\\s1\\.venv\\Lib\\site-packages\\playwright\\driver\\node.exe\" \"C:\\Users\\user\\Documents\\Projects\\MCP Servers\\web-mcp\\spikes\\s1\\.venv\\Lib\\site-packages\\playwright\\driver\\package\\cli.js\" run-driver"
+  },
+  {
+   "pid": 109676,
+   "ppid": 118328,
+   "name": "firefox.exe",
+   "exe": "C:\\Program Files\\Mozilla Firefox\\firefox.exe",
+   "cmd": "\"C:\\Program Files\\Mozilla Firefox\\firefox.exe\" --remote-debugging-port=0 --headless --profile C:\\Users\\user\\AppData\\Local\\Temp\\ks4web_spike_s3_ts1dlwgf -no-remote"
+  },
+  {
+   "pid": 103328,
+   "ppid": 109676,
+   "name": "firefox.exe",
+   "exe": "C:\\Program Files\\Mozilla Firefox\\firefox.exe",
+   "cmd": "\"C:\\Program Files\\Mozilla Firefox\\firefox.exe\" --remote-debugging-port=0 --headless --profile C:\\Users\\user\\AppData\\Local\\Temp\\ks4web_spike_s3_ts1dlwgf -no-remote"
+  },
+  {
+   "pid": 126316,
+   "ppid": 103328,
+   "name": "firefox.exe",
+   "exe": "C:\\Program Files\\Mozilla Firefox\\firefox.exe",
+   "cmd": "\"C:\\Program Files\\Mozilla Firefox\\firefox.exe\" -contentproc -parentBuildID 20260824154132 -prefsHandle 2800:27667 -prefMapHandle 2804:303261 -ipcHandle 2816 -initialChannelId {86a731b4-e32d-48f4-b6fc-11a09730e963} -parentPid 103328 -crashHelperPid 0 -crashHelper 2836 -crashReporter \"\\\\.\\pipe\\gecko-crash-server-pipe.103328\" -win32kLockedDown -appDir \"C:\\Program Files\\Mozilla Firefox\\browser\" - 1 so"
+  },
+  {
+   "pid": 114920,
+   "ppid": 103328,
+   "name": "firefox.exe",
+   "exe": "C:\\Program Files\\Mozilla Firefox\\firefox.exe",
+   "cmd": "\"C:\\Program Files\\Mozilla Firefox\\firefox.exe\" -contentproc -isForBrowser -prefsHandle 3104:27966 -prefMapHandle 3108:303261 -jsInitHandle 3112:161776 -parentBuildID 20260824154132 -ipcHandle 3120 -initialChannelId {94aeaa9b-e6ee-4572-a1f5-0444d9cfea51} -parentPid 103328 -crashHelperPid 0 -crashHelper 3128 -crashReporter \"\\\\.\\pipe\\gecko-crash-server-pipe.103328\" -win32kLockedDown -appDir \"C:\\Progr"
+  },
+  {
+   "pid": 116616,
+   "ppid": 103328,
+   "name": "firefox.exe",
+   "exe": "C:\\Program Files\\Mozilla Firefox\\firefox.exe",
+   "cmd": "\"C:\\Program Files\\Mozilla Firefox\\firefox.exe\" -contentproc -parentBuildID 20260824154132 -prefsHandle 3360:28011 -prefMapHandle 3364:303261 -ipcHandle 3372 -initialChannelId {fb5fad60-e51f-4657-8952-10c9231a0e9b} -parentPid 103328 -crashHelperPid 0 -crashHelper 3380 -crashReporter \"\\\\.\\pipe\\gecko-crash-server-pipe.103328\" -appDir \"C:\\Program Files\\Mozilla Firefox\\browser\" - 3 rdd"
+  },
+  {
+   "pid": 116820,
+   "ppid": 103328,
+   "name": "firefox.exe",
+   "exe": "C:\\Program Files\\Mozilla Firefox\\firefox.exe",
+   "cmd": "\"C:\\Program Files\\Mozilla Firefox\\firefox.exe\" -contentproc -isForBrowser -prefsHandle 4308:27306 -prefMapHandle 4312:303261 -jsInitHandle 4316:161776 -parentBuildID 20260824154132 -ipcHandle 4324 -initialChannelId {f231ddb9-018d-4a94-9fb5-b78becdc5f2e} -parentPid 103328 -crashHelperPid 0 -crashHelper 4332 -crashReporter \"\\\\.\\pipe\\gecko-crash-server-pipe.103328\" -win32kLockedDown -appDir \"C:\\Progr"
+  },
+  {
+   "pid": 101608,
+   "ppid": 103328,
+   "name": "firefox.exe",
+   "exe": "C:\\Program Files\\Mozilla Firefox\\firefox.exe",
+   "cmd": "\"C:\\Program Files\\Mozilla Firefox\\firefox.exe\" -contentproc -parentBuildID 20260824154132 -sandboxingKind 0 -prefsHandle 5380:46413 -prefMapHandle 5384:303261 -ipcHandle 5388 -initialChannelId {4823e80b-952b-4004-82bb-96bd9658b0b0} -parentPid 103328 -crashHelperPid 0 -crashHelper 5396 -crashReporter \"\\\\.\\pipe\\gecko-crash-server-pipe.103328\" -win32kLockedDown -appDir \"C:\\Program Files\\Mozilla Firef"
+  },
+  {
+   "pid": 112396,
+   "ppid": 103328,
+   "name": "firefox.exe",
+   "exe": "C:\\Program Files\\Mozilla Firefox\\firefox.exe",
+   "cmd": "\"C:\\Program Files\\Mozilla Firefox\\firefox.exe\" -contentproc -isForBrowser -prefsHandle 5676:44578 -prefMapHandle 5680:303261 -jsInitHandle 5684:161776 -parentBuildID 20260824154132 -ipcHandle 5572 -initialChannelId {da633f29-b6a5-47fd-975e-e1e0fa571e91} -parentPid 103328 -crashHelperPid 0 -crashHelper 5472 -crashReporter \"\\\\.\\pipe\\gecko-crash-server-pipe.103328\" -win32kLockedDown -appDir \"C:\\Progr"
+  },
+  {
+   "pid": 98416,
+   "ppid": 103328,
+   "name": "firefox.exe",
+   "exe": "C:\\Program Files\\Mozilla Firefox\\firefox.exe",
+   "cmd": "\"C:\\Program Files\\Mozilla Firefox\\firefox.exe\" -contentproc -isForBrowser -prefsHandle 5864:44578 -prefMapHandle 5868:303261 -jsInitHandle 5872:161776 -parentBuildID 20260824154132 -ipcHandle 5880 -initialChannelId {9cc7a1fe-f936-4792-9891-abb7f5783e5d} -parentPid 103328 -crashHelperPid 0 -crashHelper 5884 -crashReporter \"\\\\.\\pipe\\gecko-crash-server-pipe.103328\" -win32kLockedDown -appDir \"C:\\Progr"
+  },
+  {
+   "pid": 106456,
+   "ppid": 103328,
+   "name": "firefox.exe",
+   "exe": "C:\\Program Files\\Mozilla Firefox\\firefox.exe",
+   "cmd": "\"C:\\Program Files\\Mozilla Firefox\\firefox.exe\" -contentproc -isForBrowser -prefsHandle 5824:44578 -prefMapHandle 6012:303261 -jsInitHandle 6016:161776 -parentBuildID 20260824154132 -ipcHandle 5796 -initialChannelId {36b1c039-cdb5-4799-a5b5-74c3cee09c86} -parentPid 103328 -crashHelperPid 0 -crashHelper 5984 -crashReporter \"\\\\.\\pipe\\gecko-crash-server-pipe.103328\" -win32kLockedDown -appDir \"C:\\Progr"
+  },
+  {
+   "pid": 60324,
+   "ppid": 103328,
+   "name": "firefox.exe",
+   "exe": "C:\\Program Files\\Mozilla Firefox\\firefox.exe",
+   "cmd": "\"C:\\Program Files\\Mozilla Firefox\\firefox.exe\" -contentproc -isForBrowser -prefsHandle 3012:45416 -prefMapHandle 3032:303261 -jsInitHandle 4960:161776 -parentBuildID 20260824154132 -ipcHandle 6480 -initialChannelId {46995baa-62f2-4aca-887e-cdc6be0b6703} -parentPid 103328 -crashHelperPid 0 -crashHelper 6488 -crashReporter \"\\\\.\\pipe\\gecko-crash-server-pipe.103328\" -win32kLockedDown -appDir \"C:\\Progr"
+  },
+  {
+   "pid": 118360,
+   "ppid": 124936,
+   "name": "node.exe",
+   "exe": "",
+   "cmd": ""
+  }
+ ],
+ "orphans_after": [],
+ "launched_pids": [
+  118328,
+  109676,
+  103328,
+  126316,
+  114920,
+  116616,
+  116820,
+  101608,
+  112396,
+  98416,
+  106456,
+  60324,
+  118360
+ ],
+ "summary": "18/20 steps OK",
+ "gate_pass": true
+}

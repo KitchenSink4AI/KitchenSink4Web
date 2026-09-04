@@ -1,0 +1,130 @@
+{
+ "lane": "moz-firefox",
+ "mode": "nojob",
+ "self_pid": 111308,
+ "profile": "C:\\Users\\user\\AppData\\Local\\Temp\\ks4web_spike_s7_mozfirefox_erupq7zi",
+ "descendants": [
+  {
+   "pid": 97688,
+   "ppid": 111308,
+   "name": "node.exe",
+   "exe": "C:\\Users\\user\\Documents\\Projects\\MCP Servers\\web-mcp\\spikes\\s1\\.venv\\Lib\\site-packages\\playwright\\driver\\node.exe",
+   "cmd": "\"C:\\Users\\user\\Documents\\Projects\\MCP Servers\\web-mcp\\spikes\\s1\\.venv\\Lib\\site-packages\\playwright\\driver\\node.exe\" \"C:\\Users\\user\\Documents\\Projects\\MCP Servers\\web-mcp\\spikes\\s1\\.venv\\Lib\\site-packages\\playwright\\driver\\package\\cli.js\" run-driver"
+  },
+  {
+   "pid": 114276,
+   "ppid": 111308,
+   "name": "powershell.exe",
+   "exe": "C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+   "cmd": "powershell -NoProfile -Command \"Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId,Name,ExecutablePath,CommandLine | ConvertTo-Json -Compress -Depth 2\""
+  },
+  {
+   "pid": 102228,
+   "ppid": 97688,
+   "name": "firefox.exe",
+   "exe": "C:\\Program Files\\Mozilla Firefox\\firefox.exe",
+   "cmd": "\"C:\\Program Files\\Mozilla Firefox\\firefox.exe\" --remote-debugging-port=0 --headless --profile C:\\Users\\user\\AppData\\Local\\Temp\\ks4web_spike_s7_mozfirefox_erupq7zi -no-remote"
+  },
+  {
+   "pid": 104500,
+   "ppid": 102228,
+   "name": "firefox.exe",
+   "exe": "C:\\Program Files\\Mozilla Firefox\\firefox.exe",
+   "cmd": "\"C:\\Program Files\\Mozilla Firefox\\firefox.exe\" --remote-debugging-port=0 --headless --profile C:\\Users\\user\\AppData\\Local\\Temp\\ks4web_spike_s7_mozfirefox_erupq7zi -no-remote"
+  },
+  {
+   "pid": 102708,
+   "ppid": 104500,
+   "name": "crashhelper.exe",
+   "exe": "C:\\Program Files\\Mozilla Firefox\\crashhelper.exe",
+   "cmd": "\"C:\\Program Files\\Mozilla Firefox\\crashhelper.exe\" \"104500\" \"\\\\.\\pipe\\gecko-crash-server-pipe.104500\" \"C:\\Users\\user\\AppData\\Local\\Temp\\\\\" \"672\" \"20260824154132\" \"684\" \"704\""
+  },
+  {
+   "pid": 102024,
+   "ppid": 104500,
+   "name": "firefox.exe",
+   "exe": "C:\\Program Files\\Mozilla Firefox\\firefox.exe",
+   "cmd": "\"C:\\Program Files\\Mozilla Firefox\\firefox.exe\" -contentproc -parentBuildID 20260824154132 -prefsHandle 2812:27667 -prefMapHandle 2816:303261 -ipcHandle 2828 -initialChannelId {e99b5f85-656f-44aa-995f-289b1690bbc7} -parentPid 104500 -crashHelperPid 0 -crashHelper 2840 -crashReporter \"\\\\.\\pipe\\gecko-crash-server-pipe.104500\" -win32kLockedDown -appDir \"C:\\Program Files\\Mozilla Firefox\\browser\" - 1 so"
+  },
+  {
+   "pid": 115476,
+   "ppid": 104500,
+   "name": "firefox.exe",
+   "exe": "C:\\Program Files\\Mozilla Firefox\\firefox.exe",
+   "cmd": "\"C:\\Program Files\\Mozilla Firefox\\firefox.exe\" -contentproc -isForBrowser -prefsHandle 3112:27966 -prefMapHandle 3116:303261 -jsInitHandle 3120:161776 -parentBuildID 20260824154132 -ipcHandle 3128 -initialChannelId {d0774f3c-805b-489e-ac98-35d95a6d5dbb} -parentPid 104500 -crashHelperPid 0 -crashHelper 3136 -crashReporter \"\\\\.\\pipe\\gecko-crash-server-pipe.104500\" -win32kLockedDown -appDir \"C:\\Progr"
+  },
+  {
+   "pid": 118620,
+   "ppid": 104500,
+   "name": "firefox.exe",
+   "exe": "C:\\Program Files\\Mozilla Firefox\\firefox.exe",
+   "cmd": "\"C:\\Program Files\\Mozilla Firefox\\firefox.exe\" -contentproc -parentBuildID 20260824154132 -prefsHandle 3384:28011 -prefMapHandle 3388:303261 -ipcHandle 3288 -initialChannelId {9bb2842e-e9a3-44ab-9725-e30067f8f0ba} -parentPid 104500 -crashHelperPid 0 -crashHelper 3396 -crashReporter \"\\\\.\\pipe\\gecko-crash-server-pipe.104500\" -appDir \"C:\\Program Files\\Mozilla Firefox\\browser\" - 3 rdd"
+  },
+  {
+   "pid": 106404,
+   "ppid": 104500,
+   "name": "firefox.exe",
+   "exe": "C:\\Program Files\\Mozilla Firefox\\firefox.exe",
+   "cmd": "\"C:\\Program Files\\Mozilla Firefox\\firefox.exe\" -contentproc -isForBrowser -prefsHandle 4248:27306 -prefMapHandle 4288:303261 -jsInitHandle 4292:161776 -parentBuildID 20260824154132 -ipcHandle 4300 -initialChannelId {71533803-91fd-41c0-94fd-6685179dd15d} -parentPid 104500 -crashHelperPid 0 -crashHelper 4308 -crashReporter \"\\\\.\\pipe\\gecko-crash-server-pipe.104500\" -win32kLockedDown -appDir \"C:\\Progr"
+  },
+  {
+   "pid": 97736,
+   "ppid": 104500,
+   "name": "firefox.exe",
+   "exe": "C:\\Program Files\\Mozilla Firefox\\firefox.exe",
+   "cmd": "\"C:\\Program Files\\Mozilla Firefox\\firefox.exe\" -contentproc -parentBuildID 20260824154132 -sandboxingKind 0 -prefsHandle 4832:46413 -prefMapHandle 4828:303261 -ipcHandle 5448 -initialChannelId {bc5e73e0-256d-47c8-acf1-0e363258509b} -parentPid 104500 -crashHelperPid 0 -crashHelper 5424 -crashReporter \"\\\\.\\pipe\\gecko-crash-server-pipe.104500\" -win32kLockedDown -appDir \"C:\\Program Files\\Mozilla Firef"
+  },
+  {
+   "pid": 121396,
+   "ppid": 104500,
+   "name": "firefox.exe",
+   "exe": "C:\\Program Files\\Mozilla Firefox\\firefox.exe",
+   "cmd": "\"C:\\Program Files\\Mozilla Firefox\\firefox.exe\" -contentproc -isForBrowser -prefsHandle 5044:45719 -prefMapHandle 4664:303261 -jsInitHandle 5056:161776 -parentBuildID 20260824154132 -ipcHandle 5624 -initialChannelId {8002307f-485a-46bc-9707-3a1cd3bfcd88} -parentPid 104500 -crashHelperPid 0 -crashHelper 5632 -crashReporter \"\\\\.\\pipe\\gecko-crash-server-pipe.104500\" -win32kLockedDown -appDir \"C:\\Progr"
+  },
+  {
+   "pid": 40772,
+   "ppid": 104500,
+   "name": "firefox.exe",
+   "exe": "C:\\Program Files\\Mozilla Firefox\\firefox.exe",
+   "cmd": "\"C:\\Program Files\\Mozilla Firefox\\firefox.exe\" -contentproc -isForBrowser -prefsHandle 5708:45719 -prefMapHandle 5712:303261 -jsInitHandle 5716:161776 -parentBuildID 20260824154132 -ipcHandle 4980 -initialChannelId {c51bd348-5668-4c51-8573-25a89f692f32} -parentPid 104500 -crashHelperPid 0 -crashHelper 5808 -crashReporter \"\\\\.\\pipe\\gecko-crash-server-pipe.104500\" -win32kLockedDown -appDir \"C:\\Progr"
+  },
+  {
+   "pid": 114928,
+   "ppid": 104500,
+   "name": "firefox.exe",
+   "exe": "C:\\Program Files\\Mozilla Firefox\\firefox.exe",
+   "cmd": "\"C:\\Program Files\\Mozilla Firefox\\firefox.exe\" -contentproc -isForBrowser -prefsHandle 5756:45719 -prefMapHandle 5760:303261 -jsInitHandle 5764:161776 -parentBuildID 20260824154132 -ipcHandle 5772 -initialChannelId {0a1460a6-4fae-4c58-a817-560797662460} -parentPid 104500 -crashHelperPid 0 -crashHelper 6060 -crashReporter \"\\\\.\\pipe\\gecko-crash-server-pipe.104500\" -win32kLockedDown -appDir \"C:\\Progr"
+  }
+ ],
+ "descendant_pids": [
+  97688,
+  114276,
+  102228,
+  104500,
+  102708,
+  102024,
+  115476,
+  118620,
+  106404,
+  97736,
+  121396,
+  40772,
+  114928
+ ],
+ "browser_pids": [
+  102228,
+  104500,
+  102024,
+  115476,
+  118620,
+  106404,
+  97736,
+  121396,
+  40772,
+  114928
+ ],
+ "node_pids": [
+  97688
+ ],
+ "ready": true
+}

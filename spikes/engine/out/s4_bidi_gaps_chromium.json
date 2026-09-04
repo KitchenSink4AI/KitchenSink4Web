@@ -1,0 +1,147 @@
+{
+ "playwright": "1.62.0",
+ "firefox": "C:\\Program Files\\Mozilla Firefox\\firefox.exe",
+ "rows": [
+  {
+   "lane": "chromium",
+   "probe": "response.body() [document]",
+   "status": "SUPPORTED",
+   "observed": "len=708 head='<!doctype html><html><head><title>fixtur'",
+   "ms": 24
+  },
+  {
+   "lane": "chromium",
+   "probe": "response.body() [xhr POST]",
+   "status": "SUPPORTED",
+   "observed": "status=200 body='{\"echo\": \"{\\\\\"hello\\\\\":\\\\\"world\\\\\",\\\\\"n\\\\\":42}\", \"ctype\": \"application/json\"}'",
+   "ms": 19
+  },
+  {
+   "lane": "chromium",
+   "probe": "request.post_data [fetch POST]",
+   "status": "SUPPORTED",
+   "observed": "method=POST post_data='{\"hello\":\"world\",\"n\":42}' post_data_buffer=b'{\"hello\":\"world\",\"n\":42}'",
+   "ms": 12
+  },
+  {
+   "lane": "chromium",
+   "probe": "request.post_data [form submit]",
+   "status": "SUPPORTED",
+   "observed": "post_data='name=spike&msg=&color=r'",
+   "ms": 75
+  },
+  {
+   "lane": "chromium",
+   "probe": "route.fulfill",
+   "status": "SUPPORTED",
+   "observed": "ROUTED",
+   "ms": 33
+  },
+  {
+   "lane": "chromium",
+   "probe": "route.abort",
+   "status": "SUPPORTED",
+   "observed": "blocked: Failed to fetch",
+   "ms": 25
+  },
+  {
+   "lane": "chromium",
+   "probe": "route.fetch() body",
+   "status": "SUPPORTED",
+   "observed": "{\n \"user-agent\": \"Mozilla/5.0 (Windows NT 10.0; Win64; x64) ",
+   "ms": 27
+  },
+  {
+   "lane": "chromium",
+   "probe": "download event + save",
+   "status": "SUPPORTED",
+   "observed": "suggested=spike.txt bytes=460",
+   "ms": 622
+  },
+  {
+   "lane": "chromium",
+   "probe": "extra_http_headers across 302",
+   "status": "SUPPORTED",
+   "observed": "header_seen=True",
+   "ms": 28
+  },
+  {
+   "lane": "chromium",
+   "probe": "click inside CSS transform",
+   "status": "SUPPORTED",
+   "observed": "CLICKED",
+   "ms": 48
+  },
+  {
+   "lane": "chromium",
+   "probe": "go_back (plain GET history)",
+   "status": "SUPPORTED",
+   "observed": "http://127.0.0.1:53892/",
+   "ms": 24
+  },
+  {
+   "lane": "chromium",
+   "probe": "go_back (after form POST)",
+   "status": "SUPPORTED",
+   "observed": "http://127.0.0.1:53892/form",
+   "ms": 87
+  },
+  {
+   "lane": "chromium",
+   "probe": "cookies add/read",
+   "status": "SUPPORTED",
+   "observed": "['ks4web']",
+   "ms": 3
+  },
+  {
+   "lane": "chromium",
+   "probe": "dialog handling",
+   "status": "SUPPORTED",
+   "observed": "hi from spike",
+   "ms": 13
+  },
+  {
+   "lane": "chromium",
+   "probe": "set_input_files",
+   "status": "SUPPORTED",
+   "observed": "upload_probe.txt",
+   "ms": 29
+  },
+  {
+   "lane": "chromium",
+   "probe": "screenshot full_page",
+   "status": "SUPPORTED",
+   "observed": "566284",
+   "ms": 596
+  },
+  {
+   "lane": "chromium",
+   "probe": "page.pdf",
+   "status": "SUPPORTED",
+   "observed": "239652",
+   "ms": 178
+  },
+  {
+   "lane": "chromium",
+   "probe": "request events fire",
+   "status": "SUPPORTED",
+   "observed": "requests_seen=1",
+   "ms": 332
+  },
+  {
+   "lane": "chromium",
+   "probe": "http_credentials (continueWithAuth)",
+   "status": "SUPPORTED",
+   "observed": "status=200 body='AUTH-OK'",
+   "ms": 58
+  },
+  {
+   "lane": "chromium",
+   "probe": "locale + timezone emulation",
+   "status": "SUPPORTED",
+   "observed": "tz=Asia/Tokyo lang=fr-FR",
+   "ms": 69
+  }
+ ],
+ "orphans_after": []
+}

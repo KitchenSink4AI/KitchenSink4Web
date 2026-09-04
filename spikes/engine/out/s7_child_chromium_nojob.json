@@ -1,0 +1,68 @@
+{
+ "lane": "chromium",
+ "mode": "nojob",
+ "self_pid": 111792,
+ "profile": "C:\\Users\\user\\AppData\\Local\\Temp\\ks4web_spike_s7_chromium_ylvfwln7",
+ "descendants": [
+  {
+   "pid": 112652,
+   "ppid": 111792,
+   "name": "node.exe",
+   "exe": "C:\\Users\\user\\Documents\\Projects\\MCP Servers\\web-mcp\\spikes\\s1\\.venv\\Lib\\site-packages\\playwright\\driver\\node.exe",
+   "cmd": "\"C:\\Users\\user\\Documents\\Projects\\MCP Servers\\web-mcp\\spikes\\s1\\.venv\\Lib\\site-packages\\playwright\\driver\\node.exe\" \"C:\\Users\\user\\Documents\\Projects\\MCP Servers\\web-mcp\\spikes\\s1\\.venv\\Lib\\site-packages\\playwright\\driver\\package\\cli.js\" run-driver"
+  },
+  {
+   "pid": 107128,
+   "ppid": 111792,
+   "name": "powershell.exe",
+   "exe": "C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+   "cmd": "powershell -NoProfile -Command \"Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId,Name,ExecutablePath,CommandLine | ConvertTo-Json -Compress -Depth 2\""
+  },
+  {
+   "pid": 97180,
+   "ppid": 112652,
+   "name": "chrome-headless-shell.exe",
+   "exe": "C:\\Users\\user\\AppData\\Local\\ms-playwright\\chromium_headless_shell-1234\\chrome-headless-shell-win64\\chrome-headless-shell.exe",
+   "cmd": "C:\\Users\\user\\AppData\\Local\\ms-playwright\\chromium_headless_shell-1234\\chrome-headless-shell-win64\\chrome-headless-shell.exe --disable-field-trial-config --disable-background-networking --disable-background-timer-throttling --disable-backgrounding-occluded-windows --disable-back-forward-cache --disable-breakpad --disable-client-side-phishing-detection --disable-component-extensions-with-backgroun"
+  },
+  {
+   "pid": 123304,
+   "ppid": 97180,
+   "name": "chrome-headless-shell.exe",
+   "exe": "C:\\Users\\user\\AppData\\Local\\ms-playwright\\chromium_headless_shell-1234\\chrome-headless-shell-win64\\chrome-headless-shell.exe",
+   "cmd": "\"C:\\Users\\user\\AppData\\Local\\ms-playwright\\chromium_headless_shell-1234\\chrome-headless-shell-win64\\chrome-headless-shell.exe\" --type=gpu-process --no-sandbox --disable-breakpad --headless --use-angle=swiftshader-webgl --enable-unsafe-swiftshader --gpu-preferences=WAAAAAAAAADgAAAEAAAAAAAAAAAAAGAAQAAAAAAAAAAAAAAAAAAAADgAAAAAAAAAAAAAAAAAAAACAAAAAAAAAAAAAAAAAAAAKAAAAAAAAAAoAAAAAAAAAAgAAAAAAAAADAAAAA"
+  },
+  {
+   "pid": 126852,
+   "ppid": 97180,
+   "name": "chrome-headless-shell.exe",
+   "exe": "C:\\Users\\user\\AppData\\Local\\ms-playwright\\chromium_headless_shell-1234\\chrome-headless-shell-win64\\chrome-headless-shell.exe",
+   "cmd": "\"C:\\Users\\user\\AppData\\Local\\ms-playwright\\chromium_headless_shell-1234\\chrome-headless-shell-win64\\chrome-headless-shell.exe\" --type=utility --utility-sub-type=network.mojom.NetworkService --lang=en-US --service-sandbox-type=none --no-sandbox --use-angle=swiftshader-webgl --use-gl=angle --mute-audio --headless=old --field-trial-handle=1368,i,18154915158013139553,8901639556723900786,262144 --enab"
+  },
+  {
+   "pid": 120636,
+   "ppid": 97180,
+   "name": "chrome-headless-shell.exe",
+   "exe": "C:\\Users\\user\\AppData\\Local\\ms-playwright\\chromium_headless_shell-1234\\chrome-headless-shell-win64\\chrome-headless-shell.exe",
+   "cmd": "\"C:\\Users\\user\\AppData\\Local\\ms-playwright\\chromium_headless_shell-1234\\chrome-headless-shell-win64\\chrome-headless-shell.exe\" --type=renderer --headless=old --no-sandbox --disable-back-forward-cache --disable-background-timer-throttling --disable-breakpad --force-color-profile=srgb --remote-debugging-pipe --allow-pre-commit-input --blink-settings=primaryHoverType=2,availableHoverTypes=2,primaryP"
+  }
+ ],
+ "descendant_pids": [
+  112652,
+  107128,
+  97180,
+  123304,
+  126852,
+  120636
+ ],
+ "browser_pids": [
+  97180,
+  123304,
+  126852,
+  120636
+ ],
+ "node_pids": [
+  112652
+ ],
+ "ready": true
+}

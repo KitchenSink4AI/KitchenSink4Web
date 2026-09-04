@@ -1,0 +1,313 @@
+{
+ "reps": 10,
+ "lane": "chromium headless (S1 lane A)",
+ "results": {
+  "synthetic_5k": {
+   "url": "http://127.0.0.1:59562/big?n=5000",
+   "nodes": 5012,
+   "affordances": 802,
+   "nav_cold_ms": 594,
+   "extract_js": {
+    "p50": 66.7,
+    "p95": 140.5,
+    "min": 58.9,
+    "max": 140.5,
+    "mean": 76.7,
+    "n": 10
+   },
+   "project_python": {
+    "p50": 1.8,
+    "p95": 29.5
+   },
+   "tokenize_only": {
+    "p50": 0.4,
+    "p95": 1.3
+   },
+   "e2e_warm_p95_ms": 170.0,
+   "micro": {
+    "qsa_all": 0.1,
+    "node_count": 5012,
+    "style_sweep_all": 5.8,
+    "style_hits": 903,
+    "rect_sweep_all": 3.4,
+    "style_sweep_interactive_only": 2,
+    "interactive_candidates": 1502,
+    "innertext": 1.1,
+    "text_chars": 41176
+   }
+  },
+  "synthetic_10k": {
+   "url": "http://127.0.0.1:59562/big?n=10000",
+   "nodes": 10012,
+   "affordances": 1602,
+   "nav_cold_ms": 547,
+   "extract_js": {
+    "p50": 79.9,
+    "p95": 103.5,
+    "min": 72.1,
+    "max": 103.5,
+    "mean": 84.5,
+    "n": 10
+   },
+   "project_python": {
+    "p50": 1.8,
+    "p95": 4.9
+   },
+   "tokenize_only": {
+    "p50": 0.4,
+    "p95": 1.3
+   },
+   "e2e_warm_p95_ms": 108.4,
+   "micro": {
+    "qsa_all": 0.2,
+    "node_count": 10012,
+    "style_sweep_all": 12.3,
+    "style_hits": 1803,
+    "rect_sweep_all": 7.1,
+    "style_sweep_interactive_only": 4.4,
+    "interactive_candidates": 3002,
+    "innertext": 1.7,
+    "text_chars": 82776
+   }
+  },
+  "synthetic_25k": {
+   "url": "http://127.0.0.1:59562/big?n=25000",
+   "nodes": 25012,
+   "affordances": 4002,
+   "nav_cold_ms": 570,
+   "extract_js": {
+    "p50": 175.8,
+    "p95": 227.3,
+    "min": 146.2,
+    "max": 227.3,
+    "mean": 179.8,
+    "n": 10
+   },
+   "project_python": {
+    "p50": 2.0,
+    "p95": 4.7
+   },
+   "tokenize_only": {
+    "p50": 0.4,
+    "p95": 1.1
+   },
+   "e2e_warm_p95_ms": 232.0,
+   "micro": {
+    "qsa_all": 0.4,
+    "node_count": 25012,
+    "style_sweep_all": 33,
+    "style_hits": 4503,
+    "rect_sweep_all": 17.7,
+    "style_sweep_interactive_only": 10.8,
+    "interactive_candidates": 7502,
+    "innertext": 4,
+    "text_chars": 213576
+   }
+  },
+  "synthetic_50k": {
+   "url": "http://127.0.0.1:59562/big?n=50000",
+   "nodes": 50012,
+   "affordances": 8002,
+   "nav_cold_ms": 595,
+   "extract_js": {
+    "p50": 287.8,
+    "p95": 340.8,
+    "min": 260.3,
+    "max": 340.8,
+    "mean": 292.0,
+    "n": 10
+   },
+   "project_python": {
+    "p50": 1.7,
+    "p95": 3.1
+   },
+   "tokenize_only": {
+    "p50": 0.4,
+    "p95": 0.8
+   },
+   "e2e_warm_p95_ms": 343.9,
+   "micro": {
+    "qsa_all": 1.1,
+    "node_count": 50012,
+    "style_sweep_all": 64.2,
+    "style_hits": 9003,
+    "rect_sweep_all": 39.5,
+    "style_sweep_interactive_only": 25,
+    "interactive_candidates": 15002,
+    "innertext": 11.7,
+    "text_chars": 431576
+   }
+  },
+  "synthetic_100k": {
+   "url": "http://127.0.0.1:59562/big?n=100000",
+   "nodes": 100012,
+   "affordances": 16002,
+   "nav_cold_ms": 845,
+   "extract_js": {
+    "p50": 606.3,
+    "p95": 882.3,
+    "min": 495.1,
+    "max": 882.3,
+    "mean": 635.1,
+    "n": 10
+   },
+   "project_python": {
+    "p50": 1.9,
+    "p95": 7.2
+   },
+   "tokenize_only": {
+    "p50": 0.4,
+    "p95": 0.9
+   },
+   "e2e_warm_p95_ms": 889.5,
+   "micro": {
+    "qsa_all": 1.9,
+    "node_count": 100012,
+    "style_sweep_all": 171.9,
+    "style_hits": 18003,
+    "rect_sweep_all": 75.9,
+    "style_sweep_interactive_only": 43.6,
+    "interactive_candidates": 30002,
+    "innertext": 25.5,
+    "text_chars": 867576
+   }
+  },
+  "wikipedia_versailles": {
+   "url": "https://en.wikipedia.org/wiki/Treaty_of_Versailles",
+   "nodes": 10745,
+   "affordances": 2894,
+   "nav_cold_ms": 4668,
+   "extract_js": {
+    "p50": 115.2,
+    "p95": 241.1,
+    "min": 81.8,
+    "max": 241.1,
+    "mean": 125.8,
+    "n": 10
+   },
+   "project_python": {
+    "p50": 3.6,
+    "p95": 7.2
+   },
+   "tokenize_only": {
+    "p50": 0.9,
+    "p95": 3.4
+   },
+   "e2e_warm_p95_ms": 248.3,
+   "micro": {
+    "qsa_all": 0.3,
+    "node_count": 10745,
+    "style_sweep_all": 28.9,
+    "style_hits": 1454,
+    "rect_sweep_all": 10.3,
+    "style_sweep_interactive_only": 6.1,
+    "interactive_candidates": 3186,
+    "innertext": 3.8,
+    "text_chars": 136856
+   }
+  },
+  "wikipedia_gdp_table": {
+   "url": "https://en.wikipedia.org/wiki/List_of_countries_by_GDP_(nominal)",
+   "nodes": 5652,
+   "affordances": 1138,
+   "nav_cold_ms": 1149,
+   "extract_js": {
+    "p50": 81.2,
+    "p95": 122.0,
+    "min": 63.0,
+    "max": 122.0,
+    "mean": 88.2,
+    "n": 10
+   },
+   "project_python": {
+    "p50": 2.5,
+    "p95": 5.2
+   },
+   "tokenize_only": {
+    "p50": 0.6,
+    "p95": 1.3
+   },
+   "e2e_warm_p95_ms": 127.2,
+   "micro": {
+    "qsa_all": 0.3,
+    "node_count": 5652,
+    "style_sweep_all": 28.3,
+    "style_hits": 664,
+    "rect_sweep_all": 12.4,
+    "style_sweep_interactive_only": 8.2,
+    "interactive_candidates": 1302,
+    "innertext": 3.3,
+    "text_chars": 23135
+   }
+  },
+  "cnn_homepage": {
+   "url": "https://www.cnn.com/",
+   "nodes": 4036,
+   "affordances": 308,
+   "nav_cold_ms": 12821,
+   "extract_js": {
+    "p50": 56.0,
+    "p95": 86.3,
+    "min": 47.3,
+    "max": 86.3,
+    "mean": 61.9,
+    "n": 10
+   },
+   "project_python": {
+    "p50": 1.9,
+    "p95": 4.2
+   },
+   "tokenize_only": {
+    "p50": 0.5,
+    "p95": 1.9
+   },
+   "e2e_warm_p95_ms": 90.5,
+   "micro": {
+    "qsa_all": 0.2,
+    "node_count": 4036,
+    "style_sweep_all": 17.9,
+    "style_hits": 899,
+    "rect_sweep_all": 5.7,
+    "style_sweep_interactive_only": 1.7,
+    "interactive_candidates": 599,
+    "innertext": 0.5,
+    "text_chars": 8135
+   }
+  },
+  "spa_antdesign": {
+   "url": "https://ant.design/components/overview/",
+   "nodes": 1994,
+   "affordances": 294,
+   "nav_cold_ms": 12820,
+   "extract_js": {
+    "p50": 33.5,
+    "p95": 80.5,
+    "min": 27.6,
+    "max": 80.5,
+    "mean": 44.1,
+    "n": 10
+   },
+   "project_python": {
+    "p50": 1.5,
+    "p95": 4.8
+   },
+   "tokenize_only": {
+    "p50": 0.3,
+    "p95": 1.3
+   },
+   "e2e_warm_p95_ms": 85.3,
+   "micro": {
+    "qsa_all": 0,
+    "node_count": 1994,
+    "style_sweep_all": 4,
+    "style_hits": 420,
+    "rect_sweep_all": 1.6,
+    "style_sweep_interactive_only": 0.7,
+    "interactive_candidates": 339,
+    "innertext": 0,
+    "text_chars": 2621
+   }
+  }
+ },
+ "orphans_after": []
+}
