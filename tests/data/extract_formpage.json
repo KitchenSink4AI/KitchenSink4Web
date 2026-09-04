@@ -173,9 +173,10 @@
   "frames_cross": 0,
   "frames_same": 0,
   "headings_uncollected": 0,
-  "hidden_interactive": 0,
-  "hidden_nodes": 40,
+  "hidden_interactive": 1,
+  "hidden_nodes": 41,
   "hidden_reasons": {
+   "display-none": 1,
    "zero-size": 40
   },
   "hidden_text_chars": 431,
@@ -184,10 +185,10 @@
   "open_shadow_roots": 0,
   "region_cap_hit": false,
   "text_chars": 107,
-  "total_elements": 63,
+  "total_elements": 64,
   "viewport_height": 900,
   "virtual": [],
-  "walked_elements": 60,
+  "walked_elements": 61,
   "zero_width_hits": 0
  },
  "div_tables": 0,

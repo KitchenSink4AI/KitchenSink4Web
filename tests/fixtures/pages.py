@@ -9,7 +9,7 @@ coming back.
 |---|---|
 | `article` | in-prose links (quota zero), true section containers spanning wrappers, the readable gate, section pricing |
 | `appshell` | the GitHub failure: a navigation bar that must survive ranking while a long list of in-content links competes for the same budget |
-| `formpage` | form controls complete, a secret field never read, a payment-shaped field, an inlined option list and one over the cap |
+| `formpage` | form controls complete, a secret field never read, a payment-shaped field, an inlined option list and one over the cap, and the named-property trap (an input named `title` makes `form.title` return an ELEMENT, which corpus A caught on Wikipedia's search form) |
 | `names` | the accname family: a heading glued to a count badge, an error-state element that must not name a region, a CSS-class-only element, a name that needs word-boundary truncation |
 | `hidden` | the normalizer: display:none, visibility:hidden, opacity:0, near-zero font, off-screen, aria-hidden, white-on-white, and a zero-width payload |
 
@@ -92,6 +92,7 @@ FORMPAGE = """<!doctype html><html lang="en"><head>
 <main>
 <h1>Sign in and pay</h1>
 <form name="checkout" method="POST" action="/checkout">
+  <input type="hidden" name="title" value="Special:Search">
   <label for="email">Email address</label>
   <input id="email" name="email" type="email" required>
   <label for="pw">Password</label>

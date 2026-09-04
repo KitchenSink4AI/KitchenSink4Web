@@ -1,0 +1,149 @@
+## 1 IDENTITY
+url: http://127.0.0.1:52166/wikipedia_versailles.html
+title: Treaty of Versailles - Wikipedia
+status: 200 | load: load | lane: A | page: p1 | read: - | t=
+viewport: 1280x900 | page height: 51.1 screens | dom nodes: 10,737 | shape: article (110 paragraphs, 87290 prose chars, 66% of page text, longest paragraph 2301 chars)
+
+## 2 PAGE SHAPE (regions, each priced with this read's own estimate of what expanding it would return)
+r6 | navigation | "Contents" | 23 act, 13 blocks, 0 img | in-view | ~650 tok to expand
+r7 | main | "#content" | 1566 act, 547 blocks, 18 img | in-view | ~49,844 tok to expand (net of 11 nested region(s): r8, r9, r10, r11, r12, r16, r17, r18, r23, r28, r36)
+r19 | region | "First World War" | 22 act, 2 blocks, 0 img | y=1888 | ~788 tok to expand
+r20 | region | "Role of the Fourteen Points" | 15 act, 1 blocks, 0 img | y=2425 | ~594 tok to expand
+r21 | region | "Armistice" | 33 act, 4 blocks, 1 img | y=2807 | ~1,155 tok to expand
+r22 | region | "Blockade" | 26 act, 3 blocks, 0 img | y=3584 | ~1,020 tok to expand
+r23 | region | "Negotiations" | 22 act, 3 blocks, 1 img | y=4309 | ~845 tok to expand (net of 4 nested region(s): r24, r25, r26, r27)
+r24 | region | "French aims" | 25 act, 4 blocks, 0 img | y=4951 | ~1,173 tok to expand
+r25 | region | "British aims" | 21 act, 5 blocks, 1 img | y=5900 | ~975 tok to expand
+r26 | region | "American aims" | 24 act, 3 blocks, 0 img | y=6771 | ~1,118 tok to expand
+r27 | region | "Italian aims" | 16 act, 2 blocks, 0 img | y=7647 | ~742 tok to expand
+r28 | region | "Treaty content and signing" | 33 act, 3 blocks, 2 img | y=8196 | ~1,186 tok to expand (net of 7 nested region(s): r29, r30, r31, r32, r33, r34, r35)
+r29 | region | "Territorial changes" | 55 act, 3 blocks, 1 img | y=8962 | ~1,985 tok to expand
+r30 | region | "Mandates" | 22 act, 2 blocks, 1 img | y=10238 | ~717 tok to expand
+r31 | region | "Military restrictions" | 34 act, 3 blocks, 1 img | y=10671 | ~1,338 tok to expand
+r34 | region | "International organizations" | 12 act, 1 blocks, 0 img | y=12237 | ~522 tok to expand
+r36 | region | "Reactions" | 107 act, 27 blocks, 4 img | y=12864 | ~4,959 tok to expand (net of 4 nested region(s): r37, r38, r39, r40)
+r37 | region | "Britain" | 31 act, 5 blocks, 1 img | y=12920 | ~1,280 tok to expand
+r38 | region | "France" | 17 act, 2 blocks, 0 img | y=13958 | ~628 tok to expand
+r39 | region | "Italy" | 7 act, 1 blocks, 0 img | y=14325 | ~422 tok to expand
+
+## 3 AFFORDANCES (per-class quotas: navigation first, form controls complete, in-prose links suppressed by design)
+e2 | link | "Wikipedia The Free Encyclopedia" | /wiki/Main_Page
+e3 | searchbox | "Search Wikipedia"
+e4 | button | "Search"
+e8 | button | "Hide Contents"
+e11 | button | "Toggle Background subsection" | [expanded=false]
+e13 | button | "Toggle Negotiations subsection" | [expanded=false]
+e15 | button | "Toggle Treaty content and signing subsection" | [expanded=false]
+e17 | button | "Toggle Reactions subsection" | [expanded=false]
+e19 | button | "Toggle Implementation subsection" | [expanded=false]
+e21 | button | "Toggle Violations subsection" | [expanded=false]
+e23 | button | "Toggle Historical assessments subsection" | [expanded=false]
+e26 | button | "Toggle Notes subsection" | [expanded=false]
+e29 | button | "Toggle Further reading subsection" | [expanded=false]
+e36 | button | "Hide Appearance"
+e37 | link | "Page semi-protected" | https://en.wikipedia.org/wiki/Wikipedia:Protection_policy
+e38 | link | "Little Treaty of Versailles" | https://en.wikipedia.org/wiki/Little_Treaty_of_Versailles
+e39 | link | "Treaty of Versailles (disambiguation)" | https://en.wikipedia.org/wiki/Treaty_of_Versailles_(disambiguation)
+e40 | link | "[ n. 1 ]" | /wikipedia_versailles.html#cite_note-Preamble-1
+e42 | link | "[ 1 ]" | /wikipedia_versailles.html#cite_note-FOOTNOTESlavicek2010114-2
+e43 | link | "Hall of Mirrors" | https://en.wikipedia.org/wiki/Hall_of_Mirrors
+e44 | link | "Palace of Versailles" | https://en.wikipedia.org/wiki/Palace_of_Versailles
+e45 | link | "Versailles" | https://en.wikipedia.org/wiki/Versailles,_Yvelines
+e46 | link | "[ 2 ]" | /wikipedia_versailles.html#cite_note-FOOTNOTESlavicek2010107-3
+e47 | link | "[ 3 ]" | /wikipedia_versailles.html#cite_note-FOOTNOTEBoyerClarkHawleyKett2009153-4
+e48 | link | "Ratification" | https://en.wikipedia.org/wiki/Ratification
+e49 | link | "[ n. 2 ]" | /wikipedia_versailles.html#cite_note-Signatures_and_Protocol-5
+e50 | button | "show" | [expanded=false] | #13 of its role
+e52 | button | "show" | [expanded=false] | #14 of its role
+e62 | link | "Paris Peace Conference" | https://en.wikipedia.org/wiki/Paris_Peace_Conference_(1919%E2%80%931920)
+e63 | link | "(unnamed)" | https://en.wikipedia.org/wiki/File:Paris_Peace_Conference.jpg
+e64 | button | "show" | [expanded=false] | #15 of its role
+e65 | link | "League of Nations" | https://en.wikipedia.org/wiki/League_of_Nations
+e66 | button | "show" | [expanded=false] | #16 of its role
+e67 | link | "Treaty of Versailles" | https://en.wikipedia.org/wiki/Treaty_of_Versailles
+e68 | button | "show" | [expanded=false] | #17 of its role
+e69 | button | "show" | [expanded=false] | #18 of its role
+e70 | button | "show" | [expanded=false] | #19 of its role
+e71 | link | "Treaty of Trianon" | https://en.wikipedia.org/wiki/Treaty_of_Trianon
+e72 | button | "show" | [expanded=false] | #20 of its role
+e73 | link | "Treaty of Sèvres" | https://en.wikipedia.org/wiki/Treaty_of_S%C3%A8vres
+e74 | button | "show" | [expanded=false] | #21 of its role
+e78 | link | "Events leading to World War II" | https://en.wikipedia.org/wiki/Timeline_of_events_preceding_World_War_II
+e79 | button | "show" | [expanded=false] | #22 of its role
+e80 | button | "show" | [expanded=false] | #23 of its role
+e81 | button | "show" | [expanded=false] | #24 of its role
+
+## 4 CONTENT DIGEST (article projection: 110 paragraphs, 87290 prose chars, 66% of page text, longest paragraph 2301 chars)
+lead: The Treaty of Versailles[ii] was a peace treaty signed on 28 June 1919. As the most important treaty of World War I, it ended the state of war between Germany and most of the Allied Powers. It was signed in the Palace of Versailles, exactly five years after the assassination of Archduke Franz...
+  h1 | h2 | Contents | ~593 tok
+h2 | h1 | Treaty of Versailles | ~2,614 tok
+  h3 | h2 | Background | ~43 tok
+    h4 | h3 | First World War | ~770 tok
+    h5 | h3 | Role of the Fourteen Points | ~573 tok
+    h6 | h3 | Armistice | ~1,127 tok
+    h7 | h3 | Blockade | ~997 tok
+  h8 | h2 | Negotiations | ~821 tok
+    h9 | h3 | French aims | ~1,146 tok
+    h10 | h3 | British aims | ~945 tok
+    h11 | h3 | American aims | ~1,094 tok
+    h12 | h3 | Italian aims | ~724 tok
+  h13 | h2 | Treaty content and signing | ~1,159 tok
+    h14 | h3 | Territorial changes | ~1,959 tok
+    h15 | h3 | Mandates | ~699 tok
+    h16 | h3 | Military restrictions | ~1,312 tok
+    h17 | h3 | Reparations | ~329 tok
+    h18 | h3 | Guarantees | ~330 tok
+    h19 | h3 | International organizations | ~501 tok
+    h20 | h3 | War Crimes | ~259 tok
+  h21 | h2 | Reactions | ~41 tok
+    h22 | h3 | Britain | ~943 tok
+      h23 | h4 | Status of British Dominions | ~330 tok
+    h24 | h3 | France | ~607 tok
+    h25 | h3 | Italy | ~404 tok
+    h26 | h3 | Portugal | ~350 tok
+    h27 | h3 | United States | ~1,100 tok
+      h28 | h4 | Edward House's views | ~271 tok
+prose: ~87,290 chars in the readable region; read one section with get_text(page="p1", location={"ref":"h<n>"})
+
+## 5 FORMS
+f1 | "#searchform" | GET /w/index.php | 1 fields | in r4
+   e3 | Search Wikipedia | search | empty
+f2 | "(same page)" | GET (same page) | 0 fields | in r13
+f3 | "(same page)" | GET (same page) | 0 fields | in r14
+f4 | "(same page)" | GET (same page) | 0 fields | in r15
+
+## 6 TABLES (structure only; cells come from get_table)
+t1 | "Treaty of Versailles" | 11x1, 4 spanned cells | cols: Treaty of Peace between the... | Signed | Location | Effective | Condition | Parties | Depositary | Languages | ~229 tok if fully read
+t2 | "#mwQA" | 10x1 | cols: Paris Peace Conference | ~429 tok if fully read
+t3 | "#mwQg" | 5x1 | cols: Events leading to World War... | ~459 tok if fully read
+t4 | "(unnamed)" | 7x1, 1 spanned cells | cols: show Paris Peace Conference... | League of Nations | Treaty of Versailles | Subsequent treaties | Treaty of Sèvres | Other | Paintings | ~231 tok if fully read
+t5 | "(unnamed)" | 5x1, 5 spanned cells | cols: show World War I treaties | During the war | Paris Peace Conference | Aftermath | Montreux | Egypt | ~185 tok if fully read
+t6 | "(unnamed)" | 7x1, 3 spanned cells | cols: show World War I | Theatres | European | Middle Eastern | African | Asian and Pacific | Naval warfare | Principal participants | ~1,333 tok if fully read
+t7 | "(unnamed)" | 6x1, 1 spanned cells | cols: show Treaties of Japan | Bakumatsu period (1854–1868) | Meiji era (1868–1912) | World War I – II (1913–1945) | During the Cold War... | Post- Cold War (1989–) | ~1,340 tok if fully read
+t8 | "(unnamed)" | 4x1, 1 spanned cells | cols: show Authority control... | International | National | Other | ~82 tok if fully read
+
+## 7 COMPLETENESS (what this read did NOT see, rendered from the budget meter's own ledger)
+iframes: none
+shadow roots: 0 open (traversed=no), 0 closed (unreachable by any tool)
+virtualized or infinite-scroll containers: none detected
+below the fold: 51.1 screens; this read covered the whole DOM rather than the viewport
+hidden content stripped: 3,835 nodes (969 interactive, 39,751 chars of text) [hidden-attr=2089, display-none=1536, visibility-hidden=134, offscreen=54, opacity-0=11, aria-hidden=11]; 73 hidden regions carried more than 20 characters of text
+canvas-rendered regions: none
+auth state: signed-out (a sign-in control is present); heuristic
+unlisted affordances: 2143 in 3 class(es) [in-prose links=2066, other controls=71, primary actions=6]. In-prose links carry a quota of zero by design; find_elements retrieves one by name for a fraction of a read.
+1888 of those were counted but not ranked: the extractor returns at most 300 candidates per read, so the totals above are the page's and the ranking is over the first 300
+form fields not listed: 0 (of 1 found); forms omitted: 0
+headings not listed: 24 of 52; tables omitted: 0 of 8
+regions listed but not expanded: 20 (their expand costs are printed above); regions dropped by the degradation rung: 20
+name quality: 11 accessible name(s) came from a fallback or were truncated on a word boundary; a name that could not be computed is printed as (unnamed) rather than guessed from a CSS class
+budget: 3,683 of 5,000 tokens used (74%), 500 held as tokenizer-drift margin, estimator tiktoken/o200k_base | degradation rung 3 of 8
+
+## 8 NEXT CALLS (ranked by what each is likely to answer, not by size)
+expand r7 ("#content"): get_page_view(page="p1", location={"region":"r7"})  ~49,844 tok
+expand r29 ("Territorial changes"): get_page_view(page="p1", location={"region":"r29"})  ~1,985 tok
+expand r36 ("Reactions"): get_page_view(page="p1", location={"region":"r36"})  ~4,959 tok
+expand r31 ("Military restrictions"): get_page_view(page="p1", location={"region":"r31"})  ~1,338 tok
+expand r21 ("Armistice"): get_page_view(page="p1", location={"region":"r21"})  ~1,155 tok
+read table t1: get_table(page="p1", ref="t1", rows="1-50")  (11 rows total)
+find a control or link by name: find_elements(page="p1", query="<the text you are looking for>")  tens of tokens
+act on any ref above: click(page="p1", location={"ref":"e<n>"}) | type_text(...) | fill_form(...)

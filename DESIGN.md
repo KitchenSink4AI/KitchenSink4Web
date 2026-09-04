@@ -46,8 +46,9 @@ targeted follow-up that costs tens of tokens when the thing you want was not
 in the first read.**
 
 **The companion clause is not decoration and it is required everywhere the
-claim appears.** Spike S1 measured the Treaty of Versailles article at 3,726
-tokens and put six blind agents against eleven projections; the read carried
+claim appears.** The Treaty of Versailles article projects to 3,683 tokens on
+the frozen corpus, and S1 put six blind agents against eleven projections of it
+and its neighbours; the read carried
 navigation, forms, controls, sections, and tables well enough for eleven of
 seventeen tasks to be actioned from the projection alone. It did not carry an
 arbitrary in-prose link, and no budget makes it. That page holds 2,858 in-prose
@@ -277,49 +278,116 @@ because they are correct, not because they are unclaimed.
 
 ### 3.2 The targets, from the banked measurement
 
-| Read | Incumbents | KS4Web target | S1 measured | Multiple |
+| Read | Incumbents | KS4Web target | Measured, o200k, frozen corpus A | Multiple |
 |---|---|---|---|---|
-| Tool-schema bill (lite) | 4,637 / 6,460 | **under 1,500** | not yet built | 3.1x / 4.3x |
+| Tool-schema bill (lite) | 4,637 / 6,460 | **under 1,500** | **2,720** (Phase 0, unchanged) | 1.7x / 2.4x |
 | Full-surface ceiling | n/a | under 4,000 | not yet built | undercuts the incumbent DEFAULT |
-| Largest single schema | 413 / 459 | under 250 | not yet built | |
-| Article page (Wikipedia, Treaty of Versailles) | 156,347 / 177,168 | **under 5,000, regardless of page size** | **3,726** | 31x to 35x |
-| Data-table page (GDP nominal) | 66,146 / 64,635 | under 3,000 for the page structure, **the first row page priced separately as its own `get_table` call** | 2,854 structure | 22x |
-| Form page (httpbin) | 440 / 314 | **under 900**, and hold it on a real app form where incumbents balloon with shell chrome | 758 | |
-| Minimal page (example.com) | 105 / 90 | the scaffold floor, roughly 400, and do not chase parity | 404 | |
+| Largest single schema | 413 / 459 | under 250 | **148** (`get_page_view`) | |
+| Article page (Wikipedia, Treaty of Versailles) | 156,347 / 177,168 | **under 5,000, regardless of page size** | **3,683 at rung 3**; the undegraded read is 4,965 | 42x / 48x at the delivered rung, 31x / 36x undegraded |
+| Data-table page (GDP nominal) | 66,146 / 64,635 | under 3,000 for the page structure, **the first row page priced separately as its own `get_table` call** | **3,166 structure. FAILS the target by 166** | 21x |
+| Form page (httpbin) | 440 / 314 | **under 900**, and hold it on a real app form where incumbents balloon with shell chrome | **809** | a deliberate loss, 1.8x the incumbent |
+| Minimal page (example.com) | 105 / 90 | the scaffold floor, measured rather than targeted | **570** | a deliberate loss, 5.4x the incumbent |
 
-**The scaffold floor is roughly 390 tokens and it is a property of the design,
-not a defect to optimize away.** S1 measured example.com, a page with one link,
-at 404 tokens. That is what the eight blocks cost when the page contributes
-almost nothing: identity, a page shape with one region, an affordance line, the
-completeness block, and the continuation protocol. **Any target below that floor
-is unreachable by construction**, which retires two numbers this table used to
-carry.
+**Every number in that column is the SHIPPED projector against FROZEN pages
+under `o200k_base`, measured 2026-09-05** (`gates/corpus_a.json`,
+`corpus/a/MANIFEST.json`). It replaces S1's column, which was a prototype
+against live pages under `cl100k_base`. Both halves of that sentence moved at
+once, so the paragraphs below separate them rather than letting one hide inside
+the other.
 
-The httpbin "under 300" is the first. Three hundred tokens does not buy a
+**The tokenizer was not the story, and that is worth stating because the design
+expected it to be.** Conflict record #4 shows tokenizers disagreeing by roughly
+3x on this class of content, so the re-measurement reported both encodings on
+the same payloads. The gap is **0.3 to 1.0 percent, and `o200k_base` is the
+cheaper of the two on every page**: minus 2 tokens on example.com, minus 3 on
+httpbin, minus 3 on the GDP table, minus 36 on Versailles. A projection payload
+is structured English prose with short identifier tokens, which is the content
+class the two encoders agree on; the 3x disagreement lives in raw markup and
+minified script, which the projection never emits. **The practical consequence
+is that the incumbent baselines do not need re-measuring under `o200k_base`
+before the comparison is publishable**, since a sub-1-percent encoder gap
+cannot move a 20x to 48x multiple. Say the encoder in the benchmark and say
+that it was checked against the other one.
+
+**The scaffold floor is 570 tokens, up from the 390 to 404 this section used to
+publish, and it is a property of the design rather than a defect to optimize
+away.** example.com is thirteen nodes and one link, so the whole 570 is what
+the blocks cost when the page contributes almost nothing. The increase is the
+Phase 1 rebuild rather than the encoder: the completeness block alone is
+fourteen lines on that page, because it names every class of thing the read did
+not see (iframes, open and closed shadow roots, virtualization, below-the-fold
+extent, stripped hidden content, canvas, auth state, unlisted affordances by
+class, unlisted form fields, headings, tables, unexpanded regions, dropped
+regions, blocks omitted entirely, name quality) and it names them on a page
+that has none of them. **That is the design working as argued**, since the
+whole point of the block is that "I did not look" and "there is nothing there"
+are different answers, and a block that only appears when it has bad news
+cannot make that distinction. **Any target below the floor is unreachable by
+construction**, which is why example.com and httpbin are published as losses
+with the reason attached rather than as rows to chase. Two numbers this table
+used to carry were retired at S1 for exactly that reason, and the frozen
+re-measurement has something to add to each.
+
+The httpbin "under 300" was the first. Three hundred tokens does not buy a
 completeness block and a continuation protocol, so the old target was asking the
 design to drop the two blocks that make it honest in order to win a row against
-a 440-token incumbent read of a trivial page. The target is now under 900, and
-the row is documented as a **deliberate loss on tiny pages**: on httpbin the
-projection is roughly 1.7x the incumbent read, and on a 46-node page that is the
-correct trade, because the same scaffold is what caps the 574,200-token page at
-3,726. Say that plainly in the published benchmark rather than hiding the row.
+a 440-token incumbent read of a trivial page. The target is now under 900, **the
+frozen measurement is 809, and the margin is 91 tokens.** The row is documented
+as a **deliberate loss on tiny pages**: the projection is 1.8x the incumbent
+read on a 46-node page, which is the correct trade, because the same scaffold is
+what caps a 574,200-token page at 3,683. Say that plainly in the published
+benchmark rather than hiding the row. The 91-token margin is thin enough to be
+a watch item rather than a comfort, and it is the row to re-run after any change
+to the completeness block.
 
-The GDP "under 3,000 for structure plus first row page" is the second. S1
+The GDP "under 3,000 for structure plus first row page" was the second. S1
 measured the structure alone at 2,854, leaving 146 tokens for a row page, which
 is not a row page. The two reads are now priced separately, which is also the
 truer shape: the structure comes from `get_page_view` and the rows come from
 `get_table` with row-range paging, and conflating them into one number was
-comparing a KS4Web pair against a single incumbent dump.
+comparing a KS4Web pair against a single incumbent dump. **The frozen
+measurement is 3,166 and the target is 3,000, so this row FAILS by 166 tokens,
+5.5 percent.** It is recorded as a failure rather than quietly restated,
+because the target was set at S1 from a 2,854 measurement and the shipped
+projector is a rebuild rather than a regression of that prototype. The
+arithmetic the ruling needs: the page carries 300 collected affordances against
+5,644 nodes, the read lands on rung 1 with the ladder never engaging, and
+lowering the number means either dropping the affordance quota on a
+table-of-links page or moving the target to something the structure read
+actually costs. **Author call, and the design does not make it here.**
 
-The Versailles target holds with 25 percent of margin and it is the one that
-matters.
+**The Versailles row no longer holds with 25 percent of margin, and the reason
+is a ladder cliff rather than a size problem.** The frozen page's undegraded
+read is 4,965 against an effective budget of 4,500 (5,000 less the 10 percent
+drift margin), rung 2 is 4,589, and rung 3 is 3,683. So the delivered read is
+rung 3 and the ladder ENGAGES on the flagship page at the default budget, where
+S1 reported it never engaging on any of eleven pages. Two things follow. The
+guarantee holds: the read is under budget, nothing was truncated, and the
+completeness block states the 22 regions that collapsed. The margin claim does
+not: the flagship's full read is 465 tokens over the effective budget, and the
+step that fits is 906 tokens below the one that does not, **which is a 20
+percent drop where a 3 percent one would have fit.** That is S1's
+finer-rungs finding recurring at the top of the ladder after the rungs were
+already refined from five to eight, so it is a real Phase 2 item and not a
+restatement: **the rungs between full and collapsed are still too coarse on a
+long article, and the fix is a partial-collapse step that sheds the lowest
+priority regions rather than all of them.**
 
-**One tokenizer caveat carried forward from S1.** Its numbers are `tiktoken`
-`cl100k_base`; the fixed convention for this build is `o200k_base` (3.4, and
-PLAN's W1). The S1 figures above are therefore indicative rather than
-convention-conformant, and **the Phase 2 harness re-measures the frozen set under
-`o200k_base` before any of these numbers is published.** Conflict record #4 is
-the reason the distinction is worth a paragraph rather than a footnote.
+**The live drift check makes the same point from the other side, and it is the
+reason PLAN 1.3 asks for one.** Run against the live pages immediately after
+the freeze, three of the four sit within 2 percent of their frozen twins
+(example.com minus 1.9 percent, httpbin minus 1.1, the GDP table minus 1.8),
+which is the answer a freeze wants: the frozen copy still tells the truth about
+the real page. Versailles reads **plus 15.3 percent**, 4,246 live against 3,683
+frozen, and the underlying content differs by 1.5 percent (10,572 nodes against
+10,737). The whole gap is the cliff: the live page's rung 2 lands at 4,246,
+which is under the 4,500 effective budget, and the frozen page's rung 2 lands at
+4,589, which is not. **A 1.5 percent content difference produced a 15 percent
+token difference**, so the published number for a page sitting near a rung
+boundary is discontinuous in page size. That is not a defect in the freeze and
+it is not a defect in the drift check. It is the strongest available argument
+for the finer step above, and it is a caveat the published benchmark states
+rather than discovers when somebody reproduces it.
 
 MEASURED is explicit that a 3-5x beat is the wrong ambition here: 156,347
 divided by 5 is still 31,269 tokens, which still ruins a session after six
@@ -2395,13 +2463,16 @@ them compatibility surface.
    third party being able to re-run ours is the differentiator.
 
    **Publish the losing rows too.** The measured set includes pages where the
-   projection is larger than the incumbent read: httpbin at roughly 1.7x and
-   example.com at roughly 4x, both because the scaffold floor is around 390
-   tokens and a trivial page cannot amortize it (Section 3.2). Those rows go in
-   the published table with the reason stated. A benchmark that shows only wins
-   is the kind of vendor multiplier this build exists to be distinguishable from,
-   and the losing rows are cheap to defend: the same scaffold that costs 390
-   tokens on a 46-node page is what caps a 574,200-token page at 3,726.
+   projection is larger than the incumbent read: httpbin at 1.8x and
+   example.com at 5.4x, both because the scaffold floor is 570 tokens and a
+   trivial page cannot amortize it (Section 3.2). Those rows go in the
+   published table with the reason stated. A benchmark that shows only wins is
+   the kind of vendor multiplier this build exists to be distinguishable from,
+   and the losing rows are cheap to defend: the same scaffold that costs 570
+   tokens on a 46-node page is what caps a 574,200-token page at 3,683. The
+   floor grew from 404 to 570 between S1 and the frozen re-measurement, so the
+   losing rows got worse and they are still published, which is the whole
+   point of writing the rule down before the number moved.
 
 2a. **The one-read claim never ships without its companion clause** (Section
    1.1). Every public sentence about the cheap read pairs it with the cheap

@@ -1,0 +1,62 @@
+{
+ "capture": {
+  "base_tag": "none, deliberately: hrefs stay as the live page wrote them so origin matching is unchanged",
+  "dom": "post-load document.documentElement.outerHTML",
+  "stripped": "script, noscript, link[rel~=stylesheet]",
+  "styles": "inlined in document order, external sheets fetched through the browser request context"
+ },
+ "corpus": "A",
+ "fetched_kst": "2026-09-05 02:20",
+ "lane": "A(chromium) headless",
+ "pages": {
+  "example_com": {
+   "bytes": 742,
+   "file": "corpus/a/example_com.html",
+   "final_url": "https://example.com/",
+   "live_nodes_at_capture": 12,
+   "revision": null,
+   "revision_source": "none published; sha256 IS the version",
+   "sha256": "0be64ef94786eb67ed669f9c60dc8de8ebe92bdceddf1818d094579fdfae0709",
+   "stylesheets_inlined": 1,
+   "title": "Example Domain",
+   "url": "https://example.com/"
+  },
+  "httpbin_form": {
+   "bytes": 1457,
+   "file": "corpus/a/httpbin_form.html",
+   "final_url": "https://httpbin.org/forms/post",
+   "live_nodes_at_capture": 46,
+   "revision": null,
+   "revision_source": "none published; sha256 IS the version",
+   "sha256": "098ea4ce9c63f57efed33c03516b33e55d114a3a51b0d6ba155477f86864ad8f",
+   "stylesheets_inlined": 0,
+   "title": "",
+   "url": "https://httpbin.org/forms/post"
+  },
+  "wikipedia_gdp_table": {
+   "bytes": 1314313,
+   "file": "corpus/a/wikipedia_gdp_table.html",
+   "final_url": "https://en.wikipedia.org/wiki/List_of_countries_by_GDP_(nominal)",
+   "live_nodes_at_capture": 5651,
+   "revision": "1372799821",
+   "revision_source": "MediaWiki wgCurRevisionId",
+   "sha256": "c27102322186c9d1d035378399df6b53f86b7daf3216f0502c123eb1c7134ea3",
+   "stylesheets_inlined": 18,
+   "title": "List of countries by GDP (nominal) - Wikipedia",
+   "url": "https://en.wikipedia.org/wiki/List_of_countries_by_GDP_(nominal)"
+  },
+  "wikipedia_versailles": {
+   "bytes": 2097153,
+   "file": "corpus/a/wikipedia_versailles.html",
+   "final_url": "https://en.wikipedia.org/wiki/Treaty_of_Versailles",
+   "live_nodes_at_capture": 10744,
+   "revision": "1371877530",
+   "revision_source": "MediaWiki wgCurRevisionId",
+   "sha256": "722a150cc7ccf80e5d5326e9a5722d6992505c08e9142dc44f3c4a5e25731960",
+   "stylesheets_inlined": 22,
+   "title": "Treaty of Versailles - Wikipedia",
+   "url": "https://en.wikipedia.org/wiki/Treaty_of_Versailles"
+  }
+ },
+ "purpose": "the four MEASURED benchmark pages, frozen (PLAN 1.3)"
+}

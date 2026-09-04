@@ -1,0 +1,217 @@
+{
+ "budget_tokens": 5000,
+ "comparison_estimator": "cl100k_base (what S1 used)",
+ "corpus": "A (frozen)",
+ "estimator": "o200k_base (DESIGN 3.4, PLAN W1)",
+ "lane": "A(chromium) headless, all off-origin requests aborted",
+ "live_drift_check": {
+  "example_com": {
+   "delta": -11,
+   "delta_pct": -1.9,
+   "frozen_nodes": 13,
+   "frozen_tokens": 570,
+   "live_nodes": 12,
+   "live_tokens": 559
+  },
+  "httpbin_form": {
+   "delta": -9,
+   "delta_pct": -1.1,
+   "frozen_nodes": 47,
+   "frozen_tokens": 809,
+   "live_nodes": 46,
+   "live_tokens": 800
+  },
+  "wikipedia_gdp_table": {
+   "delta": -58,
+   "delta_pct": -1.8,
+   "frozen_nodes": 5644,
+   "frozen_tokens": 3166,
+   "live_nodes": 5652,
+   "live_tokens": 3108
+  },
+  "wikipedia_versailles": {
+   "delta": 563,
+   "delta_pct": 15.3,
+   "frozen_nodes": 10737,
+   "frozen_tokens": 3683,
+   "live_nodes": 10572,
+   "live_tokens": 4246
+  }
+ },
+ "manifest_fetched_kst": "2026-09-05 02:20",
+ "measured_kst": "2026-09-05 02:22",
+ "rows": {
+  "example_com": {
+   "affordances_seen": 1,
+   "budget": 5000,
+   "cl100k_base": {
+    "floor_tokens": 572,
+    "rung": 1,
+    "shape": "app",
+    "tokens": 572,
+    "trace": [
+     {
+      "dominated": false,
+      "rung": 1,
+      "tokens": 572
+     }
+    ]
+   },
+   "delta_o200k_vs_cl100k": -2,
+   "delta_pct": -0.3,
+   "hidden_elements": null,
+   "nodes": 13,
+   "o200k_base": {
+    "floor_tokens": 570,
+    "rung": 1,
+    "shape": "app",
+    "tokens": 570,
+    "trace": [
+     {
+      "dominated": false,
+      "rung": 1,
+      "tokens": 570
+     }
+    ]
+   },
+   "pass": true,
+   "s1_cl100k_live": 404,
+   "target": null,
+   "url": "http://127.0.0.1:52166/example_com.html"
+  },
+  "httpbin_form": {
+   "affordances_seen": 13,
+   "budget": 5000,
+   "cl100k_base": {
+    "floor_tokens": 812,
+    "rung": 1,
+    "shape": "form",
+    "tokens": 812,
+    "trace": [
+     {
+      "dominated": false,
+      "rung": 1,
+      "tokens": 812
+     }
+    ]
+   },
+   "delta_o200k_vs_cl100k": -3,
+   "delta_pct": -0.4,
+   "hidden_elements": null,
+   "nodes": 47,
+   "o200k_base": {
+    "floor_tokens": 809,
+    "rung": 1,
+    "shape": "form",
+    "tokens": 809,
+    "trace": [
+     {
+      "dominated": false,
+      "rung": 1,
+      "tokens": 809
+     }
+    ]
+   },
+   "pass": true,
+   "s1_cl100k_live": 758,
+   "target": 900,
+   "url": "http://127.0.0.1:52166/httpbin_form.html"
+  },
+  "wikipedia_gdp_table": {
+   "affordances_seen": 300,
+   "budget": 5000,
+   "cl100k_base": {
+    "floor_tokens": 3169,
+    "rung": 1,
+    "shape": "app",
+    "tokens": 3169,
+    "trace": [
+     {
+      "dominated": false,
+      "rung": 1,
+      "tokens": 3169
+     }
+    ]
+   },
+   "delta_o200k_vs_cl100k": -3,
+   "delta_pct": -0.1,
+   "hidden_elements": null,
+   "nodes": 5644,
+   "o200k_base": {
+    "floor_tokens": 3166,
+    "rung": 1,
+    "shape": "app",
+    "tokens": 3166,
+    "trace": [
+     {
+      "dominated": false,
+      "rung": 1,
+      "tokens": 3166
+     }
+    ]
+   },
+   "pass": false,
+   "s1_cl100k_live": 2854,
+   "target": 3000,
+   "url": "http://127.0.0.1:52166/wikipedia_gdp_table.html"
+  },
+  "wikipedia_versailles": {
+   "affordances_seen": 300,
+   "budget": 5000,
+   "cl100k_base": {
+    "floor_tokens": 3719,
+    "rung": 3,
+    "shape": "article",
+    "tokens": 3719,
+    "trace": [
+     {
+      "dominated": false,
+      "rung": 1,
+      "tokens": 5021
+     },
+     {
+      "dominated": false,
+      "rung": 2,
+      "tokens": 4635
+     },
+     {
+      "dominated": false,
+      "rung": 3,
+      "tokens": 3719
+     }
+    ]
+   },
+   "delta_o200k_vs_cl100k": -36,
+   "delta_pct": -1.0,
+   "hidden_elements": null,
+   "nodes": 10737,
+   "o200k_base": {
+    "floor_tokens": 3683,
+    "rung": 3,
+    "shape": "article",
+    "tokens": 3683,
+    "trace": [
+     {
+      "dominated": false,
+      "rung": 1,
+      "tokens": 4965
+     },
+     {
+      "dominated": false,
+      "rung": 2,
+      "tokens": 4589
+     },
+     {
+      "dominated": false,
+      "rung": 3,
+      "tokens": 3683
+     }
+    ]
+   },
+   "pass": true,
+   "s1_cl100k_live": 3726,
+   "target": 5000,
+   "url": "http://127.0.0.1:52166/wikipedia_versailles.html"
+  }
+ }
+}

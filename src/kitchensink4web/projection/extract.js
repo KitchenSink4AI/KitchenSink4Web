@@ -44,7 +44,13 @@
 
   // ------------------------------------------------------------- utilities
 
-  const squash = (s) => (s || '').replace(/\s+/g, ' ').trim();
+  // Strict about its input on purpose. A DOM property that LOOKS like a
+  // string is not always one: named-property access on a <form> makes
+  // `form.title` return the child input named "title", and Wikipedia's
+  // search form has exactly that. A permissive squash would then stringify
+  // an element into an accessible name, which is the confident-wrong-answer
+  // failure 3.7 exists to stop. A non-string is not a name, so it is ''.
+  const squash = (s) => (typeof s === 'string' ? s : '').replace(/\s+/g, ' ').trim();
 
   function clip(s, n) {
     s = squash(s);
@@ -222,7 +228,7 @@
           } catch (e) { /* labels can throw on exotic shadow hosts */ }
         }
         if (!raw && el.placeholder) { raw = squash(el.placeholder); how = 'placeholder'; }
-        if (!raw && el.title) { raw = squash(el.title); how = 'title'; }
+        if (!raw) { const tt = el.getAttribute('title'); if (squash(tt)) { raw = squash(tt); how = 'title'; } }
       } else if (tag === 'IMG' || tag === 'AREA') {
         raw = squash(el.getAttribute('alt') || ''); how = 'alt';
       } else if (tag === 'FIELDSET') {
@@ -236,7 +242,12 @@
       raw = contentName(el, 0, new Set());
       how = 'content';
     }
-    if (!raw && el.title) { raw = squash(el.title); how = 'title'; }
+    // getAttribute, not the property: `.title` is a named-property trap on
+    // form elements and the attribute is what accname actually specifies.
+    if (!raw && el.getAttribute) {
+      const tt = el.getAttribute('title');
+      if (squash(tt)) { raw = squash(tt); how = 'title'; }
+    }
     if (!raw) {
       // NEVER a CSS class (S1 printed `.mw-file-description` as a name). A
       // stable attribute or nothing, and the completeness block counts it.

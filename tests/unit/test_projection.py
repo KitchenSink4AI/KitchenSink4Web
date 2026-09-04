@@ -385,6 +385,24 @@ def test_a_css_class_is_never_emitted_as_a_name():
     assert '"(unnamed)"' in text
 
 
+def test_a_dom_property_that_is_not_a_string_never_becomes_a_name():
+    """The named-property trap, found by corpus A on Wikipedia's search form.
+
+    A <form> exposes its named controls as properties, so a form holding
+    `<input name="title">` answers `form.title` with the INPUT ELEMENT rather
+    than the title attribute. The first version of the extractor squashed that
+    element, which threw on the real page and would have stringified into a
+    name on a page where it did not throw. A non-string is not a name."""
+    data = load("formpage")
+    names = [a.get("name", "") for a in data["affordances"]]
+    names += [r.get("label", "") for r in data["regions"]]
+    names += [f.get("name", "") for f in data["forms"]]
+    for name in names:
+        assert "[object " not in name, f"a DOM object leaked into a name: {name!r}"
+    text = project(data, META, budget=5000).text
+    assert "[object " not in text
+
+
 def test_names_truncate_on_word_boundaries_with_an_ellipsis():
     """A name cut inside a word reads as a different string than the page
     contains, which is what breaks string matching downstream."""

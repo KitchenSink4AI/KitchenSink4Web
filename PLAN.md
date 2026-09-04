@@ -115,7 +115,7 @@ the spikes report" has one stated exception and this is it. The sequence:
 
 | Corpus work | Due |
 |---|---|
-| Corpus A: the four MEASURED pages fetched and frozen to disk as snapshots, with the fetch date and page revision recorded | **Before S1 starts.** S1 measures against the frozen copies, not the live pages. **NOT MET as run (2026-09-05):** S1 ran against live pages and froze the extraction outputs afterward (`spikes/s1/out/raw/*.extract.json`), plus the eleven blind-trial inputs byte-for-byte. Its ladder numbers re-derive offline and its per-page numbers do not. Corpus A is still owed as a real freeze before Phase 2's harness, and the S1 figures are indicative until it exists. |
+| Corpus A: the four MEASURED pages fetched and frozen to disk as snapshots, with the fetch date and page revision recorded | **Before S1 starts.** S1 measures against the frozen copies, not the live pages. **NOT MET as run (2026-09-05):** S1 ran against live pages and froze the extraction outputs afterward (`spikes/s1/out/raw/*.extract.json`), plus the eleven blind-trial inputs byte-for-byte. Its ladder numbers re-derive offline and its per-page numbers do not. **MET 2026-09-05 02:20 KST**, ahead of the Phase 2 harness: `corpus/a/` holds the four pages with `corpus/a/MANIFEST.json` recording the fetch DTG, the final URL, the MediaWiki revision id where one is published, a sha256 per file, and what the capture strips. `scripts/freeze_corpus_a.py` rebuilds it and `scripts/measure_corpus_a.py --live` re-measures it with the live drift check. Every DESIGN 3.2 figure now comes from this corpus. |
 | Corpus B subset: React re-render page, react-window virtualized list, client-side route change, plus the 50,000-node DOM (S1 needs it for the degradation rungs and the latency measurement) | **Before S1 and S2 start.** |
 | The rest of corpus B: iframes, shadow roots, canvas, mutating page, rowspan tables, div-tables, lazy images, `isTrusted` control, `<div onclick>`, moving target, overlay, portal dropdown, console flood, secret fields | Before **Phase 2** opens, since the Phase 2 gate is verified against them. |
 | Corpus C in full | Before **Phase 3** opens, since the Phase 3 gate IS corpus C driven end to end. |
@@ -700,8 +700,12 @@ require sticky refs and sticky refs are only useful because reads are cheap.
      named estimator (`tiktoken`, `o200k_base`) so the gate number and the
      enforced budget are the same arithmetic. **The revised targets bind**, not
      the pre-S1 ones: under 900 on httpbin, structure and row page priced
-     separately on the GDP table, and the roughly 390-token scaffold floor
-     acknowledged rather than chased.
+     separately on the GDP table, and the 570-token scaffold floor
+     acknowledged rather than chased. **Two rows are already known to need a
+     ruling before this gate can be called** (DESIGN 3.2, re-measured on frozen
+     corpus A 2026-09-05): the GDP structure read is 3,166 against a 3,000
+     target, and the Versailles read is delivered at rung 3 because its
+     undegraded form is 4,965 against a 4,500 effective budget.
   2. **Refs are sticky** across re-reads on every fixture, and **zero false
      rebinds** on the pathological fixture.
   3. **The completeness block is accurate**, verified by construction: the
@@ -982,12 +986,16 @@ regression detector: a phase that quietly inflates the page bill gets caught the
 same day.
 
 **The published table includes the rows KS4Web loses**, per DESIGN 12 rule 2:
-httpbin and example.com, where the roughly 390-token scaffold floor makes the
+httpbin and example.com, where the 570-token scaffold floor makes the
 projection larger than an incumbent read of a trivial page, with the reason
 stated inline. A benchmark showing only wins is the thing this workstream exists
-to be distinguishable from. The harness also re-measures S1's figures under
-`o200k_base`, since S1 counted with `cl100k_base` and no S1 number is publishable
-as-is.
+to be distinguishable from. **The `o200k_base` re-measurement is DONE** (2026-09-05,
+`gates/corpus_a.json`), which discharges the "no S1 number is publishable as-is"
+item: every figure in DESIGN 3.2 is now the shipped projector on frozen pages
+under the named encoder. The finding the harness inherits is that the encoder
+was not the variable. `o200k_base` and `cl100k_base` differ by 0.3 to 1.0
+percent on projection payloads, so the incumbent baselines do not need
+re-counting before publication and the benchmark says so.
 
 **W2: The Known Limitations page**, written continuously as the build discovers
 limits rather than reconstructed at the end. Every `LANE_UNSUPPORTED` entry, the

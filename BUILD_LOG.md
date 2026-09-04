@@ -1041,3 +1041,138 @@ PLAN's rulings checkpoint gives them a row: they block nothing until Phase 9,
 when they become compatibility surface.
 
 **Suite unchanged and green, 189 unit tests in 3.8 s.** Documents only.
+
+## Part VIII: Corpus A frozen, and the numbers re-measured (2026-09-05 02:31 KST)
+
+**The four MEASURED pages are frozen to disk and committed, every DESIGN 3.2
+figure is now the shipped projector under `o200k_base`, and two published
+targets do not survive contact with the measurement. 218 tests, all passing.**
+
+### The freeze
+
+`corpus/a/` holds the four pages, `corpus/a/MANIFEST.json` records the fetch
+DTG in KST, the final URL, the MediaWiki revision id where one is published
+(Versailles 1371877530, GDP 1372799821), a sha256 per file, and what the
+capture strips. `scripts/freeze_corpus_a.py` rebuilds it. This closes the item
+PLAN 1.3 has carried as NOT MET since S1, which ran against live pages and
+froze only its extraction outputs.
+
+**A naive capture is not a freeze, and the reason is the projection's own
+subject matter.** An `outerHTML` dump loses every stylesheet, visibility on the
+web is a CSS property, and the projection's hidden-content normalizer sweeps
+every node, so a projection run against a bare dump would compute different
+answers than the live page did. The capture therefore serializes the post-load
+DOM, inlines every stylesheet in document order with external sheets fetched
+through the browser's own request context, and strips `<script>` and
+`<noscript>` because a page that rehydrates is not frozen. **No `<base>` tag is
+injected, deliberately:** Wikipedia's internal links are root-relative, so a
+page served from localhost still matches origin and still prints paths rather
+than full URLs, which is what keeps the count comparable. A base pointing at
+the live origin would make every internal link cross-origin and inflate the
+exact number the corpus exists to pin down.
+
+The freeze is enforced rather than asserted. `tests/unit/test_corpus_a.py`
+verifies each file against its recorded digest, so a re-freeze is a deliberate
+act with a visible diff, and checks that no frozen page carries script.
+
+### Corpus A found a defect on its first run, before it measured anything
+
+`Page.evaluate: TypeError: (s || "").replace is not a function`, thrown on the
+Treaty of Versailles page by the shipped extractor. **A `<form>` exposes its
+named controls as properties, so a form holding `<input name="title">` answers
+`form.title` with the INPUT ELEMENT rather than a string.** Wikipedia's search
+form has exactly that field. Two fixes, and the second one is the general one.
+The `title` reads became `getAttribute('title')`, which is what accname
+specifies anyway. And `squash()` is now strict: a non-string is empty rather
+than something to coerce, because the permissive version would have
+stringified a DOM element into an accessible name on any page where it did not
+happen to throw, which is the confident-wrong-answer failure DESIGN 3.7 exists
+to stop. The `formpage` fixture grew the trap and a regression test asserts no
+object tag ever reaches a name or the payload.
+
+**This is the argument for corpus A stated as an event rather than a
+principle.** Five hand-written fixtures and a 50,000-node synthetic ladder did
+not contain a form with a control named `title`, and no amount of care would
+have invented one. Real pages carry constructs nobody would write on purpose.
+
+### The numbers, o200k against the frozen pages, budget 5,000
+
+| page | nodes | o200k | rung | cl100k | delta | target | |
+|---|---|---|---|---|---|---|---|
+| example.com | 13 | **570** | 1 | 572 | -2 | the floor | measured |
+| httpbin form | 47 | **809** | 1 | 812 | -3 | under 900 | **PASS**, 91 to spare |
+| GDP table | 5,644 | **3,166** | 1 | 3,169 | -3 | under 3,000 | **FAIL by 166** |
+| Versailles | 10,737 | **3,683** | **3** | 3,719 | -36 | under 5,000 | PASS, ladder engaged |
+
+**The tokenizer was not the story, and the design expected it to be.** Conflict
+record #4 has tokenizers disagreeing by roughly 3x on this class of content, so
+both encodings were run over the same payloads. The gap is **0.3 to 1.0
+percent** and `o200k_base` is the cheaper one on every page. A projection
+payload is structured English with short identifier tokens, which is the
+content class the encoders agree on; the 3x disagreement lives in raw markup
+and minified script, which the projection never emits. The practical
+consequence is worth more than the caveat it retires: **the incumbent baselines
+do not need re-counting under `o200k_base` before the comparison is
+publishable**, because a sub-1-percent encoder gap cannot move a 20x to 48x
+multiple.
+
+**So everything that moved, moved because of the Phase 1 rebuild.** The
+scaffold floor went from 404 to **570**. On a thirteen-node page the whole 570
+is scaffold, and the completeness block is fourteen lines of it, because it
+names every class of thing the read did not see on a page that has none of
+them. That is the design working as argued rather than a regression, since a
+block that only appears when it has bad news cannot distinguish "I did not
+look" from "there is nothing there." It does make the two losing rows worse
+(httpbin 1.8x the incumbent, example.com 5.4x), and both stay published with
+the reason attached, which is what DESIGN 12 rule 2 was written for before the
+number moved.
+
+### Two findings that need the author
+
+**The GDP structure read fails its target by 166 tokens, 5.5 percent.** It is
+recorded as a failure rather than quietly restated, because the target was set
+at S1 from a 2,854 prototype measurement and the shipped projector is a rebuild
+rather than a regression of it. Lowering the number means either dropping the
+affordance quota on a table-of-links page or moving the target to what the
+structure read actually costs, and the design does not make that call in a
+build session.
+
+**Versailles engages the ladder at the default budget, and the gap between
+rungs is the finding.** The undegraded read is 4,965 against a 4,500 effective
+budget (5,000 less the 10 percent drift margin), rung 2 is 4,589, rung 3 is
+3,683. The guarantee holds: under budget, nothing truncated, 22 collapsed
+regions stated in the completeness block. The margin claim does not, and
+"holds with 25 percent of margin" is now false. **The step that fits is 906
+tokens below the step that does not, a 20 percent drop where a 3 percent one
+would have fit.** That is S1's finer-rungs finding recurring at the TOP of the
+ladder after the rungs were already refined from five to eight, so it is a real
+Phase 2 item: a partial-collapse step that sheds the lowest-priority regions
+rather than all of them.
+
+### The live drift check, which makes the same point from the other side
+
+PLAN 1.3 asks for the live run as a drift check and this is what it bought.
+Three of four sit within 2 percent of their frozen twins (example.com -1.9,
+httpbin -1.1, GDP -1.8), which is the answer a freeze wants. **Versailles reads
++15.3 percent live, 4,246 against 3,683, on a 1.5 percent content difference**
+(10,572 nodes against 10,737). The whole gap is the cliff: live rung 2 lands at
+4,246, under the effective budget, and frozen rung 2 lands at 4,589, over it.
+A 1.5 percent content difference produced a 15 percent token difference, so the
+published number for a page near a rung boundary is discontinuous in page size.
+That is not a defect in the freeze and not a defect in the check. It is the
+strongest available argument for the finer step, and it is a caveat the
+published benchmark states rather than one a reproducer discovers.
+
+### What changed in the documents
+
+DESIGN 3.2's measured column is replaced wholesale and now names its source
+(`gates/corpus_a.json`, `corpus/a/MANIFEST.json`), with the encoder finding,
+the floor restatement, the GDP failure, the Versailles cliff, and the drift
+check each written out. DESIGN 1.1 and 12 rule 2 carry the new floor and the
+new Versailles figure. PLAN 1.3's corpus A row is MET with the artifacts named,
+PLAN's Phase 2 gate item 1 names the two rows that need a ruling before it can
+be called, and W1's "no S1 number is publishable as-is" is discharged with the
+encoder finding recorded in its place.
+
+**Suite: 218 tests, all passing** (194 unit, 24 browser), up from 213 by the
+corpus digest checks and the named-property regression.
