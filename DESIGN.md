@@ -266,13 +266,24 @@ divided by 5 is still 31,269 tokens, which still ruins a session after six
 pages. The honest target is a hard cap with paging, stated as a property rather
 than a hope: **a page view never exceeds its budget regardless of page size.**
 
-One platform constraint shapes the default. INCUMBENT verified from the Claude
-Code binary that there is an undocumented **3,000-token cap on tool results
-inside subagents** (claude-code #75267). Since "delegate the page read to a
-subagent" is the exact mitigation playwright-mcp's maintainer recommends, the
-default 5,000-token budget would fail inside the very workaround people use.
-`get_page_view` therefore takes `budget_tokens`, documents 2,500 as the
-subagent-safe setting, and `get_workflows` ships that recipe.
+One platform constraint shapes the default. A **roughly 3,000-token cap on tool
+results inside subagents** is reported in claude-code #75267, filed against
+v2.1.202, quoting the exact error text and reporting that `MAX_MCP_OUTPUT_TOKENS`
+raises the cap. **The attribution matters: this is a corroborated FIELD REPORT,
+not a binary-verified constant.** No 3,000 constant exists in the installed
+client binary anywhere near that code path, and the consistent explanation is
+that the value arrives through the same remote feature gate that carries the
+25,000-token result limit, which means it can move without a client release. The
+research record carried this under a binary-verified header and the design
+repeated it; the correct standing is "field-reported, apparently
+remote-delivered." Since "delegate the page read to a subagent" is the exact
+mitigation playwright-mcp's maintainer recommends, the default 5,000-token budget
+would still fail inside the very workaround people use, so `get_page_view` takes
+`budget_tokens`, documents 2,500 as the subagent-safe setting, and
+`get_workflows` ships that recipe. The recipe survives, but 2,500 tracks a
+**movable limit**, which makes S8's empirical confirmation against the installed
+client the load-bearing check rather than any binary read, and makes the number a
+thing to re-measure rather than a constant to trust.
 
 ### 3.3 What a page view returns
 
@@ -397,9 +408,26 @@ dropped:
    the floor and is never dropped.
 
 Rung 5 on a pathological page is still a usable orientation and is still under
-budget. If even rung 5 exceeded budget, which should be structurally
-impossible, the tool refuses with the size and the three cheaper routes rather
-than returning a mutilated tree.
+budget, and the floor is bounded by construction rather than by hope. The forms
+inventory is the reason this needs saying: enumerating every field of every form
+is unbounded, and a real airline booking page or an enterprise settings screen
+with several hundred fields would push the floor past any budget. **Rung 5
+therefore caps its own inventories: forms collapse to one line each (ref, name,
+field count) when the field-level listing would breach budget, and tables were
+never more than one line each. With inventories capped, the floor is bounded and
+a page view never refuses; the full field listing is one
+`get_page_view(view="forms")` away and the floor says so.**
+
+**The budget is enforced against ESTIMATED tokens, and the estimator is named
+rather than assumed.** "A page view never exceeds its budget" is a hard-cap
+property, and conflict record #4 already shows tokenizers disagreeing by roughly
+3x on this exact class of content, so an unnamed estimator would make the
+property unfalsifiable. The budget meter estimates with `tiktoken` on
+`o200k_base`, holds a stated safety margin (10 percent of budget) in reserve
+against client-side tokenizer drift, and reports both the estimate and the
+margin in the completeness block's budget accounting. The published benchmark
+reproduces the same estimator, so the measured numbers and the enforced cap are
+the same arithmetic.
 
 Where the payload genuinely must be large (a full table export, a response
 body, a DOM dump), the answer is spill-to-file with a queryable handle. This is
@@ -464,6 +492,19 @@ sticky refs, which is why the two designs are one design.
 **Resolution at action time: the rebind ladder.** Every action tool resolves a
 ref through this ladder before it touches anything.
 
+**Entry conditions, checked before the ladder runs.** The five outcomes below are
+exhaustive for *resolving a known ref on the current page*, and they say nothing
+about how a call gets to the ladder in the first place. These cases are decided
+first, in this order, and none of them enters the fuzzy tier:
+
+| Input case | Outcome |
+|---|---|
+| A pending modal or dialog blocks interaction | `MODAL_BLOCKED` before any resolution is attempted, naming the dialog and the call that dismisses it |
+| Ref was never minted in this session (model typo, or a ref quoted from another session or a saved workflow) | `NOT_FOUND`, stating the mint rule (refs are minted only by a read in this session) and naming the read that mints one |
+| Ref exists but belongs to a different page handle than the one passed | `BAD_PARAMS`, naming both handles, never silently retargeting |
+| Ref's entry is marked gone | Skip to (b) and re-resolve the stored anchor, carrying the gone record into any resulting message so the error can say what `e12` used to be |
+| Page URL changed since the ref was minted and `allow_cross_page_rebind=false` | `STALE_ANCHOR` directly, with no fuzzy tier, because a fuzzy match on a different URL IS a cross-page rebind under another name |
+
 - **a.** Ref found, handle still attached, fingerprint still matches. Proceed.
 - **b.** Handle detached or fingerprint changed. Re-resolve the stored anchor:
   exact role plus name within the original landmark, then role plus name
@@ -480,6 +521,45 @@ ref through this ladder before it touches anything.
 Cross-page rebinding is **off by default** (`allow_cross_page_rebind=false`).
 Silently clicking a same-named button on a different page is exactly the
 confused-deputy failure the whole safety layer exists to reduce.
+
+**Batch actions have their own semantics, because per-action rules do not cover
+them.** Typing into field one of a real form routinely re-renders its siblings
+(country and state cascades, React controlled inputs), so a fingerprint change
+partway through a batch is the ordinary case on SPA forms rather than an
+adversarial corner, and browser actions cannot be rolled back once taken.
+Validating every anchor at batch start, the pattern inherited from the siblings,
+does not survive mutations the batch itself causes. So: **batch actions
+(`fill_form`, and any future multi-target tool) resolve every ref before
+executing any, then re-check each target's fingerprint immediately before its own
+execution, because earlier items in the batch can legitimately re-render later
+targets. On a mid-batch outcome (c), the rebind is reported per item. On a
+mid-batch outcome (d) or (e), the batch STOPS: completed items stay completed
+(browser actions do not roll back), the failing item is refused with its ladder
+error, remaining items are reported `not_attempted`, and the envelope carries the
+per-item outcome list plus the form state read-back. A batch never skips a failed
+item and continues, and never retries silently.**
+
+**The ladder and the confirmation gates compose, and it is worth stating because
+it is load-bearing.** A target that rebinds between a gate's ASK and its EXECUTE
+is caught by the gate's TOCTOU fingerprint re-validation and aborts with
+`TARGET_CHANGED` rather than acting on the rebound element. Rebinding never
+launders a stale confirmation.
+
+**Where anchor ids surface.** Anchors are stored server-side and are not part of
+any default payload, so the `{"anchor": "a3f9"}` selector in Section 9 is only
+usable because two paths deliberately expose ids: `get_audit` records the anchor
+id alongside every resolved action, and saved workflow files record anchors
+rather than refs, since a replay in a later session has no refs to speak of. A
+model that never reads an audit record or a workflow file never sees an anchor
+id, which is the intended default.
+
+**Delta state retention.** `since=<read token>` requires keeping the prior
+projection state a token names. Read tokens are retained per page handle under a
+bounded LRU (the most recent N reads per page, N small and stated in the tool
+docstring), and they invalidate on navigation of that page, on close of the page
+handle, and on session end. A token that has aged out or been invalidated is not
+an error the model has to guess at: the delta call refuses with the reason and
+falls back by naming the full read that re-establishes a baseline.
 
 **Why this matters beyond convenience.** The measurement's structural insight is
 that actions are already cheap (9 to 56 tokens) and refs are the toll gate. If
@@ -860,7 +940,14 @@ inside an origin not on the allowlist.
 Code does not advertise it. It DOES advertise elicitation. The spec's replacement
 for server-initiated requests is MRTR: the server returns `InputRequiredResult`
 with `resultType: "input_required"` and the client retries with `inputResponses`.
-So gates are a **retry pattern, not a callback.** KS4Web implements MRTR first,
+The retry carries `requestState`, the server's own correlation token, and the
+gate engine depends on it: that token is how an arriving retry is matched back to
+the pending gate, its captured fingerprint, and its TOCTOU re-validation, so it
+is stored with the gate record rather than treated as protocol noise. Under
+2026-07-28 elicitation itself is delivered through MRTR, as `inputRequests`
+entries carrying `method: "elicitation/create"`, which is why the two paths below
+are one implementation with two shapes. So gates are a **retry pattern, not a
+callback.** KS4Web implements MRTR first,
 elicitation where advertised, and **fails closed** where the client advertises
 neither: the gated action refuses rather than proceeding.
 
@@ -1101,9 +1188,14 @@ The same revision **removed protocol sessions** and names browser automation as
 its motivating example: "Servers that need to maintain state across calls, a
 shopping cart, **an open browser context**, a database transaction, should do so
 by returning an explicit handle from a creation tool and accepting that handle as
-an argument on subsequent calls." Connection-scoped browser state is no longer
-conformant, which is why `manage_tabs` and `manage_session` mint and return
-explicit page and session handles that every other tool accepts.
+an argument on subsequent calls." That handle passage sits in the spec's
+**non-normative** "Stateful Tools" guidance and uses "should," so the precise
+statement is not that connection-scoped browser state is forbidden by a MUST: the
+normative basis is the removal of protocol sessions and `Mcp-Session-Id`
+(SEP-2567), which makes connection-scoped state unreliable and unsupported rather
+than illegal. The consequence for this design is the same either way, which is
+why `manage_tabs` and `manage_session` mint and return explicit page and session
+handles that every other tool accepts.
 
 ### 7.2 Re-examining the family's `enable_tools` pattern, as instructed
 
@@ -1113,19 +1205,37 @@ registered with FastMCP up front, non-lite tools start disabled, and
 `ctx.enable_components` / `disable_components`, which "send
 ToolListChangedNotification to the session only."
 
-Measured against the spec text, that does both forbidden things. The tool set
-varies **per connection** (the toggle is session-scoped by design, so two
-concurrent clients see different sets) and it varies **as a side effect of
-another request on the connection** (the `enable_tools` call is that request).
-The "MAY vary by the authorization presented" carve-out does not apply, because a
-local stdio server presents no authorization and the variation is driven by a
-tool call rather than by credentials.
+Measured against the spec text, that does both forbidden things, and the order
+matters. The tool set varies **as a side effect of another request on the
+connection**, and the `enable_tools` call is that request. That is the prong that
+bites on every transport, including a single-client stdio process, and it is the
+one to lead with. The set also varies **per connection**, but that prong is
+largely unobservable on per-process stdio servers, where each client spawns its
+own process and no two connections share a tool set to differ. The "MAY vary by
+the authorization presented" carve-out does not apply either way, because a local
+stdio server presents no authorization and the variation is driven by a tool call
+rather than by credentials.
 
-**Assessment: the family's runtime enable_tools pattern is not conformant with
-MCP 2026-07-28.** It was conformant, or at least unaddressed, under the revisions
-it was designed against. KS4Web will not ship it. Whether the shipped siblings
-change, stay, or wait for a spec clarification is a family-wide decision above
-this document's pay grade and is Open Question 4.
+**Assessment: the family's runtime enable_tools pattern cannot survive migration
+to MCP 2026-07-28.** Stated precisely, because it implicates three shipped
+products: conformance is judged per NEGOTIATED REVISION, not retroactively. The
+siblings negotiate whatever revision FastMCP advertises, which today is a
+2025-era revision under which the pattern is legal, so nothing shipped is
+non-conformant now. **The trigger is not a KS4Web decision and not a spec event;
+it is FastMCP bumping its advertised revision in a future release**, at which
+point the siblings become silently non-conformant without a line of their code
+changing. That version bump is the thing to watch, and Open Question 4 names it.
+KS4Web will not ship the pattern regardless. Whether the shipped siblings change,
+stay, or wait is a family-wide decision above this document's pay grade.
+
+Two mechanical details reinforce the conclusion rather than soften it. Under
+2026-07-28, `tools/list` results carry `ttlMs` and `cacheScope`, and `cacheScope`
+can be `"public"`, so per-connection variation would actively poison shared
+caches; the requirement has teeth beyond its prose. And the FastMCP machinery the
+pattern rides on changes shape under that revision anyway, since `list_changed`
+notifications flow only to clients holding a `subscriptions/listen` stream with
+`toolsListChanged: true` (the old push path is gone) and the `initialize`
+handshake was removed (SEP-2575).
 
 Worth noting for that decision: this is a conformance question, not a
 functionality question. Nothing breaks today. Claude Code honors `list_changed`
@@ -1152,10 +1262,16 @@ and 3 are what buy most of it back.
 **Layer 2: client-side progressive disclosure.** The `tools/list` result is
 **identical on every connection**, and the CLIENT decides what enters the model's
 context. Claude Code exposes two undocumented `_meta` fields for exactly this
-(verified from binary v2.1.92): `anthropic/alwaysLoad` (boolean, exempts a tool
-from deferral so it is always in context) and `anthropic/searchHint` (string,
-extra text indexed for tool-search matching). Tool search engages by default once
-definitions exceed roughly 10 percent of the context budget.
+(originally read from binary v2.1.92, re-verified against v2.1.220):
+`anthropic/alwaysLoad` (boolean, exempts a tool from deferral so it is always in
+context) and `anthropic/searchHint` (string, extra text indexed for tool-search
+matching). Tool search engages by default once definitions exceed roughly 10
+percent of the context budget. One asymmetry worth knowing: the client carries
+its own server-side `search_hints` override table, and that table OUTRANKS a
+tool's own `_meta` searchHint, so the hint is a suggestion the client may
+overrule. Since the research baseline moves with every client release, **the
+version of record is the client installed at spike time**, and S8 re-runs these
+checks against it rather than against a quoted version number.
 
 So: pin the lite core with `alwaysLoad`, enrich the long tail with
 `searchHint`, and let the client's own machinery do the deferral. This is
@@ -1180,7 +1296,12 @@ _.annotations?.readOnlyHint ?? false}`. **A browser tool without
 read-only unlocks concurrent execution for nothing.
 
 **Constraints that shape every schema:** tool descriptions are truncated at
-**2,048 characters** by the client, silently. The default tool-result limit is
+**2,048 characters** by the client. The truncation is silent toward the USER but
+marked toward the MODEL, which sees an explicit "… [truncated]" appended to the
+cut text while the client's internal copy keeps the full string. The mechanical
+consequence for KS4Web is unchanged, since a description over budget still loses
+its tail: the docstring-budget test enforces the limit at build time. The default
+tool-result limit is
 25,000 tokens and is **remotely reconfigurable server-side** by a feature gate
 that no documentation mentions. Oversized results are persisted to disk first and
 truncated only if that fails, and the client's own failure message tells the
@@ -1315,6 +1436,11 @@ acting on the first.
 {"coordinate": {"x": 412, "y": 260}}             pixel fallback, last resort
 ```
 
+`anchor` is the one selector a model cannot obtain from an ordinary page read.
+Anchors live server-side keyed by ref, and their ids reach the model only through
+`get_audit` records and saved workflow files (Section 3.5), which is exactly what
+the key is for: replay and audit-driven recovery, not routine addressing.
+
 Two modifiers apply to any selector: `frame` (a frame ref from the completeness
 block, so cross-origin iframe addressing is a modifier and not a separate tool
 family) and `shadow` (pierce open roots; closed roots refuse honestly with
@@ -1442,6 +1568,13 @@ Binding from Phase 0 regardless of the eventual choice:
 Genuinely undecided, flagged rather than guessed. The spike phase resolves the
 empirical ones; these need a ruling.
 
+**Ruled questions keep their question text**, so the record shows what was asked
+as well as what was decided, with the ruling recorded underneath. Two are ruled
+as of 2026-09-05: **Q11 (names)** by the author on 2026-09-04, and **Q6 (browser
+verbs)** under standing author delegation, flagged for author review and
+reversible until ship. The rest are open, and PLAN's rulings checkpoint says
+which phase each one blocks.
+
 1. **The license.** Which of the three, and if open-core, where does the seam
    run given that the safety layer is the differentiator (Section 10.2c)?
 
@@ -1456,10 +1589,16 @@ empirical ones; these need a ruling.
    actual differentiator and carries no such cost?
 
 4. **The family's `enable_tools` conformance question.** Section 7.2 concludes
-   the shipped runtime-toggle pattern is not conformant with MCP 2026-07-28.
-   KS4Web will not ship it. Do the shipped siblings change, stay, or wait for a
-   spec clarification? This is a family-wide call, and it affects three live
-   products.
+   the shipped runtime-toggle pattern cannot survive migration to MCP 2026-07-28,
+   while remaining legal under the 2025-era revision the siblings negotiate
+   today. KS4Web will not ship it. Do the shipped siblings change, stay, or wait
+   for a spec clarification? This is a family-wide call, and it affects three live
+   products. **Name the trigger when ruling: the siblings go non-conformant the
+   day FastMCP bumps its advertised protocol revision to 2026-07-28, with no
+   change to their own code.** So the watch item is a FastMCP release note, not a
+   spec announcement, and the ruling should say what happens on that day (pin the
+   FastMCP version, migrate the pattern to launch-time packs as KS4Web does, or
+   accept the flag).
 
 5. **Read-only by default?** Shipping with read-only ON by default, requiring an
    explicit flag to act, would be the strongest possible brand statement and the
@@ -1470,6 +1609,18 @@ empirical ones; these need a ruling.
    Approve `navigate` / `click` / `type` / `press` / `hover` / `scroll` / `wait`
    / `select` / `upload` / `download`, or force browser actions into the existing
    table?
+
+   **RULED 2026-09-05, under standing author delegation. FLAGGED FOR AUTHOR
+   REVIEW.** The browser-native verbs are approved. Where a domain has its own
+   settled vocabulary, the family grammar takes that vocabulary rather than
+   overwriting it: the principle the grammar actually enforces is
+   **one name per concept**, not identical verbs across products. Forcing
+   `set_` or `apply_` onto navigation would produce jargon nobody searches for
+   and no browser user recognizes, which is the failure the grammar exists to
+   prevent, not an example of it. The consistency the family gets is that
+   `click` means clicking everywhere in KS4Web and nothing else does. This is
+   reversible at zero cost until the first public release, so the author can
+   overrule it any time before ship.
 
 7. **Cross-family handoff scope.** Should `download` write into a directory
    KS4XL and KS4Word see by convention, and should `get_workflows` ship
@@ -1494,6 +1645,15 @@ empirical ones; these need a ruling.
     and `kitchensink4web`, env `KS4WEB_MODE` / `KS4WEB_PACK_POLICY` /
     `KS4WEB_ALLOWED_ROOTS`. Confirm, especially `web` as an alias, which is
     generic in a way `xl` and `ppt` are not.
+
+    **RULED by the author, 2026-09-04.** The product is **KitchenSink4Web
+    (KS4Web)**, in the **Garden** department. The local registration alias is
+    **`web`**, by family convention: the siblings register as `word` and `ppt`,
+    the alias is what the author types in his own client, and breaking the
+    pattern to dodge a genericity worry would cost more in muscle memory than it
+    buys. **Genericity accepted**, knowingly, since the alias is a local
+    registration name and not a package name or a market claim. The package,
+    console scripts, and env prefixes stand as written.
 
 12. **Launch shape.** Own Show HN or a family launch? The research is blunt that
     the right thing does not win by itself, and that a Show HN escaping this exact

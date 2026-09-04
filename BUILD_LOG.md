@@ -1,7 +1,8 @@
 # 🌿 KitchenSink4Web: The Build Log
 
 **Author:** Nykolus Alvut (with Claude Code)
-**Status:** DESIGN PHASE. No code, no spikes run, no license chosen.
+**Status:** DESIGN PHASE, review absorbed (BUILD-READY-WITH-EDITS, 15/15
+applied). No code, no spikes run, no license chosen.
 **Storefront department:** GARDEN, "browsing the great outdoors."
 
 Private record (gitignored-class in spirit). The public repo, when it exists,
@@ -83,9 +84,13 @@ reasoning time.
 states the tool set "MUST NOT vary per-connection or as a side effect of other
 requests on the connection." The family's shipped `enable_tools` pattern, which
 flips packs on mid-session using session-scoped visibility and a `list_changed`
-notification, does both of those things. Assessment recorded in DESIGN 7.2: the
-family pattern is not conformant with the current revision. KS4Web will not ship
-it, and instead tiers through launch-time packs plus the client's own
+notification, does both of those things. Assessment recorded in DESIGN 7.2, and
+stated precisely after the design review: the family pattern **cannot survive
+migration to 2026-07-28**, while remaining legal under the 2025-era revision
+FastMCP negotiates today, so nothing shipped is non-conformant right now and the
+trigger is a FastMCP version bump rather than any decision of ours. KS4Web will
+not ship the pattern regardless, and instead tiers through launch-time packs plus
+the client's own
 progressive-disclosure machinery (`anthropic/alwaysLoad`, `anthropic/searchHint`)
 plus in-tool parameters. Whether the three shipped siblings change is a
 family-wide call flagged for the author.
@@ -160,5 +165,90 @@ enforced by a test, so an open-core seam exists whether or not it is ever used.
 questions, then the spike phase. S1, the projection proof, decides whether the
 flagship claim survives contact with a real page, and nothing gets built until
 it reports.
+
+---
+
+## Part II: the design review, absorbed (2026-09-05 00:31 KST)
+
+A Fable-tier adversarial review of DESIGN and PLAN at commit `2b0a948`, run as
+verification rather than style critique: the MCP 2026-07-28 spec fetched live,
+the installed Claude Code binary (v2.1.220, not the v2.1.92 the research was
+built against) grepped directly, the Playwright source tree, the Chromium
+developer blog, and Mozilla's source docs all checked against the load-bearing
+claims. Report:
+`internal notes/20260905_ks4web_design_review.md`.
+
+**VERDICT: BUILD-READY-WITH-EDITS.** No design pillar was invalidated. The spec
+quote is verbatim-correct, all five engine-lane facts hold against primary
+sources, and the client-behavior facts came back four-for-five, with the fifth
+being a sourcing error rather than a false belief. **All fifteen proposed edits
+(E1 through E15) are applied.**
+
+**The two genuine specification gaps**, both in the flagship subsystems and both
+closed before the Phase 2 freeze rather than after it:
+
+- **The rung-5 floor was not bounded.** The degradation ladder called its floor
+  "structurally impossible" to overflow while that floor enumerated every field
+  of every form, which a real airline booking page or a 500-field settings screen
+  makes arbitrarily large. Rung 5 now caps its own inventories and the claim is
+  true instead of hopeful.
+- **Mid-batch rebind semantics were undefined.** `fill_form` is a batch, and
+  typing into field one routinely re-renders its siblings on any React form, so a
+  fingerprint change partway through a batch is the ORDINARY case, not a corner.
+  The sibling pattern (validate every anchor, then execute) does not survive
+  mutations the batch itself causes, and browser actions do not roll back. DESIGN
+  3.5 now defines resolve-all-then-recheck-each, stop-on-refusal, completed items
+  stay completed, remainder reported `not_attempted`. Round A was already
+  scheduled to test batch behavior that no document defined.
+
+**The correction worth remembering.** The 3,000-token subagent result cap was
+recorded as verified from the Claude Code binary. It is not: no such constant
+exists in v2.1.220 near that path, the issue (#75267) is a field report, and the
+value almost certainly arrives through the same remote feature gate that carries
+the 25,000-token limit. The misattribution began in the research and the design
+inherited it. The `budget_tokens=2500` subagent recipe survives, relabeled as
+tracking a MOVABLE limit that S8 measures rather than a constant to trust.
+
+Also landed: the sibling-conformance framing tightened to per-negotiated-revision
+with the FastMCP version bump named as the trigger (nothing shipped is
+retroactively non-conformant); the `server/discover` MUST added to S8 as a
+FastMCP question; the rebind ladder's entry conditions enumerated ahead of its
+five outcomes; anchor-id exposure and delta-token retention stated; the token
+estimator named (`tiktoken`, `o200k_base`, 10 percent margin) so the hard-cap
+property is checkable; S4 given an objective demotion threshold in place of "does
+it gut the surface"; corpus construction scheduled before S1 and S2 instead of
+assumed; a latency gate added, since token-cheap and wall-clock-expensive is the
+same user pain by another route and the hidden-content normalizer is
+per-node-style-hungry; the S1 blind trial given a protocol; and Edge added to the
+S9 probe, since Edge inheriting Chrome 136's default-profile restriction was
+community-reported and would otherwise have shipped as an untested assumption.
+
+### Two rulings recorded
+
+**Q11, names. RULED by the author, 2026-09-04.** Product is KitchenSink4Web
+(KS4Web), Garden department. Local registration alias `web`, by family
+convention, since the siblings register as `word` and `ppt` and the alias is what
+the author types in his own client. Genericity accepted knowingly: it is a local
+registration name, not a package name or a market claim.
+
+**Q6, browser verbs. RULED under standing author delegation, flagged for author
+review.** Browser-native verbs (`navigate`, `click`, `type`, and the rest) are
+correct where the domain demands them. The family grammar's principle is
+one-name-per-concept, not identical verbs across products, and forcing `set_` or
+`apply_` onto navigation would produce jargon nobody searches for. Reversible at
+zero cost until ship.
+
+The remaining ten questions are unruled, and PLAN now carries a **rulings
+checkpoint** between the spike gate and Phase 0 saying which phase each one
+blocks: Q2 and Q5 before Phases 3 and 7, Q10 before Phase 6, Q9 before S5 effort
+is spent, Q3 before S9's scope is set, Q1 decoupled. The scope fence's claim that
+the workflows pack drops "because nothing depends on it" is corrected: no CODE
+depends on it, but DESIGN 6.8, DESIGN 5.6, and the Section 12 capability matrix
+row all do, so dropping Phase 6 edits the matrix and the safety copy in the same
+commit.
+
+**Status unchanged otherwise:** no code, no spikes run, no license, nothing
+published. `spikes/s1/` holds an environment prep venv and is untracked. Next is
+still author review and the remaining rulings, then S1.
 
 ---

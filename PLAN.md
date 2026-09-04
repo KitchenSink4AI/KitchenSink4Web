@@ -35,7 +35,7 @@ file to save, no package to round-trip, no COM tier, and no corruption story.
 | `scripts/measure_surface.py` plus the operations counter | word-mcp `scripts/` | Port. Every public count comes from running it, never hand-math. |
 | Docstring budget test and the no-em-dash test | word-mcp / pptx tests | Port. Enforces the 80-120 token description budget and the sub-250 per-schema ceiling mechanically from day one, which is how the lite bill stays under 1,500. |
 | Process-hygiene DISCIPLINE (owned-PID journal, never sweep by name, never touch a process we did not spawn, two-phase verify with a grace window) | word-mcp / pptx / xlsx `com_gates` | The RULES port verbatim and are the reason KS4Web will not repeat chrome-devtools-mcp's 42-orphan defect. The MECHANISM is new: browser process trees, death-pipe sentinels, and profile-dir reaping instead of COM PIDs. |
-| View / batch layer STRUCTURE (anchored projection, validate every anchor before executing any, one lock and one commit per batch) | pptx `ops/view.py`, `ops/batch.py`; xlsx `get_grid_view` | The PATTERN ports; the internals are entirely new. |
+| View / batch layer STRUCTURE (anchored projection, validate every anchor before executing any, one lock and one commit per batch) | pptx `ops/view.py`, `ops/batch.py`; xlsx `get_grid_view` | The PATTERN ports; the internals are entirely new. **One place it does not port cleanly:** validate-all-then-execute assumes the batch cannot invalidate its own targets, which is false in a browser, where filling field one re-renders its siblings. DESIGN 3.5's mid-batch rebind rules replace the file-format assumption, and there is no commit to roll back. |
 | Pack registry shape and `KS4WEB_MODE` env contract | word-mcp `packs.py` | **Shape only.** The runtime `enable_tools` machinery is deliberately NOT ported (DESIGN 7.2, a conformance decision). What ports is the pack membership table, the startup-mode parsing including the "typos fail loudly" fix, and the surface-report math. |
 | CI workflows with trusted publishing, Dockerfile, registry manifest, `glama.json` two-field claim file, `mcp-name` marker discipline | word-mcp / pptx repos | Copy the shapes; fill KS4Web specifics. The KS4PPT v1.0.1 lesson stands: the `mcp-name` marker and the sub-100-char `server.json` description exist BEFORE the first release. |
 
@@ -100,13 +100,35 @@ get a storage dump into the transcript.
 Fixtures B and C are **synthetic and live in the repo.** No real user data, no
 private pages, no live third-party sites in any automated gate.
 
+**The corpus is a build item and it is scheduled, not assumed.** S1 cannot run
+without corpus A frozen, and S2 cannot run without the React re-render, the
+virtualized list, and the route change from corpus B, so "nothing is built until
+the spikes report" has one stated exception and this is it. The sequence:
+
+| Corpus work | Due |
+|---|---|
+| Corpus A: the four MEASURED pages fetched and frozen to disk as snapshots, with the fetch date and page revision recorded | **Before S1 starts.** S1 measures against the frozen copies, not the live pages. |
+| Corpus B subset: React re-render page, react-window virtualized list, client-side route change, plus the 50,000-node DOM (S1 needs it for the degradation rungs and the latency measurement) | **Before S1 and S2 start.** |
+| The rest of corpus B: iframes, shadow roots, canvas, mutating page, rowspan tables, div-tables, lazy images, `isTrusted` control, `<div onclick>`, moving target, overlay, portal dropdown, console flood, secret fields | Before **Phase 2** opens, since the Phase 2 gate is verified against them. |
+| Corpus C in full | Before **Phase 3** opens, since the Phase 3 gate IS corpus C driven end to end. |
+
+The widened benchmark set (heavy SPA, documentation site, e-commerce product
+page, login page, GitHub repo page) is frozen with the rest of B, before Phase 2.
+Fixture pages are hand-written HTML with no framework build step where possible,
+so the corpus itself never becomes a maintenance project.
+
 ---
 
 ## 2. The spike phase
 
-**Nothing is built until the spikes report.** The architecture freezes only
-after the spike gate. Every spike has an explicit kill or fallback criterion so
-it ends in a decision rather than a vibe.
+**Nothing is built until the spikes report**, with the single scheduled
+exception named in 1.3: the corpus A freeze and the S1/S2 subset of corpus B are
+built FIRST, because the spikes measure against them and a spike run against
+live pages is not reproducible. The architecture freezes only after the spike
+gate. Every spike has an explicit kill or fallback criterion so it ends in a
+decision rather than a vibe, and that rule binds this document too: a gate
+phrased as a judgment call is a defect in the plan, not a spike that happens to
+be qualitative.
 
 Spikes are ordered by information value per hour, with one deliberate change
 from the engine research's ordering: **S1 (the projection proof) comes first**,
@@ -123,18 +145,49 @@ projection out, token count printed.
 - **GATE:** the Treaty of Versailles article projects to **under 5,000 tokens**
   at `detail=standard`, the GDP table page to under 3,000 for structure plus
   the first row page, and the httpbin form to under 300.
+- **The tokenizer convention is fixed before the first measurement**, per DESIGN
+  3.4: counts are `tiktoken` on `o200k_base`, the same estimator the budget meter
+  enforces against, and every reported number names it. A number measured with a
+  different tokenizer is not comparable to the MEASURED baseline and does not
+  count toward this gate.
 - **THE HARDER GATE:** a fresh agent given only the projection can complete
-  "find and click the link to the Fourteen Points" without asking for a second
-  full read. A cheap read that is not actionable is not the product. Run this as
-  a blind trial with an agent that has not seen the page.
+  "find and click the link to the Fourteen Points." A cheap read that is not
+  actionable is not the product. Run this as a blind trial with an agent that has
+  not seen the page.
+- **The blind-trial protocol, defined so the gate means one thing.** The agent
+  gets the initial projection and may make **up to three follow-up calls** drawn
+  only from the cheap set (`find_elements`, or a region or section expansion via
+  `get_page_view(location=...)`). It may NOT request a second full-page read at
+  any budget, and it may not be told anything about the page beyond the
+  projection. **Success is the correct ref for the Fourteen Points link,
+  identified within that allowance.** A mid-prose link will often not survive the
+  capped affordance ranking, so the follow-up allowance is exactly what is being
+  tested: the claim is that the orientation names the cheap route to the answer,
+  not that the first payload contains everything. Record the number of follow-up
+  calls used, since that count is the honest measure of how good the orientation
+  is. Run the trial on at least three of the frozen pages, not only Versailles.
+- **Wall-clock is measured here too, and it is a real number, not a note.** A
+  read that is token-cheap and wall-clock-expensive is the same user pain by
+  another route, and the projection pipeline is computed-style-hungry: the
+  hidden-content normalizer (white-on-white contrast, off-screen position,
+  near-zero font size) implies per-node style computation, and the 50,000-node
+  fixture is where that bill lands. Report wall-clock per projection for every
+  fixture, cold and warm, with the p50 and p95 over ten runs. **The measured p95
+  on the fixture set becomes the Phase 2 latency budget**, so this spike sets the
+  bound rather than guessing one in advance.
 - **KILL CRITERION:** if the token target is reachable only by dropping the
   affordance set below actionable, or if actionability requires more than 5,000
   tokens on an ordinary article, **the flagship claim is wrong** and the
   positioning changes before a line of production code is written. Escalate to
-  the author immediately; do not proceed to S2.
+  the author immediately; do not proceed to S2. **A latency finding is not a kill
+  and it is not nothing:** if the 50,000-node fixture projects slower than a few
+  seconds, the normalizer's cost model is a Phase 2 design input (batch the style
+  reads in one evaluated pass, sample rather than sweep, or cap the node count
+  the normalizer visits and report the cap in the completeness block).
 - Output: the measured degradation ladder, the real ratio of interactive to
-  total nodes on each fixture, and the first honest version of the
-  completeness-block field list.
+  total nodes on each fixture, the first honest version of the
+  completeness-block field list, and the latency table that sets the Phase 2
+  bound.
 
 ### S2: Anchor durability
 
@@ -172,8 +225,18 @@ bad set specifically: response-body capture, download events, HTTP auth,
 `set_extra_http_headers` on redirects, locale and timezone emulation, and
 clicking inside a CSS-transformed element.
 
-- **GATE:** is the unsupported set small enough to declare as documented
-  limitations, or does it gut the surface?
+- **GATE, stated as a threshold rather than a judgment call.** The dividing line
+  is the LITE CORE, because that is the set a user gets with no flags and the set
+  the positioning promises on every lane. **If any lite-core operation is
+  unsupported, or silently degraded rather than loudly refused, on
+  `moz-firefox`, the Firefox lanes demote to read-mostly.** If the affected
+  operations are pack-tier only, they become `LANE_UNSUPPORTED` entries in the
+  capabilities truth table and the lane survives at full standing. Silent
+  degradation counts as unsupported for this test, because an operation that
+  reports success without acting is worse than one that refuses.
+- **The probe is run per operation and recorded as a row**, supported / degraded
+  / unsupported, with the observed failure mode quoted. A row without an observed
+  failure mode is not a finding.
 - Output: **the seed of the `manage_session(capabilities)` truth table and every
   `LANE_UNSUPPORTED` message.** This spike literally produces a product feature.
 - **FALLBACK:** Firefox lanes demote to read-mostly and Chromium becomes the
@@ -185,7 +248,10 @@ Start Firefox manually with `--remote-debugging-port=9222` on the real profile,
 connect a bare WebSocket, and drive `session.new`, `browsingContext.getTree`,
 `script.evaluate`, `browsingContext.captureScreenshot`, `input.performActions`.
 
-- **GATE:** a read-mostly Lane C toolset is achievable in a few hundred lines.
+- **GATE, stated operationally:** all five commands round-trip successfully
+  against a user-launched Firefox on a real profile, driving a read and a click
+  end to end. "A few hundred lines" is the expectation, not the criterion; the
+  criterion is that the five round-trip.
 - **Why it runs early even though Lane C may ship later:** this is the one
   capability no competing MCP server has, because Playwright cannot attach to an
   existing BiDi session and Chrome forbids the equivalent. Knowing whether it is
@@ -227,15 +293,36 @@ KS4Web spawned.
 Every one of these is a binary fact the design depends on, and all are cheap to
 check against the installed client.
 
+**Run every check against the client version installed AT SPIKE TIME, and record
+that version in the spike output.** The research baseline (v2.1.92) is already
+well over a hundred releases stale, and at least one of these facts appears to be
+delivered remotely rather than compiled in, so a quoted version number is not a
+substitute for a fresh run.
+
 - Launch-time pack selection produces an identical `tools/list` on every
   connection.
+- **Does the installed FastMCP implement the `server/discover` RPC?** MCP
+  2026-07-28 makes it a MUST for servers, and KS4Web does not implement the
+  protocol layer itself, so this is a framework question with a framework answer:
+  either FastMCP supplies it at the negotiated revision, or KS4Web's conformance
+  claim has a hole it does not control. Record the FastMCP version and the
+  revision it advertises, since that same version number is the trigger named in
+  DESIGN Open Question 4.
 - `anthropic/alwaysLoad` and `anthropic/searchHint` behave as documented in the
-  binary read, on the installed Claude Code version.
-- Elicitation is advertised; sampling is not; MRTR `InputRequiredResult` round-trips.
-- The 25,000-token result cap and the 3,000-token subagent cap, confirmed
-  empirically.
+  binary read, on the installed Claude Code version. Check whether the client's
+  server-side `search_hints` override table overrides a tool's own `_meta` hint.
+- Elicitation is advertised; sampling is not; MRTR `InputRequiredResult`
+  round-trips, and `requestState` survives the retry so the gate engine can
+  correlate.
+- The 25,000-token result cap, confirmed empirically. **And the subagent cap,
+  measured rather than assumed:** DESIGN 3.2 records it as a field report of
+  roughly 3,000 tokens that is apparently remote-delivered and therefore movable,
+  so the job here is to find the CURRENT number by bisecting result sizes inside
+  a subagent, and to re-check it near ship rather than trusting this run forever.
+  The 2,500 subagent-safe recipe is set from what this measures.
 - `readOnlyHint: true` actually unlocks concurrent execution.
-- Tool descriptions truncate at 2,048 characters.
+- Tool descriptions truncate at 2,048 characters, and the model-facing text
+  carries the "[truncated]" marker DESIGN 7.3 describes.
 - **GATE:** every assumption in DESIGN Section 7 is confirmed or the design
   adapts before Phase 7 builds on it.
 
@@ -247,6 +334,12 @@ against a Chrome started with a non-default `--user-data-dir`.
 - **GATE:** confirm firsthand that Chrome 136+ ignores the debugging flag on the
   default data directory. Do not take the blog post's word for the exact failure
   mode.
+- **Probe Edge alongside Chrome, same two tests.** DESIGN 4.3 offers `msedge` as
+  a Lane B channel, and Edge inheriting the Chrome 136 default-profile
+  restriction is community-reported rather than officially documented, so it is
+  an assumption the plan would otherwise carry into a shipped lane untested. If
+  Edge behaves differently in either direction, that belongs in the capabilities
+  truth table and the Known Limitations page.
 - **Open empirical question this resolves:** does a Chrome `User Data` directory
   copied to a non-default path still decrypt its cookies on the same machine and
   user account? App-Bound Encryption makes this genuinely uncertain and it
@@ -271,6 +364,28 @@ whole session and not just one call. Everything else is a delivery decision.
 
 Spike outputs are saved as permanent artifacts to `Draft/Working Files/Agent
 Results/` with DTG names, per house rule.
+
+### The rulings checkpoint
+
+The twelve open questions in DESIGN Section 11 are not schedule-neutral, and a
+plan that never says when they get answered will discover the coupling by
+building the wrong thing first. Rulings are collected here, between the spike
+gate and Phase 0, because several of them decide what Phase 0 writes down.
+
+| Question | Blocks | Why it blocks |
+|---|---|---|
+| Q11 names, alias, env vars | **Phase 0** | Q11 IS the Phase 0 `pyproject`: package name, console scripts, env prefixes. **RULED 2026-09-04** (KitchenSink4Web / KS4Web, Garden department, alias `web`). |
+| Q6 browser verb grammar | **Phase 0 and Phase 2** | Q6 names the first three tools Phase 2 lands, and a reversal after Phase 2 renames the whole surface. **RULED 2026-09-05** under standing delegation, flagged for author review, reversible until ship. |
+| Q2 screenshot in lite | **Phase 3, and Phase 7's gate** | Changes the lite budget arithmetic and the wording of discoverability rule 1, since lite currently promises no pixel path at all and the Phase 7 gate tests exactly that refusal. |
+| Q5 read-only by default | **Phase 3** | Read-only is enforced at registration time, so the default decides Phase 3's registration behavior, every quickstart line, and the dogfood default the author lives with from Phase 4. |
+| Q10 workflows in v1 | **Phase 6** | Decides whether Phase 6 runs at all, and the drop is not free (see the scope fence). |
+| Q9 dogfood commitment | **S5 and W7** | Decide before S5 effort is spent, not after: if the author declines to run `--remote-debugging-port` permanently, Lane C Firefox stays technically real but loses its dogfood log, its demo, and the standing to recommend publicly what the author does not do personally. |
+| Q3 Chrome Lane C in v1 | **S9 scope** | Sets how much of the Chrome Lane C probe is worth running. |
+| Q1 license | nothing structural | Genuinely decoupled. DESIGN 10.3's license-agnostic rules bind from Phase 0 regardless, and the `LICENSE` file is a Phase 9 artifact. |
+
+Q4 (the family `enable_tools` question) blocks nothing in this build, since
+KS4Web does not ship the pattern, but S8 supplies the FastMCP version and
+negotiated revision that the ruling should name.
 
 ---
 
@@ -328,9 +443,11 @@ require sticky refs and sticky refs are only useful because reads are cheap.
 - `anchors/`: fingerprints, sticky element map, rebind ladder, delta engine.
 - `get_page_view`, `find_elements`, `get_text` land here as the first three
   tools.
-- **GATE, four parts, all required:**
+- **GATE, five parts, all required:**
   1. **The measured token bill meets every target in DESIGN 3.2** on the frozen
-     benchmark set. Reported by the harness, not by hand.
+     benchmark set. Reported by the harness, not by hand, and counted with the
+     named estimator (`tiktoken`, `o200k_base`) so the gate number and the
+     enforced budget are the same arithmetic.
   2. **Refs are sticky** across re-reads on every fixture, and **zero false
      rebinds** on the pathological fixture.
   3. **The completeness block is accurate**, verified by construction: the
@@ -339,7 +456,16 @@ require sticky refs and sticky refs are only useful because reads are cheap.
      injected hidden element must be counted rather than missed or silently
      included.
   4. **The degradation ladder never truncates mid-structure**, verified by
-     forcing every rung on the 50,000-node fixture.
+     forcing every rung on the 50,000-node fixture. Rung 5's capped inventories
+     (DESIGN 3.4) are exercised specifically: a fixture form with several hundred
+     fields must collapse to the one-line form summary and stay under budget
+     rather than refusing.
+  5. **The latency budget holds.** Wall-clock p95 per projection across the
+     fixture set stays under the bound S1 measured, with the bound written into
+     the harness rather than remembered. Token-cheap and wall-clock-expensive is
+     the same user pain by another route, and the projection pipeline's
+     per-node style computation is where that bill lands, so latency is a gate
+     here and a tracked number at every phase gate afterward.
 
 ### Phase 3: The policy layer (built BEFORE the action tools, deliberately)
 
@@ -439,9 +565,16 @@ client.
   (every selector with every wrong type, two selectors at once, zero selectors),
   handle abuse (page handle from a closed page, session handle from a dead
   session, refs from another page), multiplex discriminator abuse (wrong
-  action/target combos must map to `BAD_PARAMS`), `apply`-style batch atomicity
-  under stale anchors and mid-batch kill, and a check that no raw exception
-  string ever reaches a caller.
+  action/target combos must map to `BAD_PARAMS`), batch behavior under stale
+  anchors and mid-batch kill **tested against the semantics DESIGN 3.5 defines**
+  (resolve all, re-check each target immediately before its own execution,
+  outcome (c) reported per item, outcome (d) or (e) stops the batch with
+  completed items left completed and the remainder reported `not_attempted`),
+  the pre-ladder input cases from the same section (unknown ref, ref belonging to
+  another page handle, gone-marked ref, URL changed with cross-page rebinding
+  off, pending modal), and a check that no raw exception string ever reaches a
+  caller. Browser batches are not atomic and the round tests the stated behavior
+  rather than an assumed rollback.
 - **Round B, safety.** The full adversarial fixture, run by an agent that is
   TOLD to try to get a credential into the transcript, to get an ungated
   destructive action through, to exceed a budget, and to make a hidden
@@ -516,7 +649,14 @@ Phase 9 afterthought.
 
 **W1: The benchmark harness.** Built in Phase 2, run at every phase gate
 thereafter, and published at ship. Pinned incumbent versions, the frozen page
-set, the documented tokenizer convention, raw results committed. The category is
+set, the documented tokenizer convention, raw results committed. **The tokenizer
+convention is `tiktoken` on `o200k_base`, named in every published number**, the
+same estimator the budget meter enforces against (DESIGN 3.4), which is what
+makes "never exceeds its budget" a checkable claim rather than a slogan; conflict
+record #4 is the reason, since the same content measured four ways produced
+4,024, 4,637, 11,717, and 14,400. The harness reports wall-clock alongside tokens
+from the first run, so the latency budget is tracked with the same discipline as
+the token bill. The category is
 full of vendor multipliers with no methodology; the differentiator is that a
 third party can re-run ours and get the same answer. This is also an internal
 regression detector: a phase that quietly inflates the page bill gets caught the
@@ -587,7 +727,7 @@ Explicitly OUT of v1, with the reason:
 | Code mode / programmatic execution surface | Cannot be inherited from the platform (MCP tools are excluded from programmatic tool calling), so building it is a real project. v1.1 at the earliest. |
 | Lane C Firefox, if S5 fails | Moves to v1.1; Lane C ships Chrome-only. |
 | Lane C at all, if S5 and S9 both disappoint | Lanes A and B alone are still a complete product. |
-| `workflows` pack, if Phase 6 runs long | Drops to v1.1 without touching anything else, because nothing depends on it. |
+| `workflows` pack, if Phase 6 runs long | Drops to v1.1. **No code depends on it and the positioning does**, so the drop is not free: DESIGN 6.8 calls workflows-without-eval the whole point of the pack, DESIGN 5.6 sells replay as the answer to the #1645 fork, and the Section 12 capability matrix ships "Audit trail and replay: yes." Dropping Phase 6 therefore also edits that matrix row and removes the eval-alternative line from the safety copy, in the same commit as the drop. Decide it as a positioning change, not a scheduling one. |
 
 **Anti-scope-creep rule for this build:** every "while we are in here" addition
 must name which v1 gate it serves. If it serves none, it goes on the v1.1 list
