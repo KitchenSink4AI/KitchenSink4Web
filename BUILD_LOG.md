@@ -950,3 +950,94 @@ Four.
 **Status:** Phase 1 green. No license, nothing published, no anchors yet.
 
 ---
+
+## Part VII: Phase 1 absorbed into the design (2026-09-05 02:18 KST)
+
+Ten findings from the Phase 1 report written into DESIGN and PLAN. No code
+changed and no test changed, which is the point: these are the documents
+catching up to what the build learned, so the next session reads the corrected
+rule instead of re-deriving it.
+
+### What moved, and where it landed
+
+**Three went to DESIGN 4.7 (Windows process hygiene) as mechanical facts 5
+through 7**, joining the four S7 banked. `OpenProcess` succeeds on a process
+that has already exited for as long as anyone holds a handle to it, so liveness
+waits on the process handle; the naive check fails toward "everything leaked,"
+which sounds conservative and makes the reaper's evidence worthless. A
+parent-PID walk adopts strangers through recycled PIDs, and the recorded number
+is the one that makes the case: a five-process browser tree came back as a
+forty-process claim on this machine, which would have authorized forty kills.
+And the journal's adoption filter is an arrival DIFFERENCE rather than a name
+match, which is what the cheap census buys.
+
+**The census swap is recorded inside fact 2 rather than as a new fact**, since
+it revises the CIM measurement S7 banked rather than adding to it. Toolhelp32
+at single-digit milliseconds against CIM at ~1.0 second for the same table,
+with CIM kept for the command line that only the reaper's last fence reads. The
+paragraph says why this is architectural and not an optimization: a census
+affordable per launch is what makes the before-and-after difference available,
+and the difference is the whole adoption filter.
+
+**The negative control is now in the gate DEFINITION, in both documents**, and
+it is the primary instrument rather than a substitute for breakaway. DESIGN 4.7
+and PLAN Phase 1 both carry it: breakaway is not portable (the ambient job here
+is `0x3000`, `SILENT_BREAKAWAY_OK` with `BREAKAWAY_OK` off, and WMI
+`Win32_Process::Create` does not escape it either), so the gate requires a
+teardown-free browser under a hard-killed parent that MUST survive, and keeps
+breakaway as an optional second instrument. Phase 1's 11 orphans from that
+control are the licensing measurement for its zero-orphan rows. The plan's
+wording changed from "MUST break away" to "MUST demonstrate that it can FAIL,"
+which is what the requirement always meant.
+
+**DESIGN 3.6a gained the driver-boundary term**, 604 ms of round trip against
+245 ms of in-page work on a 5,000-heading fixture, stated as the rule **cap what
+you RETURN, tally what you COUNT**. It is written as a latency finding with a
+correctness edge, because an implementation that derives "omitted 2,700" from a
+list it holds has to hold 2,700 things to say the number. The memoization
+finding went in the same section: the budget line states the total of the
+payload it sits inside, so the render is a fixpoint and most lines get measured
+twice. Both are consequences that shape a Phase 2 rebuild rather than trivia.
+PLAN's Phase 2 gate item 5 gained the same term as a checked property.
+
+**DESIGN 3.4's monotonicity requirement got its mechanism.** The old text asked
+for a monotonic ladder and the caps were non-increasing by construction, and a
+step still grew by 37 tokens because dropping a unit costs what the
+completeness block then spends accounting for it. Reasoning about caps is
+reasoning about inputs; the property is about outputs. So the requirement is now
+**monotonic AS EXPOSED**, enforced by never choosing a dominated rung, and the
+gate asserts the sequence a caller can actually be handed. The distinction
+matters enough to state because the stronger-sounding version is the one that
+is false.
+
+**DESIGN 3.7 gained sub-rule 5, the whole-ancestor-chain visibility rule.** The
+`"Uh oh!"` case was reproduced during Phase 1 by an implementation that
+believed rule 1 had retired it, because the error heading is itself visible and
+sits inside a `display:none` wrapper. PLAN's Phase 2 gate item 9 now requires
+the fixture to hide the heading through an ANCESTOR, since a fixture that hides
+the element itself passes an element-local check and tests nothing.
+
+**DESIGN 3.3's form-control quota is scoped to controls inside a form**, in the
+quota table and in a paragraph next to the zero-quota one, with the reason
+stated: an app shell's loose inputs claiming the "complete, never sampled"
+guarantee turns the guarantee into the flood it was written to prevent, which
+is the ranker failure arriving from the opposite direction. Loose controls are
+not dropped, they lose only the exemption from sampling.
+
+### The two author items
+
+**DESIGN 11 gained Q11a and Q11b under the ruling that spawned them**, with a
+new preamble line saying that a ruled question can reopen a narrower one. Q11a
+tables all twelve `KS4WEB_` variables Phase 1 added, against the three the
+ruling named plus the one Phase 0 added, and asks three things: which are
+supported surface rather than escape hatches, whether the launch-shape four
+collapse into one `KS4WEB_LANE` string, and whether `KS4WEB_JOB_OBJECT=0`
+belongs in public documentation at all given that it turns off a backstop.
+**Q11b records the `manage_session` lane string for ratification**, with the
+schema-budget reason it was chosen, the four-parameter alternative it displaced,
+and its cost stated (a string is not self-documenting the way named parameters
+are). Both are recorded as reversible-until-ship in the same standing as Q6, and
+PLAN's rulings checkpoint gives them a row: they block nothing until Phase 9,
+when they become compatibility surface.
+
+**Suite unchanged and green, 189 unit tests in 3.8 s.** Documents only.

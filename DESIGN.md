@@ -387,7 +387,7 @@ The classes and their quotas:
 | Class | Quota |
 |---|---|
 | Site and page navigation: nav landmarks, tab bars, menubars, breadcrumbs | **Guaranteed floor, filled before any other class.** This is what an agent asks for most and it is small. |
-| Form controls | **Complete whenever the form fits the budget, never sampled.** A half-listed form is not a form. |
+| Form controls, scoped to controls INSIDE a form | **Complete whenever the form fits the budget, never sampled.** A half-listed form is not a form. |
 | Primary actions: submit controls, buttons in `main` or a dialog, anything with `aria-expanded` or `aria-haspopup` | High quota. |
 | In-prose links inside a readable region | **Quota of zero.** |
 
@@ -398,6 +398,18 @@ digest, which names the sections they live in, and to `find_elements`, which
 retrieves one by name for tens of tokens. The completeness block states the
 suppressed count and the class it belongs to, so the absence is reported rather
 than implied.
+
+**The form-control scope is the second load-bearing one, and Phase 1 had to
+narrow it during the build.** A control counts as a form control only when it
+is inside a `<form>`. The first version classified by element type, so every
+loose `<input>` on an app shell claimed the "complete, never sampled"
+guarantee, and an app shell has search boxes, filter toggles, and inline
+controls scattered outside any form element. The guarantee then applies to a
+population it was never sized for and turns into the flood it was written to
+prevent, which is the same failure as the ranker burying the tab bar, arriving
+from the opposite direction. Loose controls are not dropped; they compete in
+the primary-actions class on their merits like everything else, and they lose
+only the exemption from sampling.
 
 Two corollaries, both cheap and both answering a specific blind-trial failure:
 
@@ -669,10 +681,26 @@ budget (floor 1,629) and refused eight of eleven pages at 900, which is exactly
 the unbounded-floor case the capped inventories above now close. Two further
 defects the prototype exposed, both stated as requirements rather than notes:
 
-- **The ladder is monotonic.** On httpbin the prototype got BIGGER at rung 4
-  (743 to 793 tokens) because the digest switched from a short `lead:` line to a
-  heading list. A rung that costs more than the rung above it is a defect, and
-  the harness asserts monotonicity per page across every rung.
+- **The ladder is monotonic as EXPOSED, which is a weaker requirement than
+  every rung being smaller than the one above it, and the weaker requirement is
+  the correct one.** On httpbin the prototype got BIGGER at rung 4 (743 to 793
+  tokens) because the digest switched from a short `lead:` line to a heading
+  list. A rung the caller can be handed that costs more than a rung above it is
+  a defect, and the harness asserts monotonicity per page across every rung.
+
+  **Phase 1 found that non-increasing caps do not deliver the property.** The
+  caps are non-increasing by construction and a step still grew: dropping a
+  unit occasionally costs more than it saves, because the completeness block
+  then has to account for what went, and on the `names` fixture rung 7 came
+  back 37 tokens larger than rung 6 for exactly that reason. Reasoning about
+  the caps is reasoning about the inputs; the property is about the outputs. So
+  the mechanism is **never choose a dominated rung**: a rung whose rendered
+  cost is at or above the cost of any rung above it is DOMINATED and the
+  selector skips it, which makes the ladder the caller sees monotonic whether
+  or not every individual step was. The other half of that fix was a real
+  defect the domination check exposed rather than papered over, a suppression
+  line that explained the in-prose rule even on pages where nothing in prose
+  had been suppressed, so the check earns its place twice.
 - **The rungs are finer than five and less correlated.** Measured steps on
   Versailles bought 20 percent, then 9 percent, then 17 percent, so a 2,500
   budget skipped the projection from 3,711 straight to 2,182, dropping 22
@@ -892,7 +920,33 @@ optimizing the wrong thing.
 **The Phase 2 latency budget, set from measurement:** projection p95 at or
 under **500 ms up to 50,000 nodes** and at or under **1.0 s up to 100,000
 nodes**, with Python-side assembly at or under 10 ms. The prototype passes
-both with margin.
+both with margin, and so does the shipped projector: 417 ms p95 at 50,012
+nodes and 676 ms at 100,012, with Python assembly at 5.9 ms.
+
+**The hand-back is a term of its own, and on a wide page it is the dominant
+one.** Phase 1 built the projector against a fixture carrying 5,000 headings
+and found the round trip costing **604 ms against 245 ms of actual in-page
+work**, which means more than half the wall clock was JSON crossing the driver
+boundary rather than anything the walk did. The extractor was returning every
+heading it found so the Python side could count them and then discard almost
+all of them, and the transfer scaled with the page while the answer did not.
+**The rule that follows is cap what you RETURN, tally what you COUNT.** The
+in-page pass counts every unit it sees and hands back its tallies as integers
+alongside a capped list of the units that will actually be rendered, so the
+completeness block's suppression figures come from the extractor's own count
+rather than from the length of the list in hand. No completeness figure was
+lost to the cap, which is the test of whether the split was drawn in the right
+place. This is a latency finding with a correctness edge: an implementation
+that derives its "omitted 2,700" from a list it holds in memory has to hold
+2,700 things to say the number, and one that carries the tally does not.
+
+**Per-line token measurement has to be memoized, for a structural reason
+rather than a performance one.** The budget line states the total of the
+payload it sits inside, so the render is self-referential and resolves to a
+fixpoint, which means most lines are measured at least twice. Memoizing the
+line-level counts and using `encode_ordinary` took Python assembly from 14 ms
+to under 6 ms. The estimator's BPE table is warmed when a browser starts, so
+the one-off load never lands inside the first read a user waits on.
 
 **One finding that reframes the whole latency story for users.** Cold
 navigation with a `networkidle` settle cost 12.8 seconds on cnn.com and on
@@ -945,6 +999,22 @@ Four sub-rules follow, all mechanical:
    `(unnamed)` plus one stable attribute (id, `data-testid`, or role plus
    ordinal). Unnamed and honest beats named and wrong, and the completeness
    block's name-quality flag counts how often it happened.
+
+5. **A region label requires the WHOLE ancestor chain up to the region to be
+   visible, not just the labelling element itself.** This is the sub-rule that
+   actually fixes the `"Uh oh!"` case, and Phase 1 discovered it by reproducing
+   that exact failure while believing the rule above had already retired it.
+   The obvious implementation takes the first heading in the region's subtree
+   and checks that the heading is visible, which the GitHub error heading
+   passes: it carries real text, it has no `hidden` attribute, and its own
+   computed style says it renders. It never rendered because a wrapper several
+   levels above it carried `display:none`, and visibility on the web is a
+   property of a chain rather than of an element. So the label walk climbs from
+   the candidate to the region boundary and rejects the candidate if any link
+   in that chain is hidden. **The general lesson is worth more than the fix:**
+   any per-element visibility test in the projection is answering a question
+   about an element's ancestors, and one that stops at the element gives a
+   confident wrong answer rather than a missing one.
 
 **The digest gate needs the same treatment, and it is the same disease.** The
 prototype's `lead:` field took the first `<p>` over 80 characters anywhere in the
@@ -1285,10 +1355,27 @@ harness shell, and spawned children inherit it, which would have made every
 harshest scenario was re-run with the child created under
 `CREATE_BREAKAWAY_FROM_JOB` (granted), genuinely outside any job, and both
 lanes still reaped cleanly. So Playwright's own death pipe is doing the work
-today. **The consequence is a testing requirement: the Phase 1 orphan gate must
-break away from the ambient job or it proves nothing**, because an orphan bug
-is invisible when the server is launched from a shell that owns a
-kill-on-close job. That is now a named part of the gate rather than a footnote.
+today. **The consequence is a testing requirement: the orphan gate must prove
+it can FAIL, or it proves nothing**, because an orphan bug is invisible when
+the server is launched from a shell that owns a kill-on-close job. That is now
+a named part of the gate rather than a footnote.
+
+**The gate definition names TWO instruments, and the second one is the
+requirement.** Breakaway was the mechanism S7 used and Phase 1 found it is not
+portable: the ambient job on this machine carries `0x3000`,
+`KILL_ON_JOB_CLOSE` plus `SILENT_BREAKAWAY_OK` with `BREAKAWAY_OK` off, so the
+explicit flag is denied on some paths and accepted on others, and the child
+lands inside a kill-on-close job either way. Creating the victim through WMI
+`Win32_Process::Create`, which builds the process from the service rather than
+from us, does not escape it either. **So the gate requires a NEGATIVE CONTROL
+and takes breakaway as an optional second instrument where the environment
+grants it.** The control starts a browser under plain `Popen` with no death
+pipe, no job object, and no teardown of any kind, hard-kills its parent, and
+requires that the browser SURVIVE. Phase 1 measured 11 orphaned processes from
+that control, which is what licenses the zero-orphan rows that follow it.
+Breakaway is a proxy for "the harness is not doing the work"; the negative
+control measures that property directly, on whatever machine the gate happens
+to run, which is why it is the primary instrument rather than the substitute.
 
 **Four mechanical facts a Python implementation needs, all measured:**
 
@@ -1305,7 +1392,17 @@ kill-on-close job. That is now a named part of the gate rather than a footnote.
    `Get-CimInstance Win32_Process` supplies pid, ppid, name, executable path,
    and command line. Cost measured at roughly **1.0 second for 557
    processes**, which is far too slow for a hot path and entirely fine for
-   shutdown and for a periodic sweep. The design budgets it accordingly.
+   shutdown and for a periodic sweep. **Phase 1 replaced it for the census.**
+   The Toolhelp32 snapshot API (`CreateToolhelp32Snapshot`, `Process32FirstW`,
+   `Process32NextW`) supplies pid, ppid, and image name through the same ctypes
+   route at **single-digit milliseconds** for the same process table, which is
+   three orders of magnitude cheaper and makes a per-launch census affordable
+   rather than something the design has to ration. CIM stays for the one field
+   Toolhelp32 does not carry, the command line, which only the reaper's last
+   fence reads. **The consequence is architectural rather than cosmetic:** a
+   census cheap enough to run on every launch is what lets the journal record
+   who was already there before we started, and that before-and-after
+   difference is the whole adoption filter in defense 2.
 3. **Playwright's Python API does not expose the browser process PID**
    (`context._impl_obj` carries no pid or process attribute), so the owned-PID
    journal cannot be populated from the driver. It comes from the process
@@ -1315,6 +1412,43 @@ kill-on-close job. That is now a named part of the gate rather than a footnote.
    `page.goto()` against an endpoint that never answers returned a
    `TimeoutError` at 3,017 ms against a 3,000 ms budget on both lanes, and the
    browser was fully usable afterward.
+
+**Three more facts came out of building the layer in Phase 1, and each one is
+a defect the obvious implementation has.** They are recorded here because all
+three fail in the direction that authorizes a kill or hides a survivor, which
+is the direction a hygiene layer must never fail in.
+
+5. **`OpenProcess` succeeding does not mean the process is alive.** A handle
+   keeps the process object resident after the process has exited, and a parent
+   holding a `Popen` holds exactly such a handle, so the naive liveness check
+   reports every dead child as a survivor for as long as its parent lives.
+   **Liveness waits on the process HANDLE**, which signals on exit, rather than
+   asking whether the PID can be opened. The naive version fails toward
+   "everything leaked," which sounds conservative and in practice makes the
+   reaper's evidence worthless.
+
+6. **A parent-PID walk adopts strangers, because a ppid field points at a
+   NUMBER and Windows recycles PIDs.** An unrelated process whose parent PID
+   happens to match a recycled value enters the walk as a child. Measured on
+   this machine, a genuine five-process browser tree came back as a
+   **forty-process claim**, which would have authorized forty kills. **A child
+   cannot predate its parent**, so every candidate's creation time is compared
+   against its claimed parent's, and every one of those thirty-five dropped out
+   without dropping a real child. The rule generalizes past this walk: any
+   Windows process relationship inferred from a PID needs a creation-time
+   check, since the PID alone is not an identity.
+
+7. **The journal's adoption filter is a difference, not a name match.** Only
+   browser-shaped descendants that appeared between the pre-launch census and
+   the post-launch one enter the journal, which is what makes fact 2's cheap
+   census load-bearing. This is the opposite of the banned pattern rather than
+   a soft version of it: sweeping BY name would authorize killing a browser the
+   user started, and the filter here can only ever authorize something we
+   watched arrive. The reaper's last fence then fires on **positive evidence of
+   somebody else's ownership**, never on the absence of evidence of ours,
+   because requiring a command line that names an owned profile declines every
+   helper process that does not repeat its root's flags, and declining to kill
+   a helper is how the orphan gets left behind.
 
 **Design read: the death pipe is doing the work, and the job object is a
 cheap, provably functional belt-and-braces backstop.** Both hooks the three
@@ -2102,6 +2236,13 @@ verbs)** under standing author delegation, flagged for author review and
 reversible until ship. The rest are open, and PLAN's rulings checkpoint says
 which phase each one blocks.
 
+**A ruled question can reopen a narrower one, and Q11 did.** Building an engine
+turns a naming ruling into an inventory, so Q11 now carries two sub-questions
+(11a, the twelve environment variables Phase 1 added; 11b, the `manage_session`
+lane string) recorded underneath the ruling that spawned them. Neither blocks a
+phase and both are cheaper to rule on now than after the first release makes
+them compatibility surface.
+
 1. **The license.** Which of the three, and if open-core, where does the seam
    run given that the safety layer is the differentiator (Section 10.2c)?
 
@@ -2181,6 +2322,58 @@ which phase each one blocks.
     buys. **Genericity accepted**, knowingly, since the alias is a local
     registration name and not a package name or a market claim. The package,
     console scripts, and env prefixes stand as written.
+
+    **11a. OPEN SUB-QUESTION, raised by Phase 1: the env-var inventory grew
+    from three to fifteen and nobody ruled on the twelve.** The ruling above
+    named `KS4WEB_MODE`, `KS4WEB_PACK_POLICY`, and `KS4WEB_ALLOWED_ROOTS`, and
+    Phase 0 added `KS4WEB_READ_ONLY` as the environment form of `--read-only`.
+    Phase 1 added twelve more as it built the engine, each one reasonable on its
+    own and none of them reviewed as a set:
+
+    | Variable | Governs | Default |
+    |---|---|---|
+    | `KS4WEB_LANE` | default lane when the call names none | `A` |
+    | `KS4WEB_ENGINE` | bundled engine on Lane A | `chromium` |
+    | `KS4WEB_CHANNEL` | installed channel on Lane B | `chrome` |
+    | `KS4WEB_HEADLESS` | headed or headless launches | headless |
+    | `KS4WEB_FIREFOX_PATH` | explicit Firefox binary for Lane B | discovered |
+    | `KS4WEB_AUTO_INSTALL` | whether a missing browser installs on demand | on |
+    | `KS4WEB_TIMEOUT_MS` | per-operation timeout | 30,000 |
+    | `KS4WEB_IDLE_PARK_S` | idle park to `about:blank` | 300 |
+    | `KS4WEB_IDLE_CLOSE_S` | idle context recycle | 1,800 |
+    | `KS4WEB_PROFILE_ROOT` | where throwaway profiles are created | temp dir |
+    | `KS4WEB_STATE_DIR` | where the owned-PID journal lives | state dir |
+    | `KS4WEB_JOB_OBJECT` | the job-object backstop, for embedding | on |
+
+    Three things need a ruling and none of them is urgent enough to block a
+    phase. **Which of these are supported surface** and which are escape
+    hatches that may change without notice, since a documented variable is a
+    compatibility promise and twelve of them is a large promise to make by
+    accident. **Whether the launch-shape four (`LANE`, `ENGINE`, `CHANNEL`,
+    `HEADLESS`) should collapse into one `KS4WEB_LANE` string** matching the
+    `lane` parameter in 11b below, which would take the inventory to nine and
+    leave exactly one way to express a launch shape rather than two. And
+    **whether `KS4WEB_JOB_OBJECT=0` belongs in public documentation at all**,
+    given that it turns off a safety backstop and its only stated use is
+    embedding KS4Web inside a larger process that owns its own job. The
+    variables are recorded here rather than only in the code so the ruling has
+    something to rule on.
+
+    **11b. The `manage_session` lane string, RECORDED FOR RATIFICATION.**
+    Phase 1 needed a way to express the launch shape and chose one parameter
+    carrying the whole thing: `lane="A"`, `"A:firefox"`, `"B:chrome"`,
+    `"B:msedge"`, `"B:moz-firefox"`, any of them with `"+headed"`. The
+    alternative was four parameters (lane, engine, channel, headless), and the
+    reason for the string is schema budget: four parameters on `manage_session`
+    is roughly thirty tokens of schema on a tool whose whole job is lifecycle,
+    and DESIGN 3.2's per-schema ceiling is tight enough that the flagship needs
+    the room more. A typo refuses by naming every accepted form rather than
+    downgrading to some other lane, which is the property that makes a
+    stringly-typed parameter acceptable here at all. **This is a build decision
+    standing in for an author ruling and it is reversible until ship**, in the
+    same standing as Q6. The cost of the string is that it is not
+    self-documenting in a schema the way named parameters are, and the
+    docstring carries the whole grammar to compensate.
 
 12. **Launch shape.** Own Show HN or a family launch? The research is blunt that
     the right thing does not win by itself, and that a Show HN escaping this exact

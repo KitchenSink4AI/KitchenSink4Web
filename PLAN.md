@@ -585,6 +585,7 @@ gate and Phase 0, because several of them decide what Phase 0 writes down.
 | Question | Blocks | Why it blocks |
 |---|---|---|
 | Q11 names, alias, env vars | **Phase 0** | Q11 IS the Phase 0 `pyproject`: package name, console scripts, env prefixes. **RULED 2026-09-04** (KitchenSink4Web / KS4Web, Garden department, alias `web`). |
+| Q11a the twelve env vars Phase 1 added, Q11b the `manage_session` lane string | **nothing, until Phase 9** | Neither blocks a phase and both become compatibility surface at first release, so the deadline is the docs pass rather than a gate. Q11a asks which variables are supported surface and whether the launch-shape four collapse into one; Q11b ratifies or overturns a build decision taken on schema-budget grounds. Both recorded in DESIGN 11. |
 | Q6 browser verb grammar | **Phase 0 and Phase 2** | Q6 names the first three tools Phase 2 lands, and a reversal after Phase 2 renames the whole surface. **RULED 2026-09-05** under standing delegation, flagged for author review, reversible until ship. |
 | Q2 screenshot in lite | **Phase 3, and Phase 7's gate** | Changes the lite budget arithmetic and the wording of discoverability rule 1, since lite currently promises no pixel path at all and the Phase 7 gate tests exactly that refusal. |
 | Q5 read-only by default | **Phase 3** | Read-only is enforced at registration time, so the default decides Phase 3's registration behavior, every quickstart line, and the dogfood default the author lives with from Phase 4. |
@@ -640,11 +641,26 @@ Firefox, never the daily one, until the author personally runs the dogfood pass.
   park verified by CPU measurement. This is the gate that makes "we do not leak
   browsers" true rather than asserted, and it is the row where the most-installed
   browser MCP server in the world is currently open and unfixed.
-- **The orphan test MUST break away from the ambient job object**
-  (`CREATE_BREAKAWAY_FROM_JOB`), per S7's confound. A shell that owns a
-  `KILL_ON_JOB_CLOSE` job reaps the tree for you and every result comes back
-  green whether or not the server has any teardown at all. A gate that cannot
-  fail is not a gate, and this one silently could not.
+- **The orphan test MUST demonstrate that it can FAIL**, per S7's confound. A
+  shell that owns a `KILL_ON_JOB_CLOSE` job reaps the tree for you and every
+  result comes back green whether or not the server has any teardown at all. A
+  gate that cannot fail is not a gate, and this one silently could not.
+
+  **The gate definition names two instruments and requires the second
+  (revised 2026-09-05, from the Phase 1 run).** As originally written it named
+  breakaway (`CREATE_BREAKAWAY_FROM_JOB`) alone, and breakaway is not portable:
+  the ambient job on this machine carries `SILENT_BREAKAWAY_OK` with
+  `BREAKAWAY_OK` off, so the flag is denied on some paths and accepted on
+  others and the child stays inside a kill-on-close job either way, WMI
+  `Win32_Process::Create` included. **So the required instrument is a NEGATIVE
+  CONTROL** run before the KS4Web scenarios: a browser started under plain
+  `Popen` with no death pipe, no job object, and no teardown, whose parent is
+  hard-killed and which MUST survive. Phase 1 measured 11 orphans from that
+  control against zero from every KS4Web row. Breakaway stays as an optional
+  second instrument wherever the environment grants it. This is a revision that
+  serves the original requirement rather than relaxing it: breakaway was a
+  proxy for "the harness is not doing the work" and the control measures that
+  property directly on whatever machine the gate runs.
 - **`-no-remote` on every Firefox launch is a Phase 1 acceptance item**, not a
   Phase 4 polish item (DESIGN 4.3, 4.6). It is the difference between an owned
   profile and an owned browser.
@@ -652,6 +668,16 @@ Firefox, never the daily one, until the author personally runs the dogfood pass.
   restypes must be `c_void_p` or the job-object reaper silently no-ops, and
   Playwright does not expose the browser PID, so the owned-PID journal is
   populated from the process table or from a job KS4Web owns.
+- **Three more are now known, from the Phase 1 build, and each is a defect the
+  obvious implementation has** (DESIGN 4.7, facts 5 through 7). `OpenProcess`
+  succeeds on a process that has exited while anyone holds a handle to it, so
+  liveness waits on the process handle rather than asking whether the PID
+  opens. A parent-PID walk adopts strangers through recycled PIDs, turning a
+  five-process tree into a forty-process claim on this machine, so every
+  inferred parent relationship carries a creation-time check. And the process
+  census runs on Toolhelp32 at single-digit milliseconds rather than CIM at
+  ~1.0 s, which is what makes a per-launch census affordable and therefore what
+  makes the journal's arrival-difference filter possible at all.
 
 ### Phase 2: Projection and anchors (the keystone)
 
@@ -687,8 +713,15 @@ require sticky refs and sticky refs are only useful because reads are cheap.
      forcing every rung on the 50,000-node fixture. Rung 5's capped inventories
      (DESIGN 3.4) are exercised specifically: a fixture form with several hundred
      fields must collapse to the one-line form summary and stay under budget
-     rather than refusing. **The ladder is also asserted MONOTONIC** per page
-     across every rung, since S1's prototype got bigger at rung 4 on httpbin.
+     rather than refusing. **The ladder is also asserted MONOTONIC AS EXPOSED**
+     per page across every rung, since S1's prototype got bigger at rung 4 on
+     httpbin. **Phase 1 found that non-increasing caps do not deliver that**:
+     dropping a unit can cost more than it saves once the completeness block
+     accounts for what went, measured at 37 tokens on the `names` fixture, so
+     the property is enforced by **never choosing a dominated rung** rather than
+     by reasoning about the caps. The gate asserts the exposed sequence, which
+     is what a caller can actually be handed, and permits an internal step to
+     grow as long as no caller ever receives it.
   5. **The latency budget holds, and the numbers are now set from
      measurement** (E11, discharged in the engine round; DESIGN 3.6a):
      **projection p95 at or under 500 ms up to 50,000 nodes, at or under 1.0 s
@@ -700,7 +733,16 @@ require sticky refs and sticky refs are only useful because reads are cheap.
      restricting it to interactive candidates would buy 14 percent while losing
      hidden-content detection on non-interactive nodes; and optimization
      effort, if any is needed, aims at the affordance, accessible-name, and
-     digest work, which is the other 60 percent.
+     digest work, which is the other 60 percent. **A third consequence arrived
+     with the Phase 1 build and it outranks both:** the payload crossing the
+     driver boundary is a cost term of its own, measured at 604 ms of round
+     trip against 245 ms of in-page work on a 5,000-heading fixture, so the
+     extractor **caps what it RETURNS and tallies what it COUNTS**. The
+     completeness figures come from the extractor's own integer tallies rather
+     than from the length of any list held in Python, which is what let the cap
+     land without costing a single figure. The gate checks that property
+     directly, since an implementation that derives "omitted 2,700" from a list
+     has to carry 2,700 things to say the number.
   6. **Affordance quotas hold on the adversarial cases.** On the frozen GitHub
      repo page, every tab in the repository navigation bar appears in the
      projection. On Versailles, in-prose citation links appear zero times in the
@@ -708,7 +750,13 @@ require sticky refs and sticky refs are only useful because reads are cheap.
      block. Every link affordance prints an href path, and no two affordances
      share a line without a distinguishing token. This part exists because S1's
      proximity ranker buried thirteen navigation tabs with 2,762 tokens of
-     headroom unused.
+     headroom unused. **The form-control quota is scoped to controls INSIDE a
+     form** (DESIGN 3.3, narrowed during the Phase 1 build): the "complete,
+     never sampled" guarantee applies to form members only, because letting
+     every loose input on an app shell claim it turns the guarantee into the
+     flood it was written to prevent. The gate exercises an app-shell fixture
+     carrying loose controls outside any form and requires them to compete in
+     the primary-actions class rather than arriving exempt.
   7. **Every printed price is executable and accurate.** For each priced unit,
      the harness issues the exact call the projection advertised, measures the
      result under the same estimator, and compares against the advertised
@@ -727,7 +775,13 @@ require sticky refs and sticky refs are only useful because reads are cheap.
      built from the S1 failures: a heading with an adjacent count badge must not
      fuse (`General4`), a region must not take a name from a non-rendering
      error element (`"Uh oh!"`), names truncate on word boundaries with an
-     explicit ellipsis, and a CSS class is never emitted as a name. The
+     explicit ellipsis, and a CSS class is never emitted as a name. **The
+     `"Uh oh!"` fixture must specifically hide the heading through an
+     ANCESTOR**, not on the heading itself, because that is the shape of the
+     real page and it is the shape that defeats an element-local visibility
+     check. Phase 1 reproduced the original bug while believing the rule had
+     retired it, for exactly that reason. A region label requires the whole
+     ancestor chain up to the region to be visible (DESIGN 3.7, sub-rule 5). The
      name-quality flag in the completeness block counts every fallback. The
      lead paragraph comes from the readable region only, tested against a
      fixture carrying a DRM-style error string ahead of the real content.
