@@ -1,0 +1,29 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python: ["3.12", "3.13"]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install
+        run: pip install -e ".[dev]"
+      # Phase 0 needs no browser. `playwright install` joins this workflow when
+      # Phase 1 opens and the engine extra becomes a required dependency.
+      - name: Run test suite
+        run: python -m pytest tests/unit -q
+      - name: Surface report (counts come from the script, never hand-math)
+        run: python -X utf8 scripts/measure_surface.py

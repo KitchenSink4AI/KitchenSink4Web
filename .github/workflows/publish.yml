@@ -1,0 +1,33 @@
+name: Publish
+
+# Phase 9 artifact, wired early and deliberately not enabled. Trusted
+# publishing needs a PyPI project that does not exist yet, and the KS4PPT
+# v1.0.1 lesson is that the release scaffolding should exist BEFORE the first
+# release rather than be assembled during one.
+#
+# Ship-phase checklist this workflow does NOT do for you (PLAN Phase 9):
+#   - the `mcp-name` marker in README line 1, before the first release
+#   - a sub-100-character `server.json` description
+#   - registry publish IMMEDIATELY after device auth (the JWT dies in under an
+#     hour, confirmed twice in the family)
+#   - the author READOUT of all public copy before the commit
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Build
+        run: |
+          pip install build
+          python -m build
+      - name: Verify the distribution
+        run: |
+          pip install twine
+          twine check dist/*

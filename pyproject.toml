@@ -1,0 +1,54 @@
+[project]
+name = "kitchensink4web"
+version = "0.0.0"
+description = "Kitchen-sink browser MCP server: a cheap first read of any page, durable refs, and a shipped safety layer"
+readme = "README.md"
+# NO license field and NO LICENSE file. DESIGN 10.3 rule 5: no license text,
+# badge, or claim in any file until the author's ruling lands (open question
+# Q1). The LICENSE file is a Phase 9 artifact.
+authors = [{ name = "nometalalchemist" }]
+keywords = [
+    "mcp", "browser", "playwright", "web", "automation", "claude",
+    "model-context-protocol", "token-efficient", "accessibility-tree",
+    "read-only", "audit-trail", "scraping", "forms", "downloads",
+]
+requires-python = ">=3.12"
+dependencies = [
+    # fastmcp is PINNED from day one (the Word v2 lesson: never ship
+    # unpinned fastmcp; a minor bump moved the visibility API mid-build).
+    "fastmcp>=3.4,<4",
+    # The caller-pattern ReDoS guard (policy/_regex.py). find_elements takes
+    # user regex against page text, so this matters more here than in the
+    # document family.
+    "regex",
+]
+
+[project.optional-dependencies]
+# Playwright is the engine (DESIGN 4.1) and lands in Phase 1. It is an extra
+# rather than a required dependency for exactly one reason: the 38.2 MB wheel
+# bundles a Node runtime, and Phase 0 needs none of it. It moves into
+# `dependencies` when Phase 1 opens.
+engine = ["playwright>=1.62"]
+dev = [
+    "pytest",
+    "pytest-timeout",
+]
+
+[project.scripts]
+# Q11, RULED by the author 2026-09-04.
+web-mcp = "kitchensink4web.server:main"
+kitchensink4web = "kitchensink4web.server:main"
+
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+timeout = 120
+markers = [
+    "browser: needs a real browser (none exist before Phase 1; auto-skipped)",
+]

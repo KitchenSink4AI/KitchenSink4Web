@@ -545,3 +545,144 @@ between here and the spike gate. S5 and S6 wait on a closed browser. No license,
 nothing published.
 
 ---
+
+## Part V: Phase 0, scaffold and ports (2026-09-05)
+
+**GATE GREEN. 81 tests, all passing. No browser code, no license file, nothing
+published.** First code in the repo that is not a throwaway spike.
+
+### What landed
+
+`pyproject.toml` (`kitchensink4web`, src layout, Python >= 3.12, console scripts
+`web-mcp` and `kitchensink4web`, **no license field and no LICENSE file** per
+DESIGN 10.3 rule 5), the three-package boundary, the envelope, the policy ports,
+the lite roster as stubs, 81 tests, `scripts/measure_surface.py`, `glama.json`,
+`DEPENDENCY_LEDGER.md`, and CI on `checkout@v7` plus `setup-python@v7`.
+
+**The envelope carries the browser vocabulary**, twenty codes: the eight
+inherited from the document family plus the twelve browser additions from
+DESIGN 8.3. Three tests do the load-bearing work. One asserts the vocabulary
+matches a literal transcription of the design rather than agreeing with itself.
+One asserts `HINTS` is TOTAL over every code, because a refusal with no recovery
+dead-ends the caller and that is the failure the whole vocabulary exists to
+prevent. One asserts every typed exception class is mapped, so a new failure
+class cannot silently fall through to `BAD_PARAMS`.
+
+`NOT_IMPLEMENTED` is the Phase 0 stub code and it is deliberately kept OUT of
+`CLOSED_CODES`, in a separate `SCAFFOLD_CODES` set that a test asserts is
+disjoint. A scaffold code that quietly joins the shipped vocabulary is how a
+temporary thing becomes permanent, and Phase 9's gate asserts the scaffold set
+is empty.
+
+**The redaction seam ships and no redactor does.** DESIGN 5.3 puts redaction at
+the serializer because that is the one place it can be enforced globally. Phase
+0 wires `set_redactor` and a test installs its own to prove the seam reaches
+both success payloads and refusals. Phase 3 installs the real one and its gate
+proves it against a deliberately leaky tool.
+
+**Read-only mode is real in Phase 0, not deferred.** The mechanism is absence:
+`policy/readonly.py` classifies every tool and `server.register` never hands a
+mutating tool to FastMCP when the mode is on. `--read-only` registers 10 tools
+instead of 14, and a test walks an in-process MCP client to confirm the mutating
+four are genuinely missing from `tools/list` rather than merely refusing. A tool
+nobody classified RAISES at startup rather than defaulting in either direction,
+because defaulting to non-mutating would register a write tool in read-only mode
+and make the headline claim false.
+
+**Packs are launch-time and there is no runtime toggle**, which is the family
+departure DESIGN 7.2 argues for on conformance grounds. `enable_tools` and
+`disable_tools` do not exist and a test asserts they never appear. A pack typo
+refuses to start with exit code 2 and a message naming the known packs, which
+inverts chrome-devtools-mcp #2530 rather than shrugging like it does. The pack
+hint in a refusal names `--packs extract` and `KS4WEB_MODE=extract`, since
+there is no enable call to name (DESIGN 7.4).
+
+**The open-core seam is enforced by AST, not by convention.** `policy/` may not
+import `ops/` or `engine/`, checked statically over the source, because an
+import inside a function body would pass a runtime probe and still couple the
+packages. A second test asserts the direction is actually exercised, so the
+rule cannot pass vacuously on an empty folder.
+
+**`engine/` is empty except for one constant**, and that is deliberate.
+`FIREFOX_SAFETY_ARGS = ("-no-remote",)` lives there with the S3 finding written
+above it, so the Phase 1 author of the launch path cannot miss it. Playwright's
+`BidiFirefox.defaultArgs` omits `-no-remote` and a launch can be adopted by the
+user's running Firefox regardless of profile directory. A rule that lives only
+in a design document gets re-derived; a rule that lives in a test does not.
+
+### The two membership decisions, applied and recorded
+
+The design review's arithmetic note predicted both and Phase 0 executes them.
+**`request_handoff` folds into `manage_session` as an action**, since handing a
+headed window to a human IS a session operation. **`emulate` drops out of lite**
+into the `capture` pack, since its case was always a token argument rather than
+a capability one, and KS4Web does not need a second cost lever when the
+projection is the first one. Lite is **14 tools**, and a test asserts the roster
+literally so the decisions are checked rather than commented.
+
+### The Phase 0 finding: the lite target is not reachable by trimming prose
+
+`measure_surface` reports the lite surface at **~2.72k tokens** against DESIGN
+3.2's published **1,500**. This is the risk the design review flagged as a
+watch-item, now a number, and it is worse than "tight."
+
+The arithmetic: 1,500 across 14 tools is 107 tokens per tool INCLUDING its JSON
+schema. The measured split is ~1.44k of descriptions and ~1.28k of schemas, and
+the cheapest tool in the roster costs 138 with its description already at the
+80-token floor. **No amount of editing gets there.** It needs a smaller roster
+or a revised number, and that is an author decision rather than something a
+build session should make quietly.
+
+So the test is a RATCHET rather than a gate: the surface may shrink and may not
+grow, and the 1,500 gate stays where the plan puts it, at **Phase 7**, by which
+time the roster will have been decided. The plan wins on gate placement and the
+measurement is on the record from the day it appeared instead of arriving as a
+surprise at the Phase 7 gate.
+
+Two related numbers, both comfortable: the largest single schema is
+`get_page_view` at **~148 tokens** against a 250 ceiling, so the flagship's
+eight parameters fit; and read-only lite is **~1.93k**, which is closer to the
+target for the reason that it is a smaller surface.
+
+For context rather than comfort: 2.72k still beats playwright-mcp's 4,637 and
+chrome-devtools' 6,460 measured the same way. It is a 1.7x beat rather than the
+published 3.1x, and **the published number is the one that has to change or the
+roster is.**
+
+### The gate
+
+| Phase 0 gate item (PLAN) | Result |
+|---|---|
+| Ported machinery's own tests green | **PASS**, 81 tests |
+| `measure_surface` runs | **PASS**, output above |
+| Import-direction test passes | **PASS** |
+| No browser needed yet | **PASS**, and asserted: no module imports playwright, and playwright is an optional extra |
+
+Plus, beyond the plan's four: the dependency ledger is enforced by a test that
+fails if `pyproject` grows a dependency the ledger does not list; the copy
+guards check em dashes, the safety-copy grammar, attack-recipe framing, the
+one-read overclaim banned since S1, affiliation language, and the absence of any
+license claim; and the console script parses, starts, and refuses a pack typo
+with exit code 2.
+
+### Divergences from the plan, stated
+
+Three, all additive or gate-placement rather than substitutions.
+
+1. **Tool registrations are in Phase 0.** PLAN's Phase 0 is scaffold and ports
+   and does not mention tools; the lite roster as stubs was asked for on top.
+   It costs nothing and it is what made the lite-budget finding available now
+   rather than at Phase 7.
+2. **The lite-budget gate stays at Phase 7**, where PLAN puts it, rather than
+   binding here. PLAN 1.1 does say the docstring test enforces "the 80-120
+   token description budget and the sub-250 per-schema ceiling" from day one,
+   and both of those DO bind now and both pass. The 1,500 total is a different
+   number in a different phase.
+3. **Corpus A is still owed.** Phase 0 needs no fixtures, but the freeze the
+   plan requires before S1 never happened and is still outstanding before the
+   Phase 2 harness.
+
+**Status:** Phase 0 green. Phase 1 is blocked on the spike gate, which is
+blocked on S2. No license, no browser code, nothing published.
+
+---
