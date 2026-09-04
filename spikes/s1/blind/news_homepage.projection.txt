@@ -1,0 +1,122 @@
+## 1 IDENTITY
+url: https://www.bbc.com/news
+title: BBC News - Breaking news, video and the latest top stories from the U.S. and around the world
+status: 200 | load: networkidle | lane: A(bundled chromium) | page: p1 | read_token: rt1 | t=2026-09-05T00:21:29 KST
+viewport: 1280x900 | page height: 6.7 screens | dom nodes: 1,393
+
+## 2 PAGE SHAPE (regions; expand cost is an estimate)
+r1 | banner        | "#bbc-header" | 7 act, 0 blocks, 3 img | in-view | ~89 tok to expand
+r2 | navigation    | "#main-navigation-container" | 24 act, 24 blocks, 0 img | in-view | ~320 tok to expand
+r3 | main          | "News" | 53 act, 29 blocks, 37 img | in-view | ~2,408 tok to expand
+r4 | contentinfo   | "The BBC is in multiple languages" | 82 act, 30 blocks, 8 img | y=5706 | ~1,211 tok to expand
+r5 | navigation    | "Footer navigation" | 16 act, 16 blocks, 0 img | y=5765 | ~214 tok to expand
+r6 | navigation    | "nav" | 12 act, 12 blocks, 0 img | y=5921 | ~195 tok to expand
+
+## 3 AFFORDANCES (ranked: in-viewport, then main/dialog, then weight)
+e31 | link | "Europe targeted by spiralling campaign of sabotage - and Russia is the chief suspectGerman" | in r3
+e32 | link | "LIVEFarage says Reform UK has 'taken no illegal money' after undercover report on donation" | in r3
+e4 | button | "Register" | in r1
+e6 | button | "Sign In" | in r1
+e1 | button | "Open menu" [expanded=false] | in r1
+e10,e84 | link | "Business" (x2) | in r2
+e11,e85 | link | "Technology" (x2) | in r2
+e7,e81 | link | "Home" (x2) | in r2
+e8,e82 | link | "News" (x2) | in r2
+e9,e83 | link | "Sport" (x2) | in r2
+e12,e86 | link | "Health" (x2) | in r2
+e13,e87 | link | "Culture" (x2) | in r2
+e14,e88 | link | "Arts" (x2) | in r2
+e15,e89 | link | "Travel" (x2) | in r2
+e16,e90 | link | "Earth" (x2) | in r2
+e17,e91 | link | "Audio" (x2) | in r2
+e18,e92 | link | "Video" (x2) | in r2
+e20 | link | "US & Canada" | in r2
+e24 | link | "Australia" | in r2
+e26 | link | "Latin America" | in r2
+e27 | link | "Middle East" | in r2
+e28 | link | "In Pictures" | in r2
+e29 | link | "BBC InDepth" | in r2
+e30 | link | "BBC Verify" | in r2
+e19,e93 | link | "Live" (x2) | in r2
+e21 | link | "UK" | in r2
+e22 | link | "Africa" | in r2
+e23 | link | "Asia" | in r2
+e25 | link | "Europe" | in r2
+e2,e80 | link | "British Broadcasting Corporation" (x2) | in r1
+e3 | link | "Register" | in r1
+e5 | link | "Sign In" | in r1
+e33,e54 | link | "Tata Chemicals ordered out of Kenya by president Kenya's President William Ruto orders Ind" (x2) | in r3
+e34 | link | "'We expect our sons to be killed,' father of teen shot dead in West Bank tells BBCPalestin" | in r3
+e35 | link | "Nepal rescuers try to reach dozens trapped in tunnel after two found aliveMore than 1,300 " | in r3
+e36 | link | "Watch: Tunnel rescues bring hope that more flood survivors will be foundTwo people have be" | in r3
+e37 | link | "LIVELawyers called back to courtroom in Lindsay Clancy murder trial as update expectedThe " | in r3
+e38,e46 | link | "Is India's internet boom running into an undersea problem?At least 13 of India's 18 interc" (x2) | in r3
+e39 | link | "UK support for Falkland Islands 'unwavering' after Argentina restates claims, No 10 says" | in r3
+e44 | link | "'Layer upon layer of miracles' to find tunnel survivors, Nepal rescue adviser tells BBCFro" | in r3
+[60 more interactive elements in 59 groups not listed. Next: get_page_view(page='p1', view='act', cursor='aff:40') or find_elements(query=...) or scope to a region.]
+
+## 4 CONTENT DIGEST  (readable-article projection)
+lead: Germany has blamed Russia for an attack on Leipzig airport but there has been a series of suspicious incidents elsewhere.
+h1 | h1 | News | ~10 tok
+  h2 | h2 | Europe targeted by spiralling campaign of sabotage - and Russia is the chief sus | ~10 tok
+  h3 | h2 | Farage says Reform UK has 'taken no illegal money' after undercover report on do | ~10 tok
+  h4 | h2 | Tata Chemicals ordered out of Kenya by president | ~10 tok
+  h5 | h2 | 'We expect our sons to be killed,' father of teen shot dead in West Bank tells B | ~10 tok
+  h6 | h2 | Nepal rescuers try to reach dozens trapped in tunnel after two found alive | ~10 tok
+  h7 | h2 | Watch: Tunnel rescues bring hope that more flood survivors will be found | ~10 tok
+  h8 | h2 | Lawyers called back to courtroom in Lindsay Clancy murder trial as update expect | ~10 tok
+  h9 | h2 | Is India's internet boom running into an undersea problem? | ~10 tok
+  h10 | h2 | UK support for Falkland Islands 'unwavering' after Argentina restates claims, No | ~10 tok
+  h11 | h2 | UK warned to stock up on food to prepare for extreme weather | ~10 tok
+  h12 | h2 | How could US-Iran conflict end? Three experts give their views | ~10 tok
+  h13 | h2 | Trump's peace envoys to visit Moscow and Kyiv over weekend, reports say | ~10 tok
+  h14 | h2 | Steve Irwin's family celebrates 'superhero' dad, 20 years after shock death | ~10 tok
+  h15 | h2 | More to explore | ~10 tok
+  h16 | h2 | 'Layer upon layer of miracles' to find tunnel survivors, Nepal rescue adviser te | ~10 tok
+  h17 | h2 | 100 influencers invited to US Open spark debate on 'tennis etiquette' | ~10 tok
+  h18 | h2 | Is India's internet boom running into an undersea problem? | ~10 tok
+  h19 | h2 | 'I lost my savings after a job interview scam' | ~10 tok
+  h20 | h2 | AI data centres are booming in Australia - but at what cost? | ~10 tok
+  h21 | h2 | 'Gromit was nearly a cat!': Secrets from 50 years of Aardman | ~10 tok
+  h22 | h2 | Kenya's chai lovers are not happy as the nation's cows run dry | ~10 tok
+  h23 | h2 | Also in news | ~10 tok
+  h24 | h2 | OpenAI agents hijacked German website before Hugging Face hack, report claims | ~10 tok
+  h25 | h2 | Body of world's youngest traditional king returns home to Uganda amid succession | ~10 tok
+  h26 | h2 | Nick Kyrgios given one-month ban for positive cocaine test | ~10 tok
+  h27 | h2 | Tata Chemicals ordered out of Kenya by president | ~10 tok
+  h28 | h2 | Transplanted pig kidney works in US man's body for record 271 days | ~10 tok
+  h29 | h2 | Volkswagen board approves plan to cut another 50,000 jobs | ~10 tok
+  h30 | h2 | ICE agent charged with lying about shooting Venezuelan man during crackdown | ~10 tok
+  h31 | h2 | Most watched | ~10 tok
+  h32 | h2 | ‘So scary’: massive hail and torrential rain causes chaos in Toronto | ~10 tok
+  h33 | h2 | 'A rare moment of joy': Nepal tunnel rescues bring hope for more flood survivors | ~10 tok
+  h34 | h2 | Mason: 'Not what Farage wanted today to look like' | ~10 tok
+  h35 | h2 | 'We expect our sons to be killed,' father of teen shot dead in West Bank tells B | ~10 tok
+  h36 | h2 | Could robots be the future of theme parks? | ~10 tok
+  h37 | h2 | Most read | ~10 tok
+  h38 | h2 | 'Layer upon layer of miracles' to find tunnel survivors, Nepal rescue adviser te | ~10 tok
+  h39 | h2 | How could US-Iran conflict end? Three experts give their views | ~10 tok
+  h40 | h2 | Nepal rescuers try to reach dozens trapped in tunnel after two found alive | ~10 tok
+[15 more headings; get_page_view(view='outline')]
+prose: ~3,739 chars total; expand one section with get_page_view(page='p1', view='read', location={'ref':'h<n>'})
+
+## 7 COMPLETENESS (what this read did NOT see)
+iframes not traversed: 3 same-origin, 1 cross-origin
+   if1 | cross-origin | Optimizely Internal Frame  -> get_page_view(location={"frame":"if1"})
+   if2 | same-origin | (srcdoc)  -> get_page_view(location={"frame":"if2"})
+   if3 | same-origin | (srcdoc)  -> get_page_view(location={"frame":"if3"})
+   if4 | same-origin | about:blank  -> get_page_view(location={"frame":"if4"})
+shadow roots: 0 open (traversed=no, prototype limit), 0 closed (unreachable by any tool)
+virtualized/infinite containers: none detected
+below the fold: 6.7 screens of content (this read covered the whole DOM, not just the viewport)
+hidden interactive elements stripped: 73 (visibility-hidden=67, zero-size=5, offscreen=1)
+canvas-rendered regions: none
+BUDGET: 2,718/5,000 tokens | degradation rung 1/5 | 0 regions not expanded
+
+## 8 NEXT CALLS
+expand r3 ("News"): get_page_view(page="p1", location={"region":"r3"}, detail="standard")  ~2,408 tok
+expand r4 ("The BBC is in multiple languages"): get_page_view(page="p1", location={"region":"r4"}, detail="standard")  ~1,211 tok
+expand r2 ("#main-navigation-container"): get_page_view(page="p1", location={"region":"r2"}, detail="standard")  ~320 tok
+more controls: get_page_view(page="p1", view="act", cursor="aff:40")
+act on any ref: click(page="p1", ref="e<n>") | type_text(page="p1", ref="e<n>", text=...) | fill_form(page="p1", form="f<n>", values={...})
+changed-only re-read: get_page_view(page="p1", since="rt1")

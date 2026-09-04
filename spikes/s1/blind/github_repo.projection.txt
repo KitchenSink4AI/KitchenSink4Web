@@ -1,0 +1,112 @@
+## 1 IDENTITY
+url: https://github.com/microsoft/playwright
+title: GitHub - microsoft/playwright: Playwright is a framework for Web Testing and Automation. It allows testing Chromium, Firefox and WebKit with a single API. · GitHub
+status: 200 | load: networkidle | lane: A(bundled chromium) | page: p1 | read_token: rt1 | t=2026-09-05T00:21:23 KST
+viewport: 1280x900 | page height: 9.4 screens | dom nodes: 2,913
+
+## 2 PAGE SHAPE (regions; expand cost is an estimate)
+r1 | banner        | "Navigation Menu" | 75 act, 78 blocks, 41 img | in-view | ~1,236 tok to expand
+r2 | navigation    | "Global" | 66 act, 78 blocks, 37 img | in-view | ~1,135 tok to expand
+r3 | main          | "Uh oh!" | 304 act, 117 blocks, 192 img | in-view | ~26,272 tok to expand
+r4 | navigation    | "Repository" | 13 act, 12 blocks, 13 img | in-view | ~197 tok to expand
+r5 | banner        | ".prc-PageLayout-Header-0of-R" | 0 act, 0 blocks, 0 img | in-view | ~15 tok to expand
+r6 | navigation    | "Repository files" | 6 act, 6 blocks, 6 img | y=1350 | ~98 tok to expand
+r7 | contentinfo   | "Footer" | 10 act, 9 blocks, 1 img | y=8319 | ~160 tok to expand
+r8 | navigation    | "Footer" | 9 act, 9 blocks, 0 img | y=8371 | ~144 tok to expand
+
+## 3 AFFORDANCES (ranked: in-viewport, then main/dialog, then weight)
+e27 | combobox | "Go to file" [expanded=false] | in r3
+e24 | button | "main branch" [expanded=false] | in r3
+e28 | button | "Code" [expanded=false] | in r3
+e34 | button | "pending" | in r3
+e23 | generic | "main179 Branches165 TagsGo to fileCodeOpen more actions menuLatest commitAshraf Ali (ashra" | in r3
+e31,e62,e70 | link | "fix(types): expose signal option of Locator.elementHandle (" (x3) | in r3
+e42 | link | "chore(trace): move trace types into isomorphic/trace/versions (" | in r3
+e54 | link | "docs(csharp): fix nonexistent method names in guide examples (" | in r3
+e58 | link | "test(components): restore web and html-reporter component tests (" | in r3
+e38,e46 | link | "devops: restore npm publishing from GitHub Actions (" (x2) | in r3
+e66 | link | "test: response.body() for content-encoding:identity (" | in r3
+e76 | link | "feat: implement a new image comparison function (" | in r3
+e14 | link | "You must be signed in to change notification settings" | in r3
+e15 | link | "Fork 6.4k" | in r3
+e16 | link | "You must be signed in to star a repository" | in r3
+e25 | link | "179 Branches" | in r3
+e36 | link | "17,827 Commits" | in r3
+e80,e84 | link | "chore: remove experimental component testing (" (x2) | in r3
+e88 | link | "Revert "chore: rework the crlf in md fix"" | in r3
+e12 | link | "microsoft" | in r3
+e13,e208 | link | "playwright" (x2) | in r3
+e26 | link | "165 Tags" | in r3
+e30 | link | "commits by ashrafiucse" | in r3
+e50 | link | "feat(firefox): roll to r1543 (" | in r3
+e87 | link | "CODE_OF_CONDUCT.md, (File)" | in r3
+e90 | link | "chore: update contributors' guide (" | in r3
+e200 | link | "automation" | in r3
+e205 | link | "end-to-end-testing" | in r3
+e210 | link | "test-automation" | in r3
+e216,e134 | link | "Apache-2.0 license" (x2) | in r3
+e37 | link | ".azure-pipelines, (Directory)" | in r3
+e41 | link | ".claude/skills, (Directory)" | in r3
+e49 | link | "browser_patches, (Directory)" | in r3
+e74 | link | "Initial commit" | in r3
+e89 | link | "CONTRIBUTING.md, (File)" | in r3
+e199 | link | "playwright.dev" | in r3
+e201 | link | "chrome" | in r3
+e202 | link | "chromium" | in r3
+e203 | link | "e2e-testing" | in r3
+e204 | link | "electron" | in r3
+[215 more interactive elements in 157 groups not listed. Next: get_page_view(page='p1', view='act', cursor='aff:40') or find_elements(query=...) or scope to a region.]
+
+## 4 CONTENT DIGEST  (readable-article projection)
+lead: Playwright is a framework for web automation and testing. It drives Chromium, Firefox, and WebKit with a single API — in your tests, in your scripts, and as a tool for AI agents.
+h1 | h1 | 🎭 Playwright | ~10 tok
+  h2 | h2 | Documentation | API reference | ~10 tok
+  h3 | h2 | Get Started | ~10 tok
+  h4 | h2 | Playwright Test | ~10 tok
+    h5 | h3 | Install | ~10 tok
+    h6 | h3 | Write a test | ~10 tok
+    h7 | h3 | Run tests | ~10 tok
+    h8 | h3 | Key capabilities | ~10 tok
+  h9 | h2 | Playwright CLI | ~10 tok
+    h10 | h3 | Install | ~10 tok
+    h11 | h3 | Usage | ~10 tok
+    h12 | h3 | Session monitoring | ~10 tok
+  h13 | h2 | Playwright MCP | ~10 tok
+    h14 | h3 | Setup | ~10 tok
+    h15 | h3 | How it works | ~10 tok
+  h16 | h2 | Playwright Library | ~10 tok
+    h17 | h3 | Install | ~10 tok
+    h18 | h3 | Examples | ~10 tok
+  h19 | h2 | VS Code Extension | ~10 tok
+  h20 | h2 | Cross-Browser Support | ~10 tok
+  h21 | h2 | Other Languages | ~10 tok
+  h22 | h2 | Resources | ~10 tok
+  h23 | h2 | About | ~44 tok
+  h24 | h2 | Releases165 (165) | ~19 tok
+  h25 | h2 | Used by510K (510K) | ~12 tok
+  h26 | h2 | Contributors790 (790) | ~14 tok
+  h27 | h2 | Languages | ~27 tok
+prose: ~3,831 chars total; expand one section with get_page_view(page='p1', view='read', location={'ref':'h<n>'})
+
+## 6 TABLES (structure only; cells come from get_table)
+t1 | "Table-module__Box__HZKiQ DirectoryConten" | 27x4, 54 spanned cells | cols: Name | Name | Last commit message | Last commit date | in r3 | ~538 tok if fully read
+t2 | "" | 6x3 | cols:  | Best for | Install | in r3 | ~96 tok if fully read
+t3 | "" | 4x4 | cols:  | Linux | macOS | Windows | in r3 | ~21 tok if fully read
+
+## 7 COMPLETENESS (what this read did NOT see)
+iframes: none
+shadow roots: 32 open (traversed=no, prototype limit), 0 closed (unreachable by any tool)
+virtualized/infinite containers: none detected
+below the fold: 9.4 screens of content (this read covered the whole DOM, not just the viewport)
+hidden interactive elements stripped: 134 (visibility-hidden=67, zero-size=42, opacity-0=22, display-none=2, hidden-attr=1)
+canvas-rendered regions: none
+BUDGET: 2,238/5,000 tokens | degradation rung 1/5 | 0 regions not expanded
+
+## 8 NEXT CALLS
+expand r3 ("Uh oh!"): get_page_view(page="p1", location={"region":"r3"}, detail="standard")  ~26,272 tok
+expand r1 ("Navigation Menu"): get_page_view(page="p1", location={"region":"r1"}, detail="standard")  ~1,236 tok
+expand r2 ("Global"): get_page_view(page="p1", location={"region":"r2"}, detail="standard")  ~1,135 tok
+read table t1: get_table(page="p1", ref="t1", rows="1-50")  (27 rows total)
+more controls: get_page_view(page="p1", view="act", cursor="aff:40")
+act on any ref: click(page="p1", ref="e<n>") | type_text(page="p1", ref="e<n>", text=...) | fill_form(page="p1", form="f<n>", values={...})
+changed-only re-read: get_page_view(page="p1", since="rt1")

@@ -1,0 +1,2 @@
+PAGE_TOO_LARGE: even the floor projection (rung 5) exceeds the budget (1132 > 900 tokens).
+Cheaper routes: get_page_view(view='outline'), get_page_view(location={'region':'r1'}), find_elements(query=...).

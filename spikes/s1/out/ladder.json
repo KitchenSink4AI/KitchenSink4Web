@@ -1,0 +1,653 @@
+[
+  {
+    "page": "canvas_openlayers",
+    "budget": 5000,
+    "rung": 1,
+    "tokens": 957,
+    "kept": "regions 2/2, affordance groups<=40 (of 27 elements), digest=full",
+    "rung_costs": {
+      "1": 957
+    }
+  },
+  {
+    "page": "canvas_openlayers",
+    "budget": 2500,
+    "rung": 1,
+    "tokens": 957,
+    "kept": "regions 2/2, affordance groups<=40 (of 27 elements), digest=full",
+    "rung_costs": {
+      "1": 957
+    }
+  },
+  {
+    "page": "canvas_openlayers",
+    "budget": 1500,
+    "rung": 1,
+    "tokens": 957,
+    "kept": "regions 2/2, affordance groups<=40 (of 27 elements), digest=full",
+    "rung_costs": {
+      "1": 957
+    }
+  },
+  {
+    "page": "canvas_openlayers",
+    "budget": 900,
+    "rung": 3,
+    "tokens": 880,
+    "kept": "regions 2/2, affordance groups<=18 (of 27 elements), digest=full",
+    "rung_costs": {
+      "1": 955,
+      "2": 955,
+      "3": 880
+    }
+  },
+  {
+    "page": "canvas_openlayers",
+    "budget": 500,
+    "rung": 6,
+    "tokens": 52,
+    "kept": "REFUSED (floor over budget)",
+    "rung_costs": {
+      "1": 955,
+      "2": 955,
+      "3": 880,
+      "4": 814,
+      "5": 687
+    }
+  },
+  {
+    "page": "cnn_homepage",
+    "budget": 5000,
+    "rung": 1,
+    "tokens": 2203,
+    "kept": "regions 8/8, affordance groups<=40 (of 309 elements), digest=full",
+    "rung_costs": {
+      "1": 2203
+    }
+  },
+  {
+    "page": "cnn_homepage",
+    "budget": 2500,
+    "rung": 1,
+    "tokens": 2203,
+    "kept": "regions 8/8, affordance groups<=40 (of 309 elements), digest=full",
+    "rung_costs": {
+      "1": 2203
+    }
+  },
+  {
+    "page": "cnn_homepage",
+    "budget": 1500,
+    "rung": 5,
+    "tokens": 1134,
+    "kept": "regions 6/8, affordance groups<=8 (of 309 elements), digest=none",
+    "rung_costs": {
+      "1": 2203,
+      "2": 1993,
+      "3": 1777,
+      "4": 1633,
+      "5": 1134
+    }
+  },
+  {
+    "page": "cnn_homepage",
+    "budget": 900,
+    "rung": 6,
+    "tokens": 53,
+    "kept": "REFUSED (floor over budget)",
+    "rung_costs": {
+      "1": 2201,
+      "2": 1991,
+      "3": 1775,
+      "4": 1631,
+      "5": 1132
+    }
+  },
+  {
+    "page": "cnn_homepage",
+    "budget": 500,
+    "rung": 6,
+    "tokens": 53,
+    "kept": "REFUSED (floor over budget)",
+    "rung_costs": {
+      "1": 2201,
+      "2": 1991,
+      "3": 1775,
+      "4": 1631,
+      "5": 1132
+    }
+  },
+  {
+    "page": "example_com",
+    "budget": 5000,
+    "rung": 1,
+    "tokens": 391,
+    "kept": "regions 0/0, affordance groups<=40 (of 1 elements), digest=full",
+    "rung_costs": {
+      "1": 391
+    }
+  },
+  {
+    "page": "example_com",
+    "budget": 2500,
+    "rung": 1,
+    "tokens": 391,
+    "kept": "regions 0/0, affordance groups<=40 (of 1 elements), digest=full",
+    "rung_costs": {
+      "1": 391
+    }
+  },
+  {
+    "page": "example_com",
+    "budget": 1500,
+    "rung": 1,
+    "tokens": 391,
+    "kept": "regions 0/0, affordance groups<=40 (of 1 elements), digest=full",
+    "rung_costs": {
+      "1": 391
+    }
+  },
+  {
+    "page": "example_com",
+    "budget": 900,
+    "rung": 1,
+    "tokens": 389,
+    "kept": "regions 0/0, affordance groups<=40 (of 1 elements), digest=full",
+    "rung_costs": {
+      "1": 389
+    }
+  },
+  {
+    "page": "example_com",
+    "budget": 500,
+    "rung": 1,
+    "tokens": 389,
+    "kept": "regions 0/0, affordance groups<=40 (of 1 elements), digest=full",
+    "rung_costs": {
+      "1": 389
+    }
+  },
+  {
+    "page": "github_advanced_search",
+    "budget": 5000,
+    "rung": 1,
+    "tokens": 1852,
+    "kept": "regions 6/6, affordance groups<=40 (of 52 elements), digest=full",
+    "rung_costs": {
+      "1": 1852
+    }
+  },
+  {
+    "page": "github_advanced_search",
+    "budget": 2500,
+    "rung": 1,
+    "tokens": 1852,
+    "kept": "regions 6/6, affordance groups<=40 (of 52 elements), digest=full",
+    "rung_costs": {
+      "1": 1852
+    }
+  },
+  {
+    "page": "github_advanced_search",
+    "budget": 1500,
+    "rung": 3,
+    "tokens": 1492,
+    "kept": "regions 6/6, affordance groups<=18 (of 52 elements), digest=full",
+    "rung_costs": {
+      "1": 1852,
+      "2": 1684,
+      "3": 1492
+    }
+  },
+  {
+    "page": "github_advanced_search",
+    "budget": 900,
+    "rung": 6,
+    "tokens": 53,
+    "kept": "REFUSED (floor over budget)",
+    "rung_costs": {
+      "1": 1850,
+      "2": 1682,
+      "3": 1490,
+      "4": 1383,
+      "5": 1170
+    }
+  },
+  {
+    "page": "github_advanced_search",
+    "budget": 500,
+    "rung": 6,
+    "tokens": 53,
+    "kept": "REFUSED (floor over budget)",
+    "rung_costs": {
+      "1": 1850,
+      "2": 1682,
+      "3": 1490,
+      "4": 1383,
+      "5": 1170
+    }
+  },
+  {
+    "page": "github_repo",
+    "budget": 5000,
+    "rung": 1,
+    "tokens": 2225,
+    "kept": "regions 8/8, affordance groups<=40 (of 261 elements), digest=full",
+    "rung_costs": {
+      "1": 2225
+    }
+  },
+  {
+    "page": "github_repo",
+    "budget": 2500,
+    "rung": 1,
+    "tokens": 2225,
+    "kept": "regions 8/8, affordance groups<=40 (of 261 elements), digest=full",
+    "rung_costs": {
+      "1": 2225
+    }
+  },
+  {
+    "page": "github_repo",
+    "budget": 1500,
+    "rung": 5,
+    "tokens": 1100,
+    "kept": "regions 6/8, affordance groups<=8 (of 261 elements), digest=none",
+    "rung_costs": {
+      "1": 2225,
+      "2": 2066,
+      "3": 1843,
+      "4": 1664,
+      "5": 1100
+    }
+  },
+  {
+    "page": "github_repo",
+    "budget": 900,
+    "rung": 6,
+    "tokens": 53,
+    "kept": "REFUSED (floor over budget)",
+    "rung_costs": {
+      "1": 2223,
+      "2": 2064,
+      "3": 1841,
+      "4": 1662,
+      "5": 1098
+    }
+  },
+  {
+    "page": "github_repo",
+    "budget": 500,
+    "rung": 6,
+    "tokens": 53,
+    "kept": "REFUSED (floor over budget)",
+    "rung_costs": {
+      "1": 2223,
+      "2": 2064,
+      "3": 1841,
+      "4": 1662,
+      "5": 1098
+    }
+  },
+  {
+    "page": "httpbin_form",
+    "budget": 5000,
+    "rung": 1,
+    "tokens": 745,
+    "kept": "regions 1/1, affordance groups<=40 (of 13 elements), digest=full",
+    "rung_costs": {
+      "1": 745
+    }
+  },
+  {
+    "page": "httpbin_form",
+    "budget": 2500,
+    "rung": 1,
+    "tokens": 745,
+    "kept": "regions 1/1, affordance groups<=40 (of 13 elements), digest=full",
+    "rung_costs": {
+      "1": 745
+    }
+  },
+  {
+    "page": "httpbin_form",
+    "budget": 1500,
+    "rung": 1,
+    "tokens": 745,
+    "kept": "regions 1/1, affordance groups<=40 (of 13 elements), digest=full",
+    "rung_costs": {
+      "1": 745
+    }
+  },
+  {
+    "page": "httpbin_form",
+    "budget": 900,
+    "rung": 1,
+    "tokens": 743,
+    "kept": "regions 1/1, affordance groups<=40 (of 13 elements), digest=full",
+    "rung_costs": {
+      "1": 743
+    }
+  },
+  {
+    "page": "httpbin_form",
+    "budget": 500,
+    "rung": 6,
+    "tokens": 52,
+    "kept": "REFUSED (floor over budget)",
+    "rung_costs": {
+      "1": 743,
+      "2": 743,
+      "3": 743,
+      "4": 793,
+      "5": 717
+    }
+  },
+  {
+    "page": "news_homepage",
+    "budget": 5000,
+    "rung": 1,
+    "tokens": 2705,
+    "kept": "regions 6/6, affordance groups<=40 (of 116 elements), digest=full",
+    "rung_costs": {
+      "1": 2705
+    }
+  },
+  {
+    "page": "news_homepage",
+    "budget": 2500,
+    "rung": 2,
+    "tokens": 2411,
+    "kept": "regions 6/6, affordance groups<=30 (of 116 elements), digest=full",
+    "rung_costs": {
+      "1": 2705,
+      "2": 2411
+    }
+  },
+  {
+    "page": "news_homepage",
+    "budget": 1500,
+    "rung": 5,
+    "tokens": 981,
+    "kept": "regions 6/6, affordance groups<=8 (of 116 elements), digest=none",
+    "rung_costs": {
+      "1": 2705,
+      "2": 2411,
+      "3": 2235,
+      "4": 1743,
+      "5": 981
+    }
+  },
+  {
+    "page": "news_homepage",
+    "budget": 900,
+    "rung": 6,
+    "tokens": 52,
+    "kept": "REFUSED (floor over budget)",
+    "rung_costs": {
+      "1": 2703,
+      "2": 2409,
+      "3": 2233,
+      "4": 1741,
+      "5": 979
+    }
+  },
+  {
+    "page": "news_homepage",
+    "budget": 500,
+    "rung": 6,
+    "tokens": 52,
+    "kept": "REFUSED (floor over budget)",
+    "rung_costs": {
+      "1": 2703,
+      "2": 2409,
+      "3": 2233,
+      "4": 1741,
+      "5": 979
+    }
+  },
+  {
+    "page": "spa_antdesign",
+    "budget": 5000,
+    "rung": 1,
+    "tokens": 1580,
+    "kept": "regions 5/5, affordance groups<=40 (of 294 elements), digest=full",
+    "rung_costs": {
+      "1": 1580
+    }
+  },
+  {
+    "page": "spa_antdesign",
+    "budget": 2500,
+    "rung": 1,
+    "tokens": 1580,
+    "kept": "regions 5/5, affordance groups<=40 (of 294 elements), digest=full",
+    "rung_costs": {
+      "1": 1580
+    }
+  },
+  {
+    "page": "spa_antdesign",
+    "budget": 1500,
+    "rung": 2,
+    "tokens": 1411,
+    "kept": "regions 5/5, affordance groups<=30 (of 294 elements), digest=full",
+    "rung_costs": {
+      "1": 1580,
+      "2": 1411
+    }
+  },
+  {
+    "page": "spa_antdesign",
+    "budget": 900,
+    "rung": 5,
+    "tokens": 790,
+    "kept": "regions 5/5, affordance groups<=8 (of 294 elements), digest=none",
+    "rung_costs": {
+      "1": 1578,
+      "2": 1409,
+      "3": 1232,
+      "4": 1092,
+      "5": 790
+    }
+  },
+  {
+    "page": "spa_antdesign",
+    "budget": 500,
+    "rung": 6,
+    "tokens": 52,
+    "kept": "REFUSED (floor over budget)",
+    "rung_costs": {
+      "1": 1578,
+      "2": 1409,
+      "3": 1232,
+      "4": 1092,
+      "5": 790
+    }
+  },
+  {
+    "page": "spa_realworld",
+    "budget": 5000,
+    "rung": 1,
+    "tokens": 1191,
+    "kept": "regions 3/3, affordance groups<=40 (of 41 elements), digest=full",
+    "rung_costs": {
+      "1": 1191
+    }
+  },
+  {
+    "page": "spa_realworld",
+    "budget": 2500,
+    "rung": 1,
+    "tokens": 1191,
+    "kept": "regions 3/3, affordance groups<=40 (of 41 elements), digest=full",
+    "rung_costs": {
+      "1": 1191
+    }
+  },
+  {
+    "page": "spa_realworld",
+    "budget": 1500,
+    "rung": 1,
+    "tokens": 1191,
+    "kept": "regions 3/3, affordance groups<=40 (of 41 elements), digest=full",
+    "rung_costs": {
+      "1": 1191
+    }
+  },
+  {
+    "page": "spa_realworld",
+    "budget": 900,
+    "rung": 4,
+    "tokens": 888,
+    "kept": "regions 3/3, affordance groups<=12 (of 41 elements), digest=headings",
+    "rung_costs": {
+      "1": 1189,
+      "2": 1134,
+      "3": 986,
+      "4": 888
+    }
+  },
+  {
+    "page": "spa_realworld",
+    "budget": 500,
+    "rung": 6,
+    "tokens": 52,
+    "kept": "REFUSED (floor over budget)",
+    "rung_costs": {
+      "1": 1189,
+      "2": 1134,
+      "3": 986,
+      "4": 888,
+      "5": 711
+    }
+  },
+  {
+    "page": "wikipedia_gdp_table",
+    "budget": 5000,
+    "rung": 1,
+    "tokens": 2841,
+    "kept": "regions 25/25, affordance groups<=40 (of 1119 elements), digest=full",
+    "rung_costs": {
+      "1": 2841
+    }
+  },
+  {
+    "page": "wikipedia_gdp_table",
+    "budget": 2500,
+    "rung": 2,
+    "tokens": 2259,
+    "kept": "regions 12/25, affordance groups<=30 (of 1119 elements), digest=full",
+    "rung_costs": {
+      "1": 2841,
+      "2": 2259
+    }
+  },
+  {
+    "page": "wikipedia_gdp_table",
+    "budget": 1500,
+    "rung": 5,
+    "tokens": 1483,
+    "kept": "regions 6/25, affordance groups<=8 (of 1119 elements), digest=none",
+    "rung_costs": {
+      "1": 2841,
+      "2": 2259,
+      "3": 2017,
+      "4": 1780,
+      "5": 1483
+    }
+  },
+  {
+    "page": "wikipedia_gdp_table",
+    "budget": 900,
+    "rung": 6,
+    "tokens": 53,
+    "kept": "REFUSED (floor over budget)",
+    "rung_costs": {
+      "1": 2839,
+      "2": 2257,
+      "3": 2015,
+      "4": 1778,
+      "5": 1481
+    }
+  },
+  {
+    "page": "wikipedia_gdp_table",
+    "budget": 500,
+    "rung": 6,
+    "tokens": 53,
+    "kept": "REFUSED (floor over budget)",
+    "rung_costs": {
+      "1": 2839,
+      "2": 2257,
+      "3": 2015,
+      "4": 1778,
+      "5": 1481
+    }
+  },
+  {
+    "page": "wikipedia_versailles",
+    "budget": 5000,
+    "rung": 1,
+    "tokens": 3713,
+    "kept": "regions 30/30, affordance groups<=40 (of 2858 elements), digest=full",
+    "rung_costs": {
+      "1": 3713
+    }
+  },
+  {
+    "page": "wikipedia_versailles",
+    "budget": 2500,
+    "rung": 4,
+    "tokens": 2184,
+    "kept": "regions 8/30, affordance groups<=12 (of 2858 elements), digest=headings",
+    "rung_costs": {
+      "1": 3713,
+      "2": 2912,
+      "3": 2651,
+      "4": 2184
+    }
+  },
+  {
+    "page": "wikipedia_versailles",
+    "budget": 1500,
+    "rung": 6,
+    "tokens": 54,
+    "kept": "REFUSED (floor over budget)",
+    "rung_costs": {
+      "1": 3713,
+      "2": 2912,
+      "3": 2651,
+      "4": 2184,
+      "5": 1631
+    }
+  },
+  {
+    "page": "wikipedia_versailles",
+    "budget": 900,
+    "rung": 6,
+    "tokens": 53,
+    "kept": "REFUSED (floor over budget)",
+    "rung_costs": {
+      "1": 3711,
+      "2": 2910,
+      "3": 2649,
+      "4": 2182,
+      "5": 1629
+    }
+  },
+  {
+    "page": "wikipedia_versailles",
+    "budget": 500,
+    "rung": 6,
+    "tokens": 53,
+    "kept": "REFUSED (floor over budget)",
+    "rung_costs": {
+      "1": 3711,
+      "2": 2910,
+      "3": 2649,
+      "4": 2182,
+      "5": 1629
+    }
+  }
+]

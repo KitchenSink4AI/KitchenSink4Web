@@ -1,0 +1,49 @@
+## 1 IDENTITY
+url: https://demo.realworld.show/
+title: Conduit
+status: 200 | load: networkidle | lane: A(bundled chromium) | page: p1 | read_token: rt1 | t=cached
+viewport: 1280x900 | page height: 1.4 screens | dom nodes: 170
+
+## 2 PAGE SHAPE (regions; expand cost is an estimate)
+r1 | navigation    | ".navbar" | 4 act, 3 blocks, 1 img | in-view | ~62 tok to expand
+r2 | navigation    | "nav" | 1 act, 1 blocks, 0 img | y=1057 | ~26 tok to expand
+r3 | contentinfo   | "footer" | 2 act, 0 blocks, 1 img | y=1179 | ~56 tok to expand
+
+## 3 AFFORDANCES (ranked: in-viewport, then main/dialog, then weight)
+e10,e14 | button | "2" (x2) | in -
+e18,e22,e24 | button | "1" (x3) | in -
+e1,e40 | link | "Conduit" (x2) | in r1
+e4 | link | "Sign up" | in r1
+e11 | link | "How to Learn JavaScript EfficientlyA comprehensive guide to mastering JavaScript from begi" | in -
+e2 | link | "Home" | in r1
+e3 | link | "Sign in" | in r1
+e15 | link | "React Hooks: Best Practices and Common PitfallsEssential patterns and anti-patterns when w" | in -
+e19 | link | "Building Scalable APIs with Node.jsArchitectural patterns and best practices for creating " | in -
+e7 | link | "Global Feed" | in -
+e5 | link | "Angular frontend" | in -
+e27 | link | "architecture" | in -
+[25 more interactive elements in 25 groups not listed. Next: get_page_view(page='p1', view='act', cursor='aff:12') or find_elements(query=...) or scope to a region.]
+
+## 4 CONTENT DIGEST  (app-shell projection)
+h1 | h1 | How to Learn JavaScript Efficiently | ~44 tok
+h2 | h1 | React Hooks: Best Practices and Common Pitfalls | ~43 tok
+h3 | h1 | Building Scalable APIs with Node.js | ~38 tok
+h4 | h1 | Introduction to Machine Learning for Developers | ~41 tok
+prose: ~451 chars total; expand one section with get_page_view(page='p1', view='read', location={'ref':'h<n>'})
+
+## 7 COMPLETENESS (what this read did NOT see)
+iframes: none
+shadow roots: 0 open (traversed=no, prototype limit), 0 closed (unreachable by any tool)
+virtualized/infinite containers: none detected
+below the fold: 1.4 screens of content (this read covered the whole DOM, not just the viewport)
+hidden interactive elements stripped: 0 (none)
+canvas-rendered regions: none
+BUDGET: 888/900 tokens | degradation rung 4/5 | 0 regions not expanded
+
+## 8 NEXT CALLS
+expand r1 (".navbar"): get_page_view(page="p1", location={"region":"r1"}, detail="standard")  ~62 tok
+expand r3 ("footer"): get_page_view(page="p1", location={"region":"r3"}, detail="standard")  ~56 tok
+expand r2 ("nav"): get_page_view(page="p1", location={"region":"r2"}, detail="standard")  ~26 tok
+more controls: get_page_view(page="p1", view="act", cursor="aff:12")
+act on any ref: click(page="p1", ref="e<n>") | type_text(page="p1", ref="e<n>", text=...) | fill_form(page="p1", form="f<n>", values={...})
+changed-only re-read: get_page_view(page="p1", since="rt1")

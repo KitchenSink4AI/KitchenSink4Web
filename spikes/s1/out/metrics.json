@@ -1,0 +1,398 @@
+{
+  "httpbin_form": {
+    "url": "https://httpbin.org/forms/post",
+    "kind": "small form (banked baseline)",
+    "status": 200,
+    "load": "networkidle",
+    "raw": {
+      "ai_snapshot_error": "AttributeError(\"'Page' object has no attribute '_snapshot_for_ai'\")",
+      "aria_snapshot_chars": 912,
+      "aria_snapshot_tokens": 250,
+      "html_chars": 1419,
+      "html_tokens": 433
+    },
+    "projection_tokens": 758,
+    "projection_chars": 2336,
+    "rung": 1,
+    "ladder_trace": [
+      {
+        "rung": 1,
+        "region_cap": null,
+        "aff_cap": 40,
+        "digest": "full",
+        "tokens": 758
+      }
+    ],
+    "dom_nodes": 46,
+    "interactive_visible": 13,
+    "hidden_interactive_stripped": 0,
+    "regions": 1,
+    "headings": 0,
+    "forms": 1,
+    "tables": 0,
+    "frames": 0,
+    "readable": false,
+    "ratio_interactive_to_nodes": 0.2826,
+    "multiple_vs_ai_snapshot": 0.3
+  },
+  "example_com": {
+    "url": "https://example.com",
+    "kind": "minimal page (parity check)",
+    "status": 200,
+    "load": "networkidle",
+    "raw": {
+      "ai_snapshot_error": "AttributeError(\"'Page' object has no attribute '_snapshot_for_ai'\")",
+      "aria_snapshot_chars": 232,
+      "aria_snapshot_tokens": 53,
+      "html_chars": 559,
+      "html_tokens": 163
+    },
+    "projection_tokens": 404,
+    "projection_chars": 1355,
+    "rung": 1,
+    "ladder_trace": [
+      {
+        "rung": 1,
+        "region_cap": null,
+        "aff_cap": 40,
+        "digest": "full",
+        "tokens": 404
+      }
+    ],
+    "dom_nodes": 12,
+    "interactive_visible": 1,
+    "hidden_interactive_stripped": 0,
+    "regions": 0,
+    "headings": 1,
+    "forms": 0,
+    "tables": 0,
+    "frames": 0,
+    "readable": false,
+    "ratio_interactive_to_nodes": 0.0833,
+    "multiple_vs_ai_snapshot": 0.1
+  },
+  "wikipedia_versailles": {
+    "url": "https://en.wikipedia.org/wiki/Treaty_of_Versailles",
+    "kind": "article (banked baseline)",
+    "status": 200,
+    "load": "networkidle",
+    "raw": {
+      "ai_snapshot_error": "AttributeError(\"'Page' object has no attribute '_snapshot_for_ai'\")",
+      "aria_snapshot_chars": 389233,
+      "aria_snapshot_tokens": 106088,
+      "html_chars": 1710595,
+      "html_tokens": 574200
+    },
+    "projection_tokens": 3726,
+    "projection_chars": 10865,
+    "rung": 1,
+    "ladder_trace": [
+      {
+        "rung": 1,
+        "region_cap": null,
+        "aff_cap": 40,
+        "digest": "full",
+        "tokens": 3726
+      }
+    ],
+    "dom_nodes": 10745,
+    "interactive_visible": 2858,
+    "hidden_interactive_stripped": 299,
+    "regions": 30,
+    "headings": 52,
+    "forms": 4,
+    "tables": 18,
+    "frames": 0,
+    "readable": true,
+    "ratio_interactive_to_nodes": 0.266,
+    "multiple_vs_ai_snapshot": 28.5
+  },
+  "wikipedia_gdp_table": {
+    "url": "https://en.wikipedia.org/wiki/List_of_countries_by_GDP_(nominal)",
+    "kind": "data table",
+    "status": 200,
+    "load": "networkidle",
+    "raw": {
+      "ai_snapshot_error": "AttributeError(\"'Page' object has no attribute '_snapshot_for_ai'\")",
+      "aria_snapshot_chars": 180436,
+      "aria_snapshot_tokens": 47619,
+      "html_chars": 917771,
+      "html_tokens": 296652
+    },
+    "projection_tokens": 2854,
+    "projection_chars": 8440,
+    "rung": 1,
+    "ladder_trace": [
+      {
+        "rung": 1,
+        "region_cap": null,
+        "aff_cap": 40,
+        "digest": "full",
+        "tokens": 2854
+      }
+    ],
+    "dom_nodes": 5652,
+    "interactive_visible": 1119,
+    "hidden_interactive_stripped": 176,
+    "regions": 25,
+    "headings": 7,
+    "forms": 4,
+    "tables": 8,
+    "frames": 0,
+    "readable": true,
+    "ratio_interactive_to_nodes": 0.198,
+    "multiple_vs_ai_snapshot": 16.7
+  },
+  "github_repo": {
+    "url": "https://github.com/microsoft/playwright",
+    "kind": "github repo page",
+    "status": 200,
+    "load": "networkidle",
+    "raw": {
+      "ai_snapshot_error": "AttributeError(\"'Page' object has no attribute '_snapshot_for_ai'\")",
+      "aria_snapshot_chars": 47113,
+      "aria_snapshot_tokens": 13549,
+      "html_chars": 504735,
+      "html_tokens": 192296
+    },
+    "projection_tokens": 2238,
+    "projection_chars": 6601,
+    "rung": 1,
+    "ladder_trace": [
+      {
+        "rung": 1,
+        "region_cap": null,
+        "aff_cap": 40,
+        "digest": "full",
+        "tokens": 2238
+      }
+    ],
+    "dom_nodes": 2913,
+    "interactive_visible": 261,
+    "hidden_interactive_stripped": 134,
+    "regions": 8,
+    "headings": 27,
+    "forms": 0,
+    "tables": 3,
+    "frames": 0,
+    "readable": true,
+    "ratio_interactive_to_nodes": 0.0896,
+    "multiple_vs_ai_snapshot": 6.1
+  },
+  "news_homepage": {
+    "url": "https://www.bbc.com/news",
+    "kind": "dense news homepage",
+    "status": 200,
+    "load": "networkidle",
+    "raw": {
+      "ai_snapshot_error": "AttributeError(\"'Page' object has no attribute '_snapshot_for_ai'\")",
+      "aria_snapshot_chars": 33141,
+      "aria_snapshot_tokens": 8426,
+      "html_chars": 343067,
+      "html_tokens": 117831
+    },
+    "projection_tokens": 2718,
+    "projection_chars": 8646,
+    "rung": 1,
+    "ladder_trace": [
+      {
+        "rung": 1,
+        "region_cap": null,
+        "aff_cap": 40,
+        "digest": "full",
+        "tokens": 2718
+      }
+    ],
+    "dom_nodes": 1393,
+    "interactive_visible": 116,
+    "hidden_interactive_stripped": 73,
+    "regions": 6,
+    "headings": 55,
+    "forms": 0,
+    "tables": 0,
+    "frames": 4,
+    "readable": true,
+    "ratio_interactive_to_nodes": 0.0833,
+    "multiple_vs_ai_snapshot": 3.1
+  },
+  "github_advanced_search": {
+    "url": "https://github.com/search/advanced",
+    "kind": "form-heavy app page",
+    "status": 200,
+    "load": "networkidle",
+    "raw": {
+      "ai_snapshot_error": "AttributeError(\"'Page' object has no attribute '_snapshot_for_ai'\")",
+      "aria_snapshot_chars": 6249,
+      "aria_snapshot_tokens": 1641,
+      "html_chars": 238253,
+      "html_tokens": 77859
+    },
+    "projection_tokens": 1865,
+    "projection_chars": 5799,
+    "rung": 1,
+    "ladder_trace": [
+      {
+        "rung": 1,
+        "region_cap": null,
+        "aff_cap": 40,
+        "digest": "full",
+        "tokens": 1865
+      }
+    ],
+    "dom_nodes": 2583,
+    "interactive_visible": 52,
+    "hidden_interactive_stripped": 73,
+    "regions": 6,
+    "headings": 7,
+    "forms": 1,
+    "tables": 0,
+    "frames": 0,
+    "readable": false,
+    "ratio_interactive_to_nodes": 0.0201,
+    "multiple_vs_ai_snapshot": 0.9
+  },
+  "spa_realworld": {
+    "url": "https://demo.realworld.show/",
+    "kind": "JS-heavy SPA (client-rendered)",
+    "status": 200,
+    "load": "networkidle",
+    "raw": {
+      "ai_snapshot_error": "AttributeError(\"'Page' object has no attribute '_snapshot_for_ai'\")",
+      "aria_snapshot_chars": 4315,
+      "aria_snapshot_tokens": 1250,
+      "html_chars": 46128,
+      "html_tokens": 21964
+    },
+    "projection_tokens": 1204,
+    "projection_chars": 3712,
+    "rung": 1,
+    "ladder_trace": [
+      {
+        "rung": 1,
+        "region_cap": null,
+        "aff_cap": 40,
+        "digest": "full",
+        "tokens": 1204
+      }
+    ],
+    "dom_nodes": 170,
+    "interactive_visible": 41,
+    "hidden_interactive_stripped": 0,
+    "regions": 3,
+    "headings": 4,
+    "forms": 0,
+    "tables": 0,
+    "frames": 0,
+    "readable": false,
+    "ratio_interactive_to_nodes": 0.2412,
+    "multiple_vs_ai_snapshot": 1.0
+  },
+  "cnn_homepage": {
+    "url": "https://www.cnn.com/",
+    "kind": "dense news homepage #2",
+    "status": 200,
+    "load": "domcontentloaded+settle",
+    "raw": {
+      "ai_snapshot_error": "AttributeError(\"'Page' object has no attribute '_snapshot_for_ai'\")",
+      "aria_snapshot_chars": 58946,
+      "aria_snapshot_tokens": 16344,
+      "html_chars": 6070012,
+      "html_tokens": 1830624
+    },
+    "projection_tokens": 2220,
+    "projection_chars": 6689,
+    "rung": 1,
+    "ladder_trace": [
+      {
+        "rung": 1,
+        "region_cap": null,
+        "aff_cap": 40,
+        "digest": "full",
+        "tokens": 2220
+      }
+    ],
+    "dom_nodes": 4024,
+    "interactive_visible": 309,
+    "hidden_interactive_stripped": 257,
+    "regions": 8,
+    "headings": 20,
+    "forms": 1,
+    "tables": 0,
+    "frames": 13,
+    "readable": false,
+    "ratio_interactive_to_nodes": 0.0768,
+    "multiple_vs_ai_snapshot": 7.4
+  },
+  "spa_antdesign": {
+    "url": "https://ant.design/components/overview/",
+    "kind": "heavy React SPA (docs app)",
+    "status": 200,
+    "load": "networkidle",
+    "raw": {
+      "ai_snapshot_error": "AttributeError(\"'Page' object has no attribute '_snapshot_for_ai'\")",
+      "aria_snapshot_chars": 22898,
+      "aria_snapshot_tokens": 6405,
+      "html_chars": 442803,
+      "html_tokens": 158185
+    },
+    "projection_tokens": 1593,
+    "projection_chars": 4555,
+    "rung": 1,
+    "ladder_trace": [
+      {
+        "rung": 1,
+        "region_cap": null,
+        "aff_cap": 40,
+        "digest": "full",
+        "tokens": 1593
+      }
+    ],
+    "dom_nodes": 1994,
+    "interactive_visible": 294,
+    "hidden_interactive_stripped": 0,
+    "regions": 5,
+    "headings": 14,
+    "forms": 0,
+    "tables": 0,
+    "frames": 0,
+    "readable": false,
+    "ratio_interactive_to_nodes": 0.1474,
+    "multiple_vs_ai_snapshot": 4.0
+  },
+  "canvas_openlayers": {
+    "url": "https://openlayers.org/en/latest/examples/icon.html",
+    "kind": "canvas-rendered map",
+    "status": 200,
+    "load": "networkidle",
+    "raw": {
+      "ai_snapshot_error": "AttributeError(\"'Page' object has no attribute '_snapshot_for_ai'\")",
+      "aria_snapshot_chars": 3878,
+      "aria_snapshot_tokens": 1112,
+      "html_chars": 59522,
+      "html_tokens": 15330
+    },
+    "projection_tokens": 970,
+    "projection_chars": 2909,
+    "rung": 1,
+    "ladder_trace": [
+      {
+        "rung": 1,
+        "region_cap": null,
+        "aff_cap": 40,
+        "digest": "full",
+        "tokens": 970
+      }
+    ],
+    "dom_nodes": 722,
+    "interactive_visible": 27,
+    "hidden_interactive_stripped": 15,
+    "regions": 2,
+    "headings": 1,
+    "forms": 1,
+    "tables": 0,
+    "frames": 0,
+    "readable": false,
+    "ratio_interactive_to_nodes": 0.0374,
+    "multiple_vs_ai_snapshot": 1.1
+  }
+}

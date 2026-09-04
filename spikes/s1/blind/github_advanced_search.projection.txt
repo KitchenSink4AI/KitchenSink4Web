@@ -1,0 +1,112 @@
+## 1 IDENTITY
+url: https://github.com/search/advanced
+title: GitHub · Where software is built
+status: 200 | load: networkidle | lane: A(bundled chromium) | page: p1 | read_token: rt1 | t=2026-09-05T00:21:36 KST
+viewport: 1280x900 | page height: 2.4 screens | dom nodes: 2,583
+
+## 2 PAGE SHAPE (regions; expand cost is an estimate)
+r1 | banner        | "Navigation Menu" | 75 act, 78 blocks, 41 img | in-view | ~1,236 tok to expand
+r2 | navigation    | "Global" | 66 act, 78 blocks, 37 img | in-view | ~1,135 tok to expand
+r3 | main          | "Advanced search" | 34 act, 53 blocks, 0 img | in-view | ~4,757 tok to expand
+r4 | form          | "Advanced search" | 34 act, 53 blocks, 0 img | in-view | ~4,757 tok to expand
+r5 | contentinfo   | "Footer" | 10 act, 9 blocks, 1 img | y=2066 | ~160 tok to expand
+r6 | navigation    | "Footer" | 9 act, 9 blocks, 0 img | y=2118 | ~144 tok to expand
+
+## 3 AFFORDANCES (ranked: in-viewport, then main/dialog, then weight)
+e14 | textbox | "From these owners" | in r4
+e15 | textbox | "In these repositories" | in r4
+e16 | textbox | "Created on the dates" | in r4
+e12 | textbox | "Advanced search" | in r4
+e18 | textbox | "With this many stars" | in r4
+e19 | textbox | "With this many forks" | in r4
+e20 | textbox | "Of this size" | in r4
+e21 | textbox | "Pushed to" | in r4
+e22 | combobox | "With this license" | in r4
+e24 | textbox | "With this extension" | in r4
+e17 | combobox | "Written in this language" | in r4
+e13,e42 | button | "Search" (x2) | in r4
+e23 | combobox | "Return repositories not and only including forks." | in r4
+e4 | button | "Resources" [expanded=false] | in r2
+e5 | button | "Open Source" [expanded=false] | in r2
+e6 | button | "Enterprise" [expanded=false] | in r2
+e2 | button | "Platform" [expanded=false] | in r2
+e3 | button | "Solutions" [expanded=false] | in r2
+e8 | button | "Search or jump to, type / to search" [expanded=false] | in r1
+e11 | button | "Appearance settings" | in r1
+e7 | link | "Pricing" | in r2
+e25 | textbox | "In this path" | in r4
+e26 | textbox | "With this file name" | in r4
+e30 | textbox | "With this many comments" | in r4
+e9 | link | "Sign in" | in r1
+e10 | link | "Sign up" | in r1
+e31 | textbox | "With the labels" | in r4
+e32 | textbox | "Opened by the author" | in r4
+e33 | textbox | "Mentioning the users" | in r4
+e34 | textbox | "Assigned to the users" | in r4
+e35,e41 | textbox | "Updated before the date" (x2) | in r4
+e36 | textbox | "With this full name" | in r4
+e37 | textbox | "From this location" | in r4
+e38 | textbox | "With this many followers" | in r4
+e39 | textbox | "With this many public repositories" | in r4
+e1 | link | "Homepage" | in r1
+e40 | combobox | "Working in this language" | in r4
+e28 | combobox | "In the state" | in r4
+e29 | combobox | "With the reason" | in r4
+e27 | combobox | "Return code not and only including forks." | in r4
+[10 more interactive elements in 10 groups not listed. Next: get_page_view(page='p1', view='act', cursor='aff:40') or find_elements(query=...) or scope to a region.]
+
+## 4 CONTENT DIGEST  (app-shell projection)
+h1 | h1 | Advanced search | ~40 tok
+    h2 | h3 | Advanced options | ~1,936 tok
+    h3 | h3 | Repositories options | ~507 tok
+    h4 | h3 | Code options | ~64 tok
+    h5 | h3 | Issues options | ~115 tok
+    h6 | h3 | Users options | ~1,950 tok
+    h7 | h3 | Wiki options | ~20 tok
+prose: ~0 chars total; expand one section with get_page_view(page='p1', view='read', location={'ref':'h<n>'})
+
+## 5 FORMS
+f1 | "search_form" | GET /search | 29 fields | in r4
+   e12 | Advanced search | text | empty
+   e14 | From these owners | text | empty
+   e15 | In these repositories | text | empty
+   e16 | Created on the dates | text | empty
+   e17 | Written in this language | select | empty
+   e18 | With this many stars | text | empty
+   e19 | With this many forks | text | empty
+   e20 | Of this size | text | empty
+   e21 | Pushed to | text | empty
+   e22 | With this license | select | empty
+   e23 | Return repositories not and only including forks. | select | empty
+   e24 | With this extension | text | empty
+   e25 | In this path | text | empty
+   e26 | With this file name | text | empty
+   e27 | Return code not and only including forks. | select | empty
+   e28 | In the state | select | empty
+   e29 | With the reason | select | empty
+   e30 | With this many comments | text | empty
+   e31 | With the labels | text | empty
+   e32 | Opened by the author | text | empty
+   e33 | Mentioning the users | text | empty
+   e34 | Assigned to the users | text | empty
+   e35 | Updated before the date | text | empty
+   e36 | With this full name | text | empty
+   e37 | From this location | text | empty
+   [4 more fields]
+
+## 7 COMPLETENESS (what this read did NOT see)
+iframes: none
+shadow roots: 1 open (traversed=no, prototype limit), 0 closed (unreachable by any tool)
+virtualized/infinite containers: none detected
+below the fold: 2.4 screens of content (this read covered the whole DOM, not just the viewport)
+hidden interactive elements stripped: 73 (visibility-hidden=60, zero-size=8, display-none=5)
+canvas-rendered regions: none
+BUDGET: 1,865/5,000 tokens | degradation rung 1/5 | 0 regions not expanded
+
+## 8 NEXT CALLS
+expand r3 ("Advanced search"): get_page_view(page="p1", location={"region":"r3"}, detail="standard")  ~4,757 tok
+expand r4 ("Advanced search"): get_page_view(page="p1", location={"region":"r4"}, detail="standard")  ~4,757 tok
+expand r1 ("Navigation Menu"): get_page_view(page="p1", location={"region":"r1"}, detail="standard")  ~1,236 tok
+more controls: get_page_view(page="p1", view="act", cursor="aff:40")
+act on any ref: click(page="p1", ref="e<n>") | type_text(page="p1", ref="e<n>", text=...) | fill_form(page="p1", form="f<n>", values={...})
+changed-only re-read: get_page_view(page="p1", since="rt1")

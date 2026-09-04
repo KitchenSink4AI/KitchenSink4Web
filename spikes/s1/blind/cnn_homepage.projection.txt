@@ -1,0 +1,109 @@
+## 1 IDENTITY
+url: https://edition.cnn.com/
+title: Breaking News, Latest News and Videos | CNN
+status: 200 | load: domcontentloaded+settle | lane: A(bundled chromium) | page: p1 | read_token: rt1 | t=2026-09-05T00:21:59 KST
+viewport: 1280x900 | page height: 8.4 screens | dom nodes: 4,024
+
+## 2 PAGE SHAPE (regions; expand cost is an estimate)
+r1 | banner        | "CNN values your feedback" | 210 act, 126 blocks, 23 img | in-view | ~2,885 tok to expand
+r2 | navigation    | "#pageHeader" | 189 act, 126 blocks, 23 img | in-view | ~2,557 tok to expand
+r3 | main          | "Why Iran won't back down in conflict with the US" | 184 act, 92 blocks, 160 img | in-view | ~4,474 tok to expand
+r4 | contentinfo   | "#pageFooter" | 158 act, 123 blocks, 15 img | y=6358 | ~2,121 tok to expand
+r5 | search        | ".search-bar__form" | 2 act, 0 blocks, 0 img | y=6407 | ~33 tok to expand
+r6 | navigation    | ".subnav" | 108 act, 108 blocks, 0 img | y=6487 | ~1,498 tok to expand
+r7 | navigation    | "User Account Nav" | 9 act, 4 blocks, 2 img | y=7277 | ~131 tok to expand
+r8 | navigation    | ".footer__links" | 9 act, 0 blocks, 0 img | y=7411 | ~123 tok to expand
+
+## 3 AFFORDANCES (ranked: in-viewport, then main/dialog, then weight)
+e24 | link | "Ukraine's SBU Security Service headquarters hit by Russian attack Reuters" | in r3
+e42 | group | "video player" | in r3
+e27 | link | "Daniel Mihailescu/AFP/Getty Images" | in r3
+e32 | link | "• Analysis Reuters" | in r3
+e33 | link | "Analysisby Nadeen Ebrahim The US wants to manage the stalemate in the Strait of Hormuz. Ir" | in r3
+e45 | link | "Chuck and Diane Pappas" | in r3
+e46 | link | "He thought he’d never see his 1985 Greek vacation romance again. Then he felt a tap on the" | in r3
+e25 | link | "Russia strikes Ukraine Security Service headquarters in central Kyiv" | in r3
+e26 | link | "Trump envoys Witkoff and Kushner plan to visit Moscow and Kyiv, in their first trip to Ukr" | in r3
+e31 | link | "Why Iran won't back down in conflict with the US Show all" | in r3
+e44 | link | "Video Catch up on today’s global news" | in r3
+e22 | link | "Britney’s iconic VMAs performance" | in r3
+e17 | link | "Hormuz stalemate" | in r3
+e18 | link | "Tate brothers indicted" | in r3
+e20 | link | "Missionaries in Africa" | in r3
+e21 | link | "The city that’s an AI hub" | in r3
+e19 | link | "Epstein files" | in r3
+e23 | link | "Microalgae bloom" | in r3
+e43 | link | "contact our Help Center." | in r3
+e2 | button | "Open Menu Icon" | in r2
+e14 | button | "Search Icon" | in r2
+e9,e214 | link | "Entertainment" (x2) | in r2
+e1 | generic | "Advertisement" | in r1
+e7,e197 | link | "Business" (x2) | in r2
+e15,e291 | generic | "User Account Nav" (x2) | in r2
+e16,e292 | link | "User Account Log In Button" (x2) [expanded=false] | in r2
+e3,e287 | link | "CNN logo" (x2) | in r2
+e5,e180 | link | "World" (x2) | in r2
+e6 | link | "Politics" | in r2
+e8,e207 | link | "Health" (x2) | in r2
+e10,e220 | link | "Style" (x2) | in r2
+e11,e228 | link | "Travel" (x2) | in r2
+e12,e260 | link | "Watch" (x2) | in r2
+e13,e266 | link | "Listen" (x2) | in r2
+e4 | link | "US" | in r2
+e29 | link | "Courtesy Streams of Joy Media" | in r3
+e30 | link | "The West evangelized Africa. Now African Christians are redrawing the missionary map" | in r3
+e35 | link | "Video Behind the Scenes with Kaitlan Collins: Trump administration won’t commit to a timel" | in r3
+e178 | textbox | "Search" | in r5
+e34 | link | "Vance says Iran conflict isn’t a ‘war,’ even as he refuses to say when it will end" | in r3
+[258 more interactive elements in 253 groups not listed. Next: get_page_view(page='p1', view='act', cursor='aff:40') or find_elements(query=...) or scope to a region.]
+
+## 4 CONTENT DIGEST  (app-shell projection)
+lead: It looks like your browser doesn't support the Digital Rights Management (DRM) system required to play this content. To stream on CNN, try restarting your browser or try a different browser. contact our Help Center.
+  h1 | h2 | Why Iran won't back down in conflict with the US | ~12 tok
+  h2 | h2 | Nepal flooding | ~10 tok
+  h3 | h2 | DRM System Not Supported | ~63 tok
+  h4 | h2 | More top stories | ~10 tok
+  h5 | h2 | Style | ~10 tok
+  h6 | h2 | Science & discovery | ~10 tok
+  h7 | h2 | Climate | ~10 tok
+  h8 | h2 | Destination Turkey | ~10 tok
+  h9 | h2 | Across Africa | ~10 tok
+  h10 | h2 | US Politics | ~10 tok
+  h11 | h2 | Business & Economy | ~10 tok
+  h12 | h2 | Trump's building projects | ~10 tok
+  h13 | h2 | Sports | ~10 tok
+  h14 | h2 | Gloria Steinem 1934 - 2026 | ~10 tok
+  h15 | h2 | Crime & courts | ~10 tok
+  h16 | h2 | Immigration | ~10 tok
+  h17 | h2 | In pictures | ~10 tok
+  h18 | h2 | CNN Shorts | ~3,727 tok
+  h19 | h2 | World of Wonder | ~12 tok
+  h20 | h2 | More from CNN | ~882 tok
+prose: ~336 chars total; expand one section with get_page_view(page='p1', view='read', location={'ref':'h<n>'})
+
+## 5 FORMS
+f1 | "q" | GET https://www.cnn.com/search | 1 fields | in r5
+   e178 | Search | text | empty
+
+## 7 COMPLETENESS (what this read did NOT see)
+iframes not traversed: 6 same-origin, 7 cross-origin
+   if1 | same-origin | (srcdoc)  -> get_page_view(location={"frame":"if1"})
+   if2 | same-origin | (srcdoc)  -> get_page_view(location={"frame":"if2"})
+   if3 | same-origin | 3rd party ad content  -> get_page_view(location={"frame":"if3"})
+   if4 | cross-origin | Optimizely Internal Frame  -> get_page_view(location={"frame":"if4"})
+   if5 | same-origin | onetrust-text-resize  -> get_page_view(location={"frame":"if5"})
+   if6 | same-origin | (srcdoc)  -> get_page_view(location={"frame":"if6"})
+shadow roots: 0 open (traversed=no, prototype limit), 0 closed (unreachable by any tool)
+virtualized/infinite containers: none detected
+below the fold: 8.4 screens of content (this read covered the whole DOM, not just the viewport)
+hidden interactive elements stripped: 257 (zero-size=175, display-none=50, opacity-0=21, visibility-hidden=11)
+canvas-rendered regions: none
+BUDGET: 2,220/5,000 tokens | degradation rung 1/5 | 0 regions not expanded
+
+## 8 NEXT CALLS
+expand r3 ("Why Iran won't back down in conflict with the US"): get_page_view(page="p1", location={"region":"r3"}, detail="standard")  ~4,474 tok
+expand r1 ("CNN values your feedback"): get_page_view(page="p1", location={"region":"r1"}, detail="standard")  ~2,885 tok
+expand r2 ("#pageHeader"): get_page_view(page="p1", location={"region":"r2"}, detail="standard")  ~2,557 tok
+more controls: get_page_view(page="p1", view="act", cursor="aff:40")
+act on any ref: click(page="p1", ref="e<n>") | type_text(page="p1", ref="e<n>", text=...) | fill_form(page="p1", form="f<n>", values={...})
+changed-only re-read: get_page_view(page="p1", since="rt1")

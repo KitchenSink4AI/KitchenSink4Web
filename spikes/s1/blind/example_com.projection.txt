@@ -1,0 +1,28 @@
+## 1 IDENTITY
+url: https://example.com/
+title: Example Domain
+status: 200 | load: networkidle | lane: A(bundled chromium) | page: p1 | read_token: rt1 | t=2026-09-05T00:21:45 KST
+viewport: 1280x900 | page height: 1 screens | dom nodes: 12
+
+## 2 PAGE SHAPE (regions; expand cost is an estimate)
+
+## 3 AFFORDANCES (ranked: in-viewport, then main/dialog, then weight)
+e1 | link | "Learn more" | in -
+
+## 4 CONTENT DIGEST  (app-shell projection)
+lead: This domain is for use in documentation examples without needing permission. Avoid use in operations.
+h1 | h1 | Example Domain | ~37 tok
+prose: ~111 chars total; expand one section with get_page_view(page='p1', view='read', location={'ref':'h<n>'})
+
+## 7 COMPLETENESS (what this read did NOT see)
+iframes: none
+shadow roots: 0 open (traversed=no, prototype limit), 0 closed (unreachable by any tool)
+virtualized/infinite containers: none detected
+below the fold: 1 screens of content (this read covered the whole DOM, not just the viewport)
+hidden interactive elements stripped: 0 (none)
+canvas-rendered regions: none
+BUDGET: 404/5,000 tokens | degradation rung 1/5 | 0 regions not expanded
+
+## 8 NEXT CALLS
+act on any ref: click(page="p1", ref="e<n>") | type_text(page="p1", ref="e<n>", text=...) | fill_form(page="p1", form="f<n>", values={...})
+changed-only re-read: get_page_view(page="p1", since="rt1")

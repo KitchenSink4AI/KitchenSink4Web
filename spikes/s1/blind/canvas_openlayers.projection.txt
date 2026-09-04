@@ -1,0 +1,58 @@
+## 1 IDENTITY
+url: https://openlayers.org/en/latest/examples/icon.html
+title: Icon Symbolizer
+status: 200 | load: networkidle | lane: A(bundled chromium) | page: p1 | read_token: rt1 | t=2026-09-05T00:22:13 KST
+viewport: 1280x900 | page height: 3.5 screens | dom nodes: 722
+
+## 2 PAGE SHAPE (regions; expand cost is an estimate)
+r1 | navigation    | ".navbar" | 14 act, 4 blocks, 1 img | in-view | ~176 tok to expand
+r2 | form          | "#codepen-form" | 1 act, 0 blocks, 0 img | in-view | ~24 tok to expand
+
+## 3 AFFORDANCES (ranked: in-viewport, then main/dialog, then weight)
+e2 | button | "Docs" [expanded=false] | in r1
+e5 | button | "Code" [expanded=false] | in r1
+e19 | button | "main.js" | in -
+e1 | link | "OpenLayers" | in r1
+e21,e24,e27 | button | "Copy" (x3) | in -
+e17 | button | "+" | in -
+e18 | button | "–" | in -
+e3 | link | "Examples" | in r1
+e4 | link | "API" | in r1
+e20 | generic | "import Feature from 'ol/Feature.js'; import Map from 'ol/Map.js'; import Overlay from 'ol/" | in -
+e6 | link | "Edit" | in -
+e13 | link | "marker" | in -
+e15 | link | "popup" | in -
+e7 | link | "vector" | in -
+e8 | generic | "86" | in -
+e9 | link | "style" | in -
+e10 | generic | "27" | in -
+e11 | link | "icon" | in -
+e12 | generic | "9" | in -
+e14 | generic | "6" | in -
+e16 | generic | "3" | in -
+e22 | button | "index.html" | in -
+e25 | button | "package.json" | in -
+e23 | generic | "<!DOCTYPE html> <html lang="en"> <head> <meta charset="UTF-8"> <title>Icon Symbolizer</tit" | in -
+e26 | generic | "{ "name": "icon", "dependencies": { "ol": "10.10.0" }, "devDependencies": { "vite": "^3.2." | in -
+
+## 4 CONTENT DIGEST  (app-shell projection)
+      h1 | h4 | Icon Symbolizer | ~112 tok
+prose: ~80 chars total; expand one section with get_page_view(page='p1', view='read', location={'ref':'h<n>'})
+
+## 5 FORMS
+f1 | "codepen-form" | POST https://codesandbox.io/api/v1/sandboxes/define | 0 fields | in r2
+
+## 7 COMPLETENESS (what this read did NOT see)
+iframes: none
+shadow roots: 0 open (traversed=no, prototype limit), 0 closed (unreachable by any tool)
+virtualized/infinite containers: none detected
+below the fold: 3.5 screens of content (this read covered the whole DOM, not just the viewport)
+hidden interactive elements stripped: 15 (zero-size=12, display-none=2, visibility-hidden=1)
+canvas-rendered regions with no text projection: 1 -> enable the "capture" pack (--packs capture) for pixels
+BUDGET: 970/5,000 tokens | degradation rung 1/5 | 0 regions not expanded
+
+## 8 NEXT CALLS
+expand r1 (".navbar"): get_page_view(page="p1", location={"region":"r1"}, detail="standard")  ~176 tok
+expand r2 ("#codepen-form"): get_page_view(page="p1", location={"region":"r2"}, detail="standard")  ~24 tok
+act on any ref: click(page="p1", ref="e<n>") | type_text(page="p1", ref="e<n>", text=...) | fill_form(page="p1", form="f<n>", values={...})
+changed-only re-read: get_page_view(page="p1", since="rt1")

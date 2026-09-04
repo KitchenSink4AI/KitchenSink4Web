@@ -1,0 +1,40 @@
+## 1 IDENTITY
+url: https://ant.design/components/overview
+title: Components Overview - Ant Design
+status: 200 | load: networkidle | lane: A(bundled chromium) | page: p1 | read_token: rt1 | t=cached
+viewport: 1280x900 | page height: 8.2 screens | dom nodes: 1,994
+
+## 2 PAGE SHAPE (regions; expand cost is an estimate)
+r1 | banner        | "Ant Design" | 23 act, 5 blocks, 10 img | in-view | ~254 tok to expand
+r2 | menu          | ".ant-menu" | 10 act, 5 blocks, 0 img | in-view | ~125 tok to expand
+r3 | main          | "Components Overview" | 271 act, 83 blocks, 107 img | in-view | ~3,220 tok to expand
+r4 | menu          | ".ant-menu" | 150 act, 82 blocks, 0 img | in-view | ~1,684 tok to expand
+r5 | contentinfo   | "Resources" | 38 act, 0 blocks, 25 img | y=6611 | ~561 tok to expand
+
+## 3 AFFORDANCES (ranked: in-viewport, then main/dialog, then weight)
+e176 | textbox | "Search in components" | in r3
+e177,e30 | link | "Button" (x2) | in r3
+e178,e32 | link | "FloatButton" (x2) | in r3
+e179,e34 | link | "Icon" (x2) | in r3
+e180,e36 | link | "Typography" (x2) | in r3
+e181,e38 | link | "Divider" (x2) | in r3
+e182,e40 | link | "Flex" (x2) | in r3
+e183,e42 | link | "Grid" (x2) | in r3
+[279 more interactive elements in 217 groups not listed. Next: get_page_view(page='p1', view='act', cursor='aff:8') or find_elements(query=...) or scope to a region.]
+
+## 7 COMPLETENESS (what this read did NOT see)
+iframes: none
+shadow roots: 0 open (traversed=no, prototype limit), 0 closed (unreachable by any tool)
+virtualized/infinite containers: none detected
+below the fold: 8.2 screens of content (this read covered the whole DOM, not just the viewport)
+hidden interactive elements stripped: 0 (none)
+canvas-rendered regions: none
+BUDGET: 790/900 tokens | degradation rung 5/5 | 0 regions not expanded
+
+## 8 NEXT CALLS
+expand r3 ("Components Overview"): get_page_view(page="p1", location={"region":"r3"}, detail="standard")  ~3,220 tok
+expand r4 (".ant-menu"): get_page_view(page="p1", location={"region":"r4"}, detail="standard")  ~1,684 tok
+expand r5 ("Resources"): get_page_view(page="p1", location={"region":"r5"}, detail="standard")  ~561 tok
+more controls: get_page_view(page="p1", view="act", cursor="aff:8")
+act on any ref: click(page="p1", ref="e<n>") | type_text(page="p1", ref="e<n>", text=...) | fill_form(page="p1", form="f<n>", values={...})
+changed-only re-read: get_page_view(page="p1", since="rt1")

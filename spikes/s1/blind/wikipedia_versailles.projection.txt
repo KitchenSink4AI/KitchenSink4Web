@@ -1,0 +1,165 @@
+## 1 IDENTITY
+url: https://en.wikipedia.org/wiki/Treaty_of_Versailles
+title: Treaty of Versailles - Wikipedia
+status: 200 | load: networkidle | lane: A(bundled chromium) | page: p1 | read_token: rt1 | t=2026-09-05T00:21:14 KST
+viewport: 1280x900 | page height: 51.1 screens | dom nodes: 10,745
+
+## 2 PAGE SHAPE (regions; expand cost is an estimate)
+r1 | banner        | ".vector-header" | 28 act, 18 blocks, 3 img | in-view | ~378 tok to expand
+r2 | search        | "#p-search" | 4 act, 0 blocks, 0 img | in-view | ~54 tok to expand
+r3 | form          | "#searchform" | 3 act, 0 blocks, 0 img | in-view | ~43 tok to expand
+r4 | navigation    | "Contents" | 62 act, 51 blocks, 0 img | in-view | ~983 tok to expand
+r5 | main          | "Treaty of Versailles" | 3033 act, 1462 blocks, 66 img | in-view | ~73,716 tok to expand
+r6 | banner        | "Treaty of Versailles" | 124 act, 121 blocks, 0 img | in-view | ~1,637 tok to expand
+r7 | navigation    | "Appearance" | 10 act, 3 blocks, 0 img | in-view | ~167 tok to expand
+r8 | form          | "form" | 3 act, 0 blocks, 0 img | in-view | ~46 tok to expand
+r9 | form          | "form" | 2 act, 0 blocks, 0 img | in-view | ~36 tok to expand
+r10 | form          | "form" | 3 act, 0 blocks, 0 img | in-view | ~46 tok to expand
+r11 | navigation    | "#mwQA" | 44 act, 31 blocks, 1 img | y=1191 | ~957 tok to expand
+r12 | navigation    | "#mwQg" | 72 act, 68 blocks, 0 img | y=1655 | ~1,319 tok to expand
+r13 | region        | "Background" | 96 act, 8 blocks, 1 img | y=1831 | ~2,632 tok to expand
+r14 | region        | "Negotiations" | 108 act, 15 blocks, 2 img | y=4308 | ~3,968 tok to expand
+r15 | region        | "Treaty content and signing" | 173 act, 11 blocks, 6 img | y=8195 | ~5,473 tok to expand
+r16 | region        | "Reactions" | 169 act, 31 blocks, 5 img | y=12863 | ~6,399 tok to expand
+r17 | region        | "Implementation" | 85 act, 11 blocks, 2 img | y=19370 | ~2,985 tok to expand
+r18 | region        | "Violations" | 85 act, 13 blocks, 2 img | y=22339 | ~3,836 tok to expand
+r19 | region        | "Historical assessments" | 115 act, 19 blocks, 4 img | y=26285 | ~5,150 tok to expand
+r20 | region        | "See also" | 8 act, 6 blocks, 2 img | y=31420 | ~325 tok to expand
+r21 | region        | "Notes" | 643 act, 267 blocks, 0 img | y=31591 | ~10,225 tok to expand
+r22 | region        | "Sources" | 427 act, 139 blocks, 0 img | y=36334 | ~10,306 tok to expand
+r23 | region        | "Further reading" | 78 act, 28 blocks, 0 img | y=43338 | ~1,946 tok to expand
+r24 | region        | "External links" | 623 act, 574 blocks, 4 img | y=44778 | ~11,306 tok to expand
+r25 | navigation    | "Paris Peace Conference (1919–1920)" | 42 act, 37 blocks, 0 img | y=45303 | ~704 tok to expand
+r26 | navigation    | "World War I treaties" | 52 act, 51 blocks, 0 img | y=45338 | ~766 tok to expand
+r27 | navigation    | "World War I" | 323 act, 315 blocks, 0 img | y=45374 | ~5,158 tok to expand
+r28 | navigation    | "Treaties of Japan" | 164 act, 145 blocks, 0 img | y=45409 | ~3,396 tok to expand
+r29 | navigation    | "Authority control databases" | 20 act, 17 blocks, 1 img | y=45444 | ~281 tok to expand
+r30 | contentinfo   | "#footer" | 18 act, 16 blocks, 4 img | y=45792 | ~345 tok to expand
+
+## 3 AFFORDANCES (ranked: in-viewport, then main/dialog, then weight)
+e2 | searchbox | "Search Wikipedia" | in r3
+e206,e447 | link | "assassination of Archduke Franz Ferdinand" (x2) | in r5
+e3 | button | "Search" | in r3
+e43,e205 | link | "Palace of Versailles" (x2) | in r5
+e38 | link | "Treaty of Versailles (disambiguation)" | in r5
+e33 | link | "View source" | in r5
+e34 | link | "View history" | in r5
+e37,e101 | link | "Little Treaty of Versailles" (x2) | in r5
+e40,e95 | link | ".mw-file-description" (x2) | in r5
+e210,e94 | link | "Paris Peace Conference" (x2) | in r5
+e212 | link | "required Germany to disarm" | in r5
+e30 | link | "Article" | in r5
+e32 | link | "Read" | in r5
+e201 | link | "peace treaty" | in r5
+e202,e231 | link | "World War I" (x2) | in r5
+e204 | link | "Allied Powers" | in r5
+e207,e239 | link | "Central Powers" (x2) | in r5
+e213 | link | "Kaiser Wilhelm" | in r5
+e31 | link | "Talk" | in r5
+e42 | link | "Hall of Mirrors" | in r5
+e44 | link | "Versailles" | in r5
+e47 | link | "Ratification" | in r5
+e203,e86,e236 | link | "Germany" (x3) | in r5
+e209 | link | "armistice" | in r5
+e214 | link | "reparations" | in r5
+e215 | link | "Entente" | in r5
+e36 | link | "Page semi-protected" | in r5
+e39,e50,e64+ | link | "[n. 1]" (x4) | in r5
+e200 | link | "[ii]" | in r5
+e208 | link | "[iii]" | in r5
+e211 | link | "[4]" | in r5
+e41 | link | "[1]" | in r5
+e45 | link | "[2]" | in r5
+e46 | link | "[3]" | in r5
+e48,e53,e88+ | link | "[n. 2]" (x4) | in r5
+e7 | button | "Hide Contents" | in r4
+e10 | button | "Toggle Background subsection" [expanded=false] | in r4
+e12 | button | "Toggle Negotiations subsection" [expanded=false] | in r4
+e14 | button | "Toggle Treaty content and signing subsection" [expanded=false] | in r4
+e35 | button | "Hide Appearance" | in r7
+[2803 more interactive elements in 484 groups not listed. Next: get_page_view(page='p1', view='act', cursor='aff:40') or find_elements(query=...) or scope to a region.]
+
+## 4 CONTENT DIGEST  (readable-article projection)
+lead: The Treaty of Versailles[ii] was a peace treaty signed on 28 June 1919. As the most important treaty of World War I, it ended the state of war between Germany and most of the Allied Powers. It was signed in the Palace of Versailles, exactly five years after the assassination of Archduke Franz Ferdinand, the proximate cause of the war. The other Central Powers on the German side signed separate treaties.[iii] Although...
+  h1 | h2 | Contents | ~14 tok
+h2 | h1 | Treaty of Versailles | ~273 tok
+  h3 | h2 | Background | ~10 tok
+    h4 | h3 | First World War | ~10 tok
+    h5 | h3 | Role of the Fourteen Points | ~10 tok
+    h6 | h3 | Armistice | ~10 tok
+    h7 | h3 | Blockade | ~10 tok
+  h8 | h2 | Negotiations | ~10 tok
+    h9 | h3 | French aims | ~10 tok
+    h10 | h3 | British aims | ~10 tok
+    h11 | h3 | American aims | ~10 tok
+    h12 | h3 | Italian aims | ~10 tok
+  h13 | h2 | Treaty content and signing | ~10 tok
+    h14 | h3 | Territorial changes | ~10 tok
+    h15 | h3 | Mandates | ~10 tok
+    h16 | h3 | Military restrictions | ~10 tok
+    h17 | h3 | Reparations | ~10 tok
+    h18 | h3 | Guarantees | ~10 tok
+    h19 | h3 | International organizations | ~10 tok
+    h20 | h3 | War Crimes | ~10 tok
+  h21 | h2 | Reactions | ~10 tok
+    h22 | h3 | Britain | ~10 tok
+      h23 | h4 | Status of British Dominions | ~10 tok
+    h24 | h3 | France | ~10 tok
+    h25 | h3 | Italy | ~10 tok
+    h26 | h3 | Portugal | ~10 tok
+    h27 | h3 | United States | ~10 tok
+      h28 | h4 | Edward House's views | ~10 tok
+    h29 | h3 | China | ~10 tok
+    h30 | h3 | Germany | ~10 tok
+    h31 | h3 | Japan | ~10 tok
+  h32 | h2 | Implementation | ~10 tok
+    h33 | h3 | Reparations | ~10 tok
+    h34 | h3 | Territorial changes | ~10 tok
+    h35 | h3 | Rhineland occupation | ~10 tok
+  h36 | h2 | Violations | ~10 tok
+    h37 | h3 | Reparations | ~10 tok
+    h38 | h3 | Military | ~10 tok
+    h39 | h3 | Territorial | ~10 tok
+    h40 | h3 | War criminals | ~10 tok
+[12 more headings; get_page_view(view='outline')]
+prose: ~87,290 chars total; expand one section with get_page_view(page='p1', view='read', location={'ref':'h<n>'})
+
+## 5 FORMS
+f1 | "searchform" | GET /w/index.php | 1 fields | in r3
+   e2 | Search Wikipedia | search | empty
+f2 | "(same page)" | GET (same page) | 0 fields | in r8
+f3 | "(same page)" | GET (same page) | 0 fields | in r9
+f4 | "(same page)" | GET (same page) | 0 fields | in r10
+
+## 6 TABLES (structure only; cells come from get_table)
+t1 | "Treaty of Versailles" | 11x1, 4 spanned cells | cols: Treaty of Peace between the  | Signed | Location | Effective | Condition | Parties | Depositary | Languages | in r5 | ~235 tok if fully read
+t2 | "sidebar sidebar-collapse nomobile nowrap" | 10x1 | cols: Paris Peace Conference | in r11 | ~484 tok if fully read
+t3 | "sidebar sidebar-collapse nomobile nowrap" | 5x1 | cols: Events leading to World War  | in r12 | ~520 tok if fully read
+t4 | "nowraplinks mw-collapsible autocollapse " | 7x1, 1 spanned cells | cols: showvteParis Peace Conferenc | League of Nations | Treaty of Versailles | Subsequent treaties | Treaty of Sèvres | Other | Paintings | in r25 | ~237 tok if fully read
+t5 | "nowraplinks mw-collapsible autocollapse " | 5x1, 5 spanned cells | cols: showvteWorld War I treaties | During the war | Paris Peace Conference | Aftermath | Montreux | Egypt | in r26 | ~181 tok if fully read
+t6 | "nowraplinks navbox-subgroup" | 1x2 | cols: During the war | in r26 | ~41 tok if fully read
+t7 | "nowraplinks navbox-subgroup" | 1x2 | cols: Paris Peace Conference | in r26 | ~22 tok if fully read
+t8 | "nowraplinks navbox-subgroup" | 3x1, 1 spanned cells | cols: Montreux | Egypt | in r26 | ~93 tok if fully read
+t9 | "nowraplinks hlist mw-collapsible mw-coll" | 7x1, 3 spanned cells | cols: showvteWorld War I | Theatres | European | Middle Eastern | African | Asian and Pacific | Naval warfare | Principalparticipants | in r27 | ~1,606 tok if fully read
+t10 | "nowraplinks navbox-subgroup" | 5x2 | cols: European | Middle Eastern | African | Asian and Pacific | Naval warfare | in r27 | ~81 tok if fully read
+t11 | "nowraplinks navbox-subgroup" | 2x2 | cols: Entente Powers | Central Powers | in r27 | ~86 tok if fully read
+t12 | "nowraplinks navbox-subgroup" | 9x2 | cols: Pre-War conflicts | Prelude | 1914 | 1915 | 1916 | 1917 | 1918 | Co-belligerent conflicts | in r27 | ~905 tok if fully read
+[6 more tables]
+
+## 7 COMPLETENESS (what this read did NOT see)
+iframes: none
+shadow roots: 0 open (traversed=no, prototype limit), 0 closed (unreachable by any tool)
+virtualized/infinite containers: none detected
+below the fold: 51.1 screens of content (this read covered the whole DOM, not just the viewport)
+hidden interactive elements stripped: 299 (visibility-hidden=158, zero-size=117, opacity-0=16, display-none=8)
+canvas-rendered regions: none
+BUDGET: 3,726/5,000 tokens | degradation rung 1/5 | 0 regions not expanded
+
+## 8 NEXT CALLS
+expand r5 ("Treaty of Versailles"): get_page_view(page="p1", location={"region":"r5"}, detail="standard")  ~73,716 tok
+expand r24 ("External links"): get_page_view(page="p1", location={"region":"r24"}, detail="standard")  ~11,306 tok
+expand r22 ("Sources"): get_page_view(page="p1", location={"region":"r22"}, detail="standard")  ~10,306 tok
+read table t1: get_table(page="p1", ref="t1", rows="1-50")  (11 rows total)
+more controls: get_page_view(page="p1", view="act", cursor="aff:40")
+act on any ref: click(page="p1", ref="e<n>") | type_text(page="p1", ref="e<n>", text=...) | fill_form(page="p1", form="f<n>", values={...})
+changed-only re-read: get_page_view(page="p1", since="rt1")

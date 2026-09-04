@@ -1,0 +1,121 @@
+## 1 IDENTITY
+url: https://en.wikipedia.org/wiki/List_of_countries_by_GDP_(nominal)
+title: List of countries by GDP (nominal) - Wikipedia
+status: 200 | load: networkidle | lane: A(bundled chromium) | page: p1 | read_token: rt1 | t=2026-09-05T00:21:18 KST
+viewport: 1280x900 | page height: 15.4 screens | dom nodes: 5,652
+
+## 2 PAGE SHAPE (regions; expand cost is an estimate)
+r1 | banner        | ".vector-header" | 28 act, 18 blocks, 3 img | in-view | ~378 tok to expand
+r2 | navigation    | "Site" | 15 act, 12 blocks, 0 img | in-view | ~225 tok to expand
+r3 | search        | "#p-search" | 4 act, 0 blocks, 0 img | in-view | ~54 tok to expand
+r4 | form          | "#searchform" | 3 act, 0 blocks, 0 img | in-view | ~43 tok to expand
+r5 | navigation    | "Personal tools" | 8 act, 6 blocks, 0 img | in-view | ~119 tok to expand
+r6 | navigation    | "Contents" | 8 act, 6 blocks, 0 img | in-view | ~126 tok to expand
+r7 | main          | "List of countries by GDP (nominal)" | 1225 act, 450 blocks, 233 img | in-view | ~24,695 tok to expand
+r8 | banner        | "List of countries by GDP (nominal)" | 82 act, 79 blocks, 0 img | in-view | ~1,092 tok to expand
+r9 | navigation    | "Namespaces" | 3 act, 2 blocks, 0 img | in-view | ~51 tok to expand
+r10 | navigation    | "Views" | 3 act, 3 blocks, 0 img | in-view | ~55 tok to expand
+r11 | navigation    | "Page tools" | 19 act, 16 blocks, 0 img | in-view | ~297 tok to expand
+r12 | navigation    | "Appearance" | 10 act, 3 blocks, 0 img | in-view | ~167 tok to expand
+r13 | form          | "form" | 3 act, 0 blocks, 0 img | in-view | ~46 tok to expand
+r14 | form          | "form" | 2 act, 0 blocks, 0 img | in-view | ~36 tok to expand
+r15 | form          | "form" | 3 act, 0 blocks, 0 img | in-view | ~46 tok to expand
+r16 | region        | "Table" | 245 act, 1 blocks, 221 img | y=1347 | ~7,722 tok to expand
+r17 | region        | "Nominal GDP of regional groupings" | 24 act, 1 blocks, 5 img | y=9056 | ~482 tok to expand
+r18 | region        | "See also" | 25 act, 26 blocks, 2 img | y=9762 | ~739 tok to expand
+r19 | navigation    | "Portals" | 4 act, 2 blocks, 2 img | y=9827 | ~67 tok to expand
+r20 | region        | "Notes" | 446 act, 22 blocks, 0 img | y=10519 | ~5,954 tok to expand
+r21 | region        | "References" | 331 act, 284 blocks, 2 img | y=12261 | ~6,929 tok to expand
+r22 | navigation    | "Lists of countries by financial rankings" | 67 act, 59 blocks, 0 img | y=12651 | ~1,274 tok to expand
+r23 | navigation    | "Lists of countries by GDP rankings" | 155 act, 154 blocks, 0 img | y=12687 | ~2,225 tok to expand
+r24 | navigation    | "Economic classification of countries" | 80 act, 64 blocks, 2 img | y=13532 | ~1,238 tok to expand
+r25 | contentinfo   | "#footer" | 18 act, 16 blocks, 4 img | y=13672 | ~345 tok to expand
+
+## 3 AFFORDANCES (ranked: in-viewport, then main/dialog, then weight)
+e2 | searchbox | "Search Wikipedia" | in r4
+e27 | link | "#mwHw" | in r7
+e3 | button | "Search" | in r4
+e37 | link | "purchasing power parity" | in r7
+e22,e322 | link | "List of countries by GDP (nominal) per capita" (x2) | in r7
+e23 | link | "List of countries by informal GDP (nominal)" | in r7
+e21,e321 | link | "List of countries by GDP (PPP)" (x2) | in r7
+e29 | link | "Gross domestic product" | in r7
+e24,e42 | link | "International Monetary Fund" (x2) | in r7
+e30 | link | "market value" | in r7
+e32 | link | "exchange rates" | in r7
+e33 | link | "cost of living" | in r7
+e38 | link | "nominal GDP per capita" | in r7
+e34 | link | "currency" | in r7
+e20 | link | "Page semi-protected" | in r7
+e25,e63 | link | "[n 1]" (x2) | in r7
+e31 | link | "[2]" | in r7
+e35 | link | "[3]" | in r7
+e26,e54 | link | "[1]" (x2) | in r7
+e28 | link | "[n 2]" | in r7
+e36 | link | "[4]" | in r7
+e7 | button | "Hide Contents" | in r6
+e19 | button | "Hide Appearance" | in r12
+e10 | link | "2 Nominal GDP of regional groupings" | in r6
+e8 | link | "(Top)" | in r6
+e9 | link | "1 Table" | in r6
+e11 | link | "3 See also" | in r6
+e12 | link | "4 Notes" | in r6
+e13 | link | "5 References" | in r6
+e17 | link | "View source" | in r10
+e18 | link | "View history" | in r10
+e5 | link | "Create account" | in r5
+e14 | link | "Article" | in r9
+e16 | link | "Read" | in r10
+e4 | link | "Donate" | in r5
+e6 | link | "Log in" | in r5
+e15 | link | "Talk" | in r9
+e1 | link | ".mw-logo" | in r1
+e44 | link | "United Nations Statistics Division" | in r7
+e39 | link | "GDP (PPP) per capita" | in r7
+[1074 more interactive elements in 420 groups not listed. Next: get_page_view(page='p1', view='act', cursor='aff:40') or find_elements(query=...) or scope to a region.]
+
+## 4 CONTENT DIGEST  (readable-article projection)
+lead: Gross domestic product (GDP) is the market value of all final goods and services from a nation in a given year.[2] Countries are sorted by nominal GDP estimates from financial and statistical institutions, which are calculated at market or government official exchange rates. Nominal GDP does not take into account differences in the cost of living in different countries, and the results can vary greatly from one year ...
+  h1 | h2 | Contents | ~14 tok
+h2 | h1 | List of countries by GDP (nominal) | ~187 tok
+  h3 | h2 | Table | ~10 tok
+  h4 | h2 | Nominal GDP of regional groupings | ~10 tok
+  h5 | h2 | See also | ~10 tok
+  h6 | h2 | Notes | ~10 tok
+  h7 | h2 | References | ~10 tok
+prose: ~2,686 chars total; expand one section with get_page_view(page='p1', view='read', location={'ref':'h<n>'})
+
+## 5 FORMS
+f1 | "searchform" | GET /w/index.php | 1 fields | in r4
+   e2 | Search Wikipedia | search | empty
+f2 | "(same page)" | GET (same page) | 0 fields | in r13
+f3 | "(same page)" | GET (same page) | 0 fields | in r14
+f4 | "(same page)" | GET (same page) | 0 fields | in r15
+
+## 6 TABLES (structure only; cells come from get_table)
+t1 | "" | 2x1 | cols: (no th) | in r7 | ~28 tok if fully read
+t2 | "" | 1x2 | cols: (no th) | in r7 | ~125 tok if fully read
+t3 | "GDP forecast or estimate (million US$) by country" | 223x4 | cols: Country/Territory | IMF(2026)[1] | World Bank(2025)[6] | United Nations(2024)[7] | in r16 | ~1,717 tok if fully read
+t4 | "GDP forecast or estimate (million US$) by region or grouping" | 15x3 | cols: Regional groupings | IMF(2026)[1] | World Bank(2024)[6] | in r17 | ~159 tok if fully read
+t5 | "nowraplinks mw-collapsible autocollapse " | 9x1, 2 spanned cells | cols: show.mw-parser-output .navba | Trade | Investment | Funds | Budget and debt | Income and taxes | Currency | Other | in r22 | ~538 tok if fully read
+t6 | "nowraplinks mw-collapsible uncollapsed n" | 10x1, 2 spanned cells | cols: hidevteLists of countries by | Nominal | Purchasing power parity (PPP | Per capita | Economic growth | Productivity | Gross national income (GNI) | Countries by region | in r23 | ~507 tok if fully read
+t7 | "nowraplinks hlist mw-collapsible autocol" | 12x1, 3 spanned cells | cols: showvteEconomic classificati | Three/Four-World Model | Gross domestic product (GDP) | Nominal | Purchasing power parity (PPP | Gross national income and In | Wages and salary | Wealth | in r24 | ~375 tok if fully read
+t8 | "nowraplinks navbox-subgroup" | 2x2 | cols: Nominal | Purchasing power parity (PPP | in r24 | ~39 tok if fully read
+
+## 7 COMPLETENESS (what this read did NOT see)
+iframes: none
+shadow roots: 0 open (traversed=no, prototype limit), 0 closed (unreachable by any tool)
+virtualized/infinite containers: none detected
+below the fold: 15.4 screens of content (this read covered the whole DOM, not just the viewport)
+hidden interactive elements stripped: 176 (visibility-hidden=113, zero-size=39, opacity-0=16, display-none=8)
+canvas-rendered regions: none
+BUDGET: 2,854/5,000 tokens | degradation rung 1/5 | 0 regions not expanded
+
+## 8 NEXT CALLS
+expand r7 ("List of countries by GDP (nominal)"): get_page_view(page="p1", location={"region":"r7"}, detail="standard")  ~24,695 tok
+expand r16 ("Table"): get_page_view(page="p1", location={"region":"r16"}, detail="standard")  ~7,722 tok
+expand r21 ("References"): get_page_view(page="p1", location={"region":"r21"}, detail="standard")  ~6,929 tok
+read table t1: get_table(page="p1", ref="t1", rows="1-50")  (2 rows total)
+more controls: get_page_view(page="p1", view="act", cursor="aff:40")
+act on any ref: click(page="p1", ref="e<n>") | type_text(page="p1", ref="e<n>", text=...) | fill_form(page="p1", form="f<n>", values={...})
+changed-only re-read: get_page_view(page="p1", since="rt1")

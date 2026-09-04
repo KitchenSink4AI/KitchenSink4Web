@@ -1,0 +1,55 @@
+## 1 IDENTITY
+url: https://httpbin.org/forms/post
+title: 
+status: 200 | load: networkidle | lane: A(bundled chromium) | page: p1 | read_token: rt1 | t=cached
+viewport: 1280x900 | page height: 1 screens | dom nodes: 46
+
+## 2 PAGE SHAPE (regions; expand cost is an estimate)
+r1 | form          | "Pizza Size" | 13 act, 13 blocks, 0 img | in-view | ~203 tok to expand
+
+## 3 AFFORDANCES (ranked: in-viewport, then main/dialog, then weight)
+e12 | textbox | "Delivery instructions:" | in r1
+e1 | textbox | "Customer name:" | in r1
+e2 | textbox | "Telephone:" | in r1
+e3 | textbox | "E-mail address:" | in r1
+e11 | textbox | "Preferred delivery time:" | in r1
+e13 | button | "Submit order" | in r1
+e4 | radio | "Small" | in r1
+e5 | radio | "Medium" | in r1
+e6 | radio | "Large" | in r1
+e7 | checkbox | "Bacon" | in r1
+e8 | checkbox | "Extra Cheese" | in r1
+e9 | checkbox | "Onion" | in r1
+e10 | checkbox | "Mushroom" | in r1
+
+## 4 CONTENT DIGEST  (app-shell projection)
+(no headings; page is not article-shaped)
+
+## 5 FORMS
+f1 | "/post" | POST /post | 12 fields | in r1
+   e1 | Customer name: | text | empty
+   e2 | Telephone: | tel | empty
+   e3 | E-mail address: | email | empty
+   e4 | Small | radio | set:"small"
+   e5 | Medium | radio | set:"medium"
+   e6 | Large | radio | set:"large"
+   e7 | Bacon | checkbox | set:"bacon"
+   e8 | Extra Cheese | checkbox | set:"cheese"
+   e9 | Onion | checkbox | set:"onion"
+   e10 | Mushroom | checkbox | set:"mushroom"
+   e11 | Preferred delivery time: | time | empty
+   e12 | Delivery instructions: | textarea | empty
+
+## 7 COMPLETENESS (what this read did NOT see)
+iframes: none
+shadow roots: 0 open (traversed=no, prototype limit), 0 closed (unreachable by any tool)
+virtualized/infinite containers: none detected
+below the fold: 1 screens of content (this read covered the whole DOM, not just the viewport)
+hidden interactive elements stripped: 0 (none)
+canvas-rendered regions: none
+BUDGET: 743/900 tokens | degradation rung 1/5 | 0 regions not expanded
+
+## 8 NEXT CALLS
+expand r1 ("Pizza Size"): get_page_view(page="p1", location={"region":"r1"}, detail="standard")  ~203 tok
+act on any ref: click(page="p1", ref="e<n>") | type_text(page="p1", ref="e<n>", text=...) | fill_form(page="p1", form="f<n>", values={...})
+changed-only re-read: get_page_view(page="p1", since="rt1")
