@@ -182,14 +182,16 @@ accessible names are computed by accname rather than scraped from `textContent`
 sub-300 target (3.2), ladder monotonicity and finer rungs (3.4), and the
 completeness field list extended with seven new fields (3.3 block 7).
 
-**One S1 obligation did not discharge and is transferred, not dropped. E11, the
-latency measurement, moves to the engine-spike round now running.** S1 reported
-no wall-clock table: cold and warm p50/p95 per projection over ten runs per
-fixture, including the 50,000-node fixture where the hidden-content normalizer's
-per-node style computation lands. That measurement is the bound Phase 2's gate
-part 5 asserts against, and **Phase 2 cannot open with the bound unset**, so the
-engine round owns it and reports it in the same register S1 would have. Nothing
-else about S1 is outstanding.
+**One S1 obligation did not discharge in S1 itself. E11, the latency
+measurement, transferred to the engine-spike round and was DISCHARGED there on
+2026-09-05.** S1 reported no wall-clock table; the engine round measured one
+against the unmodified S1 projector, ten repetitions per fixture, with a
+synthetic ladder bracketing the 50,000-node fixture the S1 corpus never
+reached. Result: **341 ms p95 at 50,000 nodes**, under 0.9 s at 100,000, and
+the hidden-content normalizer is 22 percent of extract rather than the bill the
+design feared, so **it is not sampled or capped in Phase 2**. The Phase 2 bound
+is set from that measurement (gate part 5 below) and no longer blocks the phase
+opening. Full numbers in DESIGN 3.6a. Nothing else about S1 is outstanding.
 
 **Tokenizer caveat, carried:** S1 counted with `tiktoken` `cl100k_base`, not the
 `o200k_base` convention this plan fixes (W1). Its figures are indicative and are
@@ -265,7 +267,35 @@ re-render, a route change, a virtualized-list recycle, and a full navigation.
   sticky-within-page only, deltas still work, and cross-navigation rebinding is
   cut from v1. That is a materially weaker product and it is still shippable.
 
-### S3: `moz-firefox` reality check
+### S3: `moz-firefox` reality check — **DONE 2026-09-05, HOLDS**
+
+**Report:** `internal notes/20260905_ks4web_engine_spikes.md`.
+**Code:** `spikes/engine/` on branch `spike-engine`.
+
+`channel="moz-firefox"` is **present and shipping in playwright-python 1.62.0
+and is not flag-gated at runtime.** It launched the installed
+`C:\Program Files\Mozilla Firefox\firefox.exe` (Firefox 154.0.1), navigated,
+clicked, filled inputs and a textarea, selected an option, checked a box, ran
+a JS handler, evaluated, aria-snapshotted, screenshotted, and round-tripped a
+form POST, headless and headed. 18 of 20 steps green. **The kill criterion did
+not trip and Lane B Firefox stands**, dogfood premise intact.
+
+Two of the twenty steps failed and both became design edits rather than lane
+problems. `about:support` is **refused by BiDi** ("Navigation to
+`about:support` is not allowed in this context"), so provenance comes from the
+process table and the user-agent string, both of which worked. `go_back` timed
+out, which S4 then characterized properly.
+
+**The safety finding this spike produced is the most important line in the
+round, and it is now a DESIGN constant (4.3, 4.6).** Playwright's
+`BidiFirefox.defaultArgs` does NOT pass `-no-remote`, unlike its own Juggler
+Firefox path. Without it, a launch can be adopted by the user's already-running
+Firefox no matter what profile directory was named, which defeats the profile
+rule from a direction that rule did not anticipate. **KS4Web supplies
+`-no-remote` on every Firefox launch, unconditionally.** The spike ran under it
+throughout and never touched the author's open browser.
+
+### S3 (original definition, kept as the record of what was asked)
 
 Launch stock Firefox via `channel="moz-firefox"` with a throwaway `user_data_dir`.
 
@@ -277,7 +307,43 @@ Launch stock Firefox via `channel="moz-firefox"` with a throwaway `user_data_dir
   bundled-only. S5 (Lane C Firefox) proceeds independently, since it uses a
   different mechanism entirely.
 
-### S4: BiDi gap inventory
+### S4: BiDi gap inventory — **DONE 2026-09-05, LANES SURVIVE AT FULL STANDING**
+
+Twenty probes on both `moz-firefox` (Firefox 154) and Chromium against a local
+deterministic fixture server, with Chromium as the control. Every probe passed
+on Chromium, so every Firefox difference is a genuine lane difference. **The
+measured table is DESIGN 4.5a and it replaces the research's hole list, which
+was stale.**
+
+**Two of the three documented gaps are REFUTED.** Response bodies work (708 B
+document, full JSON on an XHR POST). Downloads work (event fired, 460 bytes on
+disk). HTTP auth works (401 answered). Also working against expectation: header
+overrides across a 302, clicks inside a `rotate(37deg) scale(1.6)` element, and
+locale plus timezone emulation.
+
+**Two gaps are real.** Request body READS return `None` with no exception
+raised, while `content-length` proves the body exists; writing a body works, so
+the honest row is "write yes, read no." And history navigation is the NEW gap
+and the worse one: `go_back` and `go_forward` time out, the navigation
+actually happens, and `page.url` goes stale afterward, so the driver reports a
+lie rather than an absence. In-page `history.back()` shows the same stale URL,
+so it is BiDi URL tracking rather than a `go_back()` wiring bug.
+
+**Gate ruling against this spike's stated threshold: neither gap is lite
+core.** Request bodies are a `network` pack concern and back/forward has a
+working substitute (`goto` the previous URL, which KS4Web tracks anyway). **The
+Firefox lanes do NOT demote to read-mostly.** They carry two `LANE_UNSUPPORTED`
+rows, drafted in DESIGN 4.5a, plus one COST row: `page.pdf()` works on
+Firefox/BiDi, which is itself a surprise, at 8.7 s against Chromium's 0.2 s.
+A cost is not a gap and does not get an error code.
+
+**Both gaps become LOUD REFUSALS at the KS4Web layer**, because both fail
+silently or misleadingly in the driver, which is the failure class this
+product argues against. And `page.url` is never trusted after a history
+traversal on Firefox/BiDi, so no anchor logic or URL wait may derive from it
+there.
+
+### S4 (original definition, kept as the record of what was asked)
 
 Draft the tool surface first (rough is fine), then run every candidate operation
 on `moz-firefox` and record supported / degraded / unsupported. Probe the known
@@ -302,7 +368,22 @@ clicking inside a CSS-transformed element.
 - **FALLBACK:** Firefox lanes demote to read-mostly and Chromium becomes the
   only full-surface engine, documented honestly rather than papered over.
 
-### S5: Firefox live attach over raw BiDi
+### S5: Firefox live attach over raw BiDi — **DEFERRED BY SAFETY, 2026-09-05**
+
+Not run, and the reason is a standing rule rather than a scheduling accident.
+S5 requires a user-launched Firefox on a real profile, and the author's Firefox
+was open throughout the engine round. **Agent rounds never attach to the
+author's live browser** (Section 3, standing safety rule), so the spike stopped
+rather than making an exception for itself.
+
+**Runs at the next Firefox-closed window**, on a deliberately-launched fixture
+Firefox. Until then the Lane C Firefox differentiator, which is the one
+capability no competing MCP server has, remains **UNVERIFIED**, and no public
+copy may claim it. Q9 (the dogfood commitment) should be ruled before that
+window opens, per the rulings checkpoint, so the effort is not spent on a lane
+the author declines to run.
+
+### S5 (original definition)
 
 Start Firefox manually with `--remote-debugging-port=9222` on the real profile,
 connect a bare WebSocket, and drive `session.new`, `browsingContext.getTree`,
@@ -319,7 +400,15 @@ connect a bare WebSocket, and drive `session.new`, `browsingContext.getTree`,
 - **FALLBACK:** Lane C Firefox moves to v1.1 and Lane C ships Chrome-only, which
   is the weaker story (DESIGN 4.4).
 
-### S6: Seeded-profile fidelity
+### S6: Seeded-profile fidelity — **DEFERRED BY SAFETY, 2026-09-05**
+
+Not attempted, same constraint: seeding copies from a real profile, and a
+profile copy is a credential copy. It waits for the same Firefox-closed window
+as S5, and seeding remains a manual author-run operation in any case. Until it
+reports, "works with your logged-in browser" is an unverified claim and the
+weaker fallback wording is what stands.
+
+### S6 (original definition)
 
 Copy the named file subset (DESIGN 4.6) into a fresh directory, launch
 `moz-firefox` against it, and check whether the author is still logged into two
@@ -333,7 +422,41 @@ or three real sites.
   inside KS4Web's profile," which is weaker and still shippable. Say the weaker
   thing rather than the stronger one.
 
-### S7: Async plumbing and process hygiene under FastMCP
+### S7: Async plumbing and process hygiene under FastMCP — **WINDOWS SLICE DONE 2026-09-05, HOLDS**
+
+Ten scenarios across both lanes, including the harshest available (server
+process and the Node driver both `taskkill /F`d, which is the SIGKILL case the
+whole section exists for). **Zero orphans in every scenario**, with full reap in
+2.0 to 3.5 seconds. Chromium spawns 4 processes per session, `moz-firefox`
+spawns 10 or 11, and all of them died. A hung navigation returned a
+`TimeoutError` at 3,017 ms against a 3,000 ms budget on both lanes and the
+browser stayed usable afterward, so a bounded per-operation timeout does free
+the server.
+
+**The confound was found and ruled out, and it becomes a GATE REQUIREMENT.**
+The spike process was itself inside a Windows job object carrying
+`KILL_ON_JOB_CLOSE`, inherited from the harness shell, and children inherit it,
+which would have made every result the harness's doing. The harshest scenario
+was re-run with `CREATE_BREAKAWAY_FROM_JOB` granted, genuinely outside any job,
+and both lanes still reaped cleanly, so Playwright's death pipe is doing the
+work. **The Phase 1 orphan gate must break away from the ambient job or it
+proves nothing**, which is now written into that gate below.
+
+Implementation hooks, all confirmed available and all now in DESIGN 4.7: job
+objects work from plain CPython ctypes, **with the trap that HANDLE restypes
+must be `c_void_p` or every call fails with `ERROR_INVALID_HANDLE` and the
+reaper silently does nothing**; child-PID enumeration via
+`Get-CimInstance Win32_Process` costs roughly 1.0 s for 557 processes, which is
+shutdown-and-sweep speed rather than hot-path speed; and **Playwright's Python
+API does not expose the browser PID**, so the owned-PID journal is populated
+from the process table or from a job object KS4Web owns.
+
+**Still outstanding for this spike:** the FastMCP integration half. This slice
+measured process hygiene under hard kills, not a live FastMCP server holding a
+Playwright instance across tool calls with a lifespan-managed browser and an
+asyncio lock. That is Phase 1 work and the gate below still binds.
+
+### S7 (original definition)
 
 A minimal FastMCP server holding one `async_api` Playwright instance across tool
 calls, with a lifespan-managed browser, an asyncio lock around context mutation,
@@ -422,11 +545,32 @@ measure resident memory for a headless Chromium page against a headed
 reported.** S1 green means the product exists. S2 green means it is cheap for a
 whole session and not just one call. Everything else is a delivery decision.
 
-**Status 2026-09-05: S1 is GREEN, with caveats absorbed into the design.** Its
-two failed numeric targets were the design's numbers rather than the design's
-thesis, and both are restated in DESIGN 3.2 from measurement. Neither kill
-criterion tripped. The gate is not yet passable, because S2 has not run and
-E11's latency table is outstanding with the engine round.
+**Status 2026-09-05, after the S1 and engine rounds:**
+
+| Spike | Status |
+|---|---|
+| S1 projection proof | **GREEN**, VALIDATED-WITH-CAVEATS, absorbed |
+| S2 anchor durability | **NOT RUN.** The one remaining gate blocker. |
+| S3 `moz-firefox` | **GREEN**, HOLDS, absorbed |
+| S4 BiDi gaps | **GREEN**, lanes at full standing, absorbed |
+| S5 Firefox live attach | **DEFERRED BY SAFETY**, next Firefox-closed window |
+| S6 seeded profile | **DEFERRED BY SAFETY**, same window |
+| S7 process hygiene (Windows slice) | **GREEN**, HOLDS; FastMCP integration half is Phase 1 |
+| S8 MCP conformance | not run |
+| S9 Chrome and Edge Lane B/C | not run |
+| S10 weight and install | not run |
+| E11 latency (transferred from S1) | **DISCHARGED**, bound set |
+
+**S1 is green and its two failed numeric targets were the design's numbers
+rather than the design's thesis**, both restated in DESIGN 3.2 from
+measurement. Neither S1 kill criterion tripped and neither did S3's or S4's.
+
+**The gate is not yet passable, and the blocker is now S2 alone.** S1 green
+means the product exists; S2 green means it is cheap for a whole session rather
+than one call, and nothing has tested that yet. S5 and S6 are deferred by a
+safety rule rather than by a finding, which is a different kind of outstanding:
+the Lane C Firefox differentiator stays **UNVERIFIED** and unclaimable in public
+copy until that window opens.
 
 Spike outputs are saved as permanent artifacts to `Draft/Working Files/Agent
 Results/` with DTG names, per house rule.
@@ -496,6 +640,18 @@ Firefox, never the daily one, until the author personally runs the dogfood pass.
   park verified by CPU measurement. This is the gate that makes "we do not leak
   browsers" true rather than asserted, and it is the row where the most-installed
   browser MCP server in the world is currently open and unfixed.
+- **The orphan test MUST break away from the ambient job object**
+  (`CREATE_BREAKAWAY_FROM_JOB`), per S7's confound. A shell that owns a
+  `KILL_ON_JOB_CLOSE` job reaps the tree for you and every result comes back
+  green whether or not the server has any teardown at all. A gate that cannot
+  fail is not a gate, and this one silently could not.
+- **`-no-remote` on every Firefox launch is a Phase 1 acceptance item**, not a
+  Phase 4 polish item (DESIGN 4.3, 4.6). It is the difference between an owned
+  profile and an owned browser.
+- Two mechanics are already known and do not need rediscovering: ctypes HANDLE
+  restypes must be `c_void_p` or the job-object reaper silently no-ops, and
+  Playwright does not expose the browser PID, so the owned-PID journal is
+  populated from the process table or from a job KS4Web owns.
 
 ### Phase 2: Projection and anchors (the keystone)
 
@@ -533,15 +689,18 @@ require sticky refs and sticky refs are only useful because reads are cheap.
      fields must collapse to the one-line form summary and stay under budget
      rather than refusing. **The ladder is also asserted MONOTONIC** per page
      across every rung, since S1's prototype got bigger at rung 4 on httpbin.
-  5. **The latency budget holds.** Wall-clock p95 per projection across the
-     fixture set stays under the bound measured by **E11, transferred from S1 to
-     the engine-spike round**, with the bound written into the harness rather
-     than remembered. Token-cheap and wall-clock-expensive is
-     the same user pain by another route, and the projection pipeline's
-     per-node style computation is where that bill lands, so latency is a gate
-     here and a tracked number at every phase gate afterward. **Phase 2 does not
-     open until that bound exists**; a gate asserting against an unset number is
-     not a gate.
+  5. **The latency budget holds, and the numbers are now set from
+     measurement** (E11, discharged in the engine round; DESIGN 3.6a):
+     **projection p95 at or under 500 ms up to 50,000 nodes, at or under 1.0 s
+     up to 100,000 nodes, Python-side assembly at or under 10 ms.** Written
+     into the harness rather than remembered, and tracked at every phase gate
+     afterward. Two consequences that shape Phase 2's build rather than only
+     its gate: **the hidden-content normalizer sweeps every node** and is not
+     sampled or capped, because the full sweep is 22 percent of extract and
+     restricting it to interactive candidates would buy 14 percent while losing
+     hidden-content detection on non-interactive nodes; and optimization
+     effort, if any is needed, aims at the affordance, accessible-name, and
+     digest work, which is the other 60 percent.
   6. **Affordance quotas hold on the adversarial cases.** On the frozen GitHub
      repo page, every tab in the repository navigation bar appears in the
      projection. On Versailles, in-prose citation links appear zero times in the

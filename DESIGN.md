@@ -859,6 +859,49 @@ between KS4Web's read layer and the incumbents'.
 - It never silently omits. Everything not returned is counted in the
   completeness block.
 
+### 3.6a The projection's wall-clock cost, measured
+
+Token-cheap and wall-clock-expensive is the same user pain by another route,
+so the latency question was a real one rather than a note. It was measured in
+the engine-spike round (E11, transferred from S1), against the unmodified S1
+projector on Lane A headless Chromium, ten repetitions per fixture.
+
+**The projection is not slow, and the normalizer is not the bill.** A
+50,000-node page projects in **341 ms p95** in-page plus 1.7 ms of Python
+assembly, an order of magnitude inside the "a few seconds" line the plan drew.
+A 100,000-node page stays under 0.9 s. The Treaty of Versailles article, the
+flagship fixture, projects in 241 ms p95.
+
+The design's stated worry was the hidden-content normalizer, since white-on-white
+contrast, off-screen position, and near-zero font size all imply per-node style
+computation. **That worry is now retired with a number.** At 50,000 nodes the
+full per-node computed-style sweep is 64 ms of a 288 ms extract, roughly 22
+percent. Restricting it to interactive candidates would save about 39 ms, some
+14 percent, in exchange for losing hidden-content detection on every
+non-interactive node. That is a bad trade at any price and a very bad one at
+14 percent. **The normalizer sweeps every node in Phase 2. It is not sampled,
+not capped, and the completeness block therefore never has to report a
+normalizer cap**, which removes a field the design was preparing to need.
+Revisit only if a fixture beyond 100,000 nodes appears.
+
+The remaining roughly 60 percent of extract time is the affordance,
+accessible-name, and digest work plus the JSON hand-back. That is where any
+future optimization aims, and it is worth knowing before Phase 2 starts
+optimizing the wrong thing.
+
+**The Phase 2 latency budget, set from measurement:** projection p95 at or
+under **500 ms up to 50,000 nodes** and at or under **1.0 s up to 100,000
+nodes**, with Python-side assembly at or under 10 ms. The prototype passes
+both with margin.
+
+**One finding that reframes the whole latency story for users.** Cold
+navigation with a `networkidle` settle cost 12.8 seconds on cnn.com and on
+ant.design, against a roughly 90 ms projection on the same pages. **Page load
+dominates wall-clock and KS4Web does not.** Any latency story this product
+tells is therefore a story about load-state policy (what `wait_until` default
+is right, and when `networkidle` is worth its cost), not about the projection.
+Saying otherwise would be selling an optimization the user cannot feel.
+
 ### 3.7 Accessible names are computed, not scraped
 
 **REQUIREMENT: KS4Web computes accessible names by the W3C accname algorithm,
@@ -962,20 +1005,46 @@ KS4Web-owned profile.
   `launch_persistent_context` are supported. `C:\Program Files\Mozilla Firefox\
   firefox.exe` exists on this machine, which is exactly where the lookup goes.
 
-Three caveats, all real. The channel is **not in the public docs**
-(`docs/src/browsers.md` never mentions it), so it can move. It rides Playwright's
-BiDi backend, which is experimental with a documented hole list (no request or
-response bodies, no `resourceType`, no locale or timezone emulation, no content
-quads so clicks inside CSS-transformed elements are inaccurate, plus
-Firefox-specific bugs: `browsingContext.downloadWillBegin` not firing,
-`network.continueWithAuth` failing, header overrides failing on redirects).
-And version skew becomes the user's problem, since whatever Firefox they have
-installed is what gets driven.
+**S3 ran on 2026-09-05 and the channel HOLDS.** `moz-firefox` is present and
+shipping in playwright-python 1.62.0, **not flag-gated at runtime**: the driver
+registers `moz-firefox` / `-beta` / `-nightly` as `_createBidiFirefoxChannel`
+executables and `Firefox.launch()` routes any `moz-` channel to the
+`BidiFirefox` browser type, with no environment variable and no experimental
+opt-in. It launched the installed `C:\Program Files\Mozilla Firefox\
+firefox.exe` (Firefox 154.0.1, confirmed by both the process `ExecutablePath`
+and an `rv:154.0` user agent), then navigated, clicked, filled inputs and a
+textarea, selected an option, checked a box, ran a JS handler, evaluated,
+took an aria snapshot, screenshotted, and round-tripped a form POST. Headed
+mode works too, which is the dogfood shape. **Lane B Firefox stands, and the
+`executable_path` contingency was not needed.**
 
-**Everything in Lane B Firefox is contingent on Spike 1.** If stock Firefox does
-not drive on this machine, Lane B Firefox degrades to bundled-only and the
-dogfood premise for Firefox dies. The plan sequences that spike before anything
-depends on it.
+Three caveats survive, in revised form. The channel is **not in the public
+docs** (`docs/src/browsers.md` never mentions it), so it can still move. Version
+skew is still the user's problem, since whatever Firefox they have installed is
+what gets driven. And it rides Playwright's BiDi backend, whose hole list is
+**materially smaller than the research believed** and is now measured rather
+than quoted (Section 4.5a).
+
+**One new gap S3 found, and it changes an implementation assumption rather
+than the lane's standing:** `about:` pages cannot be navigated on this lane.
+The refusal is explicit (`Protocol error (browsingContext.navigate):
+unsupported operation. Navigation to "about:support" is not allowed in this
+context`). So **provenance never comes from `about:support`**; it comes from
+the process table and the user-agent string, both of which S3 used
+successfully. Any future version banner, profile-provenance check, or
+`about:config` read is unavailable on Firefox/BiDi and must say so.
+
+**CRITICAL SAFETY REQUIREMENT, found in S3 and binding on every Firefox
+launch KS4Web ever makes.** Playwright's `BidiFirefox.defaultArgs` builds
+`["--remote-debugging-port=0", "--headless"|"--foreground", "--profile",
+<dir>]` and **does NOT pass `-no-remote`**, unlike its own Juggler Firefox
+path, which does. Without `-no-remote`, a launch can be picked up by a
+Firefox instance the user is already running, which is precisely the
+collision Section 4.6 exists to prevent, arrived at from a direction that
+section did not anticipate. **KS4Web supplies `-no-remote` itself on every
+Firefox launch, on every lane, in every mode, with no flag to turn it off.**
+This is not a default; it is a constant. The spike ran under it throughout
+and never touched the author's open browser.
 
 Note what makes the bundled Firefox unsuitable for dogfooding in the first
 place: it is Firefox release-branch source plus Playwright's Juggler protocol
@@ -1048,10 +1117,87 @@ of this. It reports what the current lane supports, degrades, and cannot do, and
 support the operation. The engine research asked for exactly this tool by name,
 and the alternative is the silent degradation the whole category suffers from.
 
+### 4.5a The BiDi capability table, measured (S4, 2026-09-05)
+
+**The research's documented hole list was stale, and this table replaces it.**
+Twenty probes ran on both `moz-firefox` (Firefox 154) and Chromium against a
+local deterministic fixture server, with Chromium as the control. **Every
+probe passed on Chromium**, so each Firefox difference below is a genuine lane
+difference rather than a broken probe. This is the seed of the truth table
+`manage_session(capabilities)` returns, and it is measurement rather than
+inheritance.
+
+**Two of the three documented gaps are REFUTED.** They were carried into this
+design from research that quoted an older state of the backend:
+
+| Believed gap | Measured |
+|---|---|
+| No response bodies | **WORKS.** `response.body()` returned 708 bytes for a document and a full JSON body for an XHR POST. |
+| Downloads broken (`browsingContext.downloadWillBegin` not firing) | **WORKS.** Download event fired and the file landed on disk at 460 bytes. |
+| HTTP auth fails (`network.continueWithAuth`) | **WORKS.** A 401 challenge was answered and the protected resource returned. |
+
+Also measured as working, against expectations the design carried: header
+overrides survive a 302 redirect, clicks land correctly inside a
+`rotate(37deg) scale(1.6)` transformed element, and locale plus timezone
+emulation both apply. `route.fulfill`, `route.abort`, `route.fetch()`, cookies,
+dialogs, `set_input_files`, full-page screenshots, and request events all work.
+
+**Two gaps are real, and the shape of each matters more than its existence.**
+
+| Gap | Behavior | Row |
+|---|---|---|
+| **Request body READS** | `request.post_data`, `post_data_buffer`, and `post_data_json` all return `None` with **no exception raised**, on both a fetch POST and a form submit, while `content-length: 24` proves the body exists. The same holds inside a route handler. **Writing works**: `route.continue_(post_data=...)` was accepted and the fixture server received the tampered body verbatim. | `LANE_UNSUPPORTED` on read. The honest capability row is "request bodies: write yes, read no," never "no request bodies." |
+| **History navigation** | `go_back` and `go_forward` time out after their full budget, and **the navigation actually happened**: the DOM is the previous page while `page.url` still reports the old one. In-page `history.back()` shows the same stale URL, so this is Playwright's BiDi URL tracking on history traversal rather than a `go_back()` wiring bug. | `LANE_UNSUPPORTED`. This is the worse of the two, because the failure is not absence, it is a lie. |
+
+The two `LANE_UNSUPPORTED` messages, which are product text and not notes:
+
+> **request body capture is unavailable on Firefox/BiDi.** Playwright returns
+> null rather than raising, so KS4Web refuses explicitly instead of returning
+> an empty body. Chromium supports it; relaunch on Lane A or Lane B Chrome to
+> read request bodies.
+
+> **history navigation (back and forward) is unavailable on Firefox/BiDi.**
+> The page does navigate, but the driver never reports it and `page.url` goes
+> stale afterward, so KS4Web refuses rather than calling it. Navigate to the
+> previous URL directly instead; KS4Web tracks page history for exactly this.
+> Chromium supports back and forward normally.
+
+**Two rules follow, and they are the reason this table is in the design rather
+than in a spike file.** First, both gaps fail SILENTLY or MISLEADINGLY in the
+driver, which is the failure class this entire product argues against, so both
+become LOUD REFUSALS at the KS4Web layer rather than pass-throughs. Second,
+**`page.url` is not trusted after any history traversal on Firefox/BiDi**, so
+no anchor logic, `wait_for_url`, or load-state wait may derive from it there.
+
+**One cost row that is not a gap.** `page.pdf()` works on Firefox/BiDi, which
+is itself a surprise, since PDF generation was assumed Chromium-only. It
+produced 232 KB in **8.7 seconds** against Chromium's 240 KB in **0.2
+seconds**, roughly 45x slower. That is recorded as a COST in the capability
+table and named in the tool's own result, not as an unsupported row and not as
+a new error code: an operation that works and is slow is a different fact from
+one that does not work, and collapsing the two is how a capabilities table
+stops being useful.
+
+**Gate ruling (PLAN S4's stated threshold).** Neither missing capability is
+lite core. Reading request bodies is a `network` pack concern, and back and
+forward is a navigation convenience with a working substitute. **The Firefox
+lanes survive at full standing**, carrying two `LANE_UNSUPPORTED` rows and one
+cost row.
+
 ### 4.6 Profile safety: the hard rule
 
 **KS4Web never opens the user's real browser profile. Not read-write, not
 read-only, not "just once."**
+
+**And the rule needs a second clause that S3 found, because the first clause
+alone does not deliver it on Firefox.** Passing a fresh profile directory is
+not sufficient to stay out of the user's running browser: Playwright's
+`BidiFirefox.defaultArgs` omits `-no-remote`, which its own Juggler Firefox
+path includes, so a launch can be adopted by an already-running instance
+regardless of what profile directory was named. **KS4Web supplies `-no-remote`
+on every Firefox launch, unconditionally, with no flag to disable it**
+(Section 4.3). The hard rule is therefore: an owned profile directory AND
+`-no-remote`, together, every time.
 
 Two independent reasons on Firefox. Playwright's `BidiFirefox.prepareUserDataDir`
 calls `createProfile`, which calls `writePreferences`, which **overwrites
@@ -1123,6 +1269,57 @@ interpreter by absolute path rather than routing through a shim, since the
 node-side analog (npx.cmd breaking stdio pipes under `cmd /c`) is a documented
 first-class Windows defect and the Python console-script shim needs the same
 scrutiny.
+
+**S7's Windows slice ran on 2026-09-05 and the position HOLDS, with the
+implementation hooks confirmed as available.** Ten scenarios across both lanes,
+including the harshest (server process and the Node driver both hard-killed
+with `taskkill /F`): **zero orphans in every one**, with full reap in 2.0 to
+3.5 seconds. Chromium spawns 4 processes per session and `moz-firefox` spawns
+10 or 11, and all of them died.
+
+**The confound was found and ruled out, and that finding changes how KS4Web is
+TESTED rather than how it is built.** The spike process was itself already
+inside a Windows job object carrying `KILL_ON_JOB_CLOSE`, inherited from the
+harness shell, and spawned children inherit it, which would have made every
+"zero orphans" result the harness's doing rather than Playwright's. The
+harshest scenario was re-run with the child created under
+`CREATE_BREAKAWAY_FROM_JOB` (granted), genuinely outside any job, and both
+lanes still reaped cleanly. So Playwright's own death pipe is doing the work
+today. **The consequence is a testing requirement: the Phase 1 orphan gate must
+break away from the ambient job or it proves nothing**, because an orphan bug
+is invisible when the server is launched from a shell that owns a
+kill-on-close job. That is now a named part of the gate rather than a footnote.
+
+**Four mechanical facts a Python implementation needs, all measured:**
+
+1. **Job objects are fully available from plain CPython via ctypes.**
+   `CreateJobObjectW`, `SetInformationJobObject` with
+   `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`, and `AssignProcessToJobObject` all
+   succeed. **One trap, hit and fixed in the spike: HANDLEs are pointer-sized,
+   and ctypes' default `c_int` restype truncates them on win64**, after which
+   every call fails with `ERROR_INVALID_HANDLE (6)`. `restype` and `argtypes`
+   must be `c_void_p` or the reaper silently does nothing, which is the worst
+   possible failure mode for a safety mechanism. This is recorded here because
+   a silent no-op reaper would pass every test that checks the reaper exists.
+2. **Child PID enumeration needs no third-party dependency**:
+   `Get-CimInstance Win32_Process` supplies pid, ppid, name, executable path,
+   and command line. Cost measured at roughly **1.0 second for 557
+   processes**, which is far too slow for a hot path and entirely fine for
+   shutdown and for a periodic sweep. The design budgets it accordingly.
+3. **Playwright's Python API does not expose the browser process PID**
+   (`context._impl_obj` carries no pid or process attribute), so the owned-PID
+   journal cannot be populated from the driver. It comes from the process
+   table at launch, or from a job object KS4Web owns. That is a real
+   constraint on how defense 2 is built and it was previously an assumption.
+4. **A bounded per-operation timeout genuinely frees the server.**
+   `page.goto()` against an endpoint that never answers returned a
+   `TimeoutError` at 3,017 ms against a 3,000 ms budget on both lanes, and the
+   browser was fully usable afterward.
+
+**Design read: the death pipe is doing the work, and the job object is a
+cheap, provably functional belt-and-braces backstop.** Both hooks the three
+defenses wanted exist, so defense 1 ships as death pipe PLUS job object rather
+than either alone.
 
 ---
 

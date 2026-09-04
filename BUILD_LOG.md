@@ -403,3 +403,145 @@ per-page numbers do not. Corpus A is still owed before the Phase 2 harness.
 production code yet, no license, nothing published.
 
 ---
+
+## Part IV: the engine spikes absorbed (2026-09-05)
+
+S3, S4, S7's Windows slice, and the latency measurement S1 owed all ran on the
+`spike-engine` branch. Report:
+`internal notes/20260905_ks4web_engine_spikes.md`. **Every
+one holds.** The engine round found no kill and no demotion, refuted more of
+the design's own pessimism than it confirmed, and produced one safety line that
+is now a constant rather than a default.
+
+### The safety line, first, because it is the most important thing here
+
+**Playwright's `BidiFirefox.defaultArgs` does not pass `-no-remote`.** Its own
+Juggler Firefox path does. Without it, a Firefox launch can be adopted by an
+instance the user is already running, regardless of what profile directory was
+named. The whole profile-safety section was written to keep KS4Web out of the
+author's browser, and it turns out a fresh profile directory alone does not
+deliver that on this lane. **KS4Web now supplies `-no-remote` on every Firefox
+launch, on every lane, in every mode, with no flag to disable it** (DESIGN 4.3
+and 4.6, and a Phase 1 acceptance item rather than Phase 4 polish). The spike
+ran under it throughout and never touched the author's open Firefox.
+
+### S3: moz-firefox holds, and it is not even flag-gated
+
+The channel is present and shipping in playwright-python 1.62.0 with no
+environment variable and no experimental opt-in: the driver registers the three
+`moz-` channels and routes any of them to the `BidiFirefox` browser type. It
+launched the installed Firefox 154.0.1 from Program Files (confirmed twice, by
+process `ExecutablePath` and by an `rv:154.0` user agent), then drove it
+through navigation, clicks, a filled form, a select, a checkbox, a JS handler,
+an aria snapshot, a screenshot, and a real POST round trip, headless and
+headed. 18 of 20 steps green. **The Lane B Firefox dogfood premise survives
+and the `executable_path` fallback was never needed.**
+
+Of the two failures, one became a design edit: `about:support` is refused by
+BiDi outright, so **provenance never comes from an `about:` page**. It comes
+from the process table and the UA string, which is what the spike used. Any
+future version banner or `about:config` read is unavailable on this lane.
+
+### S4: the research was stale, and two of three gaps do not exist
+
+This is the round's biggest correction and it runs in the pleasant direction.
+Twenty probes on both lanes against a local fixture server, with Chromium as a
+control that passed every one, so each Firefox row is a genuine lane difference
+rather than a broken probe.
+
+**Refuted:** response bodies work, downloads work, HTTP auth works. Also
+working against what the design assumed: header overrides survive a 302, clicks
+land inside a `rotate(37deg) scale(1.6)` element, and locale plus timezone
+emulation both apply. The design had been carrying a hole list quoted from an
+older state of the backend, and DESIGN 4.5a now carries a measured one.
+
+**Confirmed, and reshaped:** request body READS return `None` with no exception
+raised, while `content-length: 24` proves the body is there. Writing a body
+works. So the honest capability row is "request bodies: write yes, read no,"
+which is a more useful sentence than the one it replaces.
+
+**New, and worse than the one it joins:** `go_back` and `go_forward` time out,
+**and the navigation actually happens**. The DOM is the previous page while
+`page.url` still reports the old one. In-page `history.back()` shows the same
+stale URL, so this is BiDi URL tracking rather than a `go_back()` wiring bug.
+A driver that reports a lie is a harder problem than one that reports nothing,
+and it produced a standing rule: **`page.url` is never trusted after a history
+traversal on Firefox/BiDi.**
+
+Neither gap is lite core, so **the Firefox lanes do not demote to read-mostly**
+under S4's own threshold. They carry two `LANE_UNSUPPORTED` rows, both drafted
+as product text in DESIGN 4.5a, and both are LOUD REFUSALS at the KS4Web layer
+precisely because the driver fails silently at both.
+
+One surprise recorded as a COST rather than a gap: `page.pdf()` works on
+Firefox/BiDi, which nobody expected, at 8.7 seconds against Chromium's 0.2. An
+operation that works slowly is a different fact from one that does not work,
+and no new error code was added for it. The closed vocabulary stays closed.
+
+### S7: zero orphans, and a confound that changes how we test
+
+Ten scenarios across both lanes including the harshest available, server and
+Node driver both hard-killed. **Zero orphans every time**, full reap in 2.0 to
+3.5 seconds, Chromium at 4 processes per session and moz-firefox at 10 or 11.
+
+The confound is the interesting part. The spike process was itself inside a
+Windows job object with `KILL_ON_JOB_CLOSE`, inherited from the harness shell,
+and children inherit it, which would have made every green result the harness's
+doing rather than Playwright's. Re-running the harshest scenario with
+`CREATE_BREAKAWAY_FROM_JOB` granted still reaped cleanly, so the death pipe is
+genuinely doing the work. **The consequence is a Phase 1 gate requirement: the
+orphan test must break away from the ambient job or it proves nothing.** A gate
+that silently cannot fail is worse than no gate, and this one silently could
+not.
+
+Three mechanics banked so Phase 1 does not rediscover them. Job objects work
+from plain CPython ctypes, **with the trap that HANDLE restypes must be
+`c_void_p` or every call fails with `ERROR_INVALID_HANDLE` and the reaper
+silently does nothing**, which is the worst failure mode a safety mechanism can
+have because it passes any test that merely checks the reaper exists. Child-PID
+enumeration via `Get-CimInstance Win32_Process` costs about 1.0 s for 557
+processes, so it is shutdown-and-sweep speed and never hot-path speed. And
+Playwright's Python API does not expose the browser PID at all, so the
+owned-PID journal is populated from the process table or from a job KS4Web
+owns, which was previously an assumption.
+
+### The latency gate, set from measurement
+
+E11 transferred from S1 and discharged here. Against the unmodified S1
+projector, ten runs per fixture, with a synthetic ladder bracketing the
+50,000-node fixture the S1 corpus never reached: **341 ms p95 at 50,000
+nodes**, under 0.9 s at 100,000, 241 ms on Versailles. The design's stated
+worry was the hidden-content normalizer, since contrast and position and font
+size all imply per-node style computation. **That worry is retired with a
+number:** the full sweep is 64 ms of a 288 ms extract, roughly 22 percent, and
+restricting it to interactive candidates would buy 14 percent while losing
+hidden-content detection on every non-interactive node. **The normalizer sweeps
+everything in Phase 2**, which also removes a completeness field the design was
+preparing to need (a normalizer cap it will never have to report).
+
+Phase 2's budget: projection p95 at or under 500 ms to 50,000 nodes, at or
+under 1.0 s to 100,000, Python assembly at or under 10 ms.
+
+And the finding that reframes the user-facing story: **cold navigation with a
+`networkidle` settle cost 12.8 seconds on cnn.com against a 90 ms projection on
+the same page.** Page load dominates wall-clock and we do not. Any latency
+story KS4Web tells is a story about load-state policy, not about the
+projection, and selling a projection optimization the user cannot feel would be
+the wrong pitch.
+
+### What did not run, and why it matters
+
+**S5 and S6 are DEFERRED BY SAFETY, not descoped.** Both need the author's real
+Firefox: S5 attaches to a user-launched instance, S6 copies from a real
+profile. The author's Firefox was open, the standing rule is that agent rounds
+never attach to the live daily browser, and the spike stopped rather than
+making an exception for itself. They run at the next Firefox-closed window.
+Until then **the Lane C Firefox differentiator stays UNVERIFIED**, which is the
+one capability no competing MCP server has, so it stays out of public copy too.
+Q9 should be ruled before that effort is spent.
+
+**Status:** S1, S3, S4, and S7's Windows slice green. S2 is now the only thing
+between here and the spike gate. S5 and S6 wait on a closed browser. No license,
+nothing published.
+
+---
