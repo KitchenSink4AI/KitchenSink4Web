@@ -46,7 +46,14 @@ def launch(monkeypatch):
 
     yield server.configure
 
-    server.configure()
+    # `read_only=False` and not a bare `configure()`. A bare call resolves the
+    # SHIPPED default grade, `browse`, so every test that used this fixture
+    # left the process read-only for whatever ran next, and a browser test
+    # that asserts the process is actable failed purely on file order
+    # (`pytest tests/unit tests/browser` red, `pytest tests` green). A fresh
+    # process starts with no grade applied at all, so the honest restore is
+    # the un-graded surface this fixture found, not the launch default.
+    server.configure(read_only=False)
 
 
 @pytest.fixture
