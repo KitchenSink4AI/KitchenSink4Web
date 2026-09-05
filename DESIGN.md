@@ -454,6 +454,16 @@ is real:** at `budget_tokens=2500` every one of eleven pages landed under budget
 and none was mutilated, with Versailles degrading to rung 4 at 2,184 and most
 pages never leaving rung 1.
 
+**S8 then measured the cap itself and REFUTED it on the installed client
+(Claude Code 2.1.220, 2026-09-05): 21,000 tokens arrived inline inside a real
+Task subagent, and 24,000 spilled to a file with a 2 KB preview, so the
+subagent limit is materially the main-thread 25,000 cap.** The field report
+was right about the mechanism (remote-delivered, movable) and its number has
+since moved. The `budget_tokens` parameter and the 2,500 recipe stay, worded
+as "some client versions cap subagent tool results far lower; 2,500 is safe
+everywhere," and the number is re-measured near ship as this section already
+requires.
+
 ### 3.3 What a page view returns
 
 `get_page_view` returns an ORIENTATION, not a transcript. Eight blocks, built
@@ -2101,6 +2111,24 @@ comparison plus the E6 rebind interlock immediately before the caller acts.
 The live MRTR round-trip against the installed client remains S8's check;
 nothing executes without it either way, which is the point.
 
+**S8 ran that check on 2026-09-05 (Claude Code 2.1.220, negotiated protocol
+2025-11-25) and the answer reshapes the wiring without touching the
+structure.** MRTR does not exist on the installed client: the
+`input_required` shape passes through as ordinary result content, no
+protocol retry occurs, and `requestState` does not survive; the one "retry"
+observed was the model paraphrasing `inputResponses` into plain tool
+arguments, which is exactly the echoed-token path `redeem()` already
+refuses. Elicitation IS advertised (sampling is not) and round-trips
+mechanically: a headless client answers `elicitation/create` with an
+instant `cancel`, so a gated action fails closed in 0.0 s with no hang.
+**The confirmation plumbing therefore rides elicitation where the client
+advertises it** (Phase 6 wires it: attempt the elicitation, redeem the gate
+on an explicit accept, fail closed on cancel, decline, timeout, or a client
+with no elicitation), and the MRTR-shaped refusal payload is kept as cheap
+forward-compatibility that today's client simply ignores. The interactive
+accept path cannot be exercised headlessly and is the author's one-line
+dogfood observation.
+
 **The permissions paradox**, which nobody in any thread answers and which this
 design answers directly:
 
@@ -2800,6 +2828,12 @@ them compatibility surface.
    spec announcement, and the ruling should say what happens on that day (pin the
    FastMCP version, migrate the pattern to launch-time packs as KS4Web does, or
    accept the flag).
+
+   **S8 measured the trigger's current state (2026-09-05): it has NOT fired.**
+   FastMCP 3.4.7 negotiates 2025-11-25 even when offered 2026-07-28, and
+   `server/discover` errors -32602 (no handler). The siblings remain
+   conformant under their negotiated revision, KS4Web negotiates 2025-11-25
+   where `server/discover` is not required, and the watch item stands.
 
 5. **Read-only by default?** Shipping with read-only ON by default, requiring an
    explicit flag to act, would be the strongest possible brand statement and the

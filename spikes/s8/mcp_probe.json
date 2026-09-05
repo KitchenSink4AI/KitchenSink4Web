@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "probe": {
+      "command": "C:\\Users\\user\\Documents\\Projects\\MCP Servers\\web-mcp\\.venv\\Scripts\\python.exe",
+      "args": ["-X", "utf8", "C:\\Users\\user\\Documents\\Projects\\MCP Servers\\web-mcp\\spikes\\s8\\probe_server.py"],
+      "env": {
+        "PROBE_LOG": "C:\\Users\\user\\Documents\\Projects\\MCP Servers\\web-mcp\\spikes\\s8\\probe_log.jsonl"
+      }
+    }
+  }
+}

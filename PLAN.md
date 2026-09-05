@@ -561,7 +561,61 @@ KS4Web spawned.
 - **Not a kill criterion, a blocker.** If this is wrong, nothing ships until it
   is right.
 
-### S8: MCP conformance and client-behavior probe
+### S8: MCP conformance and client-behavior probe — **DONE 2026-09-05, GATE MET; MRTR REFUTED, ELICITATION IS THE CHANNEL**
+
+**Report:** `internal notes/20260905_ks4web_spike_s8.md`.
+**Code:** `spikes/s8/` (raw stdio probe server plus a raw probe OF FastMCP),
+wire logs preserved. **Client of record: Claude Code 2.1.220**, negotiating
+protocol **2025-11-25**. Server stack: FastMCP 3.4.7 / mcp SDK 1.29.1.
+
+Ten verdicts, each from the wire rather than from a doc:
+
+1. **MRTR does not round-trip and `requestState` does not survive.** The
+   2026-07-28 `input_required` shape passes through to the model as ordinary
+   content; the "retry" that came back was a plain tools/call with the model
+   paraphrasing `inputResponses` and no token. The kill criterion is honored
+   the designed way: gates stay structurally fail-closed, and the echoed-token
+   path the model produced is exactly what `redeem()` already refuses.
+2. **Elicitation IS advertised (sampling is not) and the round-trip works
+   mechanically**: a server-initiated `elicitation/create` was answered
+   `{"action":"cancel"}` in 0.0 s by the headless client, so a gated action
+   fails closed instantly with no hang. The interactive accept path is the
+   author's one-line dogfood observation; Phase 6 wires gates to elicitation
+   with fail-closed on cancel/decline/timeout/absence.
+3. **The fail-closed classes complete end-to-end exactly as designed**: the
+   simulated gated submit asked, was auto-cancelled, refused with nothing
+   submitted. Where a human answers accept (interactive), the same wiring
+   completes; headless stays refusal.
+4. **The ~3,000-token subagent cap is REFUTED at 2.1.220**: 21,000 tokens
+   arrived inline inside a real Task subagent; 24,000 spilled to a file with a
+   2 KB preview. The subagent limit is materially the main-thread cap. The
+   2,500 recipe stays with softened wording and a re-measure near ship.
+5. **The 25,000-token cap manifests as spill-to-file with the path handed to
+   the model**, not as truncation (30k-token result: "exceeds maximum allowed
+   tokens. Output has been saved to ...").
+6. **`readOnlyHint: true` unlocks real concurrency**: two hinted 3 s calls
+   overlapped (3.2 s total); the unhinted pair serialized (6.0 s).
+7. **Descriptions truncate at ~2,048 chars** with a model-facing
+   "… [truncated]" marker; the tail sentinel was gone. The docstring-budget
+   test's hard limit is confirmed load-bearing.
+8. **`anthropic/alwaysLoad` and `anthropic/searchHint` behave as documented**
+   on a 152-tool surface: the alwaysLoad tool stayed directly callable under
+   deferral, and ToolSearch matched a word that exists only in a searchHint.
+   The client's server-side `search_hints` override table has no entry for a
+   third-party server, so our hints are what get indexed.
+9. **FastMCP 3.4.7 does not implement 2026-07-28**: offered that revision it
+   negotiates down to 2025-11-25, and `server/discover` errors -32602. **Q4's
+   trigger has NOT fired**; under the negotiated revision the conformance
+   claim has no hole.
+10. **tools/list is identical across connections** of the shipped server
+    (sha256-equal, two fresh stdio connections), and the Desktop
+    mid-conversation checkbox question is **DEFERRED-NEEDS-HUMAN**: the one
+    installed .mcpb carries no `user_config` at all, so there is no checkbox
+    on this machine to observe, and the author's one-sentence manual check is
+    in the report.
+
+The original spike definition follows, kept verbatim as the record of what
+was asked.
 
 Every one of these is a binary fact the design depends on, and all are cheap to
 check against the installed client.
@@ -646,7 +700,7 @@ whole session and not just one call. Everything else is a delivery decision.
 | S5 Firefox live attach | **GREEN**, all five commands round-trip over the in-house raw BiDi client; Lane C Firefox is real |
 | S6 seeded profile | **GREEN**, sessions survive; minimal set is cookies.sqlite + WAL sidecars; source profile hash-identical |
 | S7 process hygiene (Windows slice) | **GREEN**, HOLDS; FastMCP integration half is Phase 1 |
-| S8 MCP conformance | not run |
+| S8 MCP conformance | **DONE 2026-09-05, GATE MET**: MRTR refuted on the installed client, elicitation is the live channel, subagent 3k cap refuted, hints and readOnlyHint confirmed |
 | S9 Chrome and Edge Lane B/C | not run |
 | S10 weight and install | not run |
 | E11 latency (transferred from S1) | **DISCHARGED**, bound set |
