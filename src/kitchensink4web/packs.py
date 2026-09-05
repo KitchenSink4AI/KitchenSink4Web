@@ -25,6 +25,20 @@ Env contract (Q11, RULED by the author 2026-09-04):
     KS4WEB_PACK_POLICY   locked | open   (locked pins the launch selection)
     KS4WEB_ALLOWED_ROOTS os.pathsep list of directories (policy/sandbox.py)
 
+The .mcpb install-screen toggles (Phase 8 config work). Packs are
+launch-fixed here, so the Desktop install screen is the ONLY chooser a
+non-developer ever sees, and it speaks booleans:
+
+    KS4WEB_ALL_PACKS         master load-all toggle
+    KS4WEB_PACK_<NAME>       one per pack (EXTRACT, CAPTURE, NETWORK,
+                             STORAGE, FILES, DIAGNOSTICS, WORKFLOWS)
+
+Each accepts the literal strings "true" and "false" (what Desktop writes
+for a user_config boolean). Empty means off. Anything else REFUSES at
+startup. Precedence: --packs beats KS4WEB_MODE beats the master toggle
+beats the per-pack toggles, so a developer's explicit selection is never
+silently widened by a leftover checkbox.
+
 A typo in KS4WEB_MODE fails LOUDLY. That is not a stylistic preference: it
 inverts chrome-devtools-mcp #2530, where a typo in --browserUrl is silently
 ignored and downgrades attach mode to launch mode, and playwright-mcp #1388,
@@ -215,28 +229,60 @@ def _validate(packs: list[str]) -> list[str]:
     return packs
 
 
+#: The master install-screen toggle and the per-pack boolean prefix.
+ENV_ALL_PACKS = "KS4WEB_ALL_PACKS"
+ENV_PACK_PREFIX = "KS4WEB_PACK_"
+
+
+def _toggle_env(name: str) -> bool:
+    """One install-screen boolean: the literal strings Desktop writes for a
+    user_config checkbox, with the family's loud-typo rule. Empty is off,
+    'true' is on, 'false' is off, anything else refuses at startup."""
+    raw = os.environ.get(name)
+    if raw is None:
+        return False
+    value = raw.strip().lower()
+    if value in ("", "false"):
+        return False
+    if value == "true":
+        return True
+    raise BadParams(
+        f"{name}={raw!r} is not a pack toggle value: use 'true' or 'false' "
+        f"(empty means off). A typo is an error here rather than a silent "
+        f"downgrade.")
+
+
 def resolve_startup_packs(
     mode: str | None = None, cli_packs: list[str] | None = None
 ) -> list[str]:
     """Resolve the launch-time pack selection ONCE, before registration.
 
-    Precedence: explicit --packs beats KS4WEB_MODE. Returns the sorted pack
-    list (lite is implicit and never listed, since it is always on). Raises
-    on a typo rather than degrading."""
+    Precedence: explicit --packs beats KS4WEB_MODE beats the install-screen
+    master toggle (KS4WEB_ALL_PACKS) beats the per-pack toggles
+    (KS4WEB_PACK_<NAME>), so a developer's explicit selection is never
+    silently widened by a leftover checkbox. Returns the sorted pack list
+    (lite is implicit and never listed, since it is always on). Raises on a
+    typo rather than degrading."""
     if cli_packs:
         return sorted(set(_validate([p.strip() for p in cli_packs if p.strip()])))
-    raw = mode if mode is not None else os.environ.get("KS4WEB_MODE", "lite")
-    raw = (raw or "lite").strip().lower()
-    if not raw or raw == "lite":
-        return []
-    tokens = [p.strip() for p in raw.split(",") if p.strip()]
-    wants_full = any(t in ("full", EVERYTHING) for t in tokens)
-    named = [t for t in tokens if t not in ("lite", "full", EVERYTHING)]
-    if named:
-        _validate(named)
-    if wants_full:
+    raw = mode if mode is not None else os.environ.get("KS4WEB_MODE")
+    if raw is not None and raw.strip():
+        raw = raw.strip().lower()
+        if raw == "lite":
+            return []
+        tokens = [p.strip() for p in raw.split(",") if p.strip()]
+        wants_full = any(t in ("full", EVERYTHING) for t in tokens)
+        named = [t for t in tokens if t not in ("lite", "full", EVERYTHING)]
+        if named:
+            _validate(named)
+        if wants_full:
+            return sorted(PACK_SUMMARIES)
+        return sorted(set(named))
+    # The install-screen toggles, reached only when nothing stronger spoke.
+    if _toggle_env(ENV_ALL_PACKS):
         return sorted(PACK_SUMMARIES)
-    return sorted(set(named))
+    return sorted(p for p in PACK_SUMMARIES
+                  if _toggle_env(ENV_PACK_PREFIX + p.upper()))
 
 
 def apply_startup_packs(packs: list[str]) -> list[str]:

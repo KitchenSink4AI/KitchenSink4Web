@@ -31,6 +31,10 @@ def launch(monkeypatch):
     monkeypatch.delenv("KS4WEB_MODE", raising=False)
     monkeypatch.delenv("KS4WEB_READ_ONLY", raising=False)
     monkeypatch.delenv("KS4WEB_ALLOW_ACTING", raising=False)
+    monkeypatch.delenv("KS4WEB_ALL_PACKS", raising=False)
+    for _pack in ("EXTRACT", "CAPTURE", "NETWORK", "STORAGE", "FILES",
+                  "DIAGNOSTICS", "WORKFLOWS"):
+        monkeypatch.delenv(f"KS4WEB_PACK_{_pack}", raising=False)
 
     yield server.configure
 

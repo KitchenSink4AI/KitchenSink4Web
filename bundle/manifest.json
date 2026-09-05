@@ -1,0 +1,117 @@
+{
+  "manifest_version": "0.3",
+  "name": "kitchensink4web",
+  "display_name": "KitchenSink4Web",
+  "version": "0.0.0",
+  "description": "Kitchen-sink browser MCP server: a cheap first read of any page, durable refs, and a shipped safety layer",
+  "long_description": "A Model Context Protocol server for browser automation. get_page_view reads any page as a budgeted orientation with references Claude can act on; the safety layer ships on by default: server-level read-only mode, credential blindness, confirmation gates on form submits and payments, per-session budgets, and an audit trail. Capability packs (data extraction, screenshots, network, storage, downloads, diagnostics, workflows) are chosen below at install time and are fixed for the whole session. Launching this bundle requires uv (the uvx command) on your machine; the server itself is fetched from PyPI on first launch and uses its own bundled Chromium, never your browser or profile. Tip: in Claude Desktop's Tool permissions, set the Read-only tools group to Always Allow: those tools cannot change anything, and it stops most permission prompts.",
+  "author": {
+    "name": "nometalalchemist"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/nometalalchemist/KitchenSink4Web"
+  },
+  "icon": "icon.png",
+  "keywords": [
+    "browser",
+    "web",
+    "playwright",
+    "automation",
+    "read-only",
+    "safety",
+    "scraping",
+    "forms"
+  ],
+  "server": {
+    "type": "binary",
+    "entry_point": "",
+    "mcp_config": {
+      "command": "uvx",
+      "args": [
+        "kitchensink4web==0.0.0"
+      ],
+      "env": {
+        "KS4WEB_ALLOW_ACTING": "${user_config.allow_acting}",
+        "KS4WEB_ALL_PACKS": "${user_config.all_packs}",
+        "KS4WEB_PACK_EXTRACT": "${user_config.pack_extract}",
+        "KS4WEB_PACK_CAPTURE": "${user_config.pack_capture}",
+        "KS4WEB_PACK_NETWORK": "${user_config.pack_network}",
+        "KS4WEB_PACK_STORAGE": "${user_config.pack_storage}",
+        "KS4WEB_PACK_FILES": "${user_config.pack_files}",
+        "KS4WEB_PACK_DIAGNOSTICS": "${user_config.pack_diagnostics}",
+        "KS4WEB_PACK_WORKFLOWS": "${user_config.pack_workflows}"
+      }
+    }
+  },
+  "user_config": {
+    "allow_acting": {
+      "type": "boolean",
+      "title": "Allow this server to click and type",
+      "description": "Lets Claude click buttons, type into forms, and submit pages; leave it off and Claude can only read and navigate, with nothing on the page changeable.",
+      "default": false,
+      "required": false
+    },
+    "all_packs": {
+      "type": "boolean",
+      "title": "Load every capability pack",
+      "description": "Turns on all seven packs below at once instead of choosing them one by one.",
+      "default": false,
+      "required": false
+    },
+    "pack_extract": {
+      "type": "boolean",
+      "title": "Data extraction",
+      "description": "Pulls structured data off pages: tables, lists, links, and page details, with CSV and JSON export.",
+      "default": false,
+      "required": false
+    },
+    "pack_capture": {
+      "type": "boolean",
+      "title": "Screenshots and page capture",
+      "description": "Takes screenshots (passwords masked) and saves pages as PDF or archive files.",
+      "default": false,
+      "required": false
+    },
+    "pack_network": {
+      "type": "boolean",
+      "title": "Network inspection",
+      "description": "Shows the page's network requests and responses, and lets Claude block or mock them for testing.",
+      "default": false,
+      "required": false
+    },
+    "pack_storage": {
+      "type": "boolean",
+      "title": "Cookies and logins",
+      "description": "Works with cookies and site storage, and saves a login to a file so it can be reused next time without typing the password again.",
+      "default": false,
+      "required": false
+    },
+    "pack_files": {
+      "type": "boolean",
+      "title": "Downloads and uploads",
+      "description": "Downloads files from pages into one dedicated folder and uploads files into page forms.",
+      "default": false,
+      "required": false
+    },
+    "pack_diagnostics": {
+      "type": "boolean",
+      "title": "Page diagnostics",
+      "description": "Reads the page's own error messages and console output, and can run a page script only after you confirm it.",
+      "default": false,
+      "required": false
+    },
+    "pack_workflows": {
+      "type": "boolean",
+      "title": "Recorded workflows",
+      "description": "Records a multi-step flow once and replays it later, checking every step still matches the page before anything runs.",
+      "default": false,
+      "required": false
+    }
+  },
+  "compatibility": {
+    "runtimes": {
+      "python": ">=3.12"
+    }
+  }
+}
