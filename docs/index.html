@@ -1,0 +1,882 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!--
+  PRE-PRODUCTION. Nothing here is published. The product is not released.
+
+  ENGLISH SOURCE: internal notes/20260905_garden_page_copy_fable.md
+  Every sentence in the `en` dictionary below is VERBATIM from that file, except
+  the strings listed as mechanical/connective in the Phase 9 report, which are
+  flagged there for main-thread review. The six translations are the build
+  agent's and are flagged for the author's optional native read.
+
+  MEASURED NUMBERS (tools/measure_readme_numbers.py, 2026-09-06 KST):
+    33,073  raw dump of the frozen Treaty of Versailles page (o200k_base,
+            cheapest of three dump flavors: visible text 33,073, flat role
+            listing 64,596, serialized DOM 691,486)
+    4,426   this server's first read of the same page (rung 6, budget 5,000)
+    82      delta read after one click (corpus/b/pathological.html)
+    15      lite tools / ~4.1k tokens;  41 full / ~10.2k tokens
+    586     tests, 192 of them driving a real browser
+    16      rungs on the budget ladder
+  The DEPT. 00 map panel quotes the real region rows from
+  corpus/a/out/wikipedia_versailles.projection.txt. The DEPT. 00 dump panel
+  quotes the real document.body.innerText of the same frozen page.
+
+  MISSING COPY (see the Phase 9 report): the DEPT. 02 comparison CELLS and the
+  competitor survey. The cells render as visible red TODO markers on purpose,
+  the same way the family's unfilled numbers do, so the section cannot ship past.
+
+  AISLE: GARDEN. A page read is a plot of ground, regions are beds, the budget
+  is what you are willing to spend on water, a dump is a flood. The watering
+  can in the hero is this aisle's fixture (Word owns the faucet, PPT the
+  pendant lamp, XL the wall switch); the side-by-side in DEPT. 00 is this
+  aisle's interactive.
+  LANE C is claimed NOWHERE on this page, per the copy file's note 5.
+  STOREFRONT: https://nometalalchemist.github.io/ (do not edit it from here)
+-->
+<title>KitchenSink4Web: Everything plus the kitchen sink for the open web</title>
+<meta name="description" content="A browser MCP server that reads a whole page for the price of a paragraph. A raw dump of one Wikipedia article costs 33,073 tokens; this server's first read of it costs 4,426, and every region is priced before you open it. Starts read-only: the tools that click and type are absent until you switch them on.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🪴</text></svg>">
+<link rel="llms" href="llms.txt" type="text/plain">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght,SOFT@9..144,300..900,50&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* metric-matched local fallbacks, per the family pages: Courier New shares IBM Plex Mono's
+   advance width, Georgia scaled 104% matches Fraunces at text weights. */
+@font-face{font-family:"Plex Mono Fallback";src:local("Courier New");size-adjust:100%;line-gap-override:0%}
+@font-face{font-family:"Fraunces Fallback";src:local("Georgia");size-adjust:104%;line-gap-override:0%}
+:root{
+  --paper:#f4f0e1; --paper-deep:#eae4cc; --ink:#1f3b2c; --ink-soft:#42604e;
+  --brass:#7c6418; --brass-bright:#a2841f; --live:#4d9a52; --stamp:#a8452b; --rule:#c7bd9d;
+  --tint:rgba(124,100,24,.06); --drop-op:.18;
+  --shadow: 0 2px 0 var(--rule), 0 10px 30px rgba(31,59,44,.10);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  font-family:'IBM Plex Mono',"Plex Mono Fallback",ui-monospace,monospace;
+  background:var(--paper); color:var(--ink); line-height:1.6;
+  transition:background-color .6s ease;
+  background-image:
+    radial-gradient(ellipse at 50% -12%, var(--tint), transparent 58%),
+    repeating-linear-gradient(0deg, transparent 0 27px, rgba(31,59,44,.035) 27px 28px);
+}
+/* watered: the can has been tipped (per visit, never stored) */
+body.watered{
+  --paper:#f4f2e4; --paper-deep:#e6e8c9; --drop-op:1;
+  --tint:rgba(77,154,82,.18);
+}
+h1,h2,h3,.serif{font-family:'Fraunces',"Fraunces Fallback",Georgia,serif}
+a{color:var(--brass)}
+a:hover{text-decoration-style:wavy;text-decoration-thickness:1px;text-underline-offset:3px}
+.wrap{max-width:1080px;margin:0 auto;padding:0 24px}
+
+/* ---------- switchbar: the family shelf, one row above everything ---------- */
+.switchbar{border-bottom:1px solid var(--rule);background:var(--paper-deep);
+  padding:9px 0;font-size:11.5px;letter-spacing:.16em;text-transform:uppercase;
+  display:flex;justify-content:center;align-items:center;gap:14px;flex-wrap:wrap}
+.switchbar .lbl{color:var(--ink-soft);letter-spacing:.22em}
+.switchbar a{color:var(--brass);text-decoration:none;font-weight:600;
+  border-bottom:2px solid transparent;padding-bottom:2px}
+.switchbar a:hover{border-bottom-color:var(--brass)}
+.switchbar .here{color:var(--ink);font-weight:700;border-bottom:2px solid var(--ink);
+  padding-bottom:2px}
+
+/* ---------- masthead ---------- */
+.masthead{border-bottom:3px double var(--ink);padding:14px 0;font-size:12px;
+  letter-spacing:.18em;text-transform:uppercase;display:flex;justify-content:space-between;
+  gap:12px;flex-wrap:wrap}
+.masthead b{letter-spacing:.02em}
+.lang-toggle{display:inline-flex;gap:1px;align-items:baseline;flex-wrap:wrap;text-transform:none;letter-spacing:.05em}
+.lang-toggle button{font-family:'IBM Plex Mono',"Plex Mono Fallback",ui-monospace,monospace;font-size:11px;background:none;border:none;border-bottom:2px solid transparent;color:var(--ink-soft);cursor:pointer;padding:1px 5px;letter-spacing:.05em}
+.lang-toggle button:hover{color:var(--brass)}
+.lang-toggle button[aria-pressed="true"]{color:var(--brass);font-weight:600;border-bottom-color:var(--brass)}
+.lang-toggle .sep{color:var(--rule);padding:0 1px}
+
+/* ---------- hero ---------- */
+.hero{padding:64px 0 56px;text-align:center;position:relative;overflow:hidden}
+.catalog-no{display:inline-block;border:1.5px solid var(--ink);padding:4px 14px;
+  font-size:11px;letter-spacing:.3em;text-transform:uppercase;margin-bottom:28px;
+  background:var(--paper-deep)}
+.hero h1{font-size:clamp(40px,8vw,96px);font-weight:900;line-height:.95;
+  letter-spacing:-.015em;font-variation-settings:'SOFT' 50;
+  text-shadow:3px 3px 0 var(--paper-deep), 5px 5px 0 var(--rule)}
+.hero h1 .four{color:var(--brass)}
+.tagline{font-family:'Fraunces',"Fraunces Fallback",Georgia,serif;font-style:italic;font-size:clamp(18px,2.6vw,26px);
+  color:var(--ink-soft);margin:22px auto 0;max-width:700px}
+
+/* the watering can (family fixture: Word owns the faucet, PPT the pendant lamp,
+   XL the wall switch, Garden the can you tip over the bed) */
+.canstand{width:190px;margin:0 auto;position:relative}
+.can{display:block;width:190px;height:150px;background:none;border:none;padding:0;cursor:pointer}
+.can svg{width:100%;height:auto;display:block;overflow:visible}
+.can .body{fill:var(--paper-deep);stroke:var(--ink);stroke-width:3}
+.can .seam{stroke:var(--ink-soft);stroke-width:1.5;fill:none;opacity:.55}
+.can .rose{fill:var(--paper);stroke:var(--ink);stroke-width:3}
+.can .hole{fill:var(--ink-soft);opacity:.7}
+.can .tipgroup{transform-origin:118px 96px;transition:transform .45s cubic-bezier(.3,.7,.3,1)}
+body.watered .can .tipgroup{transform:rotate(-32deg)}
+.can .drop{fill:var(--live);opacity:0}
+body.watered .can .drop{animation:fall 1.15s ease-in infinite}
+body.watered .can .drop:nth-of-type(2){animation-delay:.28s}
+body.watered .can .drop:nth-of-type(3){animation-delay:.6s}
+@keyframes fall{0%{opacity:0;transform:translate(0,0)}
+  15%{opacity:.9}
+  100%{opacity:0;transform:translate(-6px,54px)}}
+.can:focus-visible{outline:2px dashed var(--brass);outline-offset:4px}
+.can:hover .body{fill:var(--paper)}
+/* the bed under the can, and the sprout that comes up once it has been watered */
+.bed{display:block;width:190px;height:52px;margin:0 auto}
+.bed .soil{fill:none;stroke:var(--ink-soft);stroke-width:2;opacity:.5;stroke-dasharray:3 5}
+.bed .sprout{stroke:var(--live);stroke-width:2.5;fill:none;
+  stroke-dasharray:70;stroke-dashoffset:70;transition:stroke-dashoffset .9s ease .25s}
+body.watered .bed .sprout{stroke-dashoffset:0}
+.bed .leaf{fill:var(--live);opacity:0;transition:opacity .5s ease .8s}
+body.watered .bed .leaf{opacity:var(--drop-op)}
+.can-hint{display:block;font-size:9px;letter-spacing:.22em;text-transform:uppercase;
+  color:var(--ink-soft);opacity:.55;margin-top:6px}
+
+.specs-strip{display:flex;justify-content:center;gap:0;margin:44px auto 0;
+  border:2px solid var(--ink);max-width:820px;background:var(--paper-deep);
+  box-shadow:var(--shadow);flex-wrap:wrap}
+.spec{padding:16px 24px;border-right:1px solid var(--rule);flex:1;min-width:145px}
+.spec:last-child{border-right:none}
+.spec .n{font-family:'Fraunces',"Fraunces Fallback",Georgia,serif;font-weight:900;font-size:32px;display:block;overflow-wrap:anywhere}
+.spec .l{font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--ink-soft)}
+.stamp{position:absolute;top:34px;right:max(12px,6vw);transform:rotate(9deg);
+  border:3px solid var(--stamp);color:var(--stamp);padding:8px 14px;font-weight:600;
+  font-size:12px;letter-spacing:.14em;text-transform:uppercase;border-radius:4px;
+  opacity:.85;line-height:1.3;
+  mask-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='4' height='4'%3E%3Crect width='4' height='4' fill='white'/%3E%3Ccircle cx='1' cy='1' r='.35' fill='black'/%3E%3C/svg%3E")}
+@media(max-width:640px){.stamp{display:none}}
+
+/* reveal on load */
+.rev{opacity:0;transform:translateY(14px);animation:rev .7s cubic-bezier(.2,.7,.2,1) forwards}
+@keyframes rev{to{opacity:1;transform:none}}
+.d1{animation-delay:.05s}.d2{animation-delay:.15s}.d3{animation-delay:.28s}
+.d4{animation-delay:.42s}.d5{animation-delay:.56s}
+
+/* ---------- sections ---------- */
+section{padding:64px 0;border-top:1px solid var(--rule)}
+.sec-head{display:flex;align-items:baseline;gap:16px;margin-bottom:34px}
+.sec-head h2{font-size:clamp(24px,3.8vw,38px);font-weight:800}
+.sec-head .no{font-size:12px;letter-spacing:.25em;color:var(--brass);white-space:nowrap;
+  border:2px solid currentColor;border-radius:3px;padding:3px 10px;transform:rotate(-2deg);
+  display:inline-block;opacity:.85;
+  mask-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='4' height='4'%3E%3Crect width='4' height='4' fill='white'/%3E%3Ccircle cx='2.5' cy='1.5' r='.3' fill='black'/%3E%3C/svg%3E")}
+.sec-head:after{content:"";flex:1;border-bottom:2px dotted var(--rule);transform:translateY(-6px)}
+.for-lead{font-family:'Fraunces',"Fraunces Fallback",Georgia,serif;font-size:clamp(16px,2.1vw,20px);line-height:1.65;max-width:840px;margin:0 auto 30px}
+.foot-note{font-size:11px;color:var(--ink-soft);margin-top:10px}
+
+/* ---------- DEPT 00: the dump wall against the priced map ---------- */
+.demo-grid{display:grid;grid-template-columns:1fr 1fr;gap:2px;background:var(--rule);
+  border:2px solid var(--ink);box-shadow:var(--shadow)}
+@media(max-width:820px){.demo-grid{grid-template-columns:1fr}}
+.demo-panel{background:var(--paper);padding:22px 22px 18px;position:relative;min-width:0}
+.demo-panel h3{font-size:12px;letter-spacing:.22em;text-transform:uppercase;margin-bottom:6px}
+.demo-panel.bad h3{color:var(--stamp)}
+.demo-panel.good h3{color:var(--brass)}
+.demo-panel>p{font-size:12.5px;color:var(--ink-soft);margin-top:12px;line-height:1.55}
+.corner-tag{position:absolute;top:14px;right:14px;font-size:10px;letter-spacing:.18em;
+  border:1.5px solid var(--stamp);color:var(--stamp);padding:2px 8px;transform:rotate(4deg);z-index:2}
+.corner-tag.native{border-color:var(--brass);color:var(--brass);transform:rotate(-3deg)}
+.meter{display:flex;justify-content:space-between;align-items:baseline;gap:10px;
+  border-bottom:2px solid var(--rule);padding-bottom:6px;margin-bottom:10px;flex-wrap:wrap}
+.meter .cap{font-size:9.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--ink-soft)}
+.meter .fig{font-family:'Fraunces',"Fraunces Fallback",Georgia,serif;font-weight:900;
+  font-size:26px;font-variant-numeric:tabular-nums}
+.demo-panel.bad .meter .fig{color:var(--stamp)}
+.demo-panel.good .meter .fig{color:var(--brass)}
+/* the wall: a real dump of a real page, scrolling, uninteractable on purpose */
+.wall{height:300px;overflow:auto;border:1px solid var(--rule);background:var(--paper-deep);
+  padding:10px 12px;font-size:11px;line-height:1.5;color:var(--ink-soft);
+  cursor:not-allowed;user-select:none;white-space:pre-wrap;overflow-wrap:anywhere}
+.wall b{color:var(--ink);font-weight:600}
+.wall .chrome{opacity:.72}
+.wall .more{display:block;margin-top:10px;color:var(--stamp);font-weight:600}
+/* the map: the same page as priced beds */
+.map{height:300px;overflow:auto;border:1px solid var(--rule);background:var(--paper-deep);
+  padding:10px 12px;font-size:11.5px;line-height:1.5}
+.map .idline{color:var(--ink-soft);font-size:10.5px;border-bottom:1px dotted var(--rule);
+  padding-bottom:6px;margin-bottom:8px;overflow-wrap:anywhere}
+.bedrow{width:100%;text-align:left;background:var(--paper);border:1px solid var(--rule);
+  border-left:3px solid var(--brass);color:var(--ink);font-family:inherit;font-size:11.5px;
+  padding:5px 8px;margin-bottom:4px;cursor:pointer;display:flex;justify-content:space-between;
+  gap:10px;align-items:baseline}
+.bedrow:hover{background:var(--paper-deep);border-left-color:var(--ink)}
+.bedrow:focus-visible{outline:2px dashed var(--brass);outline-offset:2px}
+.bedrow .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bedrow .px{color:var(--brass);white-space:nowrap;font-variant-numeric:tabular-nums}
+.bedrow[aria-pressed="true"]{background:var(--paper-deep);border-left-color:var(--live);
+  border-left-width:5px}
+.bedrow[aria-pressed="true"] .px{color:var(--live);font-weight:600}
+.demo-controls{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px}
+.stampbtn{font-family:'IBM Plex Mono',"Plex Mono Fallback",monospace;font-size:10px;letter-spacing:.16em;
+  text-transform:uppercase;border:2px solid var(--stamp);color:var(--stamp);background:none;
+  border-radius:4px;padding:4px 10px;cursor:pointer;transform:rotate(-3deg);transition:all .15s;font-weight:600}
+.stampbtn:hover{transform:rotate(-3deg) translate(-1px,-1px);box-shadow:2px 2px 0 var(--rule)}
+.stampbtn:focus-visible{outline:2px dashed var(--stamp);outline-offset:2px}
+.demo-read{font-family:'Fraunces',"Fraunces Fallback",Georgia,serif;font-style:italic;
+  font-size:13.5px;color:var(--brass);margin-top:10px}
+
+/* ---------- DEPT 01: the read-only tale ---------- */
+.tale{border:2px solid var(--ink);background:var(--paper-deep);padding:34px 38px;
+  box-shadow:var(--shadow);position:relative;max-width:840px;margin:0 auto}
+.tale:before{content:attr(data-label);position:absolute;top:-11px;left:28px;
+  background:var(--ink);color:var(--paper);font-size:10px;letter-spacing:.3em;padding:4px 12px}
+.tale p{font-family:'Fraunces',"Fraunces Fallback",Georgia,serif;font-size:clamp(16px,2.1vw,20px);line-height:1.65}
+.tale p+p{margin-top:14px}
+
+/* ---------- tables ---------- */
+.tablewrap{overflow-x:auto;border:2px solid var(--ink);box-shadow:var(--shadow)}
+table{border-collapse:collapse;width:100%;font-size:13px;background:var(--paper)}
+th,td{padding:10px 14px;border-bottom:1px solid var(--rule);text-align:center;white-space:nowrap}
+th{background:var(--ink);color:var(--paper);font-weight:600;font-size:11px;letter-spacing:.08em;text-transform:uppercase}
+td:first-child,th:first-child{text-align:left;font-weight:600;white-space:normal;min-width:170px}
+tr:nth-child(even) td{background:var(--paper-deep)}
+.us{background:rgba(124,100,24,.12)!important;font-weight:700}
+th.us{background:var(--brass)!important;color:var(--paper)}
+.scenario td{white-space:normal;font-size:12px;line-height:1.5;vertical-align:top;text-align:left;min-width:150px}
+.scenario td:first-child{font-family:'Fraunces',"Fraunces Fallback",Georgia,serif;font-size:15px;font-weight:700;min-width:200px}
+.scenario th{text-align:left}
+/* MISSING COPY, rendered so it cannot be shipped past */
+.todo{color:var(--stamp);font-weight:600;font-size:11px;letter-spacing:.02em;
+  border:1.5px dashed var(--stamp);padding:3px 8px;display:inline-block;background:var(--paper)}
+.bill td,.bill th{white-space:nowrap}
+.bill td:first-child{font-weight:600}
+.bill tr.sum td{background:var(--ink)!important;color:var(--paper);font-weight:700;border-bottom:none}
+.bill td.num{text-align:right;font-variant-numeric:tabular-nums}
+.bill th.num{text-align:right}
+
+/* ---------- install ---------- */
+.term{background:var(--ink);color:#e9efe6;border:2px solid var(--ink);box-shadow:var(--shadow);
+  padding:22px 24px;font-size:14px;overflow-x:auto}
+.term .c{color:#9dbfa8}
+.term .p{color:var(--live)}
+.term div{white-space:pre}
+.install-grid{display:grid;grid-template-columns:1fr 1fr;gap:26px}
+.install-grid>*{min-width:0}
+@media(max-width:760px){.install-grid{grid-template-columns:1fr}}
+.step{border:2px solid var(--ink);background:var(--paper);box-shadow:var(--shadow);
+  padding:24px 26px 22px;position:relative}
+.step .badge{position:absolute;top:-11px;left:24px;background:var(--ink);color:var(--paper);
+  font-size:10px;letter-spacing:.3em;padding:4px 12px;text-transform:uppercase}
+.step h3{font-size:16px;font-weight:800;margin:6px 0 8px}
+.step p{font-size:13px;color:var(--ink-soft);line-height:1.6;margin-bottom:14px}
+.tipbox{border-left:4px solid var(--brass);background:var(--paper-deep);padding:14px 18px;
+  font-size:12.5px;color:var(--ink-soft);margin-top:22px}
+
+/* ---------- maturity, guarantee, counters ---------- */
+.maturity{border:2px solid var(--ink);background:var(--paper-deep);box-shadow:var(--shadow);
+  padding:26px 30px 24px;margin-bottom:28px;position:relative}
+.maturity:before{content:"";position:absolute;left:0;right:0;top:0;height:7px;
+  background:repeating-linear-gradient(-45deg, var(--live) 0 10px, var(--ink) 10px 20px)}
+.maturity h3{font-size:clamp(18px,2.5vw,24px);font-weight:900;margin:8px 0 10px}
+.maturity p{font-size:13.5px;color:var(--ink-soft);line-height:1.65;max-width:780px}
+.guarantee{max-width:840px;margin:0 auto;text-align:center;border:3px double var(--ink);
+  padding:38px 34px;background:var(--paper-deep);box-shadow:var(--shadow);position:relative}
+.guarantee h3{font-size:clamp(20px,2.8vw,28px);font-weight:900;margin-bottom:14px}
+.guarantee p{font-size:14px;color:var(--ink-soft);max-width:680px;margin:0 auto}
+.guarantee .seal{font-size:40px;display:block;margin-bottom:8px}
+.ticket{display:inline-block;border:2px dashed var(--ink);background:var(--paper-deep);
+  padding:6px 18px;font-size:10px;letter-spacing:.26em;text-transform:uppercase;
+  color:var(--ink-soft);margin-bottom:24px;transform:rotate(-1.5deg);position:relative}
+.ticket:before,.ticket:after{content:"";position:absolute;top:50%;width:10px;height:10px;
+  border-radius:50%;background:var(--paper);border:2px dashed var(--ink);transform:translateY(-50%)}
+.ticket:before{left:-7px}
+.ticket:after{right:-7px}
+.service-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:22px}
+.counter{border:2px solid var(--ink);background:var(--paper);padding:26px 24px;
+  box-shadow:var(--shadow);text-decoration:none;color:var(--ink);display:block;
+  transition:all .15s;position:relative}
+.counter:hover{transform:translate(-2px,-2px);box-shadow:2px 4px 0 var(--rule), 8px 14px 30px rgba(31,59,44,.16);background:var(--paper-deep)}
+.counter .icon{font-size:30px;display:block;margin-bottom:10px;width:max-content}
+.counter h3{font-size:17px;font-weight:800;margin-bottom:8px}
+.counter p{font-size:12.5px;color:var(--ink-soft);line-height:1.55}
+.counter .go{display:inline-block;margin-top:14px;font-size:11px;letter-spacing:.18em;
+  text-transform:uppercase;color:var(--brass);font-weight:600}
+
+/* ---------- footer ---------- */
+footer{border-top:3px double var(--ink);padding:36px 0 48px;font-size:12px;color:var(--ink-soft)}
+footer .row{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
+footer a{color:var(--brass)}
+.colophon{text-align:center;padding:22px 0 0;font-size:10px;letter-spacing:.28em;
+  text-transform:uppercase;opacity:.45}
+.btn{display:inline-block;border:2px solid var(--ink);background:var(--paper);color:var(--ink);
+  text-decoration:none;padding:12px 26px;font-weight:600;font-size:14px;letter-spacing:.05em;
+  box-shadow:3px 3px 0 var(--ink);transition:all .15s;margin:6px 8px 0 0}
+.btn:hover{transform:translate(-2px,-2px);box-shadow:5px 5px 0 var(--ink)}
+.btn.primary{background:var(--brass);border-color:var(--brass);color:var(--paper);
+  box-shadow:3px 3px 0 var(--ink)}
+.demo-invite{display:inline-block;margin-top:22px;font-size:12px;letter-spacing:.06em;
+  color:var(--brass);text-decoration:none;border-bottom:1.5px dashed var(--brass);padding-bottom:2px}
+.demo-invite:hover{color:var(--ink);border-bottom-style:solid}
+
+/* reduced motion: the can still tips and the sprout still stands, they just do not
+   travel there. The pour stops pouring. */
+@media (prefers-reduced-motion: reduce){
+  *{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important}
+  html{scroll-behavior:auto}
+  body.watered .can .drop{animation:none;opacity:0}
+}
+</style>
+</head>
+<body>
+
+<div class="masthead wrap">
+  <span data-i18n="m.left"><b>GARDEN DEPARTMENT</b> &middot; FINE INSTRUMENTS FOR BROWSING THE GREAT OUTDOORS</span>
+  <nav class="lang-toggle" id="langToggle" aria-label="Language"></nav>
+  <span><span data-i18n="m.catalog">CATALOG № 41</span> · <a href="https://nometalalchemist.github.io/" data-i18n="m.family">FAMILY</a> · <a href="#service" data-i18n="m.service">SERVICE</a> · <a href="https://github.com/nometalalchemist/KitchenSink4Web">GITHUB</a> · <a href="llms.txt">LLMS.TXT</a></span>
+</div>
+
+<div class="switchbar">
+  <span class="lbl" data-i18n="sw.lbl">THE AISLES</span>
+  <a href="https://nometalalchemist.github.io/KitchenSink4Word/">🚰 KitchenSink4Word</a>
+  <a href="https://nometalalchemist.github.io/KitchenSink4PPT/">💡 KitchenSink4PPT</a>
+  <a href="https://nometalalchemist.github.io/KitchenSink4XL/">🔌 KitchenSink4XL</a>
+  <span class="here">🪴 KitchenSink4Web <span data-i18n="sw.here">(you are here)</span></span>
+  <a href="https://nometalalchemist.github.io/">🏪 <span data-i18n="sw.store">The storefront</span></a>
+</div>
+
+<header class="hero wrap">
+  <div class="stamp rev d4" data-i18n="hero.stamp">A MAP,<br>NOT A DUMP</div>
+  <div class="canstand rev d1">
+    <button class="can" id="canBtn" type="button" aria-pressed="false" aria-label="Watering can. Tip it over the bed.">
+      <svg viewBox="0 0 190 150" role="img" aria-hidden="true">
+        <g class="tipgroup">
+          <path class="body" d="M74 52 h62 a10 10 0 0 1 10 10 v46 a14 14 0 0 1 -14 14 h-54 a14 14 0 0 1 -14 -14 v-46 a10 10 0 0 1 10 -10 z"/>
+          <path class="body" d="M88 52 v-10 a20 20 0 0 1 34 0 v10"/>
+          <path class="seam" d="M74 72 h72"/>
+          <path class="body" d="M74 64 l-28 -22 -14 14"/>
+          <circle class="rose" cx="27" cy="53" r="12"/>
+          <circle class="hole" cx="23" cy="50" r="1.6"/>
+          <circle class="hole" cx="28" cy="49" r="1.6"/>
+          <circle class="hole" cx="25" cy="56" r="1.6"/>
+          <circle class="hole" cx="31" cy="55" r="1.6"/>
+        </g>
+        <circle class="drop" cx="52" cy="86" r="3"/>
+        <circle class="drop" cx="58" cy="86" r="2.4"/>
+        <circle class="drop" cx="47" cy="86" r="2.4"/>
+      </svg>
+    </button>
+    <svg class="bed" viewBox="0 0 190 52" aria-hidden="true">
+      <path class="soil" d="M28 40 h134"/>
+      <path class="sprout" d="M95 40 C95 26 95 20 95 12"/>
+      <path class="leaf" d="M95 24 C84 22 80 14 80 14 C90 12 95 20 95 24 Z"/>
+      <path class="leaf" d="M95 30 C106 28 110 20 110 20 C100 18 95 26 95 30 Z"/>
+    </svg>
+    <span class="can-hint" data-i18n="hero.canhint">tip the can</span>
+  </div>
+  <div class="catalog-no rev d2" data-i18n="hero.catno">Model Context Protocol · Server for the Open Web</div>
+  <h1 class="rev d2">KitchenSink<span class="four">4</span>Web</h1>
+  <p class="tagline rev d3" data-i18n="hero.tagline">Everything <em>plus</em> the kitchen sink for the open web: the browser MCP server that reads a whole page for the price of a paragraph.</p>
+  <div class="specs-strip rev d4">
+    <div class="spec"><span class="n">33,073</span><span class="l" data-i18n="spec.dump">Tokens, one page dumped</span></div>
+    <div class="spec"><span class="n">4,426</span><span class="l" data-i18n="spec.read">Tokens, the same page read</span></div>
+    <div class="spec"><span class="n">15</span><span class="l" data-i18n="spec.lite">Tools in the lite core</span></div>
+    <div class="spec"><span class="n">41</span><span class="l" data-i18n="spec.tools">Tools in all</span></div>
+    <div class="spec"><span class="n">586</span><span class="l" data-i18n="spec.tests">Tests</span></div>
+  </div>
+  <div class="rev d5">
+    <a class="btn primary" href="#install" data-i18n="btn.install">Install the Sink</a>
+    <a class="btn" href="https://github.com/nometalalchemist/KitchenSink4Web" data-i18n="btn.source">Read the Source</a>
+  </div>
+  <a class="demo-invite rev d5" href="#headline" data-i18n="hero.invite">↓ or see the difference first: what your assistant pays to read one page, there versus here</a>
+</header>
+
+<section id="headline">
+  <div class="wrap">
+    <div class="sec-head"><span class="no" data-i18n="no0">DEPT. 00</span><h2 data-i18n="h2.demo">Reading a page should not cost the whole conversation</h2></div>
+    <p class="for-lead" data-i18n="demo.lead">Ask most browser tools to read a page and they dump everything they see into your assistant's memory: menus, footers, cookie banners, all of it, tens of thousands of tokens for a single article. Do that three times and your assistant starts forgetting what you told it this morning. This server reads differently. It hands back a map: what the page is, what is on it section by section, what each section costs to open, and what it would do next. A page that costs other tools a novel costs this one a paragraph. And nothing is swept under the rug: every read ends with an honest accounting of what was not read and why.</p>
+    <div class="demo-grid">
+      <div class="demo-panel bad">
+        <span class="corner-tag" data-i18n="demo.badtag">EVERYTHING</span>
+        <h3 data-i18n="demo.badh">What most of the aisle hands you</h3>
+        <div class="meter">
+          <span class="cap" data-i18n="demo.meter1">Tokens spent on this page</span>
+          <span class="fig">33,073</span>
+        </div>
+        <div class="wall" id="dumpWall" aria-label="A raw dump of one Wikipedia article, scrolling"></div>
+        <p data-i18n="demo.badp">Forty-nine lines of menus, language pickers and appearance settings before one word of the article. All of it is in your assistant's memory now, and none of it was the question.</p>
+      </div>
+      <div class="demo-panel good">
+        <span class="corner-tag native" data-i18n="demo.goodtag">PRICED</span>
+        <h3 data-i18n="demo.goodh">What this catalog sells</h3>
+        <div class="meter">
+          <span class="cap" data-i18n="demo.meter2">Tokens spent on this page</span>
+          <span class="fig" id="mapFig">4,426</span>
+        </div>
+        <div class="map" id="mapPanel">
+          <div class="idline" id="mapId">Treaty of Versailles - Wikipedia · article · 10,737 dom nodes · 51.1 screens</div>
+        </div>
+        <div class="demo-controls">
+          <button class="stampbtn" id="mapReset" type="button" data-i18n="demo.reset">RESET ⟲</button>
+        </div>
+        <p class="demo-read"><span id="mapSay" data-i18n="demo.cap">open a bed and watch what it costs.</span></p>
+        <p data-i18n="demo.goodp">The same page, as beds you can price before you dig. Each row is a real region of the real article with its real cost to expand, and the meter only moves when you open one. Keyboard works too: tab to a row and press it.</p>
+      </div>
+    </div>
+    <p class="foot-note" data-i18n="demo.note">Both panels are the same frozen copy of the Treaty of Versailles article, measured by a script that ships with the source. The dump figure is the cheapest of three ways to dump a page; the other two cost 64,596 and 691,486.</p>
+  </div>
+</section>
+
+<section id="tale">
+  <div class="wrap">
+    <div class="sec-head"><span class="no" data-i18n="no1">DEPT. 01</span><h2 data-i18n="h2.tale">Out of the box, it can look but not touch</h2></div>
+    <div class="tale" data-label="THE HOUSE RULE">
+      <p data-i18n="tale.p1">A browser is where your logins, your money, and your mistakes all live. So this server starts in browsing mode: it reads, navigates, and scrolls, but the tools that click, type, and submit are not switched off somewhere, they simply do not exist until you flip one switch at install. No instruction on any webpage can talk your assistant into acting, because there is nothing to act with.</p>
+      <p data-i18n="tale.p2">That is not a promise about good behavior. It is a fact about what is installed, and anyone can check it by reading the tool list. When you do want a hand filling forms or clicking through a flow, tick one box in the extension settings and everything unlocks, in the same conversation.</p>
+      <p data-i18n="tale.p3">And it reads defensively either way. Text that a page hides from human eyes, the oldest trick for slipping instructions to an AI, is stripped, counted, and reported. Never obeyed.</p>
+    </div>
+  </div>
+</section>
+
+<section id="compare">
+  <div class="wrap">
+    <div class="sec-head"><span class="no" data-i18n="no2">DEPT. 02</span><h2 data-i18n="h2.cmp">Against the rest of the aisle</h2></div>
+    <p class="for-lead" data-i18n="cmp.lead">Feature grids flatter everybody. Here it is instead as the requests an assistant actually gets:</p>
+    <div class="tablewrap">
+      <table class="scenario">
+        <tr><th data-i18n="cmp.h1">"Hey, could you…"</th><th class="us">🪴 KitchenSink4Web</th><th data-i18n="cmp.h3">The rest of the aisle</th></tr>
+        <tr><td data-i18n="cr1.q">"Read this article and tell me what actually matters."</td><td class="us"><span class="todo">MISSING COPY</span></td><td><span class="todo">MISSING COPY</span></td></tr>
+        <tr><td data-i18n="cr2.q">"Find the issue about the broken d-pad. There are 771 open ones."</td><td class="us"><span class="todo">MISSING COPY</span></td><td><span class="todo">MISSING COPY</span></td></tr>
+        <tr><td data-i18n="cr3.q">"Before you read that page: what will it cost me?"</td><td class="us"><span class="todo">MISSING COPY</span></td><td><span class="todo">MISSING COPY</span></td></tr>
+        <tr><td data-i18n="cr4.q">"Fill in this form, but only because I said you could."</td><td class="us"><span class="todo">MISSING COPY</span></td><td><span class="todo">MISSING COPY</span></td></tr>
+        <tr><td data-i18n="cr5.q">"What did you NOT read on that page?"</td><td class="us"><span class="todo">MISSING COPY</span></td><td><span class="todo">MISSING COPY</span></td></tr>
+        <tr><td data-i18n="cr6.q">"Click send, and prove to me what happened."</td><td class="us"><span class="todo">MISSING COPY</span></td><td><span class="todo">MISSING COPY</span></td></tr>
+      </table>
+    </div>
+    <p class="foot-note" data-i18n="cmp.note">Build note, not shipping copy: the answer cells and the competitor survey behind them are not written yet. They are marked rather than guessed.</p>
+  </div>
+</section>
+
+<section id="efficiency">
+  <div class="wrap">
+    <div class="sec-head"><span class="no" data-i18n="no3">DEPT. 03</span><h2 data-i18n="h2.eff">The bill</h2></div>
+    <p class="for-lead" data-i18n="eff.lead">Every MCP server draws on an assistant's memory before any work starts, and browser servers are the hungriest of all: one careless page read elsewhere can eat most of a conversation. This one starts small, reads by the map, and puts an exact price on every expansion before you pay it. Here is the bill, measured:</p>
+    <div class="tablewrap">
+      <table class="bill">
+        <tr><th data-i18n="bill.h1">On the meter</th><th class="num" data-i18n="bill.h2">Tools</th><th class="num" data-i18n="bill.h3">Tokens</th><th data-i18n="bill.h4">When it draws</th></tr>
+        <tr><td data-i18n="bill.r1">Lite core</td><td class="num">15</td><td class="num">4.1k</td><td data-i18n="bill.w1">From the first message of every session</td></tr>
+        <tr><td data-i18n="bill.r2">Every pack switched on</td><td class="num">41</td><td class="num">10.2k</td><td data-i18n="bill.w2">Only when the packs are chosen at launch</td></tr>
+        <tr><td data-i18n="bill.r3">First read of one long article</td><td class="num">·</td><td class="num">4,426</td><td data-i18n="bill.w3">Once, and it never exceeds the budget you set</td></tr>
+        <tr class="sum"><td data-i18n="bill.r4">The same read again, after one click</td><td class="num">·</td><td class="num">82</td><td data-i18n="bill.w4">Every repeat read, priced on what changed</td></tr>
+      </table>
+    </div>
+    <p class="foot-note" data-i18n="bill.note">The budget ladder has 16 rungs, and every read says which rung it printed at and what a deeper one would cost. The tool figures come from a measuring script that ships with the source; the page figures come from another, run against a frozen copy of the page, so you can check both yourself.</p>
+  </div>
+</section>
+
+<section id="install">
+  <div class="wrap">
+    <div class="sec-head"><span class="no" data-i18n="no4">DEPT. 04</span><h2 data-i18n="h2.install">Planting it</h2></div>
+    <div class="install-grid">
+      <div class="step">
+        <span class="badge" data-i18n="inst.b1">Easiest</span>
+        <h3 data-i18n="inst.s1">Claude Desktop</h3>
+        <p data-i18n="inst.p1">Claude Desktop: install the <code>.mcpb</code> bundle and pick what you want on the install screen. The checkboxes are the whole configuration: one to allow clicking and typing (off means read-only browsing, the shipped default), and one per capability pack. Launching the bundle requires <code>uv</code> (the <code>uvx</code> command) on your machine; the server itself is fetched from PyPI on first launch and drives its own bundled Chromium, never your browser or your profile.</p>
+      </div>
+      <div class="step">
+        <span class="badge" data-i18n="inst.b2">One command</span>
+        <h3 data-i18n="inst.s2">Any other MCP client</h3>
+        <div class="term"><div><span class="c">$</span> <span class="p">uvx kitchensink4web</span></div></div>
+        <p style="margin-top:14px" data-i18n="inst.p2">Packs and read-only mode are chosen at launch (<code>--packs</code>, <code>KS4WEB_MODE</code>, <code>KS4WEB_ALLOW_ACTING</code>) and are identical for every connection to the process.</p>
+      </div>
+    </div>
+    <p class="tipbox" data-i18n="inst.tip"><b>Tip for Claude Desktop:</b> in Tool permissions, set this server's <b>Read-only tools</b> group to <b>Always Allow</b>. Those tools cannot change anything on any page, and it stops most permission prompts.</p>
+  </div>
+</section>
+
+<section id="service">
+  <div class="wrap">
+    <div class="sec-head"><span class="no" data-i18n="no5">DEPT. 05</span><h2 data-i18n="h2.svc">Service department</h2></div>
+    <div class="maturity">
+      <h3 data-i18n="maturity.h">Young, and raised in a hard school</h3>
+      <p data-i18n="maturity.p">This is the newest fixture in the family, and it grew up under the house rules: every claim measured, every release attacked by adversarial rounds before it ships, every refusal honest about its reason. What it has not had yet is a long life in strangers' browsers. The safety net while it earns that: it starts read-only, it prices every read before taking it, and it tells you what it could not see. If the web is where you live, bring your strangest pages to the service counter and tell us what broke.</p>
+    </div>
+    <span class="ticket" data-i18n="svc.ticket">NOW SERVING · TAKE A NUMBER · SAME DESK AS THE WORD, POWERPOINT, AND EXCEL SINKS</span>
+    <div class="service-grid">
+      <a class="counter" href="https://github.com/nometalalchemist/KitchenSink4Web/issues/new/choose">
+        <span class="icon">🥀</span>
+        <h3 data-i18n="svc1.t">Found a wilted read?</h3>
+        <p data-i18n="svc1.p">A page that read wrong, a refusal that made no sense, an action that lied about its outcome. File a report at the repair counter: the form asks exactly what a fix needs. Never paste private page content; describe the shape of the page instead.</p>
+        <span class="go" data-i18n="svc1.g">File a bug report →</span>
+      </a>
+      <a class="counter" href="https://github.com/nometalalchemist/KitchenSink4Web/issues/new/choose">
+        <span class="icon">🪜</span>
+        <h3 data-i18n="svc2.t">Missing a trellis?</h3>
+        <p data-i18n="svc2.p">A browsing capability the sink should also have. Describe the real task behind it and it goes on the workbench.</p>
+        <span class="go" data-i18n="svc2.g">Request a feature →</span>
+      </a>
+      <a class="counter" href="https://github.com/nometalalchemist/KitchenSink4Web/issues/new/choose">
+        <span class="icon">💼</span>
+        <h3 data-i18n="svc3.t">Commercial fitting?</h3>
+        <p data-i18n="svc3.p">Free for individuals and personal use, and it stays that way. If your company wants to build it into a product of its own, that needs a commercial license, with terms worked out case by case. This counter is where you start that conversation.</p>
+        <span class="go" data-i18n="svc3.g">Arrange a license →</span>
+      </a>
+    </div>
+  </div>
+</section>
+
+<section id="guarantee">
+  <div class="wrap">
+    <div class="guarantee">
+      <span class="seal">🛡️</span>
+      <h3 data-i18n="g.t">Engineered Not to Act on a Stranger's Instructions</h3>
+      <p data-i18n="g.p1">Hidden text is stripped and counted, never followed. Every action reports what actually happened, not just that a command was sent. The tools that change the world exist only when you have switched them on. And when something cannot be done, from a login wall to a bot check, you get a straight answer naming what stood in the way, instead of a guess dressed up as progress.</p>
+    </div>
+  </div>
+</section>
+
+<section id="family">
+  <div class="wrap">
+    <div class="sec-head"><span class="no" data-i18n="no6">DEPT. 06</span><h2 data-i18n="h2.fam">The other aisles</h2></div>
+    <div class="service-grid">
+      <a class="counter" href="https://nometalalchemist.github.io/KitchenSink4Word/">
+        <span class="icon">🚰</span>
+        <h3>KitchenSink4Word</h3>
+        <p data-i18n="fam1.p">The original fixture: everything plus the kitchen sink for Microsoft Word. 219 operations across 108 tools, live editing of open documents, citations, merge-aware table surgery, tracked changes, engineered not to corrupt.</p>
+        <span class="go" data-i18n="fam1.g">Visit the plumbing aisle →</span>
+      </a>
+      <a class="counter" href="https://nometalalchemist.github.io/KitchenSink4PPT/">
+        <span class="icon">💡</span>
+        <h3>KitchenSink4PPT</h3>
+        <p data-i18n="fam2.p">The decor aisle: everything plus the kitchen sink for Microsoft PowerPoint. 138 tools, diagrams that arrive as native shapes with connectors glued to them, so the box moves and the arrows follow.</p>
+        <span class="go" data-i18n="fam2.g">Visit the decor aisle →</span>
+      </a>
+      <a class="counter" href="https://nometalalchemist.github.io/KitchenSink4XL/">
+        <span class="icon">🔌</span>
+        <h3>KitchenSink4XL</h3>
+        <p data-i18n="fam3.p">The electrical aisle: everything plus the kitchen sink for Microsoft Excel. 69 tools, and every number comes back labeled calculated, cached or absent, so an AI never reads out a total it cannot back up.</p>
+        <span class="go" data-i18n="fam3.g">Visit the electrical aisle →</span>
+      </a>
+      <a class="counter" href="https://nometalalchemist.github.io/">
+        <span class="icon">🏪</span>
+        <h3 data-i18n="fam4.t">The storefront</h3>
+        <p data-i18n="fam4.p">The whole hardware store on one page: every KitchenSink server, its fixture, and its counter, plus a shelf or two that are not empty by accident.</p>
+        <span class="go" data-i18n="fam4.g">Browse the store →</span>
+      </a>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap row">
+    <span data-i18n="f.left">&copy; 2026 &middot; <b>AGPL-3.0</b>: free for individuals and personal use.<br>Companies building it into their own products need a commercial license; <a href='https://github.com/nometalalchemist/KitchenSink4Web/issues/new/choose'>open an issue</a> and we will talk it through.</span>
+    <span style="text-align:right" data-i18n="f.right"><a href='https://github.com/nometalalchemist/KitchenSink4Web'>github.com/nometalalchemist/KitchenSink4Web</a> · <a href='https://github.com/nometalalchemist/KitchenSink4Web/issues/new/choose'>report a wilted read</a><br>Built on the KitchenSink4Word safety core, prototyped with Claude Code, and left out in the weather until it stopped flinching. Water before noon. 🪴</span>
+  </div>
+  <div class="wrap" style="text-align:center;padding:6px 0;opacity:.5;font-size:11px" data-i18n="f.affil">Not affiliated with or endorsed by Google, Mozilla, Microsoft, or any website this server visits. Chrome, Chromium, Firefox, and Edge are trademarks of their respective owners, used nominatively to name the browsers this server can drive.</div>
+  <div class="wrap colophon">SET IN FRAUNCES &amp; IBM PLEX MONO · CATALOG № 41</div>
+</footer>
+
+<script>
+(function(){
+"use strict";
+
+/* ---------- 1. the watering can: the aisle's fixture ---------- */
+var canBtn = document.getElementById("canBtn");
+if (canBtn){
+  canBtn.addEventListener("click", function(){
+    var on = document.body.classList.toggle("watered");
+    canBtn.setAttribute("aria-pressed", String(on));
+  });
+}
+
+/* ---------- 2. DEPT. 00: the dump wall against the priced map ----------
+
+   Both panels are the SAME frozen page. The wall is the real
+   document.body.innerText of corpus/a/wikipedia_versailles.html, first 44
+   lines; the map rows are the real region lines out of
+   corpus/a/out/wikipedia_versailles.projection.txt, with their real prices.
+   Nothing here is illustrative. */
+
+var DUMP = ["Jump to content","Main menu","Search","Donate","Create account","Log in",
+  "Contents hide","(Top)","Background","Toggle Background subsection","Negotiations",
+  "Toggle Negotiations subsection","Treaty content and signing",
+  "Toggle Treaty content and signing subsection","Reactions","Toggle Reactions subsection",
+  "Implementation","Toggle Implementation subsection","Violations",
+  "Toggle Violations subsection","Historical assessments",
+  "Toggle Historical assessments subsection","See also","Notes","Toggle Notes subsection",
+  "Sources","Further reading","Toggle Further reading subsection","External links",
+  "Treaty of Versailles","121 languages","Article","Talk","Read","View source",
+  "View history","Tools","Appearance hide","Text","Small","Standard","Large","Width",
+  "Standard","Wide","Color","Automatic","Light","Dark"];
+/* line 49 onward: the article finally starts */
+var ARTICLE = ["From Wikipedia, the free encyclopedia",
+  "Not to be confused with Little Treaty of Versailles.",
+  "This article is about the Treaty of Versailles of 28 June 1919, at the end of World War I. For other uses, see",
+  "Treaty of Versailles",
+  "Treaty of Peace between the Allied and Associated Powers and Germany[n. 1]"];
+
+/* region ref, name, and the read's own price to expand it */
+var BEDS = [
+  ["r6",  "Contents",                    74],
+  ["r7",  "#content",                 18560],
+  ["r19", "First World War",            277],
+  ["r21", "Armistice",                  489],
+  ["r23", "Negotiations",               420],
+  ["r24", "French aims",                762],
+  ["r26", "American aims",              620],
+  ["r29", "Territorial changes",       1054],
+  ["r31", "Military restrictions",      726],
+  ["r32", "Reparations",                167],
+  ["r36", "Reactions",                 2812],
+  ["r37", "Britain",                    678]
+];
+var BASE = 4426;
+
+var wall = document.getElementById("dumpWall");
+var mapPanel = document.getElementById("mapPanel");
+var mapFig = document.getElementById("mapFig");
+var mapSay = document.getElementById("mapSay");
+var mapReset = document.getElementById("mapReset");
+var opened = {};
+
+function strings(){
+  var t = (window.KS4WEB_I18N && window.KS4WEB_I18N()) || {};
+  return {
+    more: t["demo.wallmore"] || "…780 more lines, all of them already paid for.",
+    idle: t["demo.cap"] || "open a bed and watch what it costs.",
+    one:  t["demo.say1"] || "one bed open. The rest of the page is still just a price on a list.",
+    many: t["demo.sayn"] || "beds open. Every one of them was priced before you paid for it."
+  };
+}
+
+function buildWall(){
+  if (!wall) return;
+  var s = strings();
+  var html = "";
+  for (var i = 0; i < DUMP.length; i++){
+    html += '<span class="chrome">' + DUMP[i] + "</span>\n";
+  }
+  for (var j = 0; j < ARTICLE.length; j++){
+    html += "<b>" + ARTICLE[j] + "</b>\n";
+  }
+  html += '<span class="more">' + s.more + "</span>";
+  wall.innerHTML = html;
+}
+
+function fmt(n){ return n.toLocaleString("en-US"); }
+
+function paint(){
+  var s = strings();
+  var total = BASE, count = 0, ref;
+  for (ref in opened){ if (opened[ref]){ total += opened[ref]; count++; } }
+  if (mapFig) mapFig.textContent = fmt(total);
+  if (mapSay){
+    mapSay.textContent = count === 0 ? s.idle
+      : (count === 1 ? "1 " + s.one : count + " " + s.many);
+  }
+}
+
+function buildMap(){
+  if (!mapPanel) return;
+  var idline = document.getElementById("mapId");
+  mapPanel.innerHTML = "";
+  if (idline) mapPanel.appendChild(idline);
+  BEDS.forEach(function(bed){
+    var b = document.createElement("button");
+    b.type = "button";
+    b.className = "bedrow";
+    b.setAttribute("aria-pressed", opened[bed[0]] ? "true" : "false");
+    var nm = document.createElement("span");
+    nm.className = "nm";
+    nm.textContent = bed[0] + " · " + bed[1];
+    var px = document.createElement("span");
+    px.className = "px";
+    px.textContent = "+" + fmt(bed[2]);
+    b.appendChild(nm);
+    b.appendChild(px);
+    b.addEventListener("click", function(){
+      if (opened[bed[0]]){ delete opened[bed[0]]; }
+      else { opened[bed[0]] = bed[2]; }
+      b.setAttribute("aria-pressed", opened[bed[0]] ? "true" : "false");
+      paint();
+    });
+    mapPanel.appendChild(b);
+  });
+  paint();
+}
+
+if (mapReset){
+  mapReset.addEventListener("click", function(){
+    opened = {};
+    buildMap();
+  });
+}
+
+window.KS4WEB_DEMO = function(){ buildWall(); buildMap(); };
+
+/* ---------- 3. seven languages ---------- */
+/*I18N-START*/
+var I18N = {
+en: {
+"pageTitle": "KitchenSink4Web: Everything plus the kitchen sink for the open web",
+"m.left": "<b>GARDEN DEPARTMENT</b> &middot; FINE INSTRUMENTS FOR BROWSING THE GREAT OUTDOORS",
+"m.catalog": "CATALOG № 41",
+"m.family": "FAMILY",
+"m.service": "SERVICE",
+"sw.lbl": "THE AISLES",
+"sw.here": "(you are here)",
+"sw.store": "The storefront",
+"hero.stamp": "A MAP,<br>NOT A DUMP",
+"hero.canhint": "tip the can",
+"hero.catno": "Model Context Protocol · Server for the Open Web",
+"hero.tagline": "Everything <em>plus</em> the kitchen sink for the open web: the browser MCP server that reads a whole page for the price of a paragraph.",
+"spec.dump": "Tokens, one page dumped",
+"spec.read": "Tokens, the same page read",
+"spec.lite": "Tools in the lite core",
+"spec.tools": "Tools in all",
+"spec.tests": "Tests",
+"btn.install": "Install the Sink",
+"btn.source": "Read the Source",
+"hero.invite": "↓ or see the difference first: what your assistant pays to read one page, there versus here",
+"no0": "DEPT. 00",
+"h2.demo": "Reading a page should not cost the whole conversation",
+"demo.lead": "Ask most browser tools to read a page and they dump everything they see into your assistant's memory: menus, footers, cookie banners, all of it, tens of thousands of tokens for a single article. Do that three times and your assistant starts forgetting what you told it this morning. This server reads differently. It hands back a map: what the page is, what is on it section by section, what each section costs to open, and what it would do next. A page that costs other tools a novel costs this one a paragraph. And nothing is swept under the rug: every read ends with an honest accounting of what was not read and why.",
+"demo.badtag": "EVERYTHING",
+"demo.badh": "What most of the aisle hands you",
+"demo.meter1": "Tokens spent on this page",
+"demo.badp": "Forty-nine lines of menus, language pickers and appearance settings before one word of the article. All of it is in your assistant's memory now, and none of it was the question.",
+"demo.wallmore": "…780 more lines, all of them already paid for.",
+"demo.goodtag": "PRICED",
+"demo.goodh": "What this catalog sells",
+"demo.meter2": "Tokens spent on this page",
+"demo.reset": "RESET ⟲",
+"demo.cap": "open a bed and watch what it costs.",
+"demo.say1": "bed open. The rest of the page is still just a price on a list.",
+"demo.sayn": "beds open. Every one of them was priced before you paid for it.",
+"demo.goodp": "The same page, as beds you can price before you dig. Each row is a real region of the real article with its real cost to expand, and the meter only moves when you open one. Keyboard works too: tab to a row and press it.",
+"demo.note": "Both panels are the same frozen copy of the Treaty of Versailles article, measured by a script that ships with the source. The dump figure is the cheapest of three ways to dump a page; the other two cost 64,596 and 691,486.",
+"no1": "DEPT. 01",
+"h2.tale": "Out of the box, it can look but not touch",
+"tale.label": "THE HOUSE RULE",
+"tale.p1": "A browser is where your logins, your money, and your mistakes all live. So this server starts in browsing mode: it reads, navigates, and scrolls, but the tools that click, type, and submit are not switched off somewhere, they simply do not exist until you flip one switch at install. No instruction on any webpage can talk your assistant into acting, because there is nothing to act with.",
+"tale.p2": "That is not a promise about good behavior. It is a fact about what is installed, and anyone can check it by reading the tool list. When you do want a hand filling forms or clicking through a flow, tick one box in the extension settings and everything unlocks, in the same conversation.",
+"tale.p3": "And it reads defensively either way. Text that a page hides from human eyes, the oldest trick for slipping instructions to an AI, is stripped, counted, and reported. Never obeyed.",
+"no2": "DEPT. 02",
+"h2.cmp": "Against the rest of the aisle",
+"cmp.lead": "Feature grids flatter everybody. Here it is instead as the requests an assistant actually gets:",
+"cmp.h1": "\"Hey, could you…\"",
+"cmp.h3": "The rest of the aisle",
+"cr1.q": "\"Read this article and tell me what actually matters.\"",
+"cr2.q": "\"Find the issue about the broken d-pad. There are 771 open ones.\"",
+"cr3.q": "\"Before you read that page: what will it cost me?\"",
+"cr4.q": "\"Fill in this form, but only because I said you could.\"",
+"cr5.q": "\"What did you NOT read on that page?\"",
+"cr6.q": "\"Click send, and prove to me what happened.\"",
+"cmp.note": "Build note, not shipping copy: the answer cells and the competitor survey behind them are not written yet. They are marked rather than guessed.",
+"no3": "DEPT. 03",
+"h2.eff": "The bill",
+"eff.lead": "Every MCP server draws on an assistant's memory before any work starts, and browser servers are the hungriest of all: one careless page read elsewhere can eat most of a conversation. This one starts small, reads by the map, and puts an exact price on every expansion before you pay it. Here is the bill, measured:",
+"bill.h1": "On the meter",
+"bill.h2": "Tools",
+"bill.h3": "Tokens",
+"bill.h4": "When it draws",
+"bill.r1": "Lite core",
+"bill.w1": "From the first message of every session",
+"bill.r2": "Every pack switched on",
+"bill.w2": "Only when the packs are chosen at launch",
+"bill.r3": "First read of one long article",
+"bill.w3": "Once, and it never exceeds the budget you set",
+"bill.r4": "The same read again, after one click",
+"bill.w4": "Every repeat read, priced on what changed",
+"bill.note": "The budget ladder has 16 rungs, and every read says which rung it printed at and what a deeper one would cost. The tool figures come from a measuring script that ships with the source; the page figures come from another, run against a frozen copy of the page, so you can check both yourself.",
+"no4": "DEPT. 04",
+"h2.install": "Planting it",
+"inst.b1": "Easiest",
+"inst.s1": "Claude Desktop",
+"inst.p1": "Claude Desktop: install the <code>.mcpb</code> bundle and pick what you want on the install screen. The checkboxes are the whole configuration: one to allow clicking and typing (off means read-only browsing, the shipped default), and one per capability pack. Launching the bundle requires <code>uv</code> (the <code>uvx</code> command) on your machine; the server itself is fetched from PyPI on first launch and drives its own bundled Chromium, never your browser or your profile.",
+"inst.b2": "One command",
+"inst.s2": "Any other MCP client",
+"inst.p2": "Packs and read-only mode are chosen at launch (<code>--packs</code>, <code>KS4WEB_MODE</code>, <code>KS4WEB_ALLOW_ACTING</code>) and are identical for every connection to the process.",
+"inst.tip": "<b>Tip for Claude Desktop:</b> in Tool permissions, set this server's <b>Read-only tools</b> group to <b>Always Allow</b>. Those tools cannot change anything on any page, and it stops most permission prompts.",
+"no5": "DEPT. 05",
+"h2.svc": "Service department",
+"maturity.h": "Young, and raised in a hard school",
+"maturity.p": "This is the newest fixture in the family, and it grew up under the house rules: every claim measured, every release attacked by adversarial rounds before it ships, every refusal honest about its reason. What it has not had yet is a long life in strangers' browsers. The safety net while it earns that: it starts read-only, it prices every read before taking it, and it tells you what it could not see. If the web is where you live, bring your strangest pages to the service counter and tell us what broke.",
+"svc.ticket": "NOW SERVING · TAKE A NUMBER · SAME DESK AS THE WORD, POWERPOINT, AND EXCEL SINKS",
+"svc1.t": "Found a wilted read?",
+"svc1.p": "A page that read wrong, a refusal that made no sense, an action that lied about its outcome. File a report at the repair counter: the form asks exactly what a fix needs. Never paste private page content; describe the shape of the page instead.",
+"svc1.g": "File a bug report →",
+"svc2.t": "Missing a trellis?",
+"svc2.p": "A browsing capability the sink should also have. Describe the real task behind it and it goes on the workbench.",
+"svc2.g": "Request a feature →",
+"svc3.t": "Commercial fitting?",
+"svc3.p": "Free for individuals and personal use, and it stays that way. If your company wants to build it into a product of its own, that needs a commercial license, with terms worked out case by case. This counter is where you start that conversation.",
+"svc3.g": "Arrange a license →",
+"g.t": "Engineered Not to Act on a Stranger's Instructions",
+"g.p1": "Hidden text is stripped and counted, never followed. Every action reports what actually happened, not just that a command was sent. The tools that change the world exist only when you have switched them on. And when something cannot be done, from a login wall to a bot check, you get a straight answer naming what stood in the way, instead of a guess dressed up as progress.",
+"no6": "DEPT. 06",
+"h2.fam": "The other aisles",
+"fam1.p": "The original fixture: everything plus the kitchen sink for Microsoft Word. 219 operations across 108 tools, live editing of open documents, citations, merge-aware table surgery, tracked changes, engineered not to corrupt.",
+"fam1.g": "Visit the plumbing aisle →",
+"fam2.p": "The decor aisle: everything plus the kitchen sink for Microsoft PowerPoint. 138 tools, diagrams that arrive as native shapes with connectors glued to them, so the box moves and the arrows follow.",
+"fam2.g": "Visit the decor aisle →",
+"fam3.p": "The electrical aisle: everything plus the kitchen sink for Microsoft Excel. 69 tools, and every number comes back labeled calculated, cached or absent, so an AI never reads out a total it cannot back up.",
+"fam3.g": "Visit the electrical aisle →",
+"fam4.t": "The storefront",
+"fam4.p": "The whole hardware store on one page: every KitchenSink server, its fixture, and its counter, plus a shelf or two that are not empty by accident.",
+"fam4.g": "Browse the store →",
+"f.left": "&copy; 2026 &middot; <b>AGPL-3.0</b>: free for individuals and personal use.<br>Companies building it into their own products need a commercial license; <a href='https://github.com/nometalalchemist/KitchenSink4Web/issues/new/choose'>open an issue</a> and we will talk it through.",
+"f.right": "<a href='https://github.com/nometalalchemist/KitchenSink4Web'>github.com/nometalalchemist/KitchenSink4Web</a> · <a href='https://github.com/nometalalchemist/KitchenSink4Web/issues/new/choose'>report a wilted read</a><br>Built on the KitchenSink4Word safety core, prototyped with Claude Code, and left out in the weather until it stopped flinching. Water before noon. 🪴",
+"f.affil": "Not affiliated with or endorsed by Google, Mozilla, Microsoft, or any website this server visits. Chrome, Chromium, Firefox, and Edge are trademarks of their respective owners, used nominatively to name the browsers this server can drive."
+}
+};
+/*I18N-END*/
+var LANGS = [["en","EN"],["ko","한국어"],["ja","日本語"],["zh","中文"],["de","DE"],["fr","FR"],["es","ES"]];
+var HTML_LANG = {en:"en", ko:"ko", ja:"ja", zh:"zh-CN", de:"de", fr:"fr", es:"es"};
+var CURRENT = "en";
+window.KS4WEB_I18N = function(){ return I18N[CURRENT] || I18N.en; };
+function apply(lang){
+  if (!I18N[lang]) lang = "en";
+  CURRENT = lang;
+  var t = I18N[lang];
+  document.documentElement.lang = HTML_LANG[lang];
+  if (t["pageTitle"]) document.title = t["pageTitle"];
+  var nodes = document.querySelectorAll("[data-i18n]");
+  for (var i = 0; i < nodes.length; i++){
+    var k = nodes[i].getAttribute("data-i18n");
+    if (t[k] !== undefined) nodes[i].innerHTML = t[k];
+  }
+  var tale = document.querySelector(".tale");
+  if (tale && t["tale.label"]) tale.setAttribute("data-label", t["tale.label"]);
+  var btns = document.querySelectorAll("#langToggle button");
+  for (var j = 0; j < btns.length; j++){
+    btns[j].setAttribute("aria-pressed", String(btns[j].getAttribute("data-lang") === lang));
+  }
+  /* the demo writes its own labels, so it re-renders in the new language */
+  if (window.KS4WEB_DEMO) window.KS4WEB_DEMO();
+  try { localStorage.setItem("ks4web-lang", lang); } catch(e){}
+}
+var nav = document.getElementById("langToggle");
+if (nav){
+  LANGS.forEach(function(pair, idx){
+    if (idx){ var s = document.createElement("span"); s.className = "sep"; s.textContent = "·"; nav.appendChild(s); }
+    var b = document.createElement("button");
+    b.type = "button";
+    b.setAttribute("data-lang", pair[0]);
+    b.setAttribute("aria-pressed", "false");
+    b.textContent = pair[1];
+    b.addEventListener("click", function(){ apply(pair[0]); });
+    nav.appendChild(b);
+  });
+}
+var saved = null;
+try { saved = localStorage.getItem("ks4web-lang"); } catch(e){}
+var lang = (saved && I18N[saved]) ? saved : null;
+if (!lang){
+  var pref = (navigator.languages && navigator.languages[0]) || navigator.language || "en";
+  var code = String(pref).toLowerCase().slice(0, 2);
+  lang = I18N[code] ? code : "en";
+}
+apply(lang);
+})();
+</script>
+
+</body>
+</html>
