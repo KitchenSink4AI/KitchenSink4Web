@@ -96,6 +96,30 @@
     return 0.2126 * f(c.r) + 0.7152 * f(c.g) + 0.0722 * f(c.b);
   }
 
+  // THE SHADOW BOUNDARY HOP, and it is security code rather than tidiness.
+  //
+  // The first child of a shadow root has `parentElement === null`, so a climb
+  // written with `.parentElement` STOPS at the boundary and reports "no hidden
+  // ancestor" for content sitting under a `display:none` host. The spike
+  // measured the counterfactual: three payloads (a display:none host, an
+  // opacity:0 host, and the act button under the first) rode out labelled
+  // visible on the naive climb and were correctly withheld once the climb
+  // hopped. Every ancestor walk in this file goes through `up()`.
+  function up(n) {
+    if (!n) return null;
+    if (n.parentElement) return n.parentElement;
+    const r = n.getRootNode && n.getRootNode();
+    return (r && r.host) ? r.host : null;
+  }
+  // An IDREF (aria-labelledby, aria-describedby) resolves inside the tree
+  // that holds it, so a shadow-borne label must be looked up in the shadow
+  // root rather than in the document, where it is not.
+  function byId(el, id) {
+    const r = el.getRootNode ? el.getRootNode() : document;
+    if (r && typeof r.getElementById === 'function') return r.getElementById(id);
+    return document.getElementById(id);
+  }
+
   // Hidden-content normalization. Every technique class DESIGN 5.1 names, and
   // the result is COUNTED rather than silently dropped or silently included.
   function hiddenReason(el, style) {
@@ -127,7 +151,7 @@
     // Hidden anywhere between an element and its region ancestor counts as
     // hidden, because that is how a display:none wrapper hides a heading that
     // is itself perfectly visible in its own computed style.
-    for (let n = el; n && n !== stopAt; n = n.parentElement) {
+    for (let n = el; n && n !== stopAt; n = up(n)) {
       if (hiddenReason(n, null)) return true;
     }
     return false;
@@ -137,7 +161,7 @@
     const fg = parseColor(style.color);
     if (!fg) return false;
     let node = el, bg = null;
-    for (let i = 0; node && i < 6; i++, node = node.parentElement) {
+    for (let i = 0; node && i < 6; i++, node = up(node)) {
       const c = parseColor(cs(node).backgroundColor);
       if (c && c.a > 0.1) { bg = c; break; }
     }
@@ -216,7 +240,7 @@
     const lb = el.getAttribute && el.getAttribute('aria-labelledby');
     if (lb) {
       const parts = lb.trim().split(/\s+/).map(id => {
-        const target = document.getElementById(id);
+        const target = byId(el, id);
         if (!target) return '';
         const own = target.getAttribute('aria-label');
         return squash(own) || contentName(target, 0, new Set());
@@ -321,7 +345,7 @@
       if (p.tagName === 'NAV' || NAV_ROLE.test(r)) break;
       if (p.tagName === 'LI') { out = { li: p }; break; }
       if (PROSE_ANCESTOR.has(p.tagName)) { out = 'prose'; break; }
-      p = p.parentElement;
+      p = up(p);
     }
     climbCache.set(start, out);
     return out;
@@ -376,7 +400,7 @@
       const label = squash(n.getAttribute('aria-label'))
         || squash(n.getAttribute('name'))
         || (n.getAttribute('aria-labelledby')
-            ? squash((document.getElementById(
+            ? squash((byId(n,
                 n.getAttribute('aria-labelledby').split(/\s+/)[0])
                 || {}).textContent)
             : '');
@@ -387,13 +411,13 @@
         out = { node: n, kind: kind, label: label };
       }
     }
-    if (out === null) out = landmarkFrom(n.parentElement);
+    if (out === null) out = landmarkFrom(up(n));
     lmCache.set(n, out);
     return out;
   }
 
   function landmarkOf(el) {
-    return landmarkFrom(el.parentElement);
+    return landmarkFrom(up(el));
   }
 
   const laCache = new Map();
@@ -408,17 +432,17 @@
     } else {
       const lb = n.getAttribute('aria-labelledby');
       if (lb) {
-        const t = document.getElementById(lb.split(/\s+/)[0]);
+        const t = byId(n, lb.split(/\s+/)[0]);
         if (t && squash(t.textContent)) out = { node: n, label: squash(t.textContent) };
       }
     }
-    if (out === null) out = labelledFrom(n.parentElement);
+    if (out === null) out = labelledFrom(up(n));
     laCache.set(n, out);
     return out;
   }
 
   function labelledAncestorOf(el, stopAt) {
-    const found = labelledFrom(el.parentElement);
+    const found = labelledFrom(up(el));
     // Memoization answers "nearest labelled ancestor anywhere above", so the
     // landmark boundary is applied here: a label found AT or ABOVE the
     // landmark is the landmark's own label, not a scoping refinement inside
@@ -502,6 +526,13 @@
   let injectionSuspects = 0, zeroWidthHits = 0;
   let openShadowRoots = 0, divTables = 0, deepestCut = 0;
   let elementCount = 0, textCharsTotal = 0;
+  // Open-shadow-root traversal (2026-09-06). Default ON: an off-by-default
+  // read is the blind read the field report rejected, and the measured
+  // regression on a page with no roots is zero because the added work is a
+  // `el.shadowRoot` test that is null on every element. `opts.shadow ===
+  // false` opts out, which is the escape hatch for a pathological page.
+  const SHADOW_ON = !(opts && opts.shadow === false);
+  let shadowRootsTraversed = 0, shadowElements = 0;
 
   // Refs resolve through a map on `window`, never through an attribute we
   // write onto the page. KS4Web reads pages; a projection that mutated the
@@ -676,16 +707,42 @@
     return null;
   }
 
+  // Counting a shadow root is NOT the same job as walking into it, and
+  // conflating them was a real defect: `openShadowRoots++` used to ride
+  // inside the body of `walk()`, which returns early on a hidden subtree, so
+  // a host under a `display:none` ancestor was never counted. The injection
+  // fixture reported 5 open roots on a page with 7. The count now happens
+  // before any early return, and a subtree the walk SKIPS still has its roots
+  // tallied here, because "what I did not look at" is exactly the number the
+  // completeness block exists to state.
+  // Counts roots strictly BELOW `node`, in the light tree and through every
+  // open root it finds. `node` itself is counted by the caller, before any
+  // early return, so a host is never double counted.
+  function countRootsUnder(node, kids) {
+    for (const k of (kids || node.querySelectorAll('*'))) {
+      if (k.shadowRoot) { openShadowRoots++; countRootsUnder(k.shadowRoot); }
+    }
+  }
+
   function walk(el, depth) {
     elementCount++;
-    if (depth > 400) { deepestCut++; return; }  // pathological nesting, reported
+    if (el.shadowRoot) openShadowRoots++;
+    if (depth > 400) {                          // pathological nesting, reported
+      deepestCut++;
+      countRootsUnder(el);
+      if (el.shadowRoot) countRootsUnder(el.shadowRoot);
+      return;
+    }
     const style = cs(el);
     const hr = hiddenReason(el, style);
     if (hr) {
       // The whole subtree is accounted for HERE and the walk stops, which is
       // what keeps the normalizer linear: counting a hidden subtree at every
       // level of itself is the O(n^2) version of the same answer.
-      const n = 1 + el.querySelectorAll('*').length;
+      const kids = el.querySelectorAll('*');
+      const n = 1 + kids.length;
+      countRootsUnder(el, kids);
+      if (el.shadowRoot) countRootsUnder(el.shadowRoot);
       hiddenNodes += n;
       hiddenReasons[hr] = (hiddenReasons[hr] || 0) + n;
       hiddenInteractive += el.querySelectorAll(INTERACTIVE_SEL).length
@@ -947,7 +1004,7 @@
               // are the same for every link. On a link-heavy page the links
               // share ancestors, so this turns 8 getAttribute calls per link
               // into 8 per distinct container.
-              const found = climbFrom(el.parentElement);
+              const found = climbFrom(up(el));
               if (found === 'prose') {
                 inProse = true;
               } else if (found && found.li) {
@@ -1110,11 +1167,36 @@
       }
       const r2 = el.getAttribute('role');
       if (r2 && /^(table|grid|treegrid)$/.test(r2.trim())) divTables++;
-      if (el.shadowRoot) openShadowRoots++;
     }
 
     for (let child = el.firstElementChild; child; child = child.nextElementSibling) {
       walk(child, depth + 1);
+    }
+    // OPEN-SHADOW-ROOT DESCENT, and the placement is the whole design.
+    //
+    // It sits INSIDE the host's own walk, after `hiddenReason()` has already
+    // returned for the host. A hidden host therefore never gets here: its
+    // shadow payload is accounted in the hidden ledger and cannot enter the
+    // projection. Sitting here also means the depth cut, the region stack,
+    // the ref minting, and the budget accounting all apply to shadow content
+    // unchanged, rather than being re-derived by a second pass.
+    //
+    // `<slot>` assigned nodes are NOT followed: an assigned node is still a
+    // light child of the host and the loop above already has it, so following
+    // the slot would count it twice. The price is ORDER, since a shadow tree
+    // can render its slotted children in any sequence and this walk reports
+    // source order. That caveat is stated in the completeness block rather
+    // than left silent. A slot's own FALLBACK children are walked, and are
+    // not double counted because they only render when nothing is assigned.
+    if (SHADOW_ON && el.shadowRoot) {
+      shadowRootsTraversed++;
+      shadowElements += el.shadowRoot.querySelectorAll('*').length;
+      for (let child = el.shadowRoot.firstElementChild; child;
+           child = child.nextElementSibling) {
+        walk(child, depth + 1);
+      }
+    } else if (el.shadowRoot) {
+      countRootsUnder(el.shadowRoot);   // opted out: still counted, not read
     }
     if (pushed) regionStack.pop();
   }
@@ -1347,6 +1429,8 @@
       frames_same: frames.filter(f => f.same_origin).length,
       frames_cross: frames.filter(f => !f.same_origin).length,
       open_shadow_roots: openShadowRoots,
+      shadow_roots_traversed: shadowRootsTraversed,
+      shadow_traversal: SHADOW_ON,
       closed_shadow_roots: (window.__ks4web_closed_shadow || 0),
       virtual: virtualContainers, canvases: canvases,
       hidden_interactive: hiddenInteractive, hidden_nodes: hiddenNodes,
@@ -1354,9 +1438,12 @@
       injection_suspects: injectionSuspects, zero_width_hits: zeroWidthHits,
       name_fallbacks: nameFallbacks,
       scope: scopeRef,
+      // Shadow content is part of the document the walk covered, so it is
+      // part of the denominator too. Without this a traversing read reports
+      // more elements walked than the page is said to have.
       total_elements: (scopeRoot
         ? scopeRoot.getElementsByTagName('*').length + 1
-        : document.getElementsByTagName('*').length),
+        : document.getElementsByTagName('*').length) + shadowElements,
       walked_elements: elementCount,
       text_chars: textCharsTotal,
       doc_height: docH, viewport_height: vpH,

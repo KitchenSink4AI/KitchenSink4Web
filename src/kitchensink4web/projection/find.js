@@ -18,12 +18,51 @@
 // a found element gets a ref from the same sticky map and is immediately
 // actionable. DESIGN 3.5: there is no operation whose only purpose is to
 // unlock other operations.
+//
+// The search reaches into OPEN shadow roots (2026-09-06). Closed roots stay
+// unreachable and are counted at creation instead. XPath is the exception and
+// searches the light DOM only.
 (opts) => {
   const query = opts.query || '';
   const kind = opts.kind || 'auto';
   const wantRole = (opts.role || '').toLowerCase() || null;
   const limit = Math.max(1, Math.min(200, opts.limit || 20));
   const t0 = performance.now();
+  const SHADOW_ON = !(opts && opts.shadow === false);
+
+  // ONE document-wide sweep, and it is the SAME sweep this pass already ran.
+  //
+  // Before traversal, `find.js` swept `document.querySelectorAll('*')` at the
+  // very end purely to count open roots and iframes for the `not_searched`
+  // block. The traversal needs exactly that sweep to discover roots, so the
+  // two are merged rather than run twice: on a page with no shadow roots the
+  // work is byte-for-byte what it always was, which is why the regression on
+  // the shadow-free fixture is zero rather than the +2.8 ms the prototype
+  // measured with a second sweep bolted on.
+  //
+  // Roots come back in host order, depth first, so a match inside a root is
+  // reported right after the light-DOM matches of the tree that holds it.
+  const openRoots = [];
+  let frames = 0;
+  (function sweep(root) {
+    for (const el of root.querySelectorAll('*')) {
+      if (el.tagName === 'IFRAME') frames++;
+      if (el.shadowRoot) {
+        openRoots.push(el.shadowRoot);
+        sweep(el.shadowRoot);
+      }
+    }
+  })(document);
+  const openShadow = openRoots.length;
+  const searchedRoots = SHADOW_ON ? openRoots : [];
+
+  function queryAll(sel) {
+    const out = Array.from(document.querySelectorAll(sel));
+    for (const root of searchedRoots) {
+      for (const el of root.querySelectorAll(sel)) out.push(el);
+    }
+    return out;
+  }
 
   const squash = (s) => (typeof s === 'string' ? s : '').replace(/\s+/g, ' ').trim();
   function clip(s, n) {
@@ -40,8 +79,25 @@
     if (v === undefined) { v = getComputedStyle(el); styleCache.set(el, v); }
     return v;
   }
+  // THE SHADOW BOUNDARY HOP. The first child of a shadow root has
+  // `parentElement === null`, so a `.parentElement` climb finds no hidden
+  // ancestor for content under a `display:none` host and passes it through
+  // the visible filter. The spike measured three payloads leaking that way.
+  // This is security code, not tidiness, and it runs whether or not the
+  // search traverses: a ref minted elsewhere can still be handed to a climb.
+  function up(n) {
+    if (!n) return null;
+    if (n.parentElement) return n.parentElement;
+    const r = n.getRootNode && n.getRootNode();
+    return (r && r.host) ? r.host : null;
+  }
+  function byId(el, id) {
+    const r = el.getRootNode ? el.getRootNode() : document;
+    if (r && typeof r.getElementById === 'function') return r.getElementById(id);
+    return document.getElementById(id);
+  }
   function hiddenAnywhere(el) {
-    for (let n = el; n && n !== document.documentElement; n = n.parentElement) {
+    for (let n = el; n && n !== document.documentElement; n = up(n)) {
       if (n.getAttribute && n.getAttribute('aria-hidden') === 'true') return true;
       if (n.hasAttribute && n.hasAttribute('hidden')) return true;
       const s = cs(n);
@@ -83,7 +139,7 @@
     if (al) return al;
     const lb = el.getAttribute && el.getAttribute('aria-labelledby');
     if (lb) {
-      const t = document.getElementById(lb.trim().split(/\s+/)[0]);
+      const t = byId(el, lb.trim().split(/\s+/)[0]);
       if (t) { const s = squash(t.textContent); if (s) return s; }
     }
     try {
@@ -114,7 +170,7 @@
     'contentinfo', 'form', 'region', 'search', 'dialog', 'alertdialog',
     'tablist']);
   function landmarkOf(el) {
-    for (let n = el.parentElement; n; n = n.parentElement) {
+    for (let n = up(el); n; n = up(n)) {
       const explicit = (n.getAttribute('role') || '').trim().split(/\s+/)[0];
       const k = (explicit && LM_ROLE.has(explicit)) ? explicit : LM_TAG[n.tagName];
       if (!k) continue;
@@ -126,7 +182,7 @@
     return { node: document.body, kind: 'document', label: '' };
   }
   function labelledAncestorOf(el, stopAt) {
-    for (let n = el.parentElement; n && n !== stopAt; n = n.parentElement) {
+    for (let n = up(el); n && n !== stopAt; n = up(n)) {
       const al = squash(n.getAttribute('aria-label'));
       if (al) return al;
     }
@@ -161,8 +217,13 @@
   let candidates = [], how = kind, selectorError = null;
   try {
     if (kind === 'css') {
-      candidates = Array.from(document.querySelectorAll(query));
+      candidates = queryAll(query);
     } else if (kind === 'xpath') {
+      // XPath is the one selector that does NOT reach shadow content:
+      // `document.evaluate` has no defined behaviour across a shadow
+      // boundary, and faking it per root would give expressions like
+      // `//body//button` a meaning they do not have. The docstring says so
+      // rather than the search quietly answering a smaller question.
       const it = document.evaluate(query, document, null,
         XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
       for (let i = 0; i < it.snapshotLength; i++) candidates.push(it.snapshotItem(i));
@@ -171,8 +232,7 @@
       // `auto` and `text` both search the interactive surface first, because
       // a found element that cannot be acted on is the operation this design
       // says should not exist. `any` widens to every element with text.
-      candidates = Array.from(document.querySelectorAll(
-        kind === 'any' ? '*' : INTERACTIVE_SEL));
+      candidates = queryAll(kind === 'any' ? '*' : INTERACTIVE_SEL);
       how = kind === 'any' ? 'any element' : 'interactive elements';
     }
   } catch (e) {
@@ -244,12 +304,7 @@
     near.length = Math.min(near.length, 6);
   }
 
-  let closedShadow = window.__ks4web_closed_shadow || 0;
-  let openShadow = 0, frames = 0;
-  for (const el of document.querySelectorAll('*')) {
-    if (el.shadowRoot) openShadow++;
-    if (el.tagName === 'IFRAME') frames++;
-  }
+  const closedShadow = window.__ks4web_closed_shadow || 0;
 
   return {
     query: query, kind: kind, searched: how,
@@ -262,6 +317,7 @@
     nearest_misses: near,
     not_searched: {
       open_shadow_roots: openShadow,
+      shadow_roots_searched: searchedRoots.length,
       closed_shadow_roots: closedShadow,
       iframes: frames
     },

@@ -68,11 +68,12 @@ async def extract(page, root: str | None = None) -> dict:
 
 
 async def find(page, query: str, kind: str = "auto", limit: int = 20,
-               root: str | None = None, role: str | None = None) -> dict:
+               root: str | None = None, role: str | None = None,
+               shadow: bool = True) -> dict:
     """The targeted follow-up pass, uncapped in what it searches."""
     return await page.evaluate(
         FIND_JS, {"query": query, "kind": kind, "limit": limit, "root": root,
-                  "role": role})
+                  "role": role, "shadow": shadow})
 
 
 async def read_text(page, root: str | None = None, start_index: int = 0,

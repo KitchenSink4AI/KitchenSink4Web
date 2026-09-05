@@ -10,12 +10,27 @@
 // decides them, from the readable host rather than from document order. S1's
 // version took the first paragraph over eighty characters anywhere in the
 // document, which on CNN returned a DRM error string as the site's headline.
+//
+// It descends into OPEN shadow roots, the same as `get_page_view` and in the
+// same change, because the alternative was a page view that sees a component's
+// text and a prose read that does not. Two tools disagreeing about what is on
+// the page is worse than either answer on its own.
 (opts) => {
   const startIndex = Math.max(0, opts.start_index || 0);
   const maxChars = Math.max(200, Math.min(200000, opts.max_chars || 20000));
   const includeHidden = !!opts.include_hidden;
+  const SHADOW_ON = !(opts && opts.shadow === false);
 
   const squash = (s) => (typeof s === 'string' ? s : '').replace(/\s+/g, ' ').trim();
+  // The shadow boundary hop, for the same reason the extractor has one: the
+  // top child of a shadow root has no parentElement, so a climb written on
+  // parentElement alone stops at the boundary and reads the wrong background.
+  function up(n) {
+    if (!n) return null;
+    if (n.parentElement) return n.parentElement;
+    const r = n.getRootNode && n.getRootNode();
+    return (r && r.host) ? r.host : null;
+  }
   const styleCache = new Map();
   function cs(el) {
     let v = styleCache.get(el);
@@ -41,7 +56,7 @@
     const fg = parseColor(s.color);
     if (!fg) return false;
     let node = el, bg = null;
-    for (let i = 0; node && i < 6; i++, node = node.parentElement) {
+    for (let i = 0; node && i < 6; i++, node = up(node)) {
       const c = parseColor(cs(node).backgroundColor);
       if (c && c.a > 0.1) { bg = c; break; }
     }
@@ -119,7 +134,7 @@
   const hiddenReasons = {};
   const hiddenSections = [];
   let hiddenBlocks = 0, hiddenChars = 0, injectionSuspects = 0;
-  let zeroWidth = 0;
+  let zeroWidth = 0, shadowRootsRead = 0;
   const ZERO_WIDTH = /[​-‏‪-‮⁠-⁤﻿]/g;
   const HIDDEN_SECTION_CAP = 2000;      // per section
   const HIDDEN_TOTAL_CAP = 20000;       // per read
@@ -171,6 +186,18 @@
     for (let child = el.firstElementChild; child; child = child.nextElementSibling) {
       walk(child);
     }
+    // The descent sits after the hidden check above has already returned for
+    // a hidden host, so shadow prose under a display:none component is
+    // counted in the hidden ledger and never printed as text. Slot-assigned
+    // nodes are not followed: they are light children the loop above already
+    // read, and following them would print the same sentence twice.
+    if (SHADOW_ON && el.shadowRoot) {
+      shadowRootsRead++;
+      for (let child = el.shadowRoot.firstElementChild; child;
+           child = child.nextElementSibling) {
+        walk(child);
+      }
+    }
   })(root);
 
   // One string, then a window over it, so `start_index` means the same thing
@@ -190,6 +217,8 @@
     total_chars: full.length,
     returned_chars: slice.length,
     blocks: blocks.length,
+    shadow_roots_read: shadowRootsRead,
+    closed_shadow_roots: (window.__ks4web_closed_shadow || 0),
     hidden: {
       blocks: hiddenBlocks, chars: hiddenChars, reasons: hiddenReasons,
       injection_suspects: injectionSuspects, zero_width_blocks: zeroWidth,

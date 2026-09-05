@@ -521,13 +521,28 @@ class Renderer:
         else:
             lines.append("iframes: none")
 
-        # The two-layer phrasing, kept verbatim on evidence: a blind agent
-        # singled this line out as the most useful in the whole document,
-        # because it separates "I did not look" from "no one can look" where
-        # most tools collapse both into a confident zero.
+        # The two-layer phrasing, kept on evidence: a blind agent singled this
+        # line out as the most useful in the whole document, because it
+        # separates "I did not look" from "no one can look" where most tools
+        # collapse both into a confident zero. The traversal build changed
+        # which layer the open roots sit in, not the shape of the sentence.
+        # `traversed=no` survives for two cases that are still real: a read
+        # that opted out, and a host the walk never reached because it sits
+        # under hidden content, whose roots are counted here all the same.
+        traversed = c.get("shadow_roots_traversed")
         lines.append(
-            f'shadow roots: {c["open_shadow_roots"]} open (traversed=no), '
-            f'{c["closed_shadow_roots"]} closed (unreachable by any tool)')
+            f'shadow roots: {c["open_shadow_roots"]} open '
+            + (f'(traversed=yes, {traversed} read)' if traversed
+               else '(traversed=no)')
+            + f', {c["closed_shadow_roots"]} closed (unreachable by any tool)')
+        if traversed:
+            # The fidelity caveat, printed only where it can bite. A shadow
+            # tree can render its slotted children in any order it likes and
+            # this walk reports source order, so on a component that reorders
+            # its slots the sequence above is not the reading sequence.
+            lines.append(
+                '   shadow content is reported in source order; a component '
+                'that reorders its slots is read out of rendered order')
 
         if c["virtual"]:
             for v in c["virtual"][:4]:
