@@ -326,8 +326,10 @@ def gate_docstring_measure():
          largest_schema_tokens=largest_schema,
          note="budgets are SOFT (author ruling); the honest number is "
               "published, never trimmed into. The 1,500 lite figure and the "
-              "250 schema ceiling are advisory. The action tools' docstrings "
-              "were written in Phase 0 and unchanged, so the bill did not grow.")
+              "250 schema ceiling are advisory. The Phase 0 action tools' "
+              "docstrings are unchanged; the lite bill grew on 2026-09-06 "
+              "when find_and_act joined the core, and the number above is "
+              "what it grew to.")
 
 
 async def main() -> int:
