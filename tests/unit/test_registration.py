@@ -230,3 +230,21 @@ def test_get_workflows_carries_the_pack_menu_and_the_lane_menu(launch):
                for entry in flows["packs"].values())
     assert any("moz-firefox" in line for line in flows["lanes"])
     assert "no runtime enable call" in flows["packs-are-launch-time"]
+
+
+def test_get_workflows_carries_the_steering_topics(launch):
+    """U12 from the 2026-09-05 field log: the tester wrote up the patterns
+    he arrived at over ~130 calls, and they are get_workflows topics. Each
+    one has to be retrievable BY NAME, since that is how an agent reaches a
+    topic it was pointed at."""
+    launch()
+    flows = _call("get_workflows", {}).structured_content["workflows"]
+    for topic in ("reading", "budgeting", "troubleshooting"):
+        assert topic in flows, f"steering topic {topic} is missing"
+        assert flows[topic], f"steering topic {topic} is empty"
+        one = _call("get_workflows", {"topic": topic})
+        assert one.is_error is False
+        assert one.structured_content["topic"] == topic
+    assert any("since=" in line for line in flows["reading"])
+    assert any("budget_tokens" in line for line in flows["budgeting"])
+    assert any("moz-firefox" in line for line in flows["troubleshooting"])
