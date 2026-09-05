@@ -2452,7 +2452,7 @@ the renderer, which is the same flake the shadow wave recorded. Report:
 
 ## 2026-09-06 07:55 KST - Phase 9B (the rulings, and the comparison table)
 
-Master `7eb1331` -> `bad04e2`, six commits, suite **595 -> 598 green in both
+Master `7eb1331` -> `d2c6650`, seven commits, suite **595 -> 598 green in both
 orders**. Still nothing pushed.
 
 **The one wrong sentence is gone.** "Two independent field logs" was not true
