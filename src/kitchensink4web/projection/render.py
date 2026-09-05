@@ -324,7 +324,11 @@ class Renderer:
             affs, self.rung.quotas,
             self.d.get("affordance_class_totals"))
         marks = ranker.disambiguate(self.selected)
+        prose_included = self.rung.quotas.get("prose_link", 0) > 0
         lines = [self.head(
+            "AFFORDANCES (per-class quotas: navigation first, form controls "
+            "complete, in-prose links included at the caller's request)"
+            if prose_included else
             "AFFORDANCES (per-class quotas: navigation first, form controls "
             "complete, in-prose links suppressed by design)")]
         for aff in self.selected:
@@ -750,18 +754,31 @@ class Renderer:
 
 
 def project(data: dict, meta: dict, budget: int = 5000,
-            view: str = "auto") -> Projection:
+            view: str = "auto", mode: str = "auto") -> Projection:
     """Run the ladder and return the richest projection that fits the budget.
 
     The budget is enforced against the meter's ESTIMATE with a 10 percent
     safety margin held back, so "a page view never exceeds its budget" is a
-    checkable property rather than a slogan."""
+    checkable property rather than a slogan.
+
+    `mode="links"` lifts the prose-link quota of zero (field request: the
+    suppressed in-prose links forced a find_elements round-trip when the
+    caller KNEW it needed a link mentioned in the body). The cost is real
+    and the ladder charges it honestly: on a link-heavy page the projection
+    lands on a lower rung or needs a bigger budget, which is the stated
+    price of asking for everything."""
     meter = BudgetMeter(budget)
     _calibrate(data, meter, view)
+    rungs = RUNGS
+    if mode == "links":
+        from dataclasses import replace as _replace
+        rungs = tuple(
+            _replace(r, quotas={**r.quotas, "prose_link": 100000})
+            for r in RUNGS)
     trace: list[dict] = []
     chosen: Projection | None = None
     previous = None
-    for rung in RUNGS:
+    for rung in rungs:
         text, tokens = _render_to_fixpoint(data, meta, meter, rung, view)
         # A rung that costs MORE than the rung above it is dominated: the
         # richer projection is also the smaller one, so there is never a

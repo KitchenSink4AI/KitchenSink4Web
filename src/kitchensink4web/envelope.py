@@ -144,7 +144,7 @@ HINTS: dict[str, str] = {
     "AUTH_REQUIRED": (
         "the page needs a signed-in session; use load_auth_state with a "
         "previously saved state file, or hand off to the human in a headed "
-        "window"
+        "window. get_workflows(topic='auth') has the four-step recipe"
     ),
     "CREDENTIAL_REFUSED": (
         "secret fields are never read or written through the model. Hand "

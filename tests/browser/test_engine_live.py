@@ -292,14 +292,24 @@ def test_manage_session_status_reports_the_hygiene_state(session_factory):
     run(go())
 
 
-def test_a_headless_handoff_refuses_and_names_the_flag(session_factory):
+def test_a_headless_handoff_auto_upgrades_to_headed(session_factory):
+    """Phase 7 field ruling: the intent of a handoff is a window a human
+    can see, so a headless session upgrades to a headed one instead of
+    refusing (the old BadParams naming '+headed' was a predictable
+    round-trip). The old session closes, the new one is headed, and the
+    response says exactly what moved."""
     async def go():
         session = await session_factory()
-        with pytest.raises(BadParams) as caught:
-            await lite.manage_session(action="handoff",
-                                      session=session.session_id,
-                                      reason="a login")
-        assert "+headed" in str(caught.value)
+        old_id = session.session_id
+        res = await lite.manage_session(action="handoff",
+                                        session=old_id,
+                                        reason="a login")
+        assert res.get("upgraded") and old_id in res["upgraded"]
+        new_id = res["session"]
+        assert new_id != old_id
+        assert old_id not in lite.MANAGER.sessions
+        assert lite.MANAGER.session(new_id).spec.headless is False
+        await lite.manage_session(action="close", session=new_id)
 
     run(go())
 

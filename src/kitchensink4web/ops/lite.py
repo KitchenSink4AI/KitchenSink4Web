@@ -47,7 +47,8 @@ from . import act as _act
 from ..engine import lanes, session as _session
 from ..errors import (AmbiguousLocation, AuthRequired, BadParams,
                       BlockedBySite, LaneUnsupported, ModalBlocked,
-                      NotImplementedYet, StaleAnchor, TargetNotFound)
+                      NotImplementedYet, ReadOnlyMode, StaleAnchor,
+                      TargetNotFound)
 from ..policy import audit as _audit
 from ..policy import budgets as _budgets
 from ..policy import credentials as _credentials
@@ -259,6 +260,7 @@ async def get_page_view(
     cursor: str | None = None,
     since: str | None = None,
     include_hidden: bool = False,
+    mode: str = "auto",
 ) -> dict:
     """Read a page as an ORIENTATION, not a transcript, under a token budget
     it never exceeds whatever the page size. Returns identity, landmark
@@ -267,6 +269,8 @@ async def get_page_view(
     inventories, an account of what was NOT read and why, and the next call
     for anything unexpanded. `location` scopes to one region or frame,
     `since` gives a delta, `budget_tokens=2500` suits a subagent.
+    `mode='links'` includes in-prose links in the affordance list (normally
+    suppressed by design) at their real token cost.
     """
     if cursor:
         _stub("get_page_view(cursor=...)",
@@ -293,6 +297,13 @@ async def get_page_view(
         raise BadParams(
             f"unknown detail {detail!r}; the levels are "
             f"{sorted(_DETAIL_SCALE)}.")
+    mode = (mode or "auto").strip().lower().replace("-", "_")
+    if mode in ("all_affordances", "all", "prose_links"):
+        mode = "links"
+    if mode not in ("auto", "links"):
+        raise BadParams(
+            f"unknown mode {mode!r}: 'auto' (the default) or 'links' "
+            f"(include in-prose links in the affordance list, at cost).")
     sess, record = MANAGER.locate(page)
     _audit.annotate(session=sess.session_id, page=record.handle,
                     url=record.page.url, lane=sess.spec.label)
@@ -328,7 +339,7 @@ async def get_page_view(
             f"than a delta. Ask for the delta at the same scope, or read "
             f"without `since` to re-baseline.")
     result = await read_page(record.page, meta, budget=budget, view=view,
-                             root=root, absorb=absorb)
+                             root=root, absorb=absorb, mode=mode)
     if isinstance(result, dict) and result.get("error"):
         raise TargetNotFound(
             f'location named {result["asked_for"]!r} and that ref is not on '
@@ -409,29 +420,37 @@ async def find_elements(
     kind: str = "auto",
     limit: int = 20,
     location: dict | None = None,
+    role: str | None = None,
 ) -> dict:
     """Find elements by text, role plus accessible name, natural-language
     description, CSS, or XPath, and get back refs you can act on plus a note
-    on what was not searched. This is the cheap targeted follow-up that
-    pairs with get_page_view: the page view tells you what string to look
-    for, and this retrieves it for a fraction of a full read. Ambiguous
-    results are listed rather than resolved, and zero results come back with
-    the nearest misses so a miss is a one-turn recovery.
+    on what was not searched. `role='button'` narrows any query to one
+    element role (field finding: 'Comment' alone matched 12; with the role
+    filter it matches the one button). This is the cheap targeted follow-up
+    that pairs with get_page_view: the page view tells you what string to
+    look for, and this retrieves it for a fraction of a full read.
+    Ambiguous results are listed rather than resolved, and zero results
+    come back with the nearest misses so a miss is a one-turn recovery.
     """
     kinds = ("auto", "text", "any", "css", "xpath")
     if kind not in kinds:
-        raise BadParams(f"unknown kind {kind!r}; the kinds are {list(kinds)}.")
-    if not (query or "").strip() and kind not in ("css", "xpath"):
+        raise BadParams(f"unknown kind {kind!r}; the kinds are {list(kinds)}."
+                        + (" To search BY role, keep kind and pass "
+                           "role='...' alongside the query."
+                           if kind == "role" else ""))
+    if not (query or "").strip() and kind not in ("css", "xpath") \
+            and not (role or "").strip():
         raise BadParams(
-            "find_elements needs a query. This is the cheap targeted "
-            "follow-up to get_page_view: read the page first, then search "
-            "for the string that read told you about.")
+            "find_elements needs a query (or a role filter). This is the "
+            "cheap targeted follow-up to get_page_view: read the page "
+            "first, then search for the string that read told you about.")
     sess, record = MANAGER.locate(page)
     _audit.annotate(session=sess.session_id, page=record.handle,
                     url=record.page.url, lane=sess.spec.label)
     record.touch(record.page.url)
     root = _scope_root(sess, record, location)
-    found = await _find(record.page, query, kind=kind, limit=limit, root=root)
+    found = await _find(record.page, query, kind=kind, limit=limit, root=root,
+                        role=(role or "").strip().lower() or None)
     if found.get("selector_error"):
         raise BadParams(
             f'{kind} selector {query!r} did not parse: '
@@ -454,7 +473,9 @@ async def find_elements(
                             scope="find")
 
     lines = [f'{len(found["matches"])} of {found["total_matches"]} match(es) '
-             f'for {query!r} ({found["searched"]}, '
+             f'for {query!r}'
+             + (f' with role={role!r}' if role else '')
+             + f' ({found["searched"]}, '
              f'{found["candidates_scanned"]:,} candidates scanned)']
     for m in found["matches"]:
         bits = [m["ref"], m["role"], f'"{m["name"] or "(unnamed)"}"']
@@ -503,9 +524,12 @@ async def get_text(
     """Extract readable prose from a page or one region of it, paginated by
     `start_index` so a long article is read in bounded pieces rather than
     one unbounded dump. Text arrives as labeled data with its origin stated,
-    hidden regions are stripped and counted rather than silently dropped or
-    silently included, and the result carries refs so anything mentioned in
-    the prose can still be acted on without a second read.
+    and hidden regions are stripped and counted rather than silently dropped
+    or silently included. Hidden content IS retrievable, deliberately:
+    include_hidden=true returns it in a separately labeled section with the
+    hiding technique named per block. There is no silent middle tier,
+    because display:none is a real injection channel; the labeled route is
+    the whole design.
     """
     if include_hidden and not _policy.hidden_content_allowed():
         raise BadParams(
@@ -577,19 +601,38 @@ async def get_text(
 
 
 async def navigate(
-    page: str,
+    page: str | None = None,
     action: str = "goto",
     url: str | None = None,
     wait_until: str = "load",
     timeout_ms: int = 30000,
 ) -> dict:
     """Go to a URL, or go back, forward, reload, or stop, and wait for the
-    load state you name. Returns the final identity after redirects, the
-    HTTP status, a robots.txt advisory, and a verdict on whether the
-    destination is a bot wall, a CAPTCHA interstitial, or a login wall, so a
-    blocked request is reported as blocked instead of surfacing as a timeout
-    or an empty page that invites a retry loop.
+    load state you name. Can be the FIRST call: with no `page`, navigate
+    opens a browser session itself (bundled Chromium, headless) or uses the
+    one already open, and returns the minted session and page handles.
+    Returns the final identity after redirects, the HTTP status, a
+    robots.txt advisory, and a verdict on whether the destination is a bot
+    wall, a CAPTCHA interstitial, or a login wall, so a blocked request is
+    reported as blocked instead of surfacing as a timeout or an empty page
+    that invites a retry loop.
     """
+    auto_session = None
+    if page is None:
+        # The manage_session round-trip is optional (Phase 7 release
+        # condition 2): the first navigate creates the session, killing the
+        # extra permission prompt a mandatory open cost every conversation.
+        # manage_session remains the explicit route for lanes, headed
+        # windows, and multi-session work; with SEVERAL sessions open the
+        # server refuses to guess which one you meant.
+        if not MANAGER.sessions:
+            opened = await MANAGER.open()
+            auto_session = (
+                f"no session was open, so navigate opened one: "
+                f"{opened.session_id} ({opened.spec.label}, headless). Use "
+                f"manage_session(action='open', lane=...) instead when you "
+                f"need a headed window or a different browser.")
+        page = MANAGER.session(None).focused
     sess, record = MANAGER.locate(page)
     _audit.annotate(session=sess.session_id, page=record.handle,
                     url=record.page.url, lane=sess.spec.label)
@@ -605,6 +648,8 @@ async def navigate(
         raise BadParams(
             "navigate(action='goto') needs a url. The other actions are "
             "'back', 'forward', 'reload', 'stop', and 'wait_for_load'.")
+    if action == "goto":
+        url = _validated_url(url)
     if action in ("goto", "back", "forward", "reload"):
         # The policy choke point (DESIGN Phase 3): read-only grade limits,
         # the deny-first origin policy, 429 backoff, loop detection, and the
@@ -714,6 +759,7 @@ async def navigate(
     return {
         "session": sess.session_id, "page": record.handle,
         "lane": sess.spec.lane,
+        **({"auto_session": auto_session} if auto_session else {}),
         "changed": {"effect": "navigated" if record.page.url != before
                     else "same-url", "from": before, "to": record.page.url},
         "url": record.page.url, "status": status,
@@ -727,15 +773,52 @@ async def navigate(
     }
 
 
+def _validated_url(url: str | None) -> str:
+    """A malformed URL refuses BAD_PARAMS with the fix named, before the
+    driver can turn it into a raw Playwright error (field finding: the
+    navigate report asked for exactly this)."""
+    text = (url or "").strip()
+    parsed = urlparse(text)
+    if parsed.scheme in ("http", "https"):
+        if parsed.netloc:
+            return text
+        raise BadParams(
+            f"{url!r} has a scheme but no host; a navigable URL looks like "
+            f"https://host/path.")
+    if parsed.scheme in ("about", "data", "file", "chrome", "view-source"):
+        # Non-web schemes pass through here; the origin policy is the layer
+        # that rules on whether they are permitted.
+        return text
+    if not parsed.scheme and "." in text and " " not in text:
+        raise BadParams(
+            f"{url!r} carries no scheme. Did you mean 'https://{text}'? "
+            f"Nothing is guessed here, because a guessed scheme is a "
+            f"different origin policy decision than the one you asked for.")
+    raise BadParams(
+        f"{url!r} is not a URL this tool can open: expected "
+        f"http(s)://host/path.")
+
+
+#: The auth workflow recipe, taught wherever an auth wall surfaces and in
+#: get_workflows(topic='auth'), because the field tester had to discover
+#: this four-call dance by trial and error.
+AUTH_RECIPE = (
+    "The auth workflow: 1) manage_session(action='open', lane='A+headed') "
+    "for a window a human can see; 2) navigate to the login page; 3) "
+    "manage_session(action='handoff') and wait for the human to sign in; "
+    "4) navigate on to the page you wanted. To reuse the login later, save "
+    "it with save_auth_state (storage pack) before closing, and load it at "
+    "the next open with manage_session(action='open', auth_state=...).")
+
+
 def _auth_refusal(url: str, marker: str | None = None):
     what = ("an expired session" if marker and "expired" in marker
             else "a signed-in session")
     return AuthRequired(
         f"{url} needs {what} "
         f"(evidence: {marker or 'HTTP 401'}). Load a saved state with the "
-        f"storage pack (--packs storage, load_auth_state), or hand the "
-        f"headed window to a human with manage_session(action='handoff') so "
-        f"the login happens outside the model's context.")
+        f"storage pack (--packs storage, load_auth_state), or let a human "
+        f"log in outside the model's context. {AUTH_RECIPE}")
 
 
 def _reraise_driver(exc: Exception, *, what: str, timeout_ms: int) -> None:
@@ -1306,6 +1389,12 @@ async def scroll(
     _audit.annotate(session=sess.session_id, page=record.handle,
                     url=record.page.url, lane=sess.spec.label)
     action = (action or "by").strip().lower()
+    # Common alias spellings land on the action they obviously mean (field
+    # finding: "to_end" got a BAD_PARAMS round-trip nobody needed).
+    action = {"to_end": "end", "to_bottom": "end", "bottom": "end",
+              "to_top": "top", "start": "top", "down": "by",
+              "page_down": "next", "element": "to",
+              "into_view": "to"}.get(action, action)
     if action not in ("by", "to", "end", "top", "container", "next"):
         raise BadParams(
             f"unknown scroll action {action!r}: the actions are 'by' (by "
@@ -1393,11 +1482,13 @@ async def wait_for(
     timeout_ms: int = 30000,
 ) -> dict:
     """Wait for text to appear or disappear, an element to reach a state, a
-    URL to match, a request or response, a download, or a JS predicate to
-    hold. Real timeouts, and a failure that says what was awaited and what
-    was observed instead rather than a bare expiry. Use this instead of
-    guessing at sleeps: a wait that names its condition is also a wait the
-    audit log can explain afterward.
+    URL to match, or a JS predicate to hold. EVERY condition is checked
+    against the current state first and returns immediately when it already
+    holds, so a wait issued after the thing already happened costs nothing
+    instead of timing out (the field's URL wait expired on a navigation
+    that had finished before the call). A `url` value without wildcards
+    matches as a substring; use * and ? for globbing. Real timeouts, and a
+    failure that says what was awaited and what was observed instead.
     """
     sess, record = MANAGER.locate(page)
     _audit.annotate(session=sess.session_id, page=record.handle,
@@ -1416,8 +1507,34 @@ async def wait_for(
         raise BadParams(
             f"unknown wait condition {condition!r}: the conditions are "
             f"{list(known)}. 'text'/'text_gone' take the string in `value`, "
-            f"'url' a URL or glob, 'visible'/'hidden' a `location`, 'js' a "
-            f"predicate expression, and 'load' a load state.")
+            f"'url' a URL, substring, or glob, 'visible'/'hidden' a "
+            f"`location`, 'js' a predicate expression, and 'load' a load "
+            f"state.")
+    resolved = None
+    if cond in ("visible", "hidden"):
+        if not location:
+            raise BadParams(
+                f"wait_for(condition={cond!r}) needs a location naming "
+                f"the element to watch.")
+        resolved = await _act.resolve(sess, record, location,
+                                      tool="wait_for")
+        _audit.annotate(replay=_replay_record(
+            "wait_for", resolved,
+            {"condition": cond, "timeout_ms": timeout_ms}))
+
+    # CHECK BEFORE WAITING, for every condition type. By the time an agent
+    # issues the wait, the condition has often already resolved, and a wait
+    # that cannot notice that turns a done deed into a timeout.
+    if await _wait_precheck(p, cond, value, resolved):
+        return {
+            "session": sess.session_id, "page": record.handle,
+            "tool": "wait_for", "condition": cond, "value": value,
+            "url": p.url, "resolved": True,
+            "already": ("the condition already held when wait_for was "
+                        "called (checked before waiting); no wait was "
+                        "needed"),
+        }
+
     from ..errors import Timeout as _TO
     try:
         if cond == "text":
@@ -1429,17 +1546,16 @@ async def wait_for(
                 "t => !document.body || !document.body.innerText.includes(t)",
                 arg=value, timeout=timeout_ms)
         elif cond == "url":
-            await p.wait_for_url(value, timeout=timeout_ms)
+            target = value or ""
+            if any(ch in target for ch in "*?"):
+                await p.wait_for_url(target, timeout=timeout_ms)
+            else:
+                # No wildcards: substring semantics, matching the precheck,
+                # because "template=bug_report" is a fragment and a glob
+                # matcher would wait forever on it.
+                await p.wait_for_url(re.compile(re.escape(target)),
+                                     timeout=timeout_ms)
         elif cond in ("visible", "hidden"):
-            if not location:
-                raise BadParams(
-                    f"wait_for(condition={cond!r}) needs a location naming "
-                    f"the element to watch.")
-            resolved = await _act.resolve(sess, record, location,
-                                          tool="wait_for")
-            _audit.annotate(replay=_replay_record(
-                "wait_for", resolved,
-                {"condition": cond, "timeout_ms": timeout_ms}))
             await resolved["handle"].wait_for_element_state(
                 "visible" if cond == "visible" else "hidden",
                 timeout=timeout_ms)
@@ -1462,6 +1578,36 @@ async def wait_for(
         "condition": cond, "value": value, "url": p.url,
         "resolved": True,
     }
+
+
+async def _wait_precheck(p, cond: str, value: str | None,
+                         resolved: dict | None) -> bool:
+    """Does the condition hold RIGHT NOW? False also covers 'could not
+    tell', in which case the real wait below gives the honest answer."""
+    try:
+        if cond == "text":
+            return bool(await p.evaluate(
+                "t => !!document.body && "
+                "document.body.innerText.includes(t)", value))
+        if cond == "text_gone":
+            return bool(await p.evaluate(
+                "t => !document.body || "
+                "!document.body.innerText.includes(t)", value))
+        if cond == "url":
+            target = value or ""
+            if any(ch in target for ch in "*?"):
+                from fnmatch import fnmatch
+                return fnmatch(p.url, target)
+            return target in p.url
+        if cond == "visible" and resolved is not None:
+            return bool(await resolved["handle"].is_visible())
+        if cond == "hidden" and resolved is not None:
+            return bool(await resolved["handle"].is_hidden())
+        if cond == "js" and value:
+            return bool(await p.evaluate(value))
+    except Exception:
+        return False
+    return False
 
 
 # ------------------------------------------------------------ the plumbing
@@ -1547,22 +1693,45 @@ async def manage_session(
     session: str | None = None,
     lane: str | None = None,
     reason: str | None = None,
+    auth_state: str | None = None,
 ) -> dict:
     """Open, close, or inspect a browser session, report the current lane's
     capabilities, read the budget counters, or hand the headed window to the
-    human for a login, an MFA prompt, or a bot wall. The capabilities action
-    is the honest-refusal instrument for the whole design: it states what
-    this lane supports, what it degrades, and what it cannot do at all,
-    naming the lane that would support each gap.
+    human for a login, an MFA prompt, or a bot wall (a handoff on a headless
+    session upgrades it to a headed window automatically). `auth_state` on
+    open loads a saved login file in the same call (gated, storage pack); on
+    close, 'save' or a path writes the session's login state before closing,
+    and nothing is ever auto-saved. The capabilities action states what this
+    lane supports, degrades, and cannot do. Tool availability reflects the
+    extension's current settings; when settings change, the tool list
+    refreshes in this conversation.
     """
     action = (action or "status").strip().lower()
 
     if action == "open":
+        checked_state = None
+        if auth_state:
+            checked_state = _auth_state_precheck(
+                "manage_session(action='open', auth_state=...)", auth_state)
+            # The same gate load_auth_state carries, asked BEFORE the open
+            # so a fail-closed answer does not strand a half-built session:
+            # loading real credentials is consequential whichever call
+            # spells it.
+            _gates.ENGINE.ask(
+                "storage_clear", tool="manage_session", session=None,
+                page=None, target=None,
+                summary=f"Open a session and load saved authentication "
+                        f"state from {checked_state}? This restores a real "
+                        f"login.")
         sess = await MANAGER.open(**_parse_lane(lane))
+        loaded = None
+        if checked_state:
+            loaded = await _load_auth_into(sess, checked_state)
         return {
             "session": sess.session_id, "lane": sess.spec.lane,
             "engine": sess.spec.label, "pages": _tab_list(sess),
             "focused": sess.focused,
+            **({"auth_state": loaded} if loaded else {}),
             "profile": (
                 "a freshly created KS4Web-owned directory. KS4Web never opens "
                 "your real browser profile, and every Firefox launch carries "
@@ -1573,7 +1742,40 @@ async def manage_session(
                         "startup_reap": MANAGER.startup_reap},
         }
     if action == "close":
-        return await MANAGER.close(MANAGER.session(session).session_id)
+        sess = MANAGER.session(session)
+        n_cookies = 0
+        try:
+            n_cookies = len(await sess.context.cookies())
+        except Exception:
+            pass
+        saved = None
+        if auth_state:
+            _auth_state_precheck(
+                "manage_session(action='close', auth_state=...)", None)
+            from . import storage as _storage
+            path = None if auth_state.strip().lower() in ("save", "true",
+                                                          "yes") \
+                else auth_state
+            saved = await _storage.save_auth_state(
+                session=sess.session_id, path=path)
+        result = await MANAGER.close(sess.session_id)
+        if saved:
+            result["auth_state"] = {
+                "saved_to": saved["saved_to"],
+                "cookies_saved": saved["cookies_saved"],
+                "note": saved["note"]}
+        elif n_cookies:
+            # The OFFER, after the fact and never silent in either
+            # direction: an authenticated session was closed and its login
+            # was NOT saved, and the caller learns the route that keeps the
+            # next one.
+            result["auth_state"] = (
+                f"this session held {n_cookies} cookie(s), which is the "
+                f"shape of a signed-in state, and none were saved (nothing "
+                f"is ever auto-saved). To keep a login for reuse, close "
+                f"with auth_state='save' (or a path), or call "
+                f"save_auth_state before closing (storage pack).")
+        return result
     if action == "capabilities":
         sess = MANAGER.session(session)
         return lanes.capabilities_report(sess.spec)
@@ -1600,15 +1802,54 @@ async def manage_session(
                     f"Reason given: {reason or '(none)'}.")
     if action == "handoff":
         sess = MANAGER.session(session)
+        upgraded = None
         if sess.spec.headless:
-            raise BadParams(
-                "a handoff needs a window a human can see and this session is "
-                "headless. Reopen with manage_session(action='open', "
-                "lane='A+headed') or 'B:chrome+headed', then hand off. Reason "
-                f"given: {reason or '(none)'}.")
+            # AUTO-UPGRADE (field ruling: the intent of a handoff is a
+            # window a human can see, so answer the intent instead of
+            # returning a round-trip). The headless session's cookies carry
+            # into the headed one and the focused page is reopened;
+            # localStorage does not carry, which the note states.
+            old = sess
+            spec = old.spec
+            state = None
+            try:
+                state = await old.context.storage_state()
+            except Exception:
+                state = None
+            current_url = None
+            try:
+                focused_url = old.page(old.focused).page.url
+                if focused_url and focused_url != "about:blank":
+                    current_url = focused_url
+            except Exception:
+                pass
+            sess = await MANAGER.open(lane=spec.lane, engine=spec.engine,
+                                      channel=spec.channel, headless=False)
+            if state and state.get("cookies"):
+                try:
+                    await sess.context.add_cookies(state["cookies"])
+                except Exception:
+                    pass
+            if current_url:
+                rec = sess.page(sess.focused)
+                try:
+                    await _session.with_timeout(
+                        rec.page.goto(current_url),
+                        _session.DEFAULT_TIMEOUT_MS, "handoff upgrade")
+                    rec.touch(rec.page.url)
+                except Exception:
+                    pass
+            await MANAGER.close(old.session_id)
+            upgraded = (
+                f"this session was headless, so it was upgraded to a "
+                f"headed window: {old.session_id} -> {sess.session_id}. "
+                f"Cookies carried over and the focused page was reopened; "
+                f"localStorage did not carry, and refs from the old "
+                f"session are gone. Use the new handles.")
         return {"session": sess.session_id, "handoff": "the headed window is "
                 "yours; nothing is automated until you call manage_session "
                 "again", "reason": reason,
+                **({"upgraded": upgraded} if upgraded else {}),
                 "pages": _tab_list(sess)}
     if action == "status":
         return {
@@ -1629,6 +1870,54 @@ async def manage_session(
         f"unknown manage_session action {action!r}: the actions are 'open', "
         f"'close', 'status', 'capabilities', 'budget', 'reset_budgets', and "
         f"'handoff'.")
+
+
+def _auth_state_precheck(what: str, path: str | None) -> str | None:
+    """The auth_state parameter's own policy ladder: absent under read-only
+    (it moves real credentials, exactly what the mode's absence property
+    promises cannot happen), present only when the storage pack is loaded
+    (it IS the storage capability under another spelling), and its path
+    sandbox-checked like every other file the server touches."""
+    if readonly.active():
+        raise ReadOnlyMode(
+            f"{what} is unavailable because this server is running "
+            f"read-only: loading or saving authentication state moves real "
+            f"credentials, which the mode's absence property covers. "
+            f"{readonly.UNLOCK_TEACHING}")
+    from .. import packs
+    if not packs.is_pack_loaded("storage"):
+        raise BadParams(
+            f"{what} needs the storage pack, which is not loaded in this "
+            f"process. Restart with --packs storage (or KS4WEB_MODE=full); "
+            f"packs are a launch-time selection.")
+    if path:
+        from ..policy import sandbox
+        return sandbox.check_path(path, "load auth state")
+    return None
+
+
+async def _load_auth_into(sess, checked: str) -> dict:
+    """Load a saved storage_state file's cookies into a just-opened
+    session. Mirrors load_auth_state's mechanics: values go through the
+    credential vault so they can never surface in a payload, and per-origin
+    storage waits for its origin."""
+    import json as _json
+    try:
+        with open(checked, encoding="utf-8") as fh:
+            data = _json.load(fh)
+    except Exception as exc:
+        raise BadParams(
+            f"could not read the state file {checked}: "
+            f"{type(exc).__name__}.") from exc
+    cookies = data.get("cookies", [])
+    if cookies:
+        await sess.context.add_cookies(cookies)
+    for c in cookies:
+        _credentials.VAULT.observe(c.get("value", ""))
+    return {"loaded_from": checked, "cookies_loaded": len(cookies),
+            "origins_pending": len(data.get("origins", [])),
+            "note": ("cookies are active now; per-origin localStorage "
+                     "applies on the next navigation to each origin")}
 
 
 async def get_audit(
@@ -1654,16 +1943,25 @@ async def get_audit(
 
 
 async def get_workflows(topic: str | None = None) -> dict:
-    """Get recipes for this server. Returns the cheap-read-then-act pattern,
-    the subagent budget setting, how to address frames and shadow roots, how
-    refs stay valid across turns, what each capability pack contains with
-    the exact launch flag that loads it, and how to record and replay a
-    multi-step flow. Packs are chosen at launch rather than at runtime, so
-    this is where you learn which flag you need before restarting.
+    """Get recipes for this server: the cheap-read-then-act pattern, the
+    auth workflow (headed handoff plus saved state), the subagent budget
+    setting, lanes, what each capability pack contains with the exact
+    launch flag that loads it, and how to record and replay a multi-step
+    flow. Packs are chosen at launch rather than at runtime, so this is
+    where you learn which flag you need before restarting. Tool
+    availability reflects the extension's current settings; when settings
+    change, the tool list refreshes in this conversation.
     """
     from .. import packs
 
     recipes = {
+        "auth": [
+            AUTH_RECIPE,
+            "Fresh profiles are a security property: KS4Web never touches "
+            "your real browser's logins, so a signed-in workflow either "
+            "hands the login to a human once (handoff) or reuses a state "
+            "file you saved earlier (auth_state / load_auth_state).",
+        ],
         "cheap-read-then-act": [
             "manage_session(action='open')  opens a browser and mints s1/p1",
             "navigate(page='p1', url=...)   returns identity, status, a "

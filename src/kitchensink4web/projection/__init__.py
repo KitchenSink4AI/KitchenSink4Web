@@ -68,10 +68,11 @@ async def extract(page, root: str | None = None) -> dict:
 
 
 async def find(page, query: str, kind: str = "auto", limit: int = 20,
-               root: str | None = None) -> dict:
+               root: str | None = None, role: str | None = None) -> dict:
     """The targeted follow-up pass, uncapped in what it searches."""
     return await page.evaluate(
-        FIND_JS, {"query": query, "kind": kind, "limit": limit, "root": root})
+        FIND_JS, {"query": query, "kind": kind, "limit": limit, "root": root,
+                  "role": role})
 
 
 async def read_text(page, root: str | None = None, start_index: int = 0,
@@ -85,7 +86,7 @@ async def read_text(page, root: str | None = None, start_index: int = 0,
 
 async def read_page(page, meta: dict, budget: int = 5000,
                     view: str = "auto", root: str | None = None,
-                    absorb=None) -> Projection:
+                    absorb=None, mode: str = "auto") -> Projection:
     """Extract and project in one call, which is what `get_page_view` does.
 
     `absorb` is the anchor layer's hook, called with the raw extraction before
@@ -97,4 +98,4 @@ async def read_page(page, meta: dict, budget: int = 5000,
         return data
     if absorb is not None:
         absorb(data)
-    return project(data, meta, budget=budget, view=view)
+    return project(data, meta, budget=budget, view=view, mode=mode)

@@ -2036,6 +2036,14 @@ safe.
   view rode out of the prose read as content. The two detectors now share
   every technique rule, and the gate's nine-technique page is the standing
   regression.
+
+  **Decided against (Phase 7, from the field report):** an
+  `include_hidden="safe"` middle tier that would silently include
+  display:none / visibility:hidden content while stripping the rest.
+  display:none is a REAL injection channel (INLINE_LEAK rides it), so no
+  hiding technique earns silent inclusion; the labeled explicit route
+  already serves the legitimate need (hidden tabs, accordions) and
+  `get_text`'s docstring now says so.
 - **Read/act separation** is the MCP-colors direction: reads are red (exposed to
   untrusted content), acting tools are blue. Advertised in `_meta`, **enforced
   server-side**, because the spec is explicit that clients "MUST consider tool

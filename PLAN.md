@@ -1309,6 +1309,29 @@ The original phase definition:
   by rule). Any discoverability failure is a red gate and a docstring or
   refusal-message fix, not a waiver.
 
+**Phase 7 field round (2026-09-06): DEFERRED to a later phase, recorded
+here so the list survives the session.** Sourced from the 2026-09-05 live
+field report (KS4Web_feedback_log.md); each needs design work, not just
+implementation, and none blocks the beta:
+
+- **Composite/sequence tool** (the report's `do_sequence`): one call
+  carrying an ordered action list where each step targets the previous
+  step's result, per-step policy gates and per-step audit records intact,
+  failure stops the sequence with batch semantics. Design sketch exists in
+  the report (Tier 1 #3); the open questions are gate UX mid-sequence and
+  how a step names "result_of_previous" in the location grammar.
+- **Shadow-root traversal** (19-20 open roots on a GitHub page): needs its
+  own spike before any default flips — projection cost over real pages,
+  and the injection surface of content the page author deliberately
+  encapsulated. Until then completeness keeps reporting `traversed=no`.
+- **Structured article extraction** (title/author/date/body/comments for
+  article-shaped pages): a schema mode for get_text or a new tool.
+- **Page mutation observer** (proactive "3 elements changed since your
+  read" with updated refs).
+- **Cross-tab refs** (using one tab's ref as context in another).
+- **Budget-by-goal** (get_page_view accepting an intent instead of a
+  number and choosing budget/detail itself).
+
 ### Phase 8: Adversarial rounds (RED GATES, plural)
 
 **The law of this family: every adversarial round finds bugs.** The Word rounds

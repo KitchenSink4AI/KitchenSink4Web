@@ -21,6 +21,7 @@
 (opts) => {
   const query = opts.query || '';
   const kind = opts.kind || 'auto';
+  const wantRole = (opts.role || '').toLowerCase() || null;
   const limit = Math.max(1, Math.min(200, opts.limit || 20));
   const t0 = performance.now();
 
@@ -192,9 +193,11 @@
     } else {
       const hay = (name + ' ' + (el.getAttribute('title') || '') + ' '
         + (el.getAttribute('placeholder') || '')).toLowerCase();
-      hit = needle ? hay.indexOf(needle) >= 0 : false;
+      // A role filter with no query matches every element of that role.
+      hit = needle ? hay.indexOf(needle) >= 0 : !!wantRole;
     }
     if (!hit) continue;
+    if (wantRole && role !== wantRole) continue;
     total++;
     if (hiddenAnywhere(el)) { hiddenMatches++; continue; }
     if (matches.length >= limit) continue;
