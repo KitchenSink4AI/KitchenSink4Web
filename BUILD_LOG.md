@@ -2133,3 +2133,6 @@ numbers next to the download figures it used to quote.
 
 The spike phase is CLOSED. PLAN's spike table shows ten of ten reported, S1
 and S2 green, and the architecture freeze stands on measurement end to end.
+
+## 2026-09-05 15:56 KST - Session pause checkpoint
+Phases 0-6 green (438 tests), ALL 10 SPIKES CLOSED (S9: Edge-inherits binary-verified, lane C works via non-default dir both browsers, ABE: Chrome seeding cannot carry sessions = Firefox-unique position strengthened; S10: ship no browsers, lazy Chromium). Read-only default browse DECIDED by field test + IMPLEMENTED. Dev mcpb delivered to author; live field log captured (34KB, untriaged). Release conditions queued for Phase 7: positive-polarity settings rename + real toggles (Desktop passes literal true/false), FAIL-OPEN fix (empty value currently unlocks), auto-session inside navigate, readOnlyHint on read tools, guided-refusal wording updates, prompt-count disclosure, tool-name legibility. Remaining: Phases 7-9 (Garden page English = Fable-authored), adversarial gauntlet, ship prep.
