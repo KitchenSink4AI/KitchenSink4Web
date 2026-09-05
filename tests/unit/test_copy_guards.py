@@ -18,7 +18,8 @@ The rules, from PLAN 8 and DESIGN 5:
   flagged" is the same fact with no recipe.
 - No warranty or guarantee language, anywhere, in any beta framing.
 - No license text, badge, or claim in any file until Q1 is ruled
-  (DESIGN 10.3 rule 5). The LICENSE file is a Phase 9 artifact.
+  (DESIGN 10.3 rule 5). DISCHARGED 2026-09-06: Q1 was ruled, the license
+  landed, and the guard inverted to check that it landed WHOLE.
 """
 
 from __future__ import annotations
@@ -320,3 +321,55 @@ def _published_test_counts() -> dict[str, int]:
         assert match, f"{where} does not state a test count where expected"
         out[where] = int(match.group(1).replace(",", ""))
     return out
+
+
+def test_no_unfilled_copy_markers_remain_on_any_surface():
+    """The build renders missing copy as a visible marker rather than
+    guessing at it, which only works if a marker cannot reach a reader."""
+    for where, text in _published_files().items():
+        assert "MISSING COPY" not in text, f"{where} still has an unfilled cell"
+        assert 'class="todo"' not in text, f"{where} still has a TODO marker"
+
+
+def test_the_comparison_table_and_the_demo_quote_the_same_numbers():
+    """DEPT. 02's first row cites the two figures DEPT. 00 demonstrates. Two
+    numbers for one measurement, on one page, is the failure that a reader
+    catches before any of us does. Checked in every language, since the
+    figures ride inside translated sentences."""
+    import json
+
+    page = _published_files().get("docs/index.html", "")
+    fill = json.loads((ROOT / "tools" / "readme_numbers_snapshot.json")
+                      .read_text(encoding="utf-8"))["fill"]
+    raw, projected = fill["RAW_DUMP_TOKENS"], fill["PROJECTION_TOKENS"]
+
+    # Digit groups are punctuated per locale (33,073 / 33.073 / 33 073), so
+    # the check is on the digits, not on the rendered separator.
+    def spellings(figure: str) -> tuple[str, ...]:
+        bare = figure.replace(",", "")
+        return (figure, bare, f"{bare[:2]}.{bare[2:]}", f"{bare[:2]} {bare[2:]}",
+                f"{bare[:1]}.{bare[1:]}", f"{bare[:1]} {bare[1:]}")
+
+    for lang in ("en", "ko", "ja", "zh", "de", "fr", "es"):
+        start = page.index(f"\n{lang}: {{\n")
+        end = page.index("\n}", start)
+        block = page[start:end]
+        cell = re.search(r'^"cr1\.oth": "(.*?)",?$', block, re.M)
+        ours = re.search(r'^"cr1\.us": "(.*?)",?$', block, re.M)
+        assert cell and ours, f"{lang} is missing the first comparison row"
+        assert any(s in cell.group(1) for s in spellings(raw)), (
+            f"{lang} row 1 does not quote the measured dump figure {raw}")
+        assert any(s in ours.group(1) for s in spellings(projected)), (
+            f"{lang} row 1 does not quote the measured read figure "
+            f"{projected}")
+
+
+def test_the_survey_the_small_print_points_at_is_in_the_repository():
+    """The comparison footnote says the sources are in the repository, so
+    they have to be in the repository."""
+    survey = ROOT / "research" / "20260906_browser_mcp_survey.md"
+    assert survey.exists(), \
+        "the comparison small print promises sources this repo does not carry"
+    text = survey.read_text(encoding="utf-8")
+    assert text.count("https://github.com/") >= 8, \
+        "the survey carries no source list"

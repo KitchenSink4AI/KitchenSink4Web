@@ -25,9 +25,11 @@
   corpus/a/out/wikipedia_versailles.projection.txt. The DEPT. 00 dump panel
   quotes the real document.body.innerText of the same frozen page.
 
-  MISSING COPY (see the Phase 9 report): the DEPT. 02 comparison CELLS and the
-  competitor survey. The cells render as visible red TODO markers on purpose,
-  the same way the family's unfilled numbers do, so the section cannot ship past.
+  DEPT. 02 comparison: the twelve answer cells and the small-print line are
+  main-thread copy, landed 2026-09-06, grounded in
+  research/20260906_browser_mcp_survey.md, which is the "sources in the
+  repository" the small print points at. Row 1 quotes the two demo numbers, so
+  it moves when they move.
 
   AISLE: GARDEN. A page read is a plot of ground, regions are beds, the budget
   is what you are willing to spend on water, a dump is a flood. The watering
@@ -243,9 +245,6 @@ th.us{background:var(--brass)!important;color:var(--paper)}
 .scenario td{white-space:normal;font-size:12px;line-height:1.5;vertical-align:top;text-align:left;min-width:150px}
 .scenario td:first-child{font-family:'Fraunces',"Fraunces Fallback",Georgia,serif;font-size:15px;font-weight:700;min-width:200px}
 .scenario th{text-align:left}
-/* MISSING COPY, rendered so it cannot be shipped past */
-.todo{color:var(--stamp);font-weight:600;font-size:11px;letter-spacing:.02em;
-  border:1.5px dashed var(--stamp);padding:3px 8px;display:inline-block;background:var(--paper)}
 .bill td,.bill th{white-space:nowrap}
 .bill td:first-child{font-weight:600}
 .bill tr.sum td{background:var(--ink)!important;color:var(--paper);font-weight:700;border-bottom:none}
@@ -442,15 +441,15 @@ footer a{color:var(--brass)}
     <div class="tablewrap">
       <table class="scenario">
         <tr><th data-i18n="cmp.h1">"Hey, could you…"</th><th class="us">🪴 KitchenSink4Web</th><th data-i18n="cmp.h3">The rest of the aisle</th></tr>
-        <tr><td data-i18n="cr1.q">"Read this article and tell me what actually matters."</td><td class="us"><span class="todo">MISSING COPY</span></td><td><span class="todo">MISSING COPY</span></td></tr>
-        <tr><td data-i18n="cr2.q">"Find the issue about the broken d-pad. There are 771 open ones."</td><td class="us"><span class="todo">MISSING COPY</span></td><td><span class="todo">MISSING COPY</span></td></tr>
-        <tr><td data-i18n="cr3.q">"Before you read that page: what will it cost me?"</td><td class="us"><span class="todo">MISSING COPY</span></td><td><span class="todo">MISSING COPY</span></td></tr>
-        <tr><td data-i18n="cr4.q">"Fill in this form, but only because I said you could."</td><td class="us"><span class="todo">MISSING COPY</span></td><td><span class="todo">MISSING COPY</span></td></tr>
-        <tr><td data-i18n="cr5.q">"What did you NOT read on that page?"</td><td class="us"><span class="todo">MISSING COPY</span></td><td><span class="todo">MISSING COPY</span></td></tr>
-        <tr><td data-i18n="cr6.q">"Click send, and prove to me what happened."</td><td class="us"><span class="todo">MISSING COPY</span></td><td><span class="todo">MISSING COPY</span></td></tr>
+        <tr><td data-i18n="cr1.q">"Read this article and tell me what actually matters."</td><td class="us" data-i18n="cr1.us">A priced map first, at a budget you set: 4,426 tokens for the same article, and the completeness block says what was left out.</td><td data-i18n="cr1.oth">The whole page arrives at once, menus and footers included. The same article this page demos costs 33,073 tokens as a raw dump.</td></tr>
+        <tr><td data-i18n="cr2.q">"Find the issue about the broken d-pad. There are 771 open ones."</td><td class="us" data-i18n="cr2.us">find_elements searches the whole page, shadow roots included, and returns actable matches; find_and_act clicks the right one in the same call.</td><td data-i18n="cr2.oth">Scroll, dump, repeat has been the pattern; the strongest peer added a text search over its snapshot in mid-2026.</td></tr>
+        <tr><td data-i18n="cr3.q">"Before you read that page: what will it cost me?"</td><td class="us" data-i18n="cr3.us">Every region line carries the price of expanding it, and the budget is a ceiling the read cannot cross.</td><td data-i18n="cr3.oth">No surveyed server documents a way to ask. The read costs what it costs, and you learn afterward.</td></tr>
+        <tr><td data-i18n="cr4.q">"Fill in this form, but only because I said you could."</td><td class="us" data-i18n="cr4.us">Out of the box the acting tools do not exist. One install switch brings them in, and submits still stop for your confirmation.</td><td data-i18n="cr4.oth">Acting tools are always loaded; restraint is the client's job, through plan modes and permission prompts.</td></tr>
+        <tr><td data-i18n="cr5.q">"What did you NOT read on that page?"</td><td class="us" data-i18n="cr5.us">Every read ends with the completeness block: what was cut, what was hidden, what no tool can reach, and the price of getting it back.</td><td data-i18n="cr5.oth">Mostly silence: one peer notes its cut size honestly; another clips every element at 100 characters without a marker.</td></tr>
+        <tr><td data-i18n="cr6.q">"Click send, and prove to me what happened."</td><td class="us" data-i18n="cr6.us">The action returns its verified outcome: what was submitted, where the page went, recorded in an audit trail you can read back.</td><td data-i18n="cr6.oth">Usually fire-and-forget. The best peer reports the navigation it caused; submission results are your problem.</td></tr>
       </table>
     </div>
-    <p class="foot-note" data-i18n="cmp.note">Build note, not shipping copy: the answer cells and the competitor survey behind them are not written yet. They are marked rather than guessed.</p>
+    <p class="foot-note" data-i18n="cmp.note">Drawn from a survey of eight browser MCP servers, September 2026; two of the eight are archived. Sources in the repository.</p>
   </div>
 </section>
 
@@ -764,12 +763,24 @@ en: {
 "cmp.h1": "\"Hey, could you…\"",
 "cmp.h3": "The rest of the aisle",
 "cr1.q": "\"Read this article and tell me what actually matters.\"",
+"cr1.us": "A priced map first, at a budget you set: 4,426 tokens for the same article, and the completeness block says what was left out.",
+"cr1.oth": "The whole page arrives at once, menus and footers included. The same article this page demos costs 33,073 tokens as a raw dump.",
 "cr2.q": "\"Find the issue about the broken d-pad. There are 771 open ones.\"",
+"cr2.us": "find_elements searches the whole page, shadow roots included, and returns actable matches; find_and_act clicks the right one in the same call.",
+"cr2.oth": "Scroll, dump, repeat has been the pattern; the strongest peer added a text search over its snapshot in mid-2026.",
 "cr3.q": "\"Before you read that page: what will it cost me?\"",
+"cr3.us": "Every region line carries the price of expanding it, and the budget is a ceiling the read cannot cross.",
+"cr3.oth": "No surveyed server documents a way to ask. The read costs what it costs, and you learn afterward.",
 "cr4.q": "\"Fill in this form, but only because I said you could.\"",
+"cr4.us": "Out of the box the acting tools do not exist. One install switch brings them in, and submits still stop for your confirmation.",
+"cr4.oth": "Acting tools are always loaded; restraint is the client's job, through plan modes and permission prompts.",
 "cr5.q": "\"What did you NOT read on that page?\"",
+"cr5.us": "Every read ends with the completeness block: what was cut, what was hidden, what no tool can reach, and the price of getting it back.",
+"cr5.oth": "Mostly silence: one peer notes its cut size honestly; another clips every element at 100 characters without a marker.",
 "cr6.q": "\"Click send, and prove to me what happened.\"",
-"cmp.note": "Build note, not shipping copy: the answer cells and the competitor survey behind them are not written yet. They are marked rather than guessed.",
+"cr6.us": "The action returns its verified outcome: what was submitted, where the page went, recorded in an audit trail you can read back.",
+"cr6.oth": "Usually fire-and-forget. The best peer reports the navigation it caused; submission results are your problem.",
+"cmp.note": "Drawn from a survey of eight browser MCP servers, September 2026; two of the eight are archived. Sources in the repository.",
 "no3": "DEPT. 03",
 "h2.eff": "The bill",
 "eff.lead": "Every MCP server draws on an assistant's memory before any work starts, and browser servers are the hungriest of all: one careless page read elsewhere can eat most of a conversation. This one starts small, reads by the map, and puts an exact price on every expansion before you pay it. Here is the bill, measured:",
@@ -876,12 +887,24 @@ ko: {
 "cmp.h1": "\"저기, 이것 좀…\"",
 "cmp.h3": "이 통로의 나머지",
 "cr1.q": "\"이 기사 읽고 진짜 중요한 게 뭔지 말해 줘.\"",
+"cr1.us": "먼저 값이 붙은 지도를, 그것도 지정한 예산 안에서 줍니다. 같은 기사에 4,426토큰이고, 무엇이 빠졌는지는 정산 항목이 말해 줍니다.",
+"cr1.oth": "메뉴와 푸터까지 포함해 페이지 전체가 한꺼번에 옵니다. 이 페이지가 시연하는 바로 그 기사를 통째로 쏟으면 33,073토큰입니다.",
 "cr2.q": "\"십자키 고장 관련 이슈 찾아 줘. 열려 있는 게 771개야.\"",
+"cr2.us": "find_elements는 섀도 루트까지 포함해 페이지 전체를 검색하고 바로 조작할 수 있는 결과를 돌려줍니다. find_and_act는 같은 호출 안에서 그중 맞는 것을 클릭합니다.",
+"cr2.oth": "스크롤하고, 쏟아붓고, 반복하는 것이 그동안의 방식이었습니다. 가장 앞선 제품이 2026년 중반에 스냅샷 대상 텍스트 검색을 추가했습니다.",
 "cr3.q": "\"그 페이지 읽기 전에, 나한테 얼마나 들지 알려 줘.\"",
+"cr3.us": "모든 구획 줄에는 그것을 펼치는 값이 적혀 있고, 예산은 읽기가 넘을 수 없는 상한입니다.",
+"cr3.oth": "조사한 어떤 서버도 물어볼 방법을 문서화하지 않았습니다. 읽기는 드는 만큼 들고, 그 사실은 나중에 알게 됩니다.",
 "cr4.q": "\"이 양식 채워 줘. 내가 그러라고 했으니까만.\"",
+"cr4.us": "상자에서 꺼낸 그대로는 조작 도구가 존재하지 않습니다. 설치 시 스위치 하나로 들어오며, 제출은 그때도 확인을 받고 멈춥니다.",
+"cr4.oth": "조작 도구는 늘 올라와 있고, 자제는 클라이언트의 몫입니다. 플랜 모드와 권한 확인 창을 통해서요.",
 "cr5.q": "\"그 페이지에서 뭘 안 읽었어?\"",
+"cr5.us": "모든 읽기는 정산 항목으로 끝납니다. 무엇이 잘렸는지, 무엇이 숨겨져 있었는지, 어떤 도구도 닿을 수 없는 것은 무엇인지, 그리고 되찾는 값이 얼마인지.",
+"cr5.oth": "대체로 침묵입니다. 한 제품은 자른 크기를 정직하게 알려 주고, 다른 제품은 모든 요소를 100자에서 표시도 없이 잘라 냅니다.",
 "cr6.q": "\"보내기 눌러 주고, 무슨 일이 있었는지 나한테 증명해 줘.\"",
-"cmp.note": "빌드 메모이며 배포용 문구가 아닙니다. 답변 칸과 그 근거가 되는 경쟁 제품 조사는 아직 작성되지 않았습니다. 추측하는 대신 표시해 두었습니다.",
+"cr6.us": "동작은 검증된 결과를 돌려줍니다. 무엇이 제출되었고 페이지가 어디로 갔는지, 나중에 다시 읽어 볼 수 있는 감사 기록에 남습니다.",
+"cr6.oth": "대개는 보내고 잊습니다. 가장 나은 제품은 자기가 일으킨 이동을 알려 주지만, 제출 결과는 사용자 몫입니다.",
+"cmp.note": "2026년 9월, 브라우저 MCP 서버 여덟 종을 조사한 결과에서 뽑았습니다. 여덟 중 둘은 보관 처리된 프로젝트입니다. 출처는 저장소에 있습니다.",
 "no3": "3번 매장",
 "h2.eff": "청구서",
 "eff.lead": "모든 MCP 서버는 일이 시작되기도 전에 AI의 기억을 끌어다 씁니다. 그중에서도 브라우저 서버가 가장 식성이 좋습니다. 다른 도구에서 페이지 한 번을 잘못 읽으면 대화 대부분이 사라집니다. 이 서버는 작게 시작하고, 지도를 보고 읽으며, 펼치기마다 값을 치르기 전에 정확한 가격을 붙입니다. 측정한 청구서는 다음과 같습니다.",
@@ -988,12 +1011,24 @@ ja: {
 "cmp.h1": "「ねえ、ちょっと…」",
 "cmp.h3": "この売り場のほか",
 "cr1.q": "「この記事を読んで、本当に大事なところを教えて。」",
+"cr1.us": "まず値札つきの地図を、指定した予算の中で返します。同じ記事で4,426トークン、何が外れたかは精算ブロックが述べます。",
+"cr1.oth": "メニューもフッターも込みで、ページ全体が一度に届きます。このページが実演しているその記事は、ぶちまけると33,073トークンです。",
 "cr2.q": "「十字キーの不具合のissueを探して。オープンなのが771件あるけど。」",
+"cr2.us": "find_elementsはシャドウルートも含めてページ全体を検索し、そのまま操作できる一致を返します。find_and_actは同じ呼び出しの中で正しいものをクリックします。",
+"cr2.oth": "スクロールして、ぶちまけて、また繰り返す。それがこれまでのやり方でした。最も進んだ製品が2026年半ばにスナップショットへのテキスト検索を加えています。",
 "cr3.q": "「そのページを読む前に、いくらかかるか教えて。」",
+"cr3.us": "どの区画の行にも、それを広げる値段が付いています。予算は読み取りが越えられない上限です。",
+"cr3.oth": "調査したどのサーバーも、尋ねる方法を文書化していません。読み取りはかかるだけかかり、それを知るのは後です。",
 "cr4.q": "「このフォームを埋めて。私がいいと言ったからだけね。」",
+"cr4.us": "箱から出したままでは、操作するツールは存在しません。導入時のスイッチひとつで入ってきますし、送信はそれでも確認を求めて止まります。",
+"cr4.oth": "操作ツールは常に読み込まれていて、抑制はクライアントの仕事です。プランモードと権限確認を通じて行われます。",
 "cr5.q": "「そのページで読まなかったのはどこ?」",
+"cr5.us": "すべての読み取りは精算ブロックで終わります。何が切られ、何が隠されていて、どのツールも届かないものは何か、そして取り戻すのにいくらかかるか。",
+"cr5.oth": "たいていは沈黙です。ある製品は切った量を正直に述べ、別の製品はすべての要素を100文字で、印もつけずに切ります。",
 "cr6.q": "「送信を押して、何が起きたか証明して。」",
-"cmp.note": "配布用の文章ではなくビルド時のメモです。回答欄と、その根拠になる競合調査はまだ書かれていません。推測せず、印を残してあります。",
+"cr6.us": "操作は検証済みの結果を返します。何が送信され、ページがどこへ行ったかが、後から読み返せる監査記録に残ります。",
+"cr6.oth": "たいていは投げっぱなしです。最も優れた製品は自分が起こした遷移を報告しますが、送信の結果は利用者の問題です。",
+"cmp.note": "2026年9月、ブラウザMCPサーバー8種を調べた結果から。8つのうち2つはアーカイブ済みです。出典はリポジトリにあります。",
 "no3": "第03売り場",
 "h2.eff": "請求書",
 "eff.lead": "どのMCPサーバーも、仕事が始まる前からAIの記憶を使います。なかでもブラウザサーバーはいちばん大食いで、よそで1ページ不用意に読ませると会話の大半が消えます。これは小さく始め、地図に従って読み、広げるたびに支払う前へ正確な値段を出します。測った請求書はこちらです。",
@@ -1100,12 +1135,24 @@ zh: {
 "cmp.h1": "“帮我个忙……”",
 "cmp.h3": "这条货道上的其他货色",
 "cr1.q": "“把这篇文章读一下，告诉我真正重要的是什么。”",
+"cr1.us": "先给一张标好价的地图，而且在你设定的预算之内：同一篇文章 4,426 个令牌，哪些没读进来由结算区块说明。",
+"cr1.oth": "整页一次性送到，菜单和页脚一并奉上。本页拿来演示的这篇文章，整页倾倒是 33,073 个令牌。",
 "cr2.q": "“找一下十字键坏掉那个 issue。开着的有 771 个。”",
+"cr2.us": "find_elements 搜索整个页面，影子根也在内，返回可直接操作的匹配；find_and_act 在同一次调用里点中那一个。",
+"cr2.oth": "一直以来的做法是滚动、倾倒、再来一遍；最强的同类在 2026 年年中给它的快照加上了文本搜索。",
 "cr3.q": "“读那一页之前先说：这要花我多少？”",
+"cr3.us": "每一行区块都带着展开它的价钱，而预算是这次读取跨不过去的上限。",
+"cr3.oth": "受调查的服务器都没有记载可以这样问的办法。读多少花多少，你事后才知道。",
 "cr4.q": "“把这张表填了，就因为是我让你填的。”",
+"cr4.us": "刚拆封时，动手的工具并不存在。安装时拨一个开关它们才进来，而提交仍然会停下来等你确认。",
+"cr4.oth": "动手的工具始终加载着；克制是客户端的事，靠计划模式和权限提示来完成。",
 "cr5.q": "“那一页上你没读的是哪些？”",
+"cr5.us": "每次读取都以结算区块收尾：哪些被裁掉、哪些是隐藏的、哪些是任何工具都够不到的，以及把它们取回来要多少钱。",
+"cr5.oth": "多半是沉默：一个同类会老实说明自己裁掉了多少，另一个把每个元素一律截到 100 个字符，还不留记号。",
 "cr6.q": "“点发送，然后向我证明发生了什么。”",
-"cmp.note": "这是构建期的备注，不是可以发布的文案：回答格以及背后的同类产品调查还没有写。宁可标出来，也不猜。",
+"cr6.us": "动作会返回经过核实的结果：提交了什么、页面去了哪里，并记进一份你可以回头查阅的审计记录。",
+"cr6.oth": "通常是发出去就不管了。最好的那一个会报告它引发的跳转；提交结果如何，得你自己想办法。",
+"cmp.note": "取自 2026 年 9 月对八款浏览器 MCP 服务器的调查；八款中有两款已归档。出处见仓库。",
 "no3": "第 03 号柜台",
 "h2.eff": "账单",
 "eff.lead": "每一台 MCP 服务器在开工之前就已经在支取助手的记忆，而浏览器服务器是其中最能吃的：在别处不小心读一个页面，就能吃掉一场对话的大半。这一台从小处起步，照着地图去读，并在你付钱之前给每一次展开标上确切的价钱。这是测出来的账单：",
@@ -1212,12 +1259,24 @@ de: {
 "cmp.h1": "\"Du, könntest du…\"",
 "cmp.h3": "Der Rest des Gangs",
 "cr1.q": "\"Lies diesen Artikel und sag mir, worauf es wirklich ankommt.\"",
+"cr1.us": "Zuerst eine ausgepreiste Karte, im Budget, das Sie setzen: 4.426 Tokens für denselben Artikel, und der Vollständigkeitsblock sagt, was weggelassen wurde.",
+"cr1.oth": "Die ganze Seite kommt auf einmal, Menüs und Fußzeilen inklusive. Derselbe Artikel, den diese Seite vorführt, kostet als Rohabzug 33.073 Tokens.",
 "cr2.q": "\"Finde das Issue zum kaputten Steuerkreuz. Es sind 771 offene.\"",
+"cr2.us": "find_elements durchsucht die ganze Seite, offene Shadow Roots eingeschlossen, und liefert Treffer zurück, auf denen man handeln kann; find_and_act klickt den richtigen im selben Aufruf.",
+"cr2.oth": "Scrollen, auskippen, wiederholen war das Muster; der stärkste Mitbewerber hat Mitte 2026 eine Textsuche über seinen Snapshot ergänzt.",
 "cr3.q": "\"Bevor du die Seite liest: was kostet mich das?\"",
+"cr3.us": "Jede Regionszeile trägt den Preis, sie aufzuklappen, und das Budget ist eine Decke, die der Lesevorgang nicht durchstößt.",
+"cr3.oth": "Kein untersuchter Server dokumentiert einen Weg, danach zu fragen. Der Lesevorgang kostet, was er kostet, und Sie erfahren es hinterher.",
 "cr4.q": "\"Füll dieses Formular aus, aber nur weil ich es gesagt habe.\"",
+"cr4.us": "Ab Werk gibt es die handelnden Werkzeuge nicht. Ein Schalter bei der Installation holt sie herein, und Absenden hält trotzdem für Ihre Bestätigung an.",
+"cr4.oth": "Handelnde Werkzeuge sind immer geladen; die Zurückhaltung ist Sache des Clients, über Planmodi und Berechtigungsabfragen.",
 "cr5.q": "\"Was hast du auf der Seite NICHT gelesen?\"",
+"cr5.us": "Jeder Lesevorgang endet mit dem Vollständigkeitsblock: was gekürzt wurde, was verborgen war, was kein Werkzeug erreichen kann, und was es kostet, es zurückzuholen.",
+"cr5.oth": "Meistens Schweigen: einer nennt die Größe seines Schnitts ehrlich, ein anderer kappt jedes Element bei 100 Zeichen, ohne Markierung.",
 "cr6.q": "\"Klick auf Senden, und beweise mir, was passiert ist.\"",
-"cmp.note": "Bauhinweis, kein Verkaufstext: Die Antwortfelder und die dahinterliegende Marktübersicht sind noch nicht geschrieben. Sie sind markiert statt geraten.",
+"cr6.us": "Die Aktion liefert ihr geprüftes Ergebnis: was abgeschickt wurde, wohin die Seite ging, festgehalten in einem Prüfprotokoll, das Sie nachlesen können.",
+"cr6.oth": "Meist abschicken und vergessen. Der beste Mitbewerber meldet die Navigation, die er ausgelöst hat; was aus dem Absenden wurde, ist Ihr Problem.",
+"cmp.note": "Aus einer Untersuchung von acht Browser-MCP-Servern, September 2026; zwei der acht sind archiviert. Die Quellen liegen im Repository.",
 "no3": "ABT. 03",
 "h2.eff": "Die Rechnung",
 "eff.lead": "Jeder MCP-Server zapft das Gedächtnis einer KI an, bevor irgendeine Arbeit beginnt, und Browser-Server sind die hungrigsten von allen: Ein unbedachter Seitenabruf anderswo frisst den größten Teil eines Gesprächs. Dieser hier fängt klein an, liest nach der Karte und schreibt an jede Erweiterung einen genauen Preis, bevor Sie ihn zahlen. Hier ist die Rechnung, gemessen:",
@@ -1324,12 +1383,24 @@ fr: {
 "cmp.h1": "\"Dis, tu pourrais…\"",
 "cmp.h3": "Le reste du rayon",
 "cr1.q": "\"Lis cet article et dis-moi ce qui compte vraiment.\"",
+"cr1.us": "D'abord une carte avec les prix, dans le budget que vous fixez : 4 426 jetons pour le même article, et le décompte final dit ce qui a été laissé de côté.",
+"cr1.oth": "La page entière arrive d'un coup, menus et pieds de page compris. Le même article que cette page met en scène coûte 33 073 jetons en déversement brut.",
 "cr2.q": "\"Trouve le ticket sur la croix directionnelle cassée. Il y en a 771 d'ouverts.\"",
+"cr2.us": "find_elements fouille toute la page, racines shadow comprises, et rend des correspondances sur lesquelles on peut agir ; find_and_act clique la bonne dans le même appel.",
+"cr2.oth": "Défiler, déverser, recommencer : c'était le schéma ; le concurrent le plus avancé a ajouté une recherche textuelle sur son instantané au milieu de 2026.",
 "cr3.q": "\"Avant de lire cette page : ça va me coûter combien ?\"",
+"cr3.us": "Chaque ligne de région porte le prix de son dépliage, et le budget est un plafond que la lecture ne franchit pas.",
+"cr3.oth": "Aucun serveur étudié ne documente un moyen de poser la question. La lecture coûte ce qu'elle coûte, et vous l'apprenez après.",
 "cr4.q": "\"Remplis ce formulaire, mais seulement parce que je te l'ai dit.\"",
+"cr4.us": "Sorti de sa boîte, les outils qui agissent n'existent pas. Un interrupteur à l'installation les fait entrer, et les envois s'arrêtent quand même pour votre confirmation.",
+"cr4.oth": "Les outils qui agissent sont toujours chargés ; la retenue revient au client, via les modes plan et les demandes d'autorisation.",
 "cr5.q": "\"Qu'est-ce que tu n'as PAS lu sur cette page ?\"",
+"cr5.us": "Chaque lecture se termine par le décompte : ce qui a été coupé, ce qui était caché, ce qu'aucun outil ne peut atteindre, et le prix pour le récupérer.",
+"cr5.oth": "Le plus souvent le silence : l'un annonce honnêtement la taille de sa coupe, un autre rogne chaque élément à 100 caractères sans le signaler.",
 "cr6.q": "\"Clique sur envoyer, et prouve-moi ce qui s'est passé.\"",
-"cmp.note": "Note de construction, pas texte publiable : les cases de réponse et l'étude comparative qui les soutient ne sont pas écrites. Elles sont signalées plutôt que devinées.",
+"cr6.us": "L'action renvoie son résultat vérifié : ce qui a été envoyé, où la page est allée, consigné dans un journal d'audit que vous pouvez relire.",
+"cr6.oth": "En général on envoie et on oublie. Le meilleur signale la navigation qu'il a provoquée ; ce que devient l'envoi vous regarde.",
+"cmp.note": "Tiré d'une étude de huit serveurs MCP de navigation, septembre 2026 ; deux des huit sont archivés. Les sources sont dans le dépôt.",
 "no3": "RAYON 03",
 "h2.eff": "La facture",
 "eff.lead": "Chaque serveur MCP puise dans la mémoire d'un assistant avant que le moindre travail commence, et les serveurs de navigation sont les plus voraces de tous : une seule lecture de page imprudente ailleurs peut avaler la plus grande partie d'une conversation. Celui-ci démarre petit, lit d'après la carte, et met un prix exact sur chaque dépliage avant que vous ne le payiez. Voici la facture, mesurée :",
@@ -1436,12 +1507,24 @@ es: {
 "cmp.h1": "\"Oye, ¿podrías…\"",
 "cmp.h3": "El resto del pasillo",
 "cr1.q": "\"Lee este artículo y dime qué importa de verdad.\"",
+"cr1.us": "Primero un mapa con precios, dentro del presupuesto que usted fije: 4.426 tokens para el mismo artículo, y el bloque de integridad dice qué quedó fuera.",
+"cr1.oth": "La página entera llega de golpe, menús y pies de página incluidos. El mismo artículo que esta página muestra cuesta 33.073 tokens como volcado en bruto.",
 "cr2.q": "\"Busca la incidencia sobre la cruceta rota. Hay 771 abiertas.\"",
+"cr2.us": "find_elements busca en toda la página, raíces shadow incluidas, y devuelve coincidencias sobre las que se puede actuar; find_and_act pulsa la correcta en la misma llamada.",
+"cr2.oth": "Desplazar, volcar y repetir ha sido el patrón; el competidor más avanzado añadió una búsqueda de texto sobre su instantánea a mediados de 2026.",
 "cr3.q": "\"Antes de leer esa página: ¿cuánto me va a costar?\"",
+"cr3.us": "Cada línea de región lleva el precio de desplegarla, y el presupuesto es un techo que la lectura no cruza.",
+"cr3.oth": "Ningún servidor estudiado documenta una forma de preguntarlo. La lectura cuesta lo que cuesta, y usted se entera después.",
 "cr4.q": "\"Rellena este formulario, pero solo porque yo te lo he dicho.\"",
+"cr4.us": "Recién sacado de la caja, las herramientas que actúan no existen. Un interruptor al instalar las trae, y los envíos siguen deteniéndose para que usted confirme.",
+"cr4.oth": "Las herramientas que actúan están siempre cargadas; la contención le toca al cliente, mediante modos de plan y avisos de permiso.",
 "cr5.q": "\"¿Qué NO leíste de esa página?\"",
+"cr5.us": "Cada lectura termina con el bloque de integridad: qué se recortó, qué estaba oculto, qué no puede alcanzar ninguna herramienta y cuánto cuesta recuperarlo.",
+"cr5.oth": "Casi siempre silencio: uno indica con honestidad cuánto ha recortado; otro corta cada elemento a los 100 caracteres sin marca alguna.",
 "cr6.q": "\"Dale a enviar y demuéstrame qué ha pasado.\"",
-"cmp.note": "Nota de construcción, no texto publicable: las casillas de respuesta y el estudio comparativo que las respalda todavía no están escritos. Se marcan en lugar de adivinarse.",
+"cr6.us": "La acción devuelve su resultado verificado: qué se envió, adónde fue la página, anotado en un registro de auditoría que usted puede releer.",
+"cr6.oth": "Lo habitual es enviar y olvidarse. El mejor informa de la navegación que provocó; qué pasó con el envío es cosa suya.",
+"cmp.note": "Extraído de un estudio de ocho servidores MCP de navegación, septiembre de 2026; dos de los ocho están archivados. Las fuentes están en el repositorio.",
 "no3": "SECCIÓN 03",
 "h2.eff": "La factura",
 "eff.lead": "Todo servidor MCP tira de la memoria de un asistente antes de que empiece cualquier trabajo, y los servidores de navegación son los más voraces de todos: una lectura descuidada de una página en otro sitio puede comerse la mayor parte de una conversación. Este empieza pequeño, lee según el mapa y le pone un precio exacto a cada despliegue antes de que usted lo pague. Aquí está la factura, medida:",
