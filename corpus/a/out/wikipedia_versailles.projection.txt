@@ -1,5 +1,5 @@
 ## 1 IDENTITY
-url: http://127.0.0.1:52706/wikipedia_versailles.html
+url: http://127.0.0.1:62468/wikipedia_versailles.html
 title: Treaty of Versailles - Wikipedia
 status: 200 | load: load | lane: A | page: p1 | read: - | t=
 viewport: 1280x900 | page height: 51.1 screens | dom nodes: 10,737 | shape: article (110 paragraphs, 87290 prose chars, 66% of page text, longest paragraph 2301 chars)
@@ -168,7 +168,8 @@ form fields not listed: 0 (of 1 found); forms omitted: 0 of 4
 headings not listed: 19 of 52; tables omitted: 0 of 8
 regions listed but not expanded: 24 (their expand costs are printed above); regions dropped by the degradation rung: 14; 2 region(s) own nothing at all and were not listed
 name quality: 11 accessible name(s) came from a fallback or were truncated on a word boundary; a name that could not be computed is printed as (unnamed) rather than guessed from a CSS class
-budget: 4,364 of 5,000 tokens used (87%), 500 held as tokenizer-drift margin, estimator tiktoken/o200k_base | degradation rung 6 of 16
+priced at page rate: 19 of 79 priced unit(s) used the page-wide characters-per-token rate because their own text sample was unavailable or this read's 40,000-character sample budget was already spent
+budget: 4,408 of 5,000 tokens used (88%), 500 held as tokenizer-drift margin, estimator tiktoken/o200k_base | degradation rung 6 of 16
 
 ## 8 NEXT CALLS (ranked by what each is likely to answer, not by size)
 expand r7 ("#content"): get_page_view(page="p1", location={"region":"r7"})  ~18,560 tok

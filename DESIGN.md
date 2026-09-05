@@ -295,17 +295,23 @@ because they are correct, not because they are unclaimed.
 | Tool-schema bill (lite) | 4,637 / 6,460 | **under 1,500** (ADVISORY since 2026-09-05: budgets ruled SOFT, Section 2.1; the honest number is published, never trimmed into) | **2,720** (Phase 0, unchanged) | 1.7x / 2.4x |
 | Full-surface ceiling | n/a | under 4,000 | not yet built | undercuts the incumbent DEFAULT |
 | Largest single schema | 413 / 459 | under 250 | **148** (`get_page_view`) | |
-| Article page (Wikipedia, Treaty of Versailles) | 156,347 / 177,168 | **under 5,000, regardless of page size** | **4,356 at rung 6**; the undegraded read is 4,846 | 36x / 41x at the delivered rung |
-| Data-table page (GDP nominal) | 66,146 / 64,635 | **under 3,500** for the page structure (REVISED in Phase 2 from 3,000; see below), **the first row page priced separately as its own `get_table` call** | **3,399 structure** | 19x |
+| Article page (Wikipedia, Treaty of Versailles) | 156,347 / 177,168 | **under 5,000, regardless of page size** | **4,408 at rung 6**; the undegraded read is 5,215 | 35x / 40x at the delivered rung |
+| Data-table page (GDP nominal) | 66,146 / 64,635 | **under 3,500** for the page structure (REVISED in Phase 2 from 3,000; see below), **the first row page priced separately as its own `get_table` call** | **3,443 structure** | 19x |
 | Form page (httpbin) | 440 / 314 | **under 900**, and hold it on a real app form where incumbents balloon with shell chrome | **842** | a deliberate loss, 1.9x the incumbent |
 | Minimal page (example.com) | 105 / 90 | the scaffold floor, measured rather than targeted | **573** | a deliberate loss, 5.5x the incumbent |
 
 **Every number in that column is the SHIPPED projector against FROZEN pages
-under `o200k_base`, re-measured at the close of Phase 2, 2026-09-05**
-(`gates/corpus_a.json`, `corpus/a/MANIFEST.json`). It replaces S1's column, which was a prototype
+under `o200k_base`, re-measured at the close of Phase 2, 2026-09-05, and
+re-measured again at the close of Phase 4** (`gates/corpus_a.json`,
+`corpus/a/MANIFEST.json`). It replaces S1's column, which was a prototype
 against live pages under `cl100k_base`. Both halves of that sentence moved at
 once, so the paragraphs below separate them rather than letting one hide inside
-the other.
+the other. **The Phase 4 re-measure moved the two large pages by +44 tokens
+each** (GDP 3,399 to 3,443, Versailles 4,364 to 4,408) and left the two trivial
+pages unchanged: Phase 4 folded in a one-line completeness disclosure of how
+many priced units fell back to page-rate pricing, and that line appears only on
+a page that actually spends its 40,000-character sample budget, which
+example.com and httpbin never do.
 
 **The tokenizer was not the story, and that is worth stating because the design
 expected it to be.** Conflict record #4 shows tokenizers disagreeing by roughly
@@ -383,8 +389,8 @@ the reason the ladder has sixteen rungs.** The cliff was the region cap
 stepping from "all of them" straight to twenty; the rungs now shed the
 lowest-priority regions a few at a time and the measured steps on this page
 are 2.2, 2.9, 4.0, 3.4 and 4.9 percent, against the 19.7 percent step
-described below. The delivered read is 4,356 at rung 6 rather than 3,683 at
-rung 3: the same guarantee, 673 more tokens of page. The live drift check
+described below. The delivered read is 4,408 at rung 6 rather than 3,683 at
+rung 3: the same guarantee, more tokens of page. The live drift check
 moved with it, from plus 15.3 percent to plus 2.4 percent, which is the
 independent confirmation that the discontinuity was the rung boundary and not
 the page.
@@ -637,6 +643,14 @@ what it did NOT see and why:
 - **blocks omitted entirely** because the page has none of that thing
 - **name-quality flag** when any accessible name was truncated or could not be
   computed (Section 3.7)
+- **priced-at-page-rate count** (added Phase 4): how many priced units fell back
+  to the page-wide characters-per-token rate because their own text sample was
+  unavailable or the read's 40,000-character sample budget (first-come,
+  Section 3.3a) was already spent. One honest count, emitted only when a
+  fallback actually happened, like the zero-width line, so a page that never
+  spends its sample budget carries no extra line. It discloses the known cost of
+  the bounded sample: a large page prices its later units at the page rate
+  rather than their own, and the count says how many.
 
 The two-layer phrasing on shadow roots is kept verbatim, on evidence: a blind
 agent singled out `shadow roots: 0 open (traversed=no), 0 closed (unreachable by
@@ -1263,6 +1277,17 @@ regression. So every run interleaves a reference arm, the extractor exactly as
 committed at HEAD, and a miss with the reference also above 80 percent of the
 same budget is reported UNCERTIFIED rather than RED. It still exits non-zero;
 it never turns a red into a green.
+
+**Phase 4 gave the ASSEMBLY check the same load control.** Phase 3 found the
+Python-assembly p95 wobbling 0.3 to 1.5 ms against its 10.0 ms budget on
+back-to-back runs of identical code, all clearing at idle: a scheduler hiccup
+was getting charged to the code because that check, unlike the projection
+check, had no machine-load escape. It now reads the same reference-arm signal:
+when the interleaved JS reference arm is over 80 percent of its own budget on a
+run, a sub-millisecond assembly miss is UNCERTIFIED rather than RED, because a
+loaded machine cannot certify a sub-ms bound. It still exits non-zero and it
+still never turns a red into a green; it just stops blaming the code for the
+scheduler.
 
 **And the p95 was not a p95.** With ten repetitions `pct(values, 0.95)`
 selects the last index, which is the MAXIMUM, so the gate failed on any single
@@ -2160,6 +2185,28 @@ navigation start, did focus move, did the target's own state change (checked,
 expanded, value)? If nothing observable happened, the result says
 `effect: "none-observed"` with a warning. **An action that cannot verify it
 happened must say so.**
+
+**As built (Phase 4, `ops/act.py` + `ops/lite.py`).** The six acting tools
+(`click`, `type_text`, `fill_form`, `press_keys`, `scroll`, `wait_for`) do not
+implement policy and do not invent resolution: they DESCRIBE the action to one
+shared path that resolves the target against the LIVE page, routes every
+mutating action through `policy/engine.approve()` (the same choke point
+`navigate` uses), dispatches TRUSTED input through the driver, and verifies the
+outcome. The verification is a MutationObserver installed at action time plus
+before/after snapshots of url, `activeElement`, and the target's own state, so
+a React `isTrusted` control (corpus B) that a synthetic click would silently
+no-op fires and is confirmed, while an overlay-intercepted click and a
+never-stable moving target surface from the driver as an actionability failure
+and become an honest `TIMEOUT` naming the cause and a recovery rather than a
+bare ok. `scroll` and `wait_for` are non-mutating and permitted under
+read-only, so they do not pass through the acting branch of the choke point.
+A gated class (a submit-typed control, a payment field, `fill_form(submit=True)`)
+asks and FAILS CLOSED, because this build wires no MRTR round-trip yet (S8), so
+nothing is submitted until a human answers. The Phase 4 gate proves no false
+successes on the pathological fixture and re-runs the Phase 3 TOCTOU battery
+against real action execution: a swap between a confirmation and its execution
+aborts `TARGET_CHANGED` at the choke point and the destructive form never
+submits (`gates/phase4.json`).
 
 ### 5.8 P8: the honest-tool posture
 

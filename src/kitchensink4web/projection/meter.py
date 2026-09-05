@@ -221,6 +221,31 @@ class BudgetMeter:
         self.ledger = Ledger()
         self.rates = Rates()
         self.used = 0
+        #: DISCLOSURE, folded in with Phase 4: how many priced units fell back
+        #: to the page-wide characters-per-token rate because their own text
+        #: sample was unavailable or the read's 40,000-character sample budget
+        #: was already spent (extract.js SAMPLE_TOTAL_CHARS, first-come). The
+        #: completeness block renders this as one honest count. Sets rather
+        #: than counters so double-pricing a unit (page shape prices it, next
+        #: calls prices it again) counts it once, and both reset per pass.
+        self.priced_units: set[str] = set()
+        self.page_rate_units: set[str] = set()
+
+    def begin_pass(self) -> None:
+        """Reset the per-render state the completeness block renders from. The
+        ledger and the rate-fallback tally are both views of ONE render pass,
+        so they are cleared together at the top of each fixpoint iteration."""
+        self.ledger = Ledger()
+        self.priced_units.clear()
+        self.page_rate_units.clear()
+
+    def _record_rate(self, key: str, sample: str | None) -> None:
+        """Note whether this priced unit carried its own text sample. The
+        fallback condition mirrors `rate_for` exactly, so the disclosed count
+        is the true number of units the page rate priced."""
+        self.priced_units.add(key)
+        if not sample or len(sample) < 40:
+            self.page_rate_units.add(key)
 
     # ------------------------------------------------------------ measuring
 
@@ -302,6 +327,7 @@ class BudgetMeter:
         constant was also most of the residual error on small regions, which
         it over-priced by exactly itself."""
         net = region["net"]
+        self._record_rate(f'region:{region.get("ref")}', region.get("sample"))
         return int(self.rates.from_chars(net["chars"],
                                          self.rate_for(region.get("sample"))))
 
@@ -319,6 +345,8 @@ class BudgetMeter:
         contributes its accessible name to that character total already."""
         if not heading.get("section_known"):
             return None
+        self._record_rate(f'section:{heading.get("ref")}',
+                          heading.get("section_sample"))
         return int(self.rates.from_chars(
             heading["section_chars"],
             self.rate_for(heading.get("section_sample"))))
@@ -331,6 +359,7 @@ class BudgetMeter:
         of the prose around it, so on a statistical article the two most
         expensive calls on the page were the two the old price understated
         most."""
+        self._record_rate(f'table:{table.get("ref")}', table.get("sample"))
         return int(self.rates.from_chars(table["chars"],
                                          self.rate_for(table.get("sample"))))
 

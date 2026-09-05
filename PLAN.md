@@ -999,7 +999,29 @@ feature.
   hidden-text injection payload must appear in the completeness count and not in
   the content. Read-only mode must show zero mutating tools in `tools/list`.
 
-### Phase 4: Action tools and verified outcomes
+### Phase 4: Action tools and verified outcomes — **RUN 2026-09-05, GATE GREEN, ALL EIGHT PARTS**
+
+**Status.** The suite is 384 tests, up from 361. The six acting tools
+(`click`, `type_text`, `fill_form`, `press_keys`, `scroll`, `wait_for`) are
+wired through the Phase 3 choke point via one shared machinery module
+(`ops/act.py`): resolution against the LIVE page (the rebind ladder for a
+stored ref over a fresh extraction, a deterministic live resolver for css /
+xpath / text / role+name / testid / coordinate / nth / describe that refuses
+ambiguity with the candidate list), trusted input through the driver, and a
+verified outcome (MutationObserver + url / activeElement / target-state diff).
+`navigate` and `manage_tabs` were wired in earlier phases and were not
+duplicated. Gate `scripts/gate_phase4.py`, record `gates/phase4.json`, on live
+Chromium against corpus B (pathological) and corpus C (toctou).
+
+**The two folded-in items are done.** The latency gate's assembly check now
+carries the same reference-arm load control the projection check has (a loaded
+machine reports UNCERTIFIED, not RED, on a sub-ms wobble). The completeness
+block discloses how many priced units fell back to page-rate pricing, one
+honest count emitted only when the 40,000-character sample budget was actually
+spent; it moved the two large corpus-A pages +44 tokens each (GDP 3,399 ->
+3,443, Versailles 4,364 -> 4,408, both still under target) and left the two
+trivial pages unchanged, re-measured in `gates/corpus_a.json` and the Phase 2
+gate re-run green.
 
 - `click`, `type_text`, `fill_form`, `press_keys`, `scroll`, `wait_for`,
   `navigate`, `manage_tabs`.
@@ -1010,7 +1032,18 @@ feature.
   `<div onclick>` button, the moving target, and the portal dropdown each
   produce either a correct action with a verified effect or an honest refusal
   with a named recovery. Nothing returns bare `ok` with `effect: "none-observed"`
-  unreported.
+  unreported. **MET:** trusted input fires the isTrusted control and the div
+  button (verified via the fixture's own `window.__effects`), the overlay and
+  the moving target refuse `TIMEOUT` naming the cause and never fire, the portal
+  trigger's click is verified by the menu it opens. Plus the run's
+  non-negotiables: every mutating action tool proven refused-invisible under
+  read-only over a real MCP client (both grades, uncallable); the Phase 3 TOCTOU
+  battery re-run against real action execution (a swap between confirm and
+  execute aborts `TARGET_CHANGED` at the choke point and the destructive form
+  never submits); session isolation characterized (each session owns a disjoint
+  browser process tree and sticky map, so the document family's cross-process
+  single-instance concern is structurally absent); latency re-verified; suite
+  green; the lite docstring bill measured and published honestly (budgets SOFT).
 - **The author's dogfood pass starts here.** From this phase forward the author
   runs KS4Web daily on Lane B, and field bugs outrank new features.
 

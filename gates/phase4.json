@@ -1,0 +1,97 @@
+{
+ "measured_kst": "2026-09-05 12:35",
+ "phase": 4,
+ "corpus": "B (pathological) and C (toctou), synthetic, never networked",
+ "lane": "A(chromium) headless",
+ "parts": {
+  "no_false_successes": {
+   "green": true,
+   "trusted_effect": "focus-moved",
+   "divbtn_effect": "focus-moved",
+   "trusted_fired": true,
+   "divbtn_fired": true,
+   "overlay_refused_not_fired": true,
+   "moving_refused_not_fired": true,
+   "portal_opened": true
+  },
+  "toctou_actions": {
+   "green": true,
+   "benign_name": "Continue",
+   "resolved_to_destructive": true,
+   "toctou_aborts_target_changed": true,
+   "plain_click_gates": true,
+   "form_never_submitted": true
+  },
+  "read_only_invisible": {
+   "green": true,
+   "browse_mutating_listed": [],
+   "browse_movements_present": true,
+   "browse_click_call_errors": true,
+   "strict_mutating_listed": [],
+   "strict_movements_present": true,
+   "strict_click_call_errors": true
+  },
+  "verified_outcomes": {
+   "green": true,
+   "real_effect_reported": true,
+   "none_observed_carries_warning": true
+  },
+  "two_process": {
+   "green": true,
+   "journals_disjoint": true,
+   "maps_distinct": true,
+   "handles_isolated": true,
+   "note": "browser sessions are per-session; each owns its own process tree and sticky map, so the cross-process single-instance concern the document family has is structurally absent here"
+  },
+  "credentials_gates": {
+   "green": true,
+   "secret_write_refused": true,
+   "submit_gated_fail_closed": true
+  },
+  "latency": {
+   "green": true,
+   "exit_code": 0,
+   "failures": [],
+   "uncertified": [],
+   "rows": [
+    {
+     "nodes": 5012,
+     "projection_p95": 128.8,
+     "python_p95": 4.7,
+     "budget_ms": 500
+    },
+    {
+     "nodes": 10012,
+     "projection_p95": 154.6,
+     "python_p95": 5.7,
+     "budget_ms": 500
+    },
+    {
+     "nodes": 25012,
+     "projection_p95": 231.8,
+     "python_p95": 5.9,
+     "budget_ms": 500
+    },
+    {
+     "nodes": 50012,
+     "projection_p95": 344.8,
+     "python_p95": 5.7,
+     "budget_ms": 500
+    },
+    {
+     "nodes": 100012,
+     "projection_p95": 597.6,
+     "python_p95": 6.2,
+     "budget_ms": 1000
+    }
+   ]
+  },
+  "docstring_measure": {
+   "green": true,
+   "lite_tokens": 2723,
+   "largest_schema_tokens": "get_page_view (148 tok)",
+   "note": "budgets are SOFT (author ruling); the honest number is published, never trimmed into. The 1,500 lite figure and the 250 schema ceiling are advisory. The action tools' docstrings were written in Phase 0 and unchanged, so the bill did not grow."
+  }
+ },
+ "green": true
+}

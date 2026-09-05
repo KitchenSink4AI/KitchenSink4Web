@@ -1741,3 +1741,98 @@ patched unilaterally.
 - The .mcpb manifest user_config block is specified in DESIGN 5.2 and built
   at Phase 9 with the rest of the packaging.
 - `cursor=` on get_page_view still refuses by naming Phase 5.
+
+---
+
+## Part XIII: Phase 4, the action tools, built through the choke point (2026-09-05 12:35 KST)
+
+The acting surface, and it is the phase where the policy layer stops being a
+thing built ahead of its callers and becomes the thing every caller goes
+through. The six acting tools do not implement policy and do not invent
+resolution: they DESCRIBE an action to one shared module and let it resolve,
+approve, dispatch, and verify.
+
+**Suite: 384 tests, up from 361. Gate: `scripts/gate_phase4.py`, EIGHT parts,
+ALL GREEN on live Chromium against corpus B (pathological) and corpus C
+(toctou), `gates/phase4.json`.** Zero orphan browser processes after the run
+(census: 0). The Phase 2 gate was re-run to full green afterward because the
+folded-in completeness line moved two published numbers.
+
+### What landed
+
+`ops/act.py`, the shared machinery: one location resolver that sends a stored
+session ref through the rebind ladder over a FRESH extraction (so a ref always
+acts on the element it resolves to right now or refuses) and every live
+selector (css, xpath, text, role+name, testid, coordinate, nth, describe)
+through a deterministic in-page resolver that refuses ambiguity with the
+candidate list and never acts on first match; the gate/credential descriptor
+builder; the verified-outcome observer (a MutationObserver installed at action
+time plus before/after snapshots of url, activeElement, and the target's own
+state); and the driver-error wrapper that turns an actionability failure into
+an honest TIMEOUT naming the cause and a recovery.
+
+The six tools in `ops/lite.py`, wired: `click`, `type_text`, `fill_form`
+(the validated batch: resolve every ref before executing any, re-check each
+target immediately before its own turn per the E6 rules, stop on failure with
+completed items left completed), `press_keys`, `scroll`, and `wait_for`.
+`click`/`type_text`/`fill_form`/`press_keys` are mutating and route through
+`policy/engine.approve()`; `scroll` and `wait_for` are non-mutating and
+permitted under read-only, so they stay out of the acting branch. `navigate`
+and `manage_tabs` were wired in earlier phases and were not duplicated.
+
+Trusted input throughout: every action goes through Playwright's input path,
+never a JS-synthesised DOM event, which is why the corpus B React control that
+checks `event.isTrusted` and silently no-ops on a synthetic click actually
+fires under KS4Web and is verified.
+
+### The two folded-in items, done
+
+1. **The latency gate's assembly check gained the projection check's load
+   control.** Phase 3 found the Python-assembly p95 wobbling 0.3 to 1.5 ms
+   against its 10.0 ms budget on identical code, all clearing at idle. The
+   assembly miss now reads the same reference-arm signal: a loaded machine
+   (JS reference arm over 80 percent of its budget) reports UNCERTIFIED rather
+   than RED. It still exits non-zero and never turns a red into a green.
+2. **The completeness block discloses page-rate fallbacks.** One honest count
+   of how many priced units fell back to the page-wide characters-per-token
+   rate because their own text sample was unavailable or the read's
+   40,000-character sample budget (first-come) was already spent. Emitted only
+   when a fallback happened, like the zero-width line. It moved the two large
+   corpus-A pages +44 tokens each (GDP 3,399 -> 3,443, Versailles 4,364 ->
+   4,408, both under target) and left the two trivial pages unchanged;
+   `gates/corpus_a.json` re-measured, Phase 2 gate re-run green, DESIGN 3.2
+   updated.
+
+### Gate table
+
+| Part | Result |
+|---|---|
+| no_false_successes (trusted fires, div fires, overlay+moving refuse, portal verified) | GREEN |
+| toctou_actions (swap under click aborts TARGET_CHANGED at the choke point; form never submits) | GREEN |
+| read_only_invisible (mutating tools absent + uncallable over a real client, both grades) | GREEN |
+| verified_outcomes (real effect reported; none-observed carries a warning, never a bare ok) | GREEN |
+| two_process (sessions own disjoint process trees and sticky maps; concern structurally absent) | GREEN |
+| credentials_gates (secret write refuses at the choke point; submit gated, fail closed) | GREEN |
+| latency (re-verified after the completeness change; assembly load control in place) | GREEN |
+| docstring_measure (lite 2,723 tok chars/4, largest schema get_page_view 148; budgets SOFT) | GREEN |
+
+### The two-process discipline, characterized honestly
+
+The family learned a two-process discipline this week from the COM side (a
+document open in a second application process). It does NOT transfer to browser
+sessions and the report says so rather than inventing a concern: each KS4Web
+session spawns its own browser process tree tracked by its own owned-PID
+journal and holds its own sticky element map, so two sessions share no
+single-instance state one could corrupt. The gate asserts disjoint journals and
+distinct maps; the cross-process concern is structurally absent because browsers
+are per-session.
+
+### Open items carried forward
+
+- The confirmation gate FAILS CLOSED with no MRTR round-trip wired (S8's
+  check). A gated class (submit, payment) asks and nothing executes until a
+  human answers, which is the correct Phase 4 behavior; the round-trip against
+  the installed client is still S8.
+- The `{'anchor': ...}` selector refuses by naming the workflows/replay path
+  (Phase 6); anchor-driven addressing arrives with that pack.
+- `cursor=` on get_page_view still refuses by naming Phase 5.
