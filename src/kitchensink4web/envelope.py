@@ -245,7 +245,11 @@ def classify(exc: BaseException) -> str:
     if ("execution context was destroyed" in text
             or "target closed" in text
             or "has been closed" in text
-            or "frame was detached" in text):
+            or "frame was detached" in text
+            # A renderer crash (gauntlet 2026-09-06, M1): before this row it
+            # fell through to BAD_PARAMS and inherited the location-selector
+            # hint, which sent the caller to fix arguments that were fine.
+            or "page crashed" in text):
         return "CONFLICT"
     return "BAD_PARAMS"
 
@@ -286,6 +290,21 @@ def refusal(exc: BaseException) -> dict:
     """Build the {ok: false, error: {code, message, hint}} payload."""
     code = getattr(exc, "code", None) or classify(exc)
     message = str(exc)
+    if not isinstance(exc, _err.WebMcpError) \
+            and "page crashed" in message.lower():
+        # The honest crash refusal (M1), built at the choke point so every
+        # path that observes a renderer crash says the same true thing
+        # instead of leaking the raw driver string. The handle is marked
+        # dead by the crash event, so reuse refuses in locate() with the
+        # same recovery.
+        detail = message.splitlines()[0][:160]
+        message = (
+            f"the page's renderer process crashed (driver detail: "
+            f"{detail}). The arguments were fine; the page itself died, "
+            f"which extremely deep or pathological DOM nesting can cause. "
+            f"This page handle is dead and will not recover: open a NEW "
+            f"tab with manage_tabs(action='open', url=...) and continue "
+            f"there. Refs minted on the crashed page are gone.")
     if isinstance(exc, LookupError) and len(message) < 40:
         message = (
             f"internal lookup failed on {message}: a nested parameter "

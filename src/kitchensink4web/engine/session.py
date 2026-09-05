@@ -75,6 +75,13 @@ class PageHandle:
     parked: bool = False
     last_status: int | None = None
     last_load_state: str = "load"
+    #: Set when the renderer crashed (the driver's `crash` event, or a
+    #: "Page crashed" driver error). A crashed page never recovers: every
+    #: later call through this handle refuses and names the recovery
+    #: (gauntlet 2026-09-06, M1: a deep-DOM hostile page crashed the
+    #: renderer and the poisoned handle kept answering with a misleading
+    #: BAD_PARAMS).
+    crashed: str | None = None
 
     def touch(self, url: str | None = None) -> None:
         self.last_used = time.time()
@@ -229,6 +236,17 @@ class SessionManager:
     def _attach_page(self, session: Session, page: Any) -> PageHandle:
         handle = self._next_page_handle()
         record = PageHandle(handle=handle, page=page)
+        # The renderer-crash mark (M1). The event is the reliable signal:
+        # whichever call OBSERVES the crash, the handle is dead from the
+        # moment it fires, and locate() refuses reuse with the recovery
+        # named instead of replaying the driver's "Page crashed" forever.
+        try:
+            page.on("crash", lambda _page: setattr(
+                record, "crashed",
+                f"the renderer crashed at "
+                f"{time.strftime('%Y-%m-%dT%H:%M:%S')}"))
+        except Exception:
+            pass  # a lane without the event still gets the message-sniff path
         session.pages[handle] = record
         session.counters["pages_opened"] += 1
         if session.focused is None:
@@ -319,7 +337,24 @@ class SessionManager:
         belongs to."""
         for session in self.sessions.values():
             if page_handle in session.pages:
-                return session, session.pages[page_handle]
+                record = session.pages[page_handle]
+                if record.crashed:
+                    # A crashed renderer never recovers on the same page:
+                    # replaying the driver's "Page crashed" against a dead
+                    # handle is a loop, not a recovery. manage_tabs reaches
+                    # the record through Session.page() and can still close
+                    # or list it; everything that would READ or ACT refuses
+                    # here with the real recovery.
+                    raise Conflict(
+                        f"page {page_handle} is dead: {record.crashed}. A "
+                        f"crashed renderer does not recover on the same "
+                        f"page handle. Open a fresh tab with manage_tabs("
+                        f"session={session.session_id!r}, action='open', "
+                        f"url=...) and continue there; this handle can only "
+                        f"be closed (manage_tabs action='close'). Refs "
+                        f"minted on it are gone. Extremely deep or "
+                        f"pathological DOM nesting is a known crash cause.")
+                return session, record
         known = sorted(h for s in self.sessions.values() for h in s.pages)
         raise TargetNotFound(
             f"no page {page_handle!r}. Open pages are {known or 'none'}. "
