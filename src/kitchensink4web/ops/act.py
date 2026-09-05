@@ -44,7 +44,7 @@ from __future__ import annotations
 
 from ..anchors import Outcome, ladder
 from ..errors import (AmbiguousLocation, BadParams, ModalBlocked, StaleAnchor,
-                      TargetNotFound, Timeout)
+                      TargetChanged, TargetNotFound, Timeout)
 from ..policy import credentials
 from ..projection import extract
 
@@ -243,10 +243,23 @@ _RESOLVE_JS = r"""
     map.set(ref, el);
     const d = describe(el);
     const r = d.role;
-    const type = el.tagName === 'INPUT' ? (el.type || 'text').toLowerCase() : (el.tagName === 'BUTTON' ? (el.getAttribute('type') || '') : '');
-    const ac = (el.getAttribute && el.getAttribute('autocomplete') || '').toLowerCase();
-    const inForm = !!(el.form || el.closest('form'));
     const formEl = el.form || el.closest('form');
+    const inForm = !!formEl;
+    // Effective submission type, the SAME rule the extractor applies (C1):
+    // a <button> with a missing or invalid type is a submit button per the
+    // HTML spec ('button'/'reset' opt out), with the default-submit case
+    // scoped to buttons inside a form. Reading only the raw attribute here
+    // left a typeless in-form button unclassified on the live path.
+    let type = '';
+    if (el.tagName === 'INPUT') {
+      type = (el.type || 'text').toLowerCase();
+    } else if (el.tagName === 'BUTTON') {
+      const rawType = (el.getAttribute('type') || '').trim().toLowerCase();
+      if (rawType === 'button' || rawType === 'reset') type = rawType;
+      else if (rawType === 'submit') type = 'submit';
+      else type = inForm ? 'submit' : rawType;
+    }
+    const ac = (el.getAttribute && el.getAttribute('autocomplete') || '').toLowerCase();
     // The landmark climb, a compact mirror of the extractor's, so a
     // live-resolved element's anchor registers under the SAME keys a read
     // would give it and the session map hands back the same ref for the
@@ -429,22 +442,37 @@ def action_class_for(desc: dict, *, submitting: bool = False) -> str | None:
 
 # ------------------------------------------------------------- resolution
 
-async def resolve(sess, record, location: dict, *, tool: str) -> dict:
+async def resolve(sess, record, location: dict, *, tool: str,
+                  acting: bool = True) -> dict:
     """Resolve one location to a live element handle, refusing rather than
     guessing. Returns a dict carrying the handle, the descriptor, the gate
     fingerprint source, and the rebind resolution outcome ('ok'/'rebound').
 
     A stored session ref goes through the rebind ladder over a FRESH extraction,
     so the resolution is against the page as it is right now; every other
-    selector resolves live and refuses on more than one visible match."""
+    selector resolves live and refuses on more than one visible match.
+
+    `acting=False` marks a read-shaped caller (a screenshot of an element):
+    reads may proceed on a reported rebind where an acting call refuses."""
     group, value = selector_of(location)
 
     if group == "ref":
-        return await _resolve_ref(sess, record, value, tool=tool)
+        return await _resolve_ref(sess, record, value, tool=tool,
+                                  acting=acting)
     return await _resolve_live(sess, record, location, tool=tool)
 
 
-async def _resolve_ref(sess, record, ref: str, *, tool: str) -> dict:
+def _material_name_change(old: str | None, new: str | None) -> bool:
+    """A name change a human would notice: compared case-folded and
+    whitespace-squashed, so 'Save ' vs 'save' is cosmetic and 'Save' vs
+    'Delete account' is material."""
+    def norm(s):
+        return " ".join(str(s or "").split()).casefold()
+    return norm(old) != norm(new)
+
+
+async def _resolve_ref(sess, record, ref: str, *, tool: str,
+                       acting: bool = True) -> dict:
     entry = sess.element_map.entries.get(ref)
     if entry is None:
         # NOT a session ref, and that is the end of it. This branch used to
@@ -477,6 +505,31 @@ async def _resolve_ref(sess, record, ref: str, *, tool: str) -> dict:
                 f"Re-read the page and use the ref it returns.")
         rebound = None
         if verdict == Outcome.REBOUND:
+            # H2 (gauntlet 2026-09-06): a stable attribute key (testid, id,
+            # named control) reassigned to a SAME-ROLE element whose
+            # accessible name materially changed is the volatile-id theft
+            # shape with the role kept. A hostile page fully controls its
+            # own testids, so on an ACTING path this is a refusal, not a
+            # warning: the caller reasoned about the old name and the click
+            # would land on the new one. A re-read updates the map (the key
+            # re-binds to the renamed element and the payload shows its
+            # current name), after which the ref resolves cleanly. Reads
+            # still proceed with the rebind reported.
+            tier = str(outcome.get("tier") or "")
+            old_name = (entry.anchor or {}).get("name")
+            new_name = unit.get("name")
+            if (acting and tier.startswith("fingerprint (")
+                    and _material_name_change(old_name, new_name)):
+                raise TargetChanged(
+                    f'{ref!r} still carries its stable attribute key, but '
+                    f'the element wearing that key is no longer what you '
+                    f'read: it was {entry.anchor.get("role")} '
+                    f'"{old_name}" and is now {unit.get("role")} '
+                    f'"{new_name}". Acting on a renamed control through a '
+                    f'reused key is how the wrong element gets clicked, so '
+                    f'nothing was done. Re-read the page (get_page_view or '
+                    f'find_elements) and act on the ref that read returns '
+                    f'if the renamed control is really the one you want.')
             rebound = (f'{ref} was rebound: {outcome.get("was")} -> '
                        f'{outcome.get("now")} (tier {outcome.get("tier")})')
         return {"handle": handle, "node_ref": node_ref, "session_ref": ref,
@@ -580,23 +633,6 @@ async def _handle(page, node_ref: str):
         await jsh.dispose()
         return None
     return element
-
-
-async def _describe_handle(page, handle, ref: str) -> dict:
-    """Descriptor for an element reached by a bare 'x' ref, computed in-page."""
-    return await page.evaluate(
-        r"""(el) => { if (!el) return {};
-          const squash = (s) => (typeof s === 'string' ? s : '').replace(/\s+/g, ' ').trim();
-          const type = el.tagName === 'INPUT' ? (el.type || 'text').toLowerCase()
-            : (el.tagName === 'BUTTON' ? (el.getAttribute('type') || '') : '');
-          const formEl = el.form || (el.closest ? el.closest('form') : null);
-          return { role: (el.getAttribute && el.getAttribute('role')) || el.tagName.toLowerCase(),
-            name: squash(el.getAttribute && el.getAttribute('aria-label')) || squash(el.textContent).slice(0, 80),
-            type: type, tag: el.tagName, secret: (type === 'password'),
-            autocomplete: (el.getAttribute && el.getAttribute('autocomplete') || '').toLowerCase(),
-            in_form: !!formEl, form_action: formEl ? (formEl.getAttribute('action') || '') : '',
-            page_key: location.origin + location.pathname + location.hash }; }""",
-        handle)
 
 
 def _candidate_text(candidates) -> str:

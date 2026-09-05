@@ -146,7 +146,7 @@ async def take_screenshot(
                 "target='element' needs a location naming the element, for "
                 "example {'ref': 'e12'} or {'css': '#chart'}.")
         resolved = await _act.resolve(sess, record, location,
-                                      tool="take_screenshot")
+                                      tool="take_screenshot", acting=False)
         box = await resolved["handle"].bounding_box()
         if not box or box["width"] < 1 or box["height"] < 1:
             raise BadParams(

@@ -859,7 +859,26 @@
             const collect = affordances.length < MAX_AFFORDANCES;
             const named = collect ? accName(el, role)
               : { name: '', quality: 'not-collected' };
-            const type = tag === 'INPUT' ? (el.type || 'text').toLowerCase() : null;
+            const formEl = el.form || el.closest('form');
+            // Submission semantics (C1, gauntlet 2026-09-06). The HTML spec
+            // says a <button> with a missing or invalid type IS a submit
+            // button; only 'button' and 'reset' opt out. This affordance's
+            // `type` is what the ref path's action classifier reads, and
+            // when it carried null for <button type=submit> the form_submit
+            // confirmation gate never fired on the canonical read->ref->act
+            // flow. An EXPLICIT type=submit keeps its declared semantics
+            // anywhere, matching <input type=submit>; the default-submit
+            // case applies only inside a form, where a click can actually
+            // submit something.
+            let type = null;
+            if (tag === 'INPUT') {
+              type = (el.type || 'text').toLowerCase();
+            } else if (tag === 'BUTTON') {
+              const rawType = (el.getAttribute('type') || '').trim().toLowerCase();
+              if (rawType === 'button' || rawType === 'reset') type = rawType;
+              else if (rawType === 'submit') type = 'submit';
+              else type = formEl ? 'submit' : (rawType || null);
+            }
             const ac = ((el.getAttribute && el.getAttribute('autocomplete')) || '').toLowerCase();
             const secret = type === 'password' ||
               /current-password|new-password|one-time-code/.test(ac);
@@ -941,7 +960,6 @@
                 }
               }
             }
-            const formEl = el.form || el.closest('form');
             // A CITATION MARKER is a reference, not an affordance, and it is
             // recognizable by its own shape rather than by its ancestor. The
             // ancestor test alone misses every marker that sits in an
