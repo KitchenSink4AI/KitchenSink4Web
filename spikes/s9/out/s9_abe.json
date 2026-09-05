@@ -1,0 +1,178 @@
+{
+ "results": [
+  {
+   "browser": "chrome",
+   "version": "152.0.7977.76",
+   "default_ud": "C:\\Users\\user\\AppData\\Local\\Temp\\ks4web_spike_s9_abe_la_chrome_7stdokhs\\Google\\Chrome\\User Data",
+   "mint": {
+    "server_saw_request": true,
+    "teardown": "graceful",
+    "default_ud_created": true
+   },
+   "at_rest": {
+    "store": "<UD>\\Default\\Network\\Cookies",
+    "row_count": 1,
+    "encrypted_value_prefix": "v10"
+   },
+   "local_state": {
+    "os_crypt_keys": [
+     "audit_enabled",
+     "encrypted_key"
+    ]
+   },
+   "same_path": {
+    "cookie_header": "ks4web_s9_abe=SPIKE9-COOKIE-VALUE-20260905",
+    "cookie_sent": true
+   },
+   "copy_ud": "C:\\Users\\user\\AppData\\Local\\Temp\\ks4web_spike_s9_abe_copy_chrome_i3j6fjou\\User Data",
+   "copied_path": {
+    "cookie_header": "ks4web_s9_abe=SPIKE9-COOKIE-VALUE-20260905",
+    "cookie_sent": true
+   },
+   "copied_at_rest": {
+    "store": "<UD>\\Default\\Network\\Cookies",
+    "row_count": 1,
+    "encrypted_value_prefix": "v10"
+   },
+   "verdict": "DECRYPTS AFTER COPY: a User Data tree minted at the default path still serves its cookies from a non-default path, same machine + user"
+  },
+  {
+   "browser": "msedge",
+   "version": "151.0.4129.107",
+   "default_ud": "C:\\Users\\user\\AppData\\Local\\Temp\\ks4web_spike_s9_abe_la_msedge_yldfgx8s\\Microsoft\\Edge\\User Data",
+   "mint": {
+    "server_saw_request": true,
+    "teardown": "graceful + 2 surviving descendants force-killed",
+    "default_ud_created": true
+   },
+   "at_rest": {
+    "store": "<UD>\\Default\\Network\\Cookies",
+    "row_count": 1,
+    "encrypted_value_prefix": "v10"
+   },
+   "local_state": {
+    "os_crypt_keys": [
+     "audit_enabled",
+     "encrypted_key"
+    ]
+   },
+   "same_path": {
+    "cookie_header": "ks4web_s9_abe=SPIKE9-COOKIE-VALUE-20260905",
+    "cookie_sent": true
+   },
+   "copy_ud": "C:\\Users\\user\\AppData\\Local\\Temp\\ks4web_spike_s9_abe_copy_msedge_oi_htk7x\\User Data",
+   "copied_path": {
+    "cookie_header": "ks4web_s9_abe=SPIKE9-COOKIE-VALUE-20260905",
+    "cookie_sent": true
+   },
+   "copied_at_rest": {
+    "store": "<UD>\\Default\\Network\\Cookies",
+    "row_count": 1,
+    "encrypted_value_prefix": "v10"
+   },
+   "verdict": "DECRYPTS AFTER COPY: a User Data tree minted at the default path still serves its cookies from a non-default path, same machine + user"
+  }
+ ],
+ "source_facts": {
+  "tag": "152.0.7977.76",
+  "file": "chrome/browser/os_crypt/app_bound_encryption_provider_win.cc",
+  "fact": "app-bound encryption checks the user data dir: SupportLevel::kNotUsingDefaultUserDataDir -> the app-bound key is withheld (KeyError::kTemporarilyUnavailable) and cookies mint v10 DPAPI, which is what this probe measured (fetched 2026-09-05)",
+  "consequence": "a KS4Web-owned (non-default) Chrome profile always runs DPAPI-mode cookies, so copies decrypt; a REAL default profile mints v20 app-bound values that the provider cannot unwrap at a non-default path, so seeding from a real profile is expected NOT to carry v20 sessions; behavioral confirmation of the v20 side needs a disposable default profile"
+ },
+ "swept": [],
+ "leftovers_after_sweep": [
+  {
+   "pid": 109484,
+   "ppid": 58080,
+   "name": "chrome.exe",
+   "exe": "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+   "cmd": "\"C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe\" --type=renderer --origin-trial-disabled-features=CanvasTextNg|WebAssemblyCustomDescriptors --no-pre-read-main-dll --video-capture-use-gpu-memory-buffer --lang=en-US --device-scale-factor=2 --num-raster-threads=4 --enable-main-frame-before-activation --renderer-client-id=41 --launch-time-ticks=2023527797966 --metrics-shmem-handle=6624,i,119985"
+  },
+  {
+   "pid": 94680,
+   "ppid": 58080,
+   "name": "chrome.exe",
+   "exe": "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+   "cmd": "\"C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe\" --type=renderer --origin-trial-disabled-features=CanvasTextNg|WebAssemblyCustomDescriptors --no-pre-read-main-dll --video-capture-use-gpu-memory-buffer --lang=en-US --device-scale-factor=2 --num-raster-threads=4 --enable-main-frame-before-activation --renderer-client-id=43 --launch-time-ticks=2023534892457 --metrics-shmem-handle=5200,i,480117"
+  },
+  {
+   "pid": 97864,
+   "ppid": 83676,
+   "name": "chrome.exe",
+   "exe": "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+   "cmd": "\"C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe\" --allow-pre-commit-input --disable-background-networking --disable-background-timer-throttling --disable-backgrounding-occluded-windows --disable-breakpad --disable-client-side-phishing-detection --disable-component-extensions-with-background-pages --disable-crash-reporter --disable-default-apps --disable-dev-shm-usage --disable-hang-monitor "
+  },
+  {
+   "pid": 115448,
+   "ppid": 97864,
+   "name": "chrome.exe",
+   "exe": "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+   "cmd": "\"C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe\" --type=crashpad-handler --user-data-dir=C:\\Users\\user\\.cache\\chrome-devtools-mcp\\chrome-profile /prefetch:4 --monitor-self-annotation=ptype=crashpad-handler --database=C:\\Users\\user\\.cache\\chrome-devtools-mcp\\chrome-profile\\Crashpad --url=https://clients2.google.com/cr/report --annotation=channel= --annotation=plat=Win64 --annotation=prod=C"
+  },
+  {
+   "pid": 38752,
+   "ppid": 97864,
+   "name": "chrome.exe",
+   "exe": "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+   "cmd": "\"C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe\" --type=gpu-process --disable-breakpad --user-data-dir=\"C:\\Users\\user\\.cache\\chrome-devtools-mcp\\chrome-profile\" --no-pre-read-main-dll --gpu-preferences=WAAAAAAAAADgAAAEAAAAAAAAAAAAAGAAQAAAAAAAAAADAAAAAAAAADgAAAAAAAAAAAAAAAAAAAACAAAAAAAAAAAAAAAAAAAAKAAAAAAAAAAoAAAAAAAAAAgAAAAAAAAAEAAAAAIAAAABAAAAAAAAAAgAAAAAAAAACAAAAAAAAAA= --metrics-shmem-h"
+  },
+  {
+   "pid": 106824,
+   "ppid": 97864,
+   "name": "chrome.exe",
+   "exe": "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+   "cmd": "\"C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe\" --type=utility --utility-sub-type=network.mojom.NetworkService --lang=en-US --service-sandbox-type=none --user-data-dir=\"C:\\Users\\user\\.cache\\chrome-devtools-mcp\\chrome-profile\" --no-pre-read-main-dll --metrics-shmem-handle=2160,i,6630412669055119463,2276705602219318391,524288 --field-trial-handle=1900,i,12137513630365001787,2573908192294604"
+  },
+  {
+   "pid": 74972,
+   "ppid": 97864,
+   "name": "chrome.exe",
+   "exe": "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+   "cmd": "\"C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe\" --type=utility --utility-sub-type=storage.mojom.StorageService --lang=en-US --service-sandbox-type=service --user-data-dir=\"C:\\Users\\user\\.cache\\chrome-devtools-mcp\\chrome-profile\" --no-pre-read-main-dll --metrics-shmem-handle=2416,i,10942594583267666624,9301033926454018120,524288 --field-trial-handle=1900,i,12137513630365001787,257390819229"
+  },
+  {
+   "pid": 107624,
+   "ppid": 97864,
+   "name": "chrome.exe",
+   "exe": "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+   "cmd": "\"C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe\" --type=renderer --user-data-dir=\"C:\\Users\\user\\.cache\\chrome-devtools-mcp\\chrome-profile\" --no-pre-read-main-dll --disable-background-timer-throttling --disable-breakpad --enable-automation --force-color-profile=srgb --remote-debugging-pipe --allow-pre-commit-input --video-capture-use-gpu-memory-buffer --lang=en-US --device-scale-factor=2 --"
+  },
+  {
+   "pid": 126644,
+   "ppid": 97864,
+   "name": "chrome.exe",
+   "exe": "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+   "cmd": "\"C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe\" --type=renderer --user-data-dir=\"C:\\Users\\user\\.cache\\chrome-devtools-mcp\\chrome-profile\" --no-pre-read-main-dll --disable-background-timer-throttling --disable-breakpad --enable-automation --force-color-profile=srgb --remote-debugging-pipe --allow-pre-commit-input --video-capture-use-gpu-memory-buffer --lang=en-US --device-scale-factor=2 --"
+  },
+  {
+   "pid": 13964,
+   "ppid": 70164,
+   "name": "node.exe",
+   "exe": "C:\\Program Files\\nodejs\\node.exe",
+   "cmd": "\"C:\\Program Files\\nodejs\\node.exe\" C:/Users/user/.claude/statusline.js"
+  },
+  {
+   "pid": 120828,
+   "ppid": 94940,
+   "name": "node.exe",
+   "exe": "C:\\Program Files\\nodejs\\node.exe",
+   "cmd": "\"C:\\Program Files\\nodejs\\node.exe\" C:/Users/user/.claude/statusline.js"
+  }
+ ],
+ "zero_orphans": false,
+ "zero_orphans_ours": true,
+ "note": "leftovers_after_sweep can include third-party browser activity that began mid-run (e.g. another tool's debug Chrome); only processes naming our scratch dirs are ours and only those are ever killed",
+ "spawned_cmdlines": [
+  "\"C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe\" --no-first-run --no-default-browser-check http://127.0.0.1:8855/set-cookie?tag=chrome-mint",
+  "\"C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe\" --no-first-run --no-default-browser-check http://127.0.0.1:8855/cookie-echo?tag=chrome-same",
+  "\"C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe\" --no-first-run --no-default-browser-check \"--user-data-dir=C:\\Users\\user\\AppData\\Local\\Temp\\ks4web_spike_s9_abe_copy_chrome_i3j6fjou\\User Data\" http://127.0.0.1:8855/cookie-echo?tag=chrome-copied",
+  "\"C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe\" --no-first-run --no-default-browser-check http://127.0.0.1:8855/set-cookie?tag=msedge-mint",
+  "\"C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe\" --no-first-run --no-default-browser-check http://127.0.0.1:8855/cookie-echo?tag=msedge-same",
+  "\"C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe\" --no-first-run --no-default-browser-check \"--user-data-dir=C:\\Users\\user\\AppData\\Local\\Temp\\ks4web_spike_s9_abe_copy_msedge_oi_htk7x\\User Data\" http://127.0.0.1:8855/cookie-echo?tag=msedge-copied"
+ ],
+ "real_profile_attestation": {
+  "real_profile_named_in_any_spawn": [],
+  "clean": true
+ },
+ "scratch_dirs_removed": true
+}

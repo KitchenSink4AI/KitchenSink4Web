@@ -653,7 +653,98 @@ substitute for a fresh run.
 - **GATE:** every assumption in DESIGN Section 7 is confirmed or the design
   adapts before Phase 7 builds on it.
 
-### S9: Chrome Lane B and C, and the App-Bound Encryption question
+### S9: Chrome Lane B and C, and the App-Bound Encryption question — **DONE 2026-09-05, LANES GREEN; GATE ANSWERED AT SOURCE AND BINARY LEVEL, LIVE REFUSAL DEFERRED BY RULE**
+
+**Report:** `internal notes/20260905_ks4web_spikes_s9_s10.md`.
+**Code:** `spikes/s9/` on master, raw JSON in `spikes/s9/out/`. Chrome
+152.0.7977.76 and Edge 151.0.4129.107 (152.0.4191.62 staged), both installed.
+
+**Lane B is green on both branded channels.** `channel="chrome"` and
+`channel="msedge"` each ran the full S3-shaped battery, 28 of 28 steps OK:
+persistent context on a throwaway profile, navigate, read, click, fill,
+evaluate, screenshot, headless and headed, with provenance proven from the
+process table (every new process at the installed binary's path). DESIGN 4.3
+called the Chrome side "mature, low risk"; it is now measured rather than
+assumed, and Edge is on the record for the first time.
+
+**Lane C works end to end on both browsers, including the fact Lane C cannot
+live without.** A user-style launch (headed branded binary, scratch
+`--user-data-dir`, `--remote-debugging-port`) accepted `connect_over_cdp`,
+drove a read, a click, and a screenshot, and **`browser.close()` DISCONNECTS
+without killing the user-side browser** on both Chrome and Edge, verified by
+the launched process surviving the disconnect. No approval prompt interfered
+at Chrome 152 on a non-default directory.
+
+**The gate, honestly.** The spike was told not to take the blog post's word
+for the Chrome 136 failure mode, and it did not; it also could not observe the
+refusal live, because the only directory Chrome's check recognizes as default
+on this machine is the author's real profile, and the profile rule is
+absolute. What it did instead:
+
+- **Mechanism pinned from the shipped source tag (152.0.7977.76):** the check
+  is a PATH COMPARISON, `chrome::IsUsingDefaultDataDirectory()` feeding
+  `IsRemoteDebuggingAllowed`, refusing with `NotStartedReason::
+  kDisabledByDefaultUserDataDir` on branded builds, with a policy gate
+  (`prefs::kDevToolsRemoteDebuggingAllowed` -> `kDisabledByPolicy`) and, new
+  in the 152 era, `features::kDevToolsAcceptDebuggingConnections`, an
+  approval mode for debugging connections.
+- **The exact refusal text extracted from the shipped binaries on this
+  machine**, not from any blog: `DevTools remote debugging requires a
+  non-default data directory. Specify this using --user-data-dir.` It is
+  byte-identical in `chrome.dll` 152 and `msedge.dll` 151 AND 152, which
+  moves the Edge-inherits-the-restriction community claim from "reported"
+  to "the identical code path ships in Edge's binary." The live behavioral
+  run on a true default profile is the one residue, deferred to any machine
+  or throwaway Windows account whose default profile is disposable.
+- **Headless never hits the restriction, measured:** `--headless=new` with a
+  debug port and no `--user-data-dir` opens the port on BOTH browsers because
+  headless uses an EPHEMERAL profile (`%TEMP%\HeadlessChrome<digits>` /
+  `HeadlessEdge<digits>`, read via `chrome://version` over CDP), never the
+  default directory.
+- **A bypass exists and is now measured, because Chrome computes the two
+  paths differently:** the USED directory (no switch) comes from
+  install_static expanding the `LOCALAPPDATA` environment variable, while the
+  default it is COMPARED against comes from the shell known-folder API, which
+  ignores the environment. A launch under a redirected `LOCALAPPDATA` (the
+  spike's scratch-default method) therefore minted its "default" User Data in
+  scratch and **got the debug port**, headed, no switch, on both browsers.
+  Chrome 136's restriction is real and also not airtight.
+
+**The App-Bound Encryption question is answered, with one deferred edge.**
+Cookie stores minted in ANY non-default data directory are **v10 DPAPI, not
+v20 app-bound**, and the reason is in the shipped source: the ABE provider
+checks the data dir and withholds the app-bound key
+(`SupportLevel::kNotUsingDefaultUserDataDir` ->
+`KeyError::kTemporarilyUnavailable`). Measured on both browsers: a profile
+minted at a (scratch) default path, whole `User Data` tree copied to a
+non-default path, **cookies decrypt and are served after the copy**, same
+machine and user, verified server-side by the fixture receiving the Cookie
+header. The consequences split cleanly: KS4Web-owned Chrome and Edge profiles
+always run DPAPI-mode cookies, so copies and relocations of THOSE are safe;
+but a REAL default profile's cookies are v20 app-bound values that the
+provider cannot unwrap at any non-default path, so **seeding a Chrome profile
+from the user's real profile is expected NOT to carry sessions**, pending the
+same disposable-default-machine run. Chrome seeded profiles are the opposite
+of Firefox's S6 result, and DESIGN 4.4's "worse story than Firefox" now has
+its mechanism.
+
+**Two hygiene findings the probes forced, both now design inputs (DESIGN
+4.7).** Edge's startup-boost keep-alive (`msedge --no-startup-window`) can
+RESPAWN after a graceful close, holding the profile's Cookies store, with a
+command line that names nothing of ours while its crashpad CHILD names the
+profile directory, so teardown sweeps must loop and may take a parent on the
+child's evidence. And force-killing a browser's lagging children too soon
+after a graceful root exit loses the cookie flush (measured: a 1.5 s kill lag
+cost the minted cookie; a 10 s descendant-wait recovered it).
+
+Zero orphans of ours in every script, with third-party churn attributed
+rather than hidden: the author's Firefox restarted itself on its real profile
+mid-run (14:55:24 parent.lock, bare command line, never touched), and another
+tool's debug Chrome appeared and was correctly refused by both kill fences.
+The author's real Chrome profile was scanned read-only afterward: zero files
+modified. No spawn ever named a real profile path.
+
+### S9 (original definition, kept as the record of what was asked)
 
 `channel="chrome"` with a KS4Web profile directory, then `connect_over_cdp`
 against a Chrome started with a non-default `--user-data-dir`.
@@ -672,7 +763,39 @@ against a Chrome started with a non-default `--user-data-dir`.
   user account? App-Bound Encryption makes this genuinely uncertain and it
   determines whether Chrome seeded profiles are useful at all.
 
-### S10: Weight and install measurement
+### S10: Weight and install measurement — **DONE 2026-09-05, GATE DECIDED: NO BROWSERS SHIPPED, CHROMIUM LAZY ON FIRST USE**
+
+**Report:** `internal notes/20260905_ks4web_spikes_s9_s10.md`.
+**Code:** `spikes/s10/` on master, raw JSON in `spikes/s10/out/`. Everything
+ran in scratch (fresh venv, scratch `PLAYWRIGHT_BROWSERS_PATH`) and was
+deleted after measuring; the user's Playwright cache was never touched.
+
+**Install bill, measured 2026-09-05 (network times are network times):**
+fresh venv 11.1 s; `pip install playwright --no-cache-dir` 11.0 s and
+**+108.2 MB** of site-packages (the 38.2 MB wheel, installed) at 1.62.0;
+`playwright install chromium` 43.9 s and **701.0 MB on disk** (chromium plus
+the headless shell plus ffmpeg and winldd, which is why the on-disk figure
+dwarfs the 281 MB download the design quoted); `firefox` 21.3 s and
+**+336.5 MB**; `webkit` 10.7 s and **+169.1 MB**. All three engines together:
+**1,206.7 MB** on disk plus a 119.5 MB venv.
+
+**Resident memory on the same frozen Versailles page, settled 6 s, summed
+over the browser's own process tree** (working set overstates a multi-process
+tree because shared pages count once per process; private bytes is the
+honest cross-tree sum): bundled Chromium HEADLESS 4 processes, 267.5 MB WS /
+**129.6 MB private**; bundled Chromium headed 7 processes, 490.2 / 286.4;
+`moz-firefox` headed (the dogfood shape) 12 processes, 1,178.6 / **898.4 MB
+private**, roughly 6.9x headless Chromium. The Playwright node driver idles
+at 104.7 WS / 91.4 private alongside any of them.
+
+**GATE, decided on the numbers:** ship with NO browsers. Install Chromium
+lazily on first use (44 s and 701 MB, once, and the cheapest RAM at run
+time). Firefox and WebKit stay opt-in downloads, and `moz-firefox` remains
+the zero-download lane when Firefox is already installed, at a measured and
+disclosed memory premium. This is the expectation the spike was asked to
+check, now held up by measurement rather than by preference.
+
+### S10 (original definition, kept as the record of what was asked)
 
 Time and measure `pip install playwright` plus `playwright install` per engine;
 measure resident memory for a headless Chromium page against a headed
@@ -701,8 +824,8 @@ whole session and not just one call. Everything else is a delivery decision.
 | S6 seeded profile | **GREEN**, sessions survive; minimal set is cookies.sqlite + WAL sidecars; source profile hash-identical |
 | S7 process hygiene (Windows slice) | **GREEN**, HOLDS; FastMCP integration half is Phase 1 |
 | S8 MCP conformance | **DONE 2026-09-05, GATE MET**: MRTR refuted on the installed client, elicitation is the live channel, subagent 3k cap refuted, hints and readOnlyHint confirmed |
-| S9 Chrome and Edge Lane B/C | not run |
-| S10 weight and install | not run |
+| S9 Chrome and Edge Lane B/C | **DONE 2026-09-05**: Lane B green on both branded channels (28/28), Lane C works on both incl. disconnect-leaves-browser-running; restriction pinned at source and binary (Edge ships the identical code path); ABE answered: non-default dirs mint v10 DPAPI and copies decrypt, real-profile v20 seeding expected NOT to carry sessions; live default-dir refusal deferred by the profile rule to a disposable machine |
+| S10 weight and install | **DONE 2026-09-05, GATE DECIDED**: no browsers shipped, Chromium lazy on first use (43.9 s / 701 MB); all engines 1,206.7 MB; headless Chromium 129.6 MB private vs headed moz-firefox 898.4 MB |
 | E11 latency (transferred from S1) | **DISCHARGED**, bound set |
 
 **S1 is green and its two failed numeric targets were the design's numbers
@@ -713,9 +836,9 @@ measurement. Neither S1 kill criterion tripped and neither did S3's or S4's.
 S2 green means it is cheap for a whole session rather than one call, and it is
 now measured: 396 resolutions, zero false rebinds, zero false stickiness, with
 100 percent ref survival through a re-render that destroyed 77 percent of the
-DOM nodes. The architecture freezes. S8, S9, and S10 remain unrun and none of
-them is a gate blocker, since each is a delivery decision rather than a test of
-whether the product exists. S5 and S6 ran on 2026-09-05 in the authorized
+DOM nodes. The architecture freezes. **Every spike has now reported: S8, S9,
+and S10 closed on 2026-09-05**, each a delivery decision rather than a test of
+whether the product exists, and none tripped a kill. S5 and S6 ran on 2026-09-05 in the authorized
 Firefox-closed window and both gates PASS: **the Lane C Firefox differentiator
 is VERIFIED** (raw BiDi attach to a user-style stock launch, five commands
 round-tripping, no Playwright involved) and the seeded-copy dogfood path is

@@ -1440,8 +1440,19 @@ its own Playwright instance, which is strictly worse.
 
 Weight, and what it implies: the wheel is 38.2 MB on Windows because it bundles
 a Node runtime plus the playwright-core driver, and browsers are roughly 281 MB
-(Chromium), 187 MB (Firefox), 180 MB (WebKit). **Ship with no browsers, install
-per engine on first use.** Lazy install is also lazy start, which matters for a
+(Chromium), 187 MB (Firefox), 180 MB (WebKit) as downloads. **S10 measured the
+real bill on 2026-09-05:** the installed wheel is 108.2 MB of site-packages
+(11.0 s), and ON DISK the engines cost 701.0 MB for Chromium (43.9 s,
+including the headless shell, ffmpeg, and winldd), 336.5 MB for Firefox
+(21.3 s), and 169.1 MB for WebKit (10.7 s), 1,206.7 MB all together. Resident
+memory on the same frozen Versailles page: headless bundled Chromium 129.6 MB
+private across 4 processes, headed 286.4 across 7, headed `moz-firefox`
+898.4 MB private across 12, plus a ~91 MB idle node driver in every case.
+**Ship with no browsers, install per engine on first use** — the S10 gate
+decided it on these numbers: Chromium lazily on first use (the one-time 44 s /
+701 MB buys the cheapest runtime memory), Firefox and WebKit opt-in, and
+`moz-firefox` the zero-download lane at a disclosed memory premium. Lazy
+install is also lazy start, which matters for a
 different reason in Section 4.6.
 
 ### 4.2 Lane A: driven (the default)
@@ -1455,7 +1466,13 @@ most users get.
 KS4Web launches the user's **installed** Chrome or Firefox, still with a
 KS4Web-owned profile.
 
-- Chrome side: `channel="chrome"` / `"msedge"`. Mature, low risk.
+- Chrome side: `channel="chrome"` / `"msedge"`. Mature, low risk — and
+  **measured by S9 (2026-09-05) rather than assumed**: both branded channels
+  ran the full S3-shaped battery 28 of 28 green on throwaway profiles,
+  headless and headed, provenance proven from the process table. One
+  packaging note from the run: Edge stages updates side by side (151 running
+  with 152 staged), so the driven version is whatever the stub launches, the
+  same version-skew posture as `moz-firefox`.
 - Firefox side: `channel="moz-firefox"`. This is the most interesting finding in
   the engine research and the most contingent. Playwright registers three
   undocumented channels (`moz-firefox`, `-beta`, `-nightly`) via
@@ -1526,6 +1543,35 @@ increase in attackers using Chrome Remote Debugging to extract cookies." So
 dead, permanently, and any Chrome Lane C story involves a second profile. That
 must be documented as a worse story than Firefox's rather than papered over.
 Playwright itself calls this connection "significantly lower fidelity."
+
+**S9 measured the Chrome side on 2026-09-05, and the second-profile story
+WORKS while the worse-than-Firefox verdict deepens.** `connect_over_cdp`
+against a user-style launch (headed Chrome 152 / Edge 151, non-default
+`--user-data-dir`, `--remote-debugging-port`) drove a read, a click, and a
+screenshot end to end on both browsers, and `browser.close()` disconnects
+WITHOUT killing the user's browser, which is the teardown behavior Lane C
+requires and now has measured. No debugging-approval prompt interfered at
+these versions on a non-default directory. The restriction itself was pinned
+past the blog post: the shipped source (tag 152.0.7977.76) refuses via
+`chrome::IsUsingDefaultDataDirectory()` -> `NotStartedReason::
+kDisabledByDefaultUserDataDir` (a PATH comparison, branded builds, plus a
+`DevToolsRemoteDebuggingAllowed` policy pref and the 152-era
+`features::kDevToolsAcceptDebuggingConnections` approval mode), and the
+refusal text `DevTools remote debugging requires a non-default data
+directory. Specify this using --user-data-dir.` sits byte-identical in
+`chrome.dll` 152 and `msedge.dll` 151/152, so **Edge ships the same
+restriction code path** and the community claim is no longer carried
+unverified. Two measured wrinkles: `--headless=new` never triggers the
+restriction because headless uses an ephemeral `%TEMP%` profile rather than
+the default directory, and the used-vs-compared paths are computed
+differently (environment expansion vs shell API), so a redirected
+`LOCALAPPDATA` bypasses the check entirely. The one residue is the live
+refusal observed on a true default profile, deferred to a machine whose
+default profile is disposable; the author's real profiles are untouchable by
+standing rule. **And the deeper reason Chrome Lane C stays second-profile
+even with sessions in mind: App-Bound Encryption makes a copy of the user's
+real profile useless for cookies (Section 4.6), so there is no seeded
+shortcut around the second login.**
 
 **Firefox side, and this is the differentiator.** Mozilla's remote agent is
 enabled only by a command-line flag, with no runtime toggle, so you cannot turn
@@ -1651,6 +1697,19 @@ applies to the Playwright-driven Firefox lanes (A and B) only; Lane C's own
 client supports history truthfully, and the capability table must say so
 per-lane rather than per-browser.
 
+**S9 (2026-09-05) adds the branded Chromium lanes to the per-lane table, all
+measured.** Lane B `chrome` and `msedge`: the full battery supported, no
+`LANE_UNSUPPORTED` rows found (Chromium was already the S4 control, so the
+two Firefox gaps simply do not exist here). Lane C Chrome and Edge over
+`connect_over_cdp`: read, click, and screenshot supported, and disconnect
+leaves the user-side browser running, on both. Three per-lane truths the
+table carries from S9: Lane C Chrome/Edge REQUIRES a non-default
+`--user-data-dir` (the 136+ restriction, pinned at source and binary, with
+the refusal text byte-identical in Edge's binary); `--headless=new` never
+uses the default directory (ephemeral `%TEMP%` profile, so the restriction is
+a headed-only concern); and cookie stores in KS4Web-owned (non-default)
+Chrome/Edge profiles are v10 DPAPI, per the 4.6 ABE finding.
+
 **One cost row that is not a gap.** `page.pdf()` works on Firefox/BiDi, which
 is itself a surprise, since PDF generation was assumed Chromium-only. It
 produced 232 KB in **8.7 seconds** against Chromium's 240 KB in **0.2
@@ -1722,8 +1781,24 @@ COPY. Second: a same-version stock launch against the seed mints its own
 complaint (Firefox 154 also derives a `logins.db`), so none of those belong in
 the copy set. Version-skewed seeds remain untested.
 
-Whether copied Chrome profiles decrypt at a non-default path is an open
-empirical question (App-Bound Encryption), resolved by Spike 6, not guessed.
+**The App-Bound Encryption question was resolved by S9 on 2026-09-05, by
+measurement plus the shipped source, and it splits in two.** Cookie stores
+minted in ANY non-default data directory are v10 DPAPI rather than v20
+app-bound, because the ABE provider checks the data dir and withholds the
+app-bound key there (`app_bound_encryption_provider_win.cc`, tag
+152.0.7977.76: `SupportLevel::kNotUsingDefaultUserDataDir` ->
+`KeyError::kTemporarilyUnavailable`). Measured on Chrome 152 and Edge 151: a
+profile minted at a (scratch) default path and copied whole to a non-default
+path **still serves its cookies after the copy**, same machine and user,
+verified server-side. So KS4Web-owned Chrome and Edge profiles, which are
+always non-default, run DPAPI-mode cookies and copy safely. **A REAL default
+profile's cookies are v20 app-bound values the provider cannot unwrap at any
+non-default path, so seeding a Chrome profile from the user's real profile is
+expected NOT to carry sessions.** That is the opposite of the Firefox S6
+result, it is why the Chrome seeded-copy pattern is not offered as a session
+shortcut, and the one deferred edge (observing the v20 copy fail live) needs
+a machine whose default Chrome profile is disposable. "Log in once inside
+KS4Web's profile" is the honest Chrome-side story.
 
 ### 4.7 Windows process hygiene: three defenses, not one
 
@@ -1875,6 +1950,27 @@ is the direction a hygiene layer must never fail in.
    because requiring a command line that names an owned profile declines every
    helper process that does not repeat its root's flags, and declining to kill
    a helper is how the orphan gets left behind.
+
+**Two more facts arrived with S9's branded-channel probes (2026-09-05), and
+both bind on any teardown that touches Chrome or Edge outside Playwright's
+own lifecycle** (seed tooling, Lane C user-side simulation, reapers):
+
+8. **Edge's startup-boost keep-alive respawns AFTER a graceful close.** A
+   gracefully closed Edge root can leave or re-spawn an
+   `msedge --no-startup-window` background process that holds the profile's
+   Cookies store, whose OWN command line names nothing of ours while its
+   crashpad CHILD carries the `--user-data-dir`. Measured: it held the
+   sqlite lock and broke a profile copy. So teardown sweeps LOOP until quiet
+   rather than running once, and a parent may be claimed on its child's
+   evidence, which is still positive evidence of ownership and never a name
+   match.
+
+9. **Force-killing a browser's lagging children too soon after a graceful
+   root exit loses data.** A 1.5-second kill lag after root exit cost a
+   freshly minted cookie (the network-service child had not flushed);
+   waiting up to 10 seconds for the children's own shutdown before any
+   force-kill recovered it. Graceful teardown means graceful for the whole
+   tree, with the force path as the deadline, not the habit.
 
 **Design read: the death pipe is doing the work, and the job object is a
 cheap, provably functional belt-and-braces backstop.** Both hooks the three

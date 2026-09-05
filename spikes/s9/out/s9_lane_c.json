@@ -1,0 +1,144 @@
+{
+ "rows": [
+  {
+   "step": "chrome connect_over_cdp",
+   "status": "OK",
+   "ms": 71,
+   "detail": "<Browser type=<BrowserType name=chromium executable_path=C:\\Users\\user\\AppData\\Local\\ms-playwright\\chromium-1234\\chrome-win64\\chrome.exe> version=152.0.7977.76>"
+  },
+  {
+   "step": "chrome contexts",
+   "status": "OK",
+   "ms": 0,
+   "detail": "1"
+  },
+  {
+   "step": "chrome adopt page",
+   "status": "OK",
+   "ms": 0,
+   "detail": "<Page url='about:blank'>"
+  },
+  {
+   "step": "chrome navigate",
+   "status": "OK",
+   "ms": 54,
+   "detail": "200"
+  },
+  {
+   "step": "chrome read marker",
+   "status": "OK",
+   "ms": 47,
+   "detail": "S9-INDEX-OK"
+  },
+  {
+   "step": "chrome click #bump -> count",
+   "status": "OK",
+   "ms": 66,
+   "detail": "1"
+  },
+  {
+   "step": "chrome screenshot",
+   "status": "OK",
+   "ms": 231,
+   "detail": "27660"
+  },
+  {
+   "step": "chrome browser.close() (disconnect)",
+   "status": "OK",
+   "ms": 9,
+   "detail": "None"
+  },
+  {
+   "step": "msedge connect_over_cdp",
+   "status": "OK",
+   "ms": 294,
+   "detail": "<Browser type=<BrowserType name=chromium executable_path=C:\\Users\\user\\AppData\\Local\\ms-playwright\\chromium-1234\\chrome-win64\\chrome.exe> version=151.0.4129.107>"
+  },
+  {
+   "step": "msedge contexts",
+   "status": "OK",
+   "ms": 0,
+   "detail": "1"
+  },
+  {
+   "step": "msedge adopt page",
+   "status": "OK",
+   "ms": 0,
+   "detail": "<Page url='about:blank'>"
+  },
+  {
+   "step": "msedge navigate",
+   "status": "OK",
+   "ms": 96,
+   "detail": "200"
+  },
+  {
+   "step": "msedge read marker",
+   "status": "OK",
+   "ms": 51,
+   "detail": "S9-INDEX-OK"
+  },
+  {
+   "step": "msedge click #bump -> count",
+   "status": "OK",
+   "ms": 118,
+   "detail": "1"
+  },
+  {
+   "step": "msedge screenshot",
+   "status": "OK",
+   "ms": 426,
+   "detail": "27917"
+  },
+  {
+   "step": "msedge browser.close() (disconnect)",
+   "status": "OK",
+   "ms": 4,
+   "detail": "None"
+  }
+ ],
+ "verdicts": [
+  {
+   "browser": "chrome",
+   "endpoint": {
+    "Browser": "Chrome/152.0.7977.76",
+    "Protocol-Version": "1.3",
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
+    "V8-Version": "15.2.124.19",
+    "WebKit-Version": "537.36 (@0d89dfa2dd7c1ec4b8a14b9f303f887bb63b6174)",
+    "webSocketDebuggerUrl": "ws://127.0.0.1:9631/devtools/browser/8c0e913f-eea2-4000-98aa-2edb632bf7b8"
+   },
+   "disconnect_leaves_browser_running": true,
+   "teardown": "graceful",
+   "contexts": 1,
+   "verdict": "WORKS"
+  },
+  {
+   "browser": "msedge",
+   "endpoint": {
+    "Browser": "Edg/151.0.4129.107",
+    "Protocol-Version": "1.3",
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36 Edg/151.0.0.0",
+    "V8-Version": "15.1.23.12",
+    "WebKit-Version": "537.36 (@419e77616b4ed7d0a544b85cb53ccd5b74d5f135)",
+    "webSocketDebuggerUrl": "ws://127.0.0.1:9632/devtools/browser/3af7d042-51d2-499f-a0f1-4477896dc29b"
+   },
+   "disconnect_leaves_browser_running": true,
+   "teardown": "graceful",
+   "contexts": 1,
+   "verdict": "WORKS"
+  }
+ ],
+ "swept": [],
+ "leftovers_after_sweep": [
+  {
+   "pid": 125388,
+   "ppid": 120844,
+   "name": "node.exe",
+   "exe": "C:\\Program Files\\nodejs\\node.exe",
+   "cmd": "\"C:\\Program Files\\nodejs\\node.exe\" C:/Users/user/.claude/statusline.js"
+  }
+ ],
+ "zero_orphans": false,
+ "scratch_dirs_removed": true
+}

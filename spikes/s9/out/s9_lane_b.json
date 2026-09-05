@@ -1,0 +1,213 @@
+{
+ "env": {
+  "python": "3.14.3",
+  "playwright_python": "1.62.0",
+  "chrome_exe": "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+  "chrome_version": "152.0.7977.76",
+  "edge_exe": "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
+  "edge_version": "151.0.4129.107"
+ },
+ "rows": [
+  {
+   "step": "chrome launch_persistent(headless)",
+   "status": "OK",
+   "ms": 1412,
+   "detail": "<BrowserContext browser=<Browser type=<BrowserType name=chromium executable_path=C:\\Users\\user\\AppData\\Local\\ms-playwright\\chromium-1234\\chrome-win64\\chrome.exe> version=152.0.7977.76>>"
+  },
+  {
+   "step": "chrome navigate",
+   "status": "OK",
+   "ms": 51,
+   "detail": "200"
+  },
+  {
+   "step": "chrome read title+marker",
+   "status": "OK",
+   "ms": 39,
+   "detail": "('s9 fixture', 'S9-INDEX-OK')"
+  },
+  {
+   "step": "chrome click #bump",
+   "status": "OK",
+   "ms": 117,
+   "detail": "1"
+  },
+  {
+   "step": "chrome fill input",
+   "status": "OK",
+   "ms": 19,
+   "detail": "lane-b"
+  },
+  {
+   "step": "chrome evaluate",
+   "status": "OK",
+   "ms": 6,
+   "detail": "42"
+  },
+  {
+   "step": "chrome screenshot",
+   "status": "OK",
+   "ms": 65,
+   "detail": "10415"
+  },
+  {
+   "step": "chrome user agent",
+   "status": "OK",
+   "ms": 3,
+   "detail": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/152.0.0.0 Safari/537.36"
+  },
+  {
+   "step": "chrome browser.version",
+   "status": "OK",
+   "ms": 0,
+   "detail": "152.0.7977.76"
+  },
+  {
+   "step": "chrome provenance (process table)",
+   "status": "OK",
+   "ms": 1125,
+   "detail": "8 processes at installed path"
+  },
+  {
+   "step": "chrome close",
+   "status": "OK",
+   "ms": 184,
+   "detail": "None"
+  },
+  {
+   "step": "chrome launch_persistent(HEADED)",
+   "status": "OK",
+   "ms": 409,
+   "detail": "<BrowserContext browser=<Browser type=<BrowserType name=chromium executable_path=C:\\Users\\user\\AppData\\Local\\ms-playwright\\chromium-1234\\chrome-win64\\chrome.exe> version=152.0.7977.76>>"
+  },
+  {
+   "step": "chrome headed navigate+read",
+   "status": "OK",
+   "ms": 68,
+   "detail": "S9-INDEX-OK"
+  },
+  {
+   "step": "chrome headed close",
+   "status": "OK",
+   "ms": 229,
+   "detail": "None"
+  },
+  {
+   "step": "msedge launch_persistent(headless)",
+   "status": "OK",
+   "ms": 838,
+   "detail": "<BrowserContext browser=<Browser type=<BrowserType name=chromium executable_path=C:\\Users\\user\\AppData\\Local\\ms-playwright\\chromium-1234\\chrome-win64\\chrome.exe> version=151.0.4129.107>>"
+  },
+  {
+   "step": "msedge navigate",
+   "status": "OK",
+   "ms": 40,
+   "detail": "200"
+  },
+  {
+   "step": "msedge read title+marker",
+   "status": "OK",
+   "ms": 29,
+   "detail": "('s9 fixture', 'S9-INDEX-OK')"
+  },
+  {
+   "step": "msedge click #bump",
+   "status": "OK",
+   "ms": 85,
+   "detail": "1"
+  },
+  {
+   "step": "msedge fill input",
+   "status": "OK",
+   "ms": 14,
+   "detail": "lane-b"
+  },
+  {
+   "step": "msedge evaluate",
+   "status": "OK",
+   "ms": 4,
+   "detail": "42"
+  },
+  {
+   "step": "msedge screenshot",
+   "status": "OK",
+   "ms": 173,
+   "detail": "10417"
+  },
+  {
+   "step": "msedge user agent",
+   "status": "OK",
+   "ms": 2,
+   "detail": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.0.0 Safari/537.36 Edg/151.0.0.0"
+  },
+  {
+   "step": "msedge browser.version",
+   "status": "OK",
+   "ms": 0,
+   "detail": "151.0.4129.107"
+  },
+  {
+   "step": "msedge provenance (process table)",
+   "status": "OK",
+   "ms": 1160,
+   "detail": "7 processes at installed path"
+  },
+  {
+   "step": "msedge close",
+   "status": "OK",
+   "ms": 155,
+   "detail": "None"
+  },
+  {
+   "step": "msedge launch_persistent(HEADED)",
+   "status": "OK",
+   "ms": 399,
+   "detail": "<BrowserContext browser=<Browser type=<BrowserType name=chromium executable_path=C:\\Users\\user\\AppData\\Local\\ms-playwright\\chromium-1234\\chrome-win64\\chrome.exe> version=151.0.4129.107>>"
+  },
+  {
+   "step": "msedge headed navigate+read",
+   "status": "OK",
+   "ms": 70,
+   "detail": "S9-INDEX-OK"
+  },
+  {
+   "step": "msedge headed close",
+   "status": "OK",
+   "ms": 222,
+   "detail": "None"
+  }
+ ],
+ "verdicts": [
+  {
+   "channel": "chrome",
+   "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/152.0.0.0 Safari/537.36",
+   "version": "152.0.7977.76"
+  },
+  {
+   "channel": "msedge",
+   "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.0.0 Safari/537.36 Edg/151.0.0.0",
+   "version": "151.0.4129.107"
+  }
+ ],
+ "leftovers_before_sweep": [
+  {
+   "pid": 69508,
+   "ppid": 122456,
+   "name": "node.exe",
+   "exe": "",
+   "cmd": ""
+  }
+ ],
+ "swept": [],
+ "leftovers_after_sweep": [
+  {
+   "pid": 96876,
+   "ppid": 107420,
+   "name": "node.exe",
+   "exe": "",
+   "cmd": ""
+  }
+ ],
+ "zero_orphans": false,
+ "scratch_dirs_removed": true
+}

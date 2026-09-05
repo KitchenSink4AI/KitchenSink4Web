@@ -1,0 +1,201 @@
+{
+ "results": {
+  "source_facts": {
+   "tag": "152.0.7977.76",
+   "mechanism": "path comparison: chrome::IsUsingDefaultDataDirectory() -> IsRemoteDebuggingAllowed -> NotStartedReason::kDisabledByDefaultUserDataDir; branded builds, Win/Mac/Linux",
+   "policy_gate": "prefs::kDevToolsRemoteDebuggingAllowed false -> kDisabledByPolicy",
+   "approval_feature": "features::kDevToolsAcceptDebuggingConnections (152)",
+   "asymmetry": "used dir: install_static GetEnvironmentString(LOCALAPPDATA); comparison default: PathService DIR_LOCAL_APP_DATA (shell API)",
+   "fetched": "2026-09-05 via chromium.googlesource.com"
+  },
+  "chrome": {
+   "browser": "chrome",
+   "version": "152.0.7977.76",
+   "h1_redirected": {
+    "mode": "headless=new, no user-data-dir, redirected env",
+    "port_open": true,
+    "cdp_version": {
+     "Browser": "Chrome/152.0.7977.76",
+     "Protocol-Version": "1.3",
+     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/152.0.0.0 Safari/537.36",
+     "V8-Version": "15.2.124.19",
+     "WebKit-Version": "537.36 (@0d89dfa2dd7c1ec4b8a14b9f303f887bb63b6174)",
+     "webSocketDebuggerUrl": "ws://127.0.0.1:9611/devtools/browser/42802972-b30d-4a07-9cd5-6ee847bebb00"
+    },
+    "profile_path": "C:\\Users\\user\\AppData\\Local\\Temp\\HeadlessChrome407722022837750\\Default",
+    "teardown": "forced",
+    "stderr": "DevTools listening on ws://127.0.0.1:9611/devtools/browser/42802972-b30d-4a07-9cd5-6ee847bebb00\r\n[40772:122004:0905/144051.607:ERROR:google_apis\\gcm\\engine\\registration_request.cc:291] Registration response error message: DEPRECATED_ENDPOINT"
+   },
+   "h1_profile_is_ephemeral_temp": true,
+   "h2_clean_env": {
+    "mode": "headless=new, no user-data-dir, clean env",
+    "port_open": true,
+    "cdp_version": {
+     "Browser": "Chrome/152.0.7977.76",
+     "Protocol-Version": "1.3",
+     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/152.0.0.0 Safari/537.36",
+     "V8-Version": "15.2.124.19",
+     "WebKit-Version": "537.36 (@0d89dfa2dd7c1ec4b8a14b9f303f887bb63b6174)",
+     "webSocketDebuggerUrl": "ws://127.0.0.1:9612/devtools/browser/886d249b-a4e1-4605-9b31-e412210d44bb"
+    },
+    "profile_path": "C:\\Users\\user\\AppData\\Local\\Temp\\HeadlessChrome674042022847312\\Default",
+    "teardown": "forced",
+    "stderr": "DevTools listening on ws://127.0.0.1:9612/devtools/browser/886d249b-a4e1-4605-9b31-e412210d44bb\r\n[67404:123740:0905/144100.154:ERROR:google_apis\\gcm\\engine\\registration_request.cc:291] Registration response error message: DEPRECATED_ENDPOINT"
+   },
+   "a_headed_bypass": {
+    "mode": "HEADED, no user-data-dir, redirected env (bypass probe)",
+    "scratch_ud_appeared_s": 0.1,
+    "port_open": true,
+    "cdp_version": {
+     "Browser": "Chrome/152.0.7977.76",
+     "Protocol-Version": "1.3",
+     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
+     "V8-Version": "15.2.124.19",
+     "WebKit-Version": "537.36 (@0d89dfa2dd7c1ec4b8a14b9f303f887bb63b6174)",
+     "webSocketDebuggerUrl": "ws://127.0.0.1:9613/devtools/browser/ee7eaf13-7141-4042-9053-0cfc580fbe3d"
+    },
+    "profile_path": "C:\\Users\\user\\AppData\\Local\\Temp\\ks4web_spike_s9_la_chrome_s3ut0rc_\\Google\\Chrome\\User Data\\Default",
+    "devtools_active_port_file": false,
+    "teardown": "graceful",
+    "stderr": "[0905/144107.266:ERROR:third_party\\crashpad\\crashpad\\util\\win\\registration_protocol_win.cc:136] TransactNamedPipe: The pipe has been ended. (0x6D)\r\n\r\nDevTools listening on ws://127.0.0.1:9613/devtools/browser/ee7eaf13-7141-4042-9053-0cfc580fbe3d"
+   },
+   "c_positive": {
+    "mode": "HEADED, explicit scratch --user-data-dir",
+    "port_open": true,
+    "cdp_version": {
+     "Browser": "Chrome/152.0.7977.76",
+     "Protocol-Version": "1.3",
+     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
+     "V8-Version": "15.2.124.19",
+     "WebKit-Version": "537.36 (@0d89dfa2dd7c1ec4b8a14b9f303f887bb63b6174)",
+     "webSocketDebuggerUrl": "ws://127.0.0.1:9614/devtools/browser/6af44fa4-f015-4939-be1e-e35fa12d924c"
+    },
+    "teardown": "graceful",
+    "stderr": "DevTools listening on ws://127.0.0.1:9614/devtools/browser/6af44fa4-f015-4939-be1e-e35fa12d924c"
+   },
+   "d_true_default_refusal": {
+    "status": "DEFERRED BY RULE",
+    "why": "the only directory IsUsingDefaultDataDirectory() recognizes as default on this machine is the author's real profile, and the profile rule is absolute",
+    "needs": "any machine (or throwaway Windows account) whose default Chrome/Edge profile is disposable; run: <browser> --remote-debugging-port=9222 with no --user-data-dir and record stderr + port state",
+    "expected_per_source": "port never opens; NotStartedReason::kDisabledByDefaultUserDataDir (branded builds)"
+   },
+   "real_profile_scan": {
+    "real_ud": "C:\\Users\\user\\AppData\\Local\\Google\\Chrome\\User Data",
+    "exists": true,
+    "files_modified_last_90min": 0,
+    "newest": null
+   }
+  },
+  "msedge": {
+   "browser": "msedge",
+   "version": "151.0.4129.107",
+   "h1_redirected": {
+    "mode": "headless=new, no user-data-dir, redirected env",
+    "port_open": true,
+    "cdp_version": {
+     "Browser": "Edg/151.0.4129.107",
+     "Protocol-Version": "1.3",
+     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.0.0 Safari/537.36 Edg/151.0.0.0",
+     "V8-Version": "15.1.23.12",
+     "WebKit-Version": "537.36 (@419e77616b4ed7d0a544b85cb53ccd5b74d5f135)",
+     "webSocketDebuggerUrl": "ws://127.0.0.1:9621/devtools/browser/5a37f406-be72-40f2-a539-812ab4030d7b"
+    },
+    "profile_path": "C:\\Users\\user\\AppData\\Local\\Temp\\HeadlessEdge1004442022863453\\Default",
+    "teardown": "forced",
+    "stderr": "DevTools listening on ws://127.0.0.1:9621/devtools/browser/5a37f406-be72-40f2-a539-812ab4030d7b\r\n[100444:110092:0905/144116.183:ERROR:chrome\\browser\\edge_windows_user_activity\\windows_user_activity_register.cc:723] hr failed: Invalid window handle. (0x80070578)"
+   },
+   "h1_profile_is_ephemeral_temp": true,
+   "h2_clean_env": {
+    "mode": "headless=new, no user-data-dir, clean env",
+    "port_open": true,
+    "cdp_version": {
+     "Browser": "Edg/151.0.4129.107",
+     "Protocol-Version": "1.3",
+     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.0.0 Safari/537.36 Edg/151.0.0.0",
+     "V8-Version": "15.1.23.12",
+     "WebKit-Version": "537.36 (@419e77616b4ed7d0a544b85cb53ccd5b74d5f135)",
+     "webSocketDebuggerUrl": "ws://127.0.0.1:9622/devtools/browser/1646bd91-f19b-46b1-bcd8-d4886a4b219a"
+    },
+    "profile_path": "C:\\Users\\user\\AppData\\Local\\Temp\\HeadlessEdge1015802022873343\\Default",
+    "teardown": "forced",
+    "stderr": "DevTools listening on ws://127.0.0.1:9622/devtools/browser/1646bd91-f19b-46b1-bcd8-d4886a4b219a\r\n[101580:87468:0905/144126.161:ERROR:chrome\\browser\\edge_windows_user_activity\\windows_user_activity_register.cc:723] hr failed: Invalid window handle. (0x80070578)"
+   },
+   "a_headed_bypass": {
+    "mode": "HEADED, no user-data-dir, redirected env (bypass probe)",
+    "scratch_ud_appeared_s": 0.1,
+    "port_open": true,
+    "cdp_version": {
+     "Browser": "Edg/151.0.4129.107",
+     "Protocol-Version": "1.3",
+     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36 Edg/151.0.0.0",
+     "V8-Version": "15.1.23.12",
+     "WebKit-Version": "537.36 (@419e77616b4ed7d0a544b85cb53ccd5b74d5f135)",
+     "webSocketDebuggerUrl": "ws://127.0.0.1:9623/devtools/browser/a4013116-f2f1-4d86-8cb7-603ec5a70e83"
+    },
+    "profile_path": "C:\\Users\\user\\AppData\\Local\\Temp\\ks4web_spike_s9_la_msedge_1g7tszto\\Microsoft\\Edge\\User Data\\Default",
+    "devtools_active_port_file": false,
+    "teardown": "graceful",
+    "stderr": "DevTools listening on ws://127.0.0.1:9623/devtools/browser/a4013116-f2f1-4d86-8cb7-603ec5a70e83\r\n[126212:116452:0905/144135.005:ERROR:components\\sync\\engine\\get_updates_processor.cc:424] PostClientToServerMessage() failed during GetUpdates with error Network error (ERR_ABORTED)"
+   },
+   "c_positive": {
+    "mode": "HEADED, explicit scratch --user-data-dir",
+    "port_open": true,
+    "cdp_version": {
+     "Browser": "Edg/151.0.4129.107",
+     "Protocol-Version": "1.3",
+     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36 Edg/151.0.0.0",
+     "V8-Version": "15.1.23.12",
+     "WebKit-Version": "537.36 (@419e77616b4ed7d0a544b85cb53ccd5b74d5f135)",
+     "webSocketDebuggerUrl": "ws://127.0.0.1:9624/devtools/browser/b2ca0506-8c9f-4021-9e36-4eb48023debb"
+    },
+    "teardown": "graceful",
+    "stderr": "DevTools listening on ws://127.0.0.1:9624/devtools/browser/b2ca0506-8c9f-4021-9e36-4eb48023debb"
+   },
+   "d_true_default_refusal": {
+    "status": "DEFERRED BY RULE",
+    "why": "the only directory IsUsingDefaultDataDirectory() recognizes as default on this machine is the author's real profile, and the profile rule is absolute",
+    "needs": "any machine (or throwaway Windows account) whose default Chrome/Edge profile is disposable; run: <browser> --remote-debugging-port=9222 with no --user-data-dir and record stderr + port state",
+    "expected_per_source": "port never opens; NotStartedReason::kDisabledByDefaultUserDataDir (branded builds)"
+   },
+   "real_profile_scan": {
+    "real_ud": "C:\\Users\\user\\AppData\\Local\\Microsoft\\Edge\\User Data",
+    "exists": true,
+    "files_modified_last_90min": 11,
+    "newest": "14:41:12"
+   }
+  }
+ },
+ "swept": [],
+ "leftovers_after_sweep": [],
+ "zero_orphans": true,
+ "spawned_cmdlines": [
+  "[H-redirected-chrome] \"C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe\" --no-first-run --no-default-browser-check --headless=new --disable-gpu --remote-debugging-port=9611 about:blank",
+  "[H-clean-chrome] \"C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe\" --no-first-run --no-default-browser-check --headless=new --disable-gpu --remote-debugging-port=9612 about:blank",
+  "[A-chrome] \"C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe\" --no-first-run --no-default-browser-check --remote-debugging-port=9613 about:blank",
+  "[C-chrome] \"C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe\" --no-first-run --no-default-browser-check --user-data-dir=C:\\Users\\user\\AppData\\Local\\Temp\\ks4web_spike_s9_posud_chrome_qeedr2oa --remote-debugging-port=9614 about:blank",
+  "[H-redirected-msedge] \"C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe\" --no-first-run --no-default-browser-check --headless=new --disable-gpu --remote-debugging-port=9621 about:blank",
+  "[H-clean-msedge] \"C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe\" --no-first-run --no-default-browser-check --headless=new --disable-gpu --remote-debugging-port=9622 about:blank",
+  "[A-msedge] \"C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe\" --no-first-run --no-default-browser-check --remote-debugging-port=9623 about:blank",
+  "[C-msedge] \"C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe\" --no-first-run --no-default-browser-check --user-data-dir=C:\\Users\\user\\AppData\\Local\\Temp\\ks4web_spike_s9_posud_msedge_krhj_pgs --remote-debugging-port=9624 about:blank"
+ ],
+ "real_profile_attestation": {
+  "real_profile_named_in_any_spawn": [],
+  "clean": true
+ },
+ "scratch_dirs_removed": true,
+ "binary_string_evidence": {
+  "method": "read-only scan of the shipped DLLs on this machine, 2026-09-05",
+  "refusal_message_verbatim": "DevTools remote debugging requires a non-default data directory. Specify this using --user-data-dir.",
+  "present_in": {
+   "chrome.dll 152.0.7977.76": true,
+   "msedge.dll 151.0.4129.107": true,
+   "msedge.dll 152.0.4191.62": true
+  },
+  "feature_string_DevToolsAcceptDebuggingConnections": {
+   "chrome.dll 152": true,
+   "msedge.dll 151": true,
+   "msedge.dll 152": true
+  },
+  "read": "Edge carries the identical restriction code path as Chrome (message byte-identical); the live default-profile refusal itself stays deferred to a disposable machine"
+ }
+}
