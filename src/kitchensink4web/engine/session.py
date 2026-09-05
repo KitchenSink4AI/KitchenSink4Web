@@ -250,6 +250,10 @@ class SessionManager:
                 hygiene.kill(pid)
             session.journal.close()
             hygiene._remove_tree(session.profile_dir)
+            # The enforcing budget ledger dies with the session. Not a
+            # reset: budgets are per-session by definition (policy/budgets).
+            from ..policy import budgets as _budgets
+            _budgets.BOOK.drop(session_id)
             return {
                 "session": session_id,
                 "owned_pids": sorted(session.journal.pids),

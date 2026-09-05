@@ -22,24 +22,24 @@
    "live_tokens": 833
   },
   "wikipedia_gdp_table": {
-   "delta": -178,
-   "delta_pct": -5.2,
+   "delta": -173,
+   "delta_pct": -5.1,
    "frozen_nodes": 5644,
    "frozen_tokens": 3399,
-   "live_nodes": 5560,
-   "live_tokens": 3221
+   "live_nodes": 5571,
+   "live_tokens": 3226
   },
   "wikipedia_versailles": {
-   "delta": 109,
-   "delta_pct": 2.5,
+   "delta": 129,
+   "delta_pct": 3.0,
    "frozen_nodes": 10737,
    "frozen_tokens": 4364,
-   "live_nodes": 10571,
-   "live_tokens": 4473
+   "live_nodes": 10633,
+   "live_tokens": 4493
   }
  },
  "manifest_fetched_kst": "2026-09-05 02:20",
- "measured_kst": "2026-09-05 05:11",
+ "measured_kst": "2026-09-05 11:42",
  "rows": {
   "example_com": {
    "affordances_seen": 1,
@@ -78,7 +78,7 @@
    "s1_cl100k_live": 404,
    "superseded_target": null,
    "target": null,
-   "url": "http://127.0.0.1:63547/example_com.html"
+   "url": "http://127.0.0.1:52706/example_com.html"
   },
   "httpbin_form": {
    "affordances_seen": 13,
@@ -117,7 +117,7 @@
    "s1_cl100k_live": 758,
    "superseded_target": null,
    "target": 900,
-   "url": "http://127.0.0.1:63547/httpbin_form.html"
+   "url": "http://127.0.0.1:52706/httpbin_form.html"
   },
   "wikipedia_gdp_table": {
    "affordances_seen": 300,
@@ -156,7 +156,7 @@
    "s1_cl100k_live": 2854,
    "superseded_target": 3000,
    "target": 3500,
-   "url": "http://127.0.0.1:63547/wikipedia_gdp_table.html"
+   "url": "http://127.0.0.1:52706/wikipedia_gdp_table.html"
   },
   "wikipedia_versailles": {
    "affordances_seen": 300,
@@ -245,7 +245,7 @@
    "s1_cl100k_live": 3726,
    "superseded_target": null,
    "target": 5000,
-   "url": "http://127.0.0.1:63547/wikipedia_versailles.html"
+   "url": "http://127.0.0.1:52706/wikipedia_versailles.html"
   }
  }
 }

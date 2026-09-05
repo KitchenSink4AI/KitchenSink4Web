@@ -173,18 +173,17 @@ def _call(tool: str, args: dict):
 
 
 def test_unbuilt_tools_still_refuse_with_not_implemented(launch):
-    """Phase 2 built the read layer. The ACTION tools are Phase 4 and the
-    audit log is Phase 3, and every tool that is not built yet says so in the
-    envelope rather than returning plausible output, because a tool that
-    reports success without doing anything is the exact disease this product
-    argues against."""
+    """Phase 2 built the read layer and Phase 3 built the policy layer and
+    the audit log. The ACTION tools are Phase 4, and every tool that is not
+    built yet says so in the envelope rather than returning plausible
+    output, because a tool that reports success without doing anything is
+    the exact disease this product argues against."""
     launch()
     for tool, args, phase in (
             ("click", {"page": "p1", "location": {"ref": "e1"}}, "Phase 4"),
             ("type_text", {"page": "p1", "location": {"ref": "e1"},
                            "text": "x"}, "Phase 4"),
-            ("fill_form", {"page": "p1", "fields": []}, "Phase 4"),
-            ("get_audit", {}, "Phase 3")):
+            ("fill_form", {"page": "p1", "fields": []}, "Phase 4")):
         result = _call(tool, args)
         assert result.is_error is True, tool
         assert result.structured_content["error"]["code"] == "NOT_IMPLEMENTED"

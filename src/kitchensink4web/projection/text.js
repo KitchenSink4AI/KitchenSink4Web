@@ -22,6 +22,32 @@
     if (v === undefined) { v = getComputedStyle(el); styleCache.set(el, v); }
     return v;
   }
+  // The FULL technique set (DESIGN 5.1), matching the extractor's hygiene
+  // layer. Phase 3's corpus C gate caught the divergence that used to live
+  // here: this function had no contrast, geometry, or text-indent check, so
+  // a white-on-white injection stripped from the page view rode out of
+  // get_text as content. The two detectors now share every rule.
+  function parseColor(v) {
+    const m = /rgba?\(([^)]+)\)/.exec(v || '');
+    if (!m) return null;
+    const p = m[1].split(',').map(x => parseFloat(x));
+    return { r: p[0], g: p[1], b: p[2], a: p.length > 3 ? p[3] : 1 };
+  }
+  function lum(c) {
+    const f = (x) => { x /= 255; return x <= 0.03928 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4); };
+    return 0.2126 * f(c.r) + 0.7152 * f(c.g) + 0.0722 * f(c.b);
+  }
+  function lowContrast(el, s) {
+    const fg = parseColor(s.color);
+    if (!fg) return false;
+    let node = el, bg = null;
+    for (let i = 0; node && i < 6; i++, node = node.parentElement) {
+      const c = parseColor(cs(node).backgroundColor);
+      if (c && c.a > 0.1) { bg = c; break; }
+    }
+    if (!bg) return false;
+    return Math.abs(lum(fg) - lum(bg)) < 0.02;
+  }
   function hiddenReason(el) {
     if (el.getAttribute && el.getAttribute('aria-hidden') === 'true') return 'aria-hidden';
     if (el.hasAttribute && el.hasAttribute('hidden')) return 'hidden-attr';
@@ -31,6 +57,14 @@
     if (parseFloat(s.opacity) === 0) return 'opacity-0';
     const fs = parseFloat(s.fontSize);
     if (fs === fs && fs < 2) return 'font-size-0';
+    if (s.textIndent && parseFloat(s.textIndent) < -900) return 'offscreen';
+    if (el.getBoundingClientRect) {
+      const r = el.getBoundingClientRect();
+      if (r.width === 0 && r.height === 0 && el.tagName !== 'BODY') return 'zero-size';
+      const x = r.left + window.scrollX, y = r.top + window.scrollY;
+      if (x + r.width < -500 || y + r.height < -500 || x > 100000) return 'offscreen';
+    }
+    if (lowContrast(el, s)) return 'low-contrast';
     return null;
   }
 
@@ -66,12 +100,16 @@
   // again a moment later, so a navbox whose cells wrap their lists in a div
   // came back at two and a half times its true length. The over-long text was
   // the measurement the price gate was failing against.
+  // Hidden inline content is stripped from the MAIN text unconditionally.
+  // include_hidden does not relax this: DESIGN 5.1 routes hidden content
+  // into a separately labeled section, never mixed into the main text, so
+  // the main text is byte-identical whichever way the flag is set.
   function inlineText(el, into) {
     for (const node of el.childNodes) {
       if (node.nodeType === 3) { into.push(node.nodeValue || ''); continue; }
       if (node.nodeType !== 1) continue;
       if (SKIP.has(node.tagName) || BLOCK.has(node.tagName)) continue;
-      if (hiddenReason(node) && !includeHidden) continue;
+      if (hiddenReason(node)) continue;
       into.push(' ');
       inlineText(node, into);
     }
@@ -79,14 +117,18 @@
 
   const blocks = [];
   const hiddenReasons = {};
+  const hiddenSections = [];
   let hiddenBlocks = 0, hiddenChars = 0, injectionSuspects = 0;
   let zeroWidth = 0;
   const ZERO_WIDTH = /[​-‏‪-‮⁠-⁤﻿]/g;
+  const HIDDEN_SECTION_CAP = 2000;      // per section
+  const HIDDEN_TOTAL_CAP = 20000;       // per read
+  let hiddenCollected = 0;
 
   (function walk(el) {
     if (SKIP.has(el.tagName)) return;
     const reason = hiddenReason(el);
-    if (reason && !includeHidden) {
+    if (reason) {
       const text = squash(el.textContent || '');
       if (text) {
         hiddenBlocks++;
@@ -94,8 +136,18 @@
         hiddenReasons[reason] = (hiddenReasons[reason] || 0) + 1;
         // A hidden block carrying real sentences is the shape of a prompt
         // injection, so it is counted as a suspect and named as one. It is
-        // still never printed.
+        // never printed in the main text; with include_hidden it lands in
+        // the labeled section below, bounded, and nowhere else.
         if (text.length > 20) injectionSuspects++;
+        if (includeHidden && hiddenCollected < HIDDEN_TOTAL_CAP) {
+          const clipped = text.slice(0, HIDDEN_SECTION_CAP);
+          hiddenCollected += clipped.length;
+          hiddenSections.push({
+            reason: reason,
+            truncated: clipped.length < text.length,
+            text: clipped
+          });
+        }
       }
       return;
     }
@@ -142,6 +194,7 @@
       blocks: hiddenBlocks, chars: hiddenChars, reasons: hiddenReasons,
       injection_suspects: injectionSuspects, zero_width_blocks: zeroWidth,
       included: includeHidden
-    }
+    },
+    hidden_sections: includeHidden ? hiddenSections : null
   };
 }

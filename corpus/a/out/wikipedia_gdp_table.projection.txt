@@ -1,5 +1,5 @@
 ## 1 IDENTITY
-url: http://127.0.0.1:63547/wikipedia_gdp_table.html
+url: http://127.0.0.1:52706/wikipedia_gdp_table.html
 title: List of countries by GDP (nominal) - Wikipedia
 status: 200 | load: load | lane: A | page: p1 | read: - | t=
 viewport: 1280x900 | page height: 15.3 screens | dom nodes: 5,644 | shape: app (prose is 13% of page text over 10 paragraphs)
@@ -18,16 +18,16 @@ r12 | navigation | "Appearance" | 1 act, 3 blocks, 0 img | in-view | ~5 tok of c
 r13 | form | "(form)" | 0 act, 0 blocks, 0 img | in-view | ~3 tok of content
 r14 | form | "(form)" | 0 act, 0 blocks, 0 img | in-view | ~2 tok of content
 r15 | form | "(form)" | 0 act, 0 blocks, 0 img | in-view | ~3 tok of content
-r16 | region | "Table" | 245 act, 1 blocks, 221 img | y=1217 | ~2,861 tok of content
-r17 | region | "Nominal GDP of regional groupings" | 24 act, 1 blocks, 5 img | y=8926 | ~310 tok of content
-r18 | region | "See also" | 21 act, 24 blocks, 0 img | y=9632 | ~212 tok of content (net of 1 nested region(s): r19)
+r16 | region | "Table" | 245 act, 1 blocks, 221 img | y=1218 | ~2,861 tok of content
+r17 | region | "Nominal GDP of regional groupings" | 24 act, 1 blocks, 5 img | y=8927 | ~310 tok of content
+r18 | region | "See also" | 21 act, 24 blocks, 0 img | y=9633 | ~212 tok of content (net of 1 nested region(s): r19)
 r19 | navigation | "Portals" | 4 act, 2 blocks, 2 img | y=9697 | ~8 tok of content
-r20 | region | "Notes" | 446 act, 22 blocks, 0 img | y=10389 | ~1,060 tok of content
-r21 | region | "References" | 29 act, 7 blocks, 0 img | y=12131 | ~298 tok of content (net of 3 nested region(s): r22, r23, r24)
-r22 | navigation | "Lists of countries by financial rankings" | 7 act, 3 blocks, 0 img | y=12521 | ~11 tok of content
+r20 | region | "Notes" | 446 act, 22 blocks, 0 img | y=10390 | ~1,060 tok of content
+r21 | region | "References" | 29 act, 7 blocks, 0 img | y=12132 | ~298 tok of content (net of 3 nested region(s): r22, r23, r24)
+r22 | navigation | "Lists of countries by financial rankings" | 7 act, 3 blocks, 0 img | y=12522 | ~11 tok of content
 r23 | navigation | "Lists of countries by GDP rankings" | 155 act, 154 blocks, 0 img | y=12557 | ~503 tok of content
-r24 | navigation | "Economic classification of countries" | 4 act, 3 blocks, 0 img | y=13402 | ~10 tok of content
-r25 | contentinfo | "#footer" | 17 act, 15 blocks, 4 img | y=13542 | ~123 tok of content
+r24 | navigation | "Economic classification of countries" | 4 act, 3 blocks, 0 img | y=13403 | ~10 tok of content
+r25 | contentinfo | "#footer" | 17 act, 15 blocks, 4 img | y=13543 | ~123 tok of content
 
 ## 3 AFFORDANCES (per-class quotas: navigation first, form controls complete, in-prose links suppressed by design)
 e2 | link | "Wikipedia The Free Encyclopedia" | /wiki/Main_Page

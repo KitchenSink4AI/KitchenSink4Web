@@ -436,18 +436,21 @@ def test_an_impossible_budget_refuses_by_naming_the_floor(session_factory,
 
 def test_the_parameters_that_are_still_unbuilt_refuse_honestly(
         session_factory, fixture_site):
-    """`location` and `since` landed in Phase 2. `cursor` and
-    `include_hidden` did not, and each names the phase that owns it rather
-    than returning something plausible."""
+    """`location` and `since` landed in Phase 2, and Phase 3 ruled on
+    `include_hidden`: the ORIENTATION never carries hidden content, and the
+    refusal names the labeled get_text route instead. `cursor` is still
+    unbuilt and names Phase 5 rather than returning something plausible."""
     async def go():
         session = await session_factory()
         page = session.focused
         await lite.navigate(page=page, url=fixture_site + "/form")
-        for kwargs, phase in (({"cursor": "aff:40"}, "Phase 5"),
-                              ({"include_hidden": True}, "Phase 3")):
-            with pytest.raises(Exception) as caught:
-                await lite.get_page_view(page=page, **kwargs)
-            assert phase in str(caught.value)
+        with pytest.raises(Exception) as caught:
+            await lite.get_page_view(page=page, cursor="aff:40")
+        assert "Phase 5" in str(caught.value)
+        with pytest.raises(Exception) as caught:
+            await lite.get_page_view(page=page, include_hidden=True)
+        assert "get_text" in str(caught.value)
+        assert "separately labeled" in str(caught.value)
 
         # A ref nobody minted refuses by naming the mint rule, which is the
         # entry condition rather than a not-implemented stub.

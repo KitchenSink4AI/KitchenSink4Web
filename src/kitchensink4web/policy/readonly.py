@@ -24,6 +24,15 @@ submit, upload, download, evaluate script, or write storage." NEVER "cannot
 change anything," because a URL can mutate server state. Read-only removes
 the ACT leg of the lethal trifecta; navigation remains an outbound channel,
 and `strict` paired with an origin allowlist is what closes it.
+
+**The in-session invariant (author ruling, 2026-09-05): the agent can NEVER
+flip this mode.** No tool, no argument, no MRTR or elicitation path may
+change the grade once the process started. Mechanically: `apply()` is
+callable only from server startup (`server.configure`), a static test scans
+the tree for any other caller, no gate class touches policy, and a runtime
+test drives every registered tool with flip-shaped arguments and asserts the
+grade and the tool set never move. That invariant is what makes the safety
+provable rather than asserted.
 """
 
 from __future__ import annotations
@@ -31,6 +40,20 @@ from __future__ import annotations
 import os
 
 from ..errors import BadParams
+
+#: THE DEFAULT, deliberately a single constant (author ruling, 2026-09-05).
+#: The shipped default is UNDECIDED: it will be chosen from field-test
+#: evidence at the pre-production review. Both defaults are fully built and
+#: this constant is the whole switch:
+#:
+#:     None      -> acting allowed unless --read-only / KS4WEB_READ_ONLY set
+#:     "browse"  -> read-only by default; acting needs an explicit opt-in
+#:                  (KS4WEB_READ_ONLY=0, or the .mcpb user_config checkbox
+#:                  "Allow this server to click and type")
+#:
+#: An explicit env value or CLI flag ALWAYS beats this constant, in either
+#: direction, which is what makes the checkbox UX work under both defaults.
+DEFAULT_GRADE: str | None = None
 
 #: `browse` is the default when the flag is bare: navigation, back and
 #: forward, scroll, and every read tool. `strict` is the same tool set with
@@ -101,10 +124,20 @@ def parse_grade(value: str | bool | None) -> str | None:
 
 def apply(value: str | bool | None = None) -> str | None:
     """Resolve and record the grade ONCE, before registration. Returns the
-    grade in force, or None when the server is not read-only."""
+    grade in force, or None when the server is not read-only.
+
+    STARTUP ONLY. The only sanctioned caller is `server.configure`; the
+    read-only invariant test scans the tree for any other call site, because
+    a second caller is a runtime toggle wearing a disguise. Precedence:
+    explicit value (CLI) beats KS4WEB_READ_ONLY beats DEFAULT_GRADE, and an
+    explicit off-value ("0"/"false"/"off"/"no") beats the default in the
+    unlocking direction too."""
     global _grade
     if value is None:
         value = os.environ.get("KS4WEB_READ_ONLY")
+    if value is None:
+        _grade = DEFAULT_GRADE
+        return _grade
     _grade = parse_grade(value)
     return _grade
 

@@ -1,42 +1,38 @@
-"""Docstring budgets and the copy guards, ported from the KS4W / PPT / XL
-tests and enforced from Phase 0 rather than gated.
+"""Docstring measurement and the copy guards.
 
-PLAN 1.1 is explicit that this binds "mechanically from day one, which is
-how the lite bill stays under 1,500." The siblings gated their version
-behind a SURFACE_READY flag because their Phase 0 surfaces were partial.
-KS4Web's is not: the lite core is fully declared in Phase 0, and the lite
-core IS the surface the 1,500-token target measures. So there is nothing to
-gate and the budget binds now.
+AUTHOR RULING 2026-09-05, and it reshapes this file: **token budgets are
+SOFT.** A browser tool that delivers may cost what it costs (the author's
+own words allow 7-10k for a delivering tool), and useful docstring
+information is NEVER deleted to hit a cap. So the lite ratchet and the
+per-tool caps become ADVISORY WITH MEASURED HONESTY: every number is still
+measured on every run and published to `gates/docstring_budget.json`, the
+published copy quotes the honest figure, and nothing here deletes a word.
 
-Budgets (PLAN 1.1, DESIGN 3.2):
-  description   80 to 120 tokens (chars/4)
-  schema        under 250 tokens per tool
-  lite total    under 1,500 tokens
+What stays HARD, because each protects information rather than chasing a
+number:
+
+- the 2,048-character client truncation (a description over it silently
+  LOSES its tail, which is deletion by another name)
+- descriptions exist, say what the tool returns, and carry no em dashes
+- the ADVISORY numbers are actually written, so honesty is mechanical
+
+The retired hard caps are kept as reference constants so the report can say
+how far each tool sits from the old target. DESIGN 3.2's lite row and the
+Phase 7 gate carry the same ruling.
 """
 
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 from kitchensink4web import packs
 
-DESC_MIN, DESC_MAX = 80, 120
-SCHEMA_CAP = 250
+DESC_MIN, DESC_REF_MAX = 80, 120     # reference, advisory since 2026-09-05
+SCHEMA_REF_CAP = 250                 # reference, advisory since 2026-09-05
+LITE_REF_TARGET = 1500               # reference, advisory since 2026-09-05
 
-#: DESIGN 3.2's published lite target, gated at PHASE 7 rather than here.
-LITE_TARGET = 1500
-
-#: The Phase 0 measured baseline, and a RATCHET: the surface may shrink and
-#: may not grow. Phase 0 measured ~2.7k against a 1.5k target, so the target
-#: is at risk and the gap is tracked from the day it appeared rather than
-#: discovered at the Phase 7 gate. See test_lite_budget_gap_is_tracked.
-LITE_RATCHET = 2900
-
-#: Tools whose action-parameter shape earns a wider description budget. The
-#: family calls these multiplex tools. Empty for now: the Phase 0 lite core
-#: fits the standard budget, and a name is added here only when a real tool
-#: earns it, never to make a failing test pass.
-MULTIPLEX: frozenset[str] = frozenset()
+GATES_DIR = Path(__file__).resolve().parents[2] / "gates"
 
 
 def _tools(launch, live_tools):
@@ -55,66 +51,62 @@ def test_no_em_dashes_in_descriptions(launch, live_tools):
             f"{tool.name} description has an em dash"
 
 
-def test_description_budget(launch, live_tools):
+def test_every_tool_has_a_description_of_substance(launch, live_tools):
+    """The MINIMUM stands: it is a quality floor, not a cap, and nothing
+    about the soft-budget ruling licenses a one-line description."""
     for tool in _tools(launch, live_tools):
         desc = tool.description or ""
         assert desc, f"{tool.name} has no description"
-        tokens = _tok(desc)
-        cap = 350 if tool.name in MULTIPLEX else DESC_MAX
-        assert DESC_MIN <= tokens <= cap, (
-            f"{tool.name} description is ~{tokens} tokens, outside "
-            f"[{DESC_MIN}, {cap}]"
-        )
+        assert _tok(desc) >= DESC_MIN, (
+            f"{tool.name} description is ~{_tok(desc)} tokens, under the "
+            f"{DESC_MIN} floor")
 
 
 def test_description_fits_the_client_truncation(launch, live_tools):
-    """Client-side: tool descriptions truncate at 2,048 characters, silently
-    toward the user and with a marker toward the model. A description over
-    budget loses its tail either way (DESIGN 7.3)."""
+    """HARD, and it survives the soft-budget ruling for the same reason the
+    ruling exists: a description over 2,048 characters loses its tail
+    silently (DESIGN 7.3), which is exactly the information loss the ruling
+    forbids. The fix for a breach is restructuring, never deletion."""
     for tool in _tools(launch, live_tools):
         assert len(tool.description or "") <= 2048, \
             f"{tool.name} description would be truncated by the client"
 
 
-def test_single_schema_ceiling(launch, live_tools):
-    """The incumbents' worst single schemas are 413 and 459 tokens. Ours
-    stay under 250 (DESIGN 3.2). get_page_view is the one to watch: it
-    carries eight parameters and is the flagship."""
-    for tool in _tools(launch, live_tools):
-        size = _tok(json.dumps(tool.parameters or {}))
-        assert size <= SCHEMA_CAP, (
-            f"{tool.name} schema is ~{size} tokens, over the {SCHEMA_CAP} "
-            f"ceiling"
-        )
-
-
-def test_lite_budget_gap_is_tracked(launch, live_tools):
-    """The lite surface may shrink and may not grow.
-
-    PHASE 0 FINDING, recorded here rather than in a comment. DESIGN 3.2
-    publishes a 1,500-token lite target and DESIGN 2.1 reasons that "at the
-    family's observed docstring density that buys roughly 10 to 14 tools."
-    The design review flagged the arithmetic as tight and predicted this
-    test would catch it early. It did, and it is worse than tight: **the
-    measured lite surface is roughly 2.7k for 14 tools**, because 1,500 over
-    14 tools is 107 tokens per tool INCLUDING its JSON schema, and the
-    smallest tool in the roster costs 138 with a description at the 80-token
-    floor. The target is not reachable by trimming prose. It needs either a
-    smaller roster or a revised number, and that is an author decision
-    rather than a test's.
-
-    So this is a RATCHET, not the gate. The gate lives at Phase 7, where the
-    plan puts it, and where the roster will have been decided. Until then
-    the number may only go down, so nothing regresses while the decision is
-    pending.
-    """
+def test_measured_honesty_is_published(launch, live_tools):
+    """The advisory half of the ruling, made mechanical: every run measures
+    the real numbers and writes them where the published copy reads from.
+    A missing report would let a stale figure survive, so THIS is the hard
+    assertion the soft budgets left behind."""
+    tools = _tools(launch, live_tools)
     launch()
-    cost = packs.pack_cost("lite", live_tools())
-    assert cost <= LITE_RATCHET, (
-        f"lite surface grew to ~{cost} tokens, over the {LITE_RATCHET} "
-        f"ratchet. It may shrink and may not grow while the Phase 7 target "
-        f"of {LITE_TARGET} is unresolved."
-    )
+    lite_cost = packs.pack_cost("lite", {t.name: t for t in tools})
+    rows = {}
+    for tool in sorted(tools, key=lambda t: t.name):
+        desc = _tok(tool.description or "")
+        schema = _tok(json.dumps(tool.parameters or {}))
+        rows[tool.name] = {
+            "description_tokens": desc,
+            "schema_tokens": schema,
+            "total_tokens": desc + schema,
+            "over_reference_caps": bool(desc > DESC_REF_MAX
+                                        or schema > SCHEMA_REF_CAP),
+        }
+    report = {
+        "ruling": ("2026-09-05: token budgets are SOFT; these figures are "
+                   "published honestly rather than enforced as caps. "
+                   "Estimator: chars/4 (approximate; page-read numbers use "
+                   "tiktoken o200k_base and the two are never mixed)."),
+        "lite_total_tokens": lite_cost,
+        "reference_targets": {"lite": LITE_REF_TARGET,
+                              "description": [DESC_MIN, DESC_REF_MAX],
+                              "schema": SCHEMA_REF_CAP},
+        "tools": rows,
+    }
+    GATES_DIR.mkdir(exist_ok=True)
+    out = GATES_DIR / "docstring_budget.json"
+    out.write_text(json.dumps(report, indent=2), encoding="utf-8")
+    assert lite_cost > 0
+    assert len(rows) >= 14
 
 
 def test_every_description_says_what_the_tool_returns(launch, live_tools):

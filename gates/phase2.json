@@ -1,5 +1,5 @@
 {
- "measured_kst": "2026-09-05 05:11",
+ "measured_kst": "2026-09-05 11:42",
  "phase": 2,
  "green": true,
  "parts": {
@@ -44,7 +44,7 @@
   "2_3_6_9_suite": {
    "green": true,
    "command": "pytest tests/browser/test_anchors_s2.py tests/unit/test_anchors.py tests/browser/test_phase2_reads.py tests/unit/test_projection.py",
-   "result": "140 passed in 53.28s",
+   "result": "140 passed in 50.74s",
    "covers": [
     "2 sticky refs and zero false rebinds (the ported S2 battery)",
     "3 completeness accurate by construction on corpus B",
@@ -140,7 +140,7 @@
    "tolerance": 0.35,
    "noise_floor_tokens": 60,
    "verified_against": "get_text on the same region, NET of its nested regions, which is an independent measure of the content the price is about",
-   "worst_error_pct": 27.1,
+   "worst_error_pct": 26.9,
    "median_error_pct": 6.3,
    "rank_correlation": 0.993,
    "green": true
@@ -152,45 +152,45 @@
    "rows": [
     {
      "nodes": 5012,
-     "projection_p95": 140.4,
+     "projection_p95": 171.8,
      "budget_ms": 500,
-     "reference_p50": 102.3,
-     "cost_vs_reference_pct": 1
+     "reference_p50": 128.1,
+     "cost_vs_reference_pct": -11
     },
     {
      "nodes": 10012,
-     "projection_p95": 169.2,
+     "projection_p95": 284.0,
      "budget_ms": 500,
-     "reference_p50": 130.9,
+     "reference_p50": 168.0,
      "cost_vs_reference_pct": 1
     },
     {
      "nodes": 25012,
-     "projection_p95": 225.5,
+     "projection_p95": 307.8,
      "budget_ms": 500,
-     "reference_p50": 200.9,
-     "cost_vs_reference_pct": -2
+     "reference_p50": 210.6,
+     "cost_vs_reference_pct": 0
     },
     {
      "nodes": 50012,
-     "projection_p95": 413.5,
+     "projection_p95": 492.4,
      "budget_ms": 500,
-     "reference_p50": 319.9,
+     "reference_p50": 400.7,
      "cost_vs_reference_pct": 0
     },
     {
      "nodes": 100012,
-     "projection_p95": 713.2,
+     "projection_p95": 792.1,
      "budget_ms": 1000,
-     "reference_p50": 549.8,
-     "cost_vs_reference_pct": 7
+     "reference_p50": 650.1,
+     "cost_vs_reference_pct": 0
     }
    ]
   },
   "8_completeness_is_derived": {
    "green": true,
    "result": [
-    "9 passed, 276 deselected in 4.19s"
+    "9 passed, 352 deselected in 3.98s"
    ],
    "named_regression": "0 regions not expanded while thirty regions carry expand costs"
   },
@@ -214,20 +214,20 @@
      "live_tokens": 833
     },
     "wikipedia_gdp_table": {
-     "delta": -178,
-     "delta_pct": -5.2,
+     "delta": -173,
+     "delta_pct": -5.1,
      "frozen_nodes": 5644,
      "frozen_tokens": 3399,
-     "live_nodes": 5560,
-     "live_tokens": 3221
+     "live_nodes": 5571,
+     "live_tokens": 3226
     },
     "wikipedia_versailles": {
-     "delta": 109,
-     "delta_pct": 2.5,
+     "delta": 129,
+     "delta_pct": 3.0,
      "frozen_nodes": 10737,
      "frozen_tokens": 4364,
-     "live_nodes": 10571,
-     "live_tokens": 4473
+     "live_nodes": 10633,
+     "live_tokens": 4493
     }
    }
   },

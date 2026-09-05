@@ -1,0 +1,93 @@
+{
+ "measured": "2026-09-05 11:44",
+ "corpus": "C (corpus/c, synthetic, never networked)",
+ "lane": "A(chromium) headless",
+ "parts": {
+  "serializer_redaction": {
+   "green": true,
+   "leaked": false,
+   "mask_present": true,
+   "planted_prefix": "KS4WEB-COOKIE-SECRET..."
+  },
+  "toctou": {
+   "green": true,
+   "swap_detected": "the target changed between the confirmation and the execution; nothing was done. Fields that differ: ['name', 'landmark_label']. Confirmed: ",
+   "rebind_interlock": "the confirmed target was REBOUND between the confirmation and the execution (x). A rebind may be legitimate on its own terms and it still ne"
+  },
+  "redirect_blocked": {
+   "green": true,
+   "parked": true,
+   "leaked": false,
+   "refusal": "http://localhost:62876/c/landing_blocked.html is on the deny list (KS4WEB_DENY_ORIGINS), evaluated before the allow list, always. The page h"
+  },
+  "hidden_injection": {
+   "green": true,
+   "leaks": [],
+   "counted": true,
+   "labeled_route_works": true,
+   "main_text_identical": true
+  },
+  "read_only_registration": {
+   "green": true,
+   "browse_mutating_listed": [],
+   "browse_reads_present": true,
+   "strict_mutating_listed": [],
+   "strict_reads_present": true,
+   "default_browse_registers_click": false,
+   "checkbox_unlock_beats_default": true,
+   "default_open_registers_click": true
+  },
+  "read_only_invariant": {
+   "green": true,
+   "page_readable": true,
+   "refusals": 3,
+   "ghost_tools_absent": true,
+   "surface_unchanged": true,
+   "grade_unchanged": true
+  },
+  "fail_closed": {
+   "green": true,
+   "ask_refuses": true,
+   "carries_request_state": true,
+   "says_fails_closed": true,
+   "forged_refuses": true,
+   "unredeemed_never_executes": true,
+   "echoed_token_refuses": true
+  },
+  "budgets_loops": {
+   "green": true,
+   "budget_trips": true,
+   "counters_printed": true,
+   "reset_named": true,
+   "reset_is_gated": true,
+   "ask_alone_resets_nothing": true,
+   "loop_trips": true,
+   "429_honored": true
+  },
+  "walls": {
+   "green": true,
+   "botwall": "http://127.0.0.1:62876/c/botwall.html answered with a bot-wall-or-captcha rather than the page (HTTP",
+   "captcha": "http://127.0.0.1:62876/c/captcha.html answered with a bot-wall-or-captcha rather than the page (HTTP",
+   "expired": "http://127.0.0.1:62876/c/expired_login.html needs an expired session (evidence: your session has exp"
+  },
+  "secret_fields": {
+   "green": true,
+   "value_absent": true,
+   "marked_secret": true,
+   "write_refused": true
+  },
+  "audit": {
+   "green": true,
+   "tools_seen": [
+    "get_audit",
+    "get_page_view",
+    "manage_session",
+    "navigate"
+   ],
+   "refusal_recorded": true,
+   "session_annotated": true,
+   "paginates": true
+  }
+ },
+ "green": true
+}

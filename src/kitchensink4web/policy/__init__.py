@@ -11,8 +11,11 @@ Shared leaves (`errors`, `envelope`, `packs`) sit at the package top level
 precisely so all three subpackages can use them without importing each
 other.
 
-Phase 0 lands two members: `sandbox` (the path policy governing the download
-directory, the spill-to-file directory, the audit directory, and the seeded
-profile directory) and `readonly` (the registration-time mode that is the
-design's strongest safety differentiator). Phase 3 lands the rest.
+Phase 0 landed `sandbox` and `readonly`. Phase 3 landed the rest, built
+BEFORE the action tools by deliberate design: `credentials` (secret-field
+blindness, the vault, the serializer redactor), `origins` (deny-first
+allow/deny evaluator), `budgets` (per-session budgets, loop detection,
+429/Retry-After honor), `gates` (the TOCTOU-re-validating confirmation
+engine), `audit` (the bounded, redacted action log), and `engine` (the ONE
+choke point every Phase 4 action tool calls through).
 """

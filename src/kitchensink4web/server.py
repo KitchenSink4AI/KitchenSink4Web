@@ -34,7 +34,12 @@ from fastmcp import FastMCP
 
 from . import envelope, packs
 from .ops import lite
-from .policy import readonly
+from .policy import audit, credentials, readonly
+
+# Redaction lives in the serializer (DESIGN 5.3): installed at import, before
+# any tool can run, so there is no window where a payload rides out unscrubbed.
+# The Phase 3 gate proves it here by driving a deliberately leaky test tool.
+envelope.set_redactor(credentials.redactor)
 
 mcp = FastMCP(
     name="kitchensink4web",
@@ -59,7 +64,15 @@ def _wrap(fn):
         try:
             result = await fn(*args, **kwargs)
         except envelope.CATCHABLE as exc:
+            # The audit trail records refusals too (DESIGN 5.6: every tool
+            # call appends a record), and it records them HERE so no tool can
+            # forget to. The annotations ops set before raising still land.
+            audit.LOG.record(fn.__name__,
+                             getattr(exc, "code", None)
+                             or envelope.classify(exc),
+                             args=kwargs)
             return envelope.refuse(exc)
+        audit.LOG.record(fn.__name__, "ok", args=kwargs)
         if isinstance(result, dict) and "ok" not in result:
             return envelope.success(result)
         return envelope.redact(result)
