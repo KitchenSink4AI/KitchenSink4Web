@@ -111,3 +111,51 @@ def test_manifest_source_carries_every_toggle():
         assert entry["default"] is False, (
             f"{key} must default off: lite and read-only are the shipped "
             f"defaults")
+
+
+def test_dev_manifest_differs_only_in_defaults_and_lane_boxes():
+    """The FIELD-TEST manifest (bundle/dev/manifest.json). It runs the same
+    server; it exists so a field test does not spend its first hour signing
+    in and can reach lane B, which is where the 2026-09-05 log found that
+    Firefox passes bot checks headless Chromium fails.
+
+    What this holds: same pack checkboxes and same env mapping as the
+    shipped manifest, storage ON, acting still OFF (the safety default is
+    not a test convenience), and the two lane boxes wired to the lane and
+    channel the engine already reads."""
+    shipped = json.loads((ROOT / "bundle" / "manifest.json")
+                         .read_text(encoding="utf-8"))
+    dev = json.loads((ROOT / "bundle" / "dev" / "manifest.json")
+                     .read_text(encoding="utf-8"))
+    assert dev["name"] != shipped["name"]
+    assert dev["server"]["mcp_config"]["args"] == \
+        shipped["server"]["mcp_config"]["args"]
+    env = dev["server"]["mcp_config"]["env"]
+    config = dev["user_config"]
+    for pack in ALL:
+        assert env[packs.ENV_PACK_PREFIX + pack.upper()] == \
+            f"${{user_config.pack_{pack}}}"
+    assert config["pack_storage"]["default"] is True
+    assert config["allow_acting"]["default"] is False
+    assert env["KS4WEB_LANE"] == "${user_config.browser_lane}"
+    assert env["KS4WEB_CHANNEL"] == "${user_config.browser_channel}"
+    assert config["browser_lane"]["default"] == "A"
+    assert config["browser_channel"]["default"] == ""
+    # Every pack except storage stays off here too.
+    for pack in ALL:
+        if pack != "storage":
+            assert config[f"pack_{pack}"]["default"] is False
+
+
+def test_empty_lane_boxes_resolve_to_the_bundled_default(monkeypatch):
+    """Desktop writes an empty string for a string box the user left alone,
+    so empty must mean "the default lane", not a typo refusal."""
+    from kitchensink4web.engine import lanes
+    monkeypatch.setenv("KS4WEB_LANE", "")
+    monkeypatch.setenv("KS4WEB_CHANNEL", "")
+    spec = lanes.resolve()
+    assert spec.lane == "A" and spec.engine == "chromium"
+    monkeypatch.setenv("KS4WEB_LANE", "B")
+    monkeypatch.setenv("KS4WEB_CHANNEL", "moz-firefox")
+    spec = lanes.resolve()
+    assert spec.lane == "B" and spec.engine == "firefox"
