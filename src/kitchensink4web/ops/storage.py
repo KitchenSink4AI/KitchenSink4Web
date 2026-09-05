@@ -23,6 +23,9 @@ classes).
 
 from __future__ import annotations
 
+import time
+from pathlib import Path
+
 from ..errors import BadParams, TargetNotFound
 from ..policy import credentials as _credentials
 from ..policy import engine as _policy
@@ -197,24 +200,62 @@ async def save_auth_state(
     what was written, never the values. The file lands in the scoped
     downloads directory unless a path is named, checked against
     KS4WEB_ALLOWED_ROOTS, and it holds real credentials, so it belongs
-    somewhere the sandbox governs.
+    somewhere the sandbox governs. The file records when its earliest
+    authentication cookie expires, and a load whose login has run out or is
+    about to says so in one line.
     """
+    import json
     sess = common.session_of(session)
-    out = path or str(common.downloads_dir() / f"auth_{common.stamp()}.json")
+    # The engine tag in the name (field finding U17): a directory holding a
+    # Chromium file and a Firefox file wants to say which is which, and the
+    # cross-engine load question the field log raised is unanswerable when
+    # both are called auth_<timestamp>.
+    out = path or str(common.downloads_dir()
+                      / f"auth_{sess.spec.engine}_{common.stamp()}.json")
     checked = sandbox.check_path(out, "save auth state")
     state = await sess.context.storage_state(path=checked)
     n_cookies = len(state.get("cookies", []))
     n_origins = len(state.get("origins", []))
+    # EXPIRY, recorded in the file at save time (field finding U10, asked
+    # twice). Playwright has already written the file; this rewrites it with
+    # one extra top-level key, which nothing in the load path reads as a
+    # cookie, so the file still loads anywhere a storage_state file loads.
+    expiry = common.auth_expiry(state.get("cookies", []))
+    state["ks4web"] = {
+        "saved_at": time.time(),
+        "engine": sess.spec.engine,
+        "auth_expiry": expiry,
+    }
+    Path(checked).write_text(json.dumps(state), encoding="utf-8")
     # The session remembers the save, so close can say "saved earlier" (field
     # finding 41) instead of contradicting a save made minutes ago.
     sess.record_auth_save(checked)
+    warning = common.expiry_note(expiry)
     return {
         "session": sess.session_id, "saved_to": checked,
         "cookies_saved": n_cookies, "origins_saved": n_origins,
+        "auth_expiry": _expiry_report(expiry),
+        **({"warnings": [warning]} if warning else {}),
         "note": ("this file holds real session credentials; it was written "
                  "to a sandbox-checked path and its values never entered "
                  "the transcript. Reuse it with load_auth_state."),
     }
+
+
+def _expiry_report(expiry: dict | None) -> str:
+    """The expiry fact, in words, whether or not it is worth a warning."""
+    if not expiry:
+        return ("no authentication cookie in this state carries an expiry "
+                "date, so there is nothing to age out")
+    if "expires" not in expiry:
+        return (f'{expiry["session_cookies"]} authentication cookie(s) are '
+                f'session cookies with no expiry date of their own')
+    when = time.strftime("%Y-%m-%dT%H:%M:%S",
+                         time.localtime(expiry["expires"]))
+    return (f'the earliest authentication cookie ({expiry["name"]}) expires '
+            f'{when}'
+            + (f'; {expiry["session_cookies"]} more are session cookies with '
+               f'no expiry date' if expiry.get("session_cookies") else ''))
 
 
 async def load_auth_state(
@@ -231,7 +272,10 @@ async def load_auth_state(
     Returns what was loaded, never the values. A file this server wrote
     loads as-is; a hand-built or profile-exported one must carry `expires`
     in SECONDS, since a browser profile may store milliseconds and the
-    driver rejects the whole batch over one such cookie. Client note as of
+    driver rejects the whole batch over one such cookie. A file whose
+    earliest authentication cookie has expired or is close to it says so in
+    one line, so a run that is about to fail on a dead login learns it here
+    rather than three navigations later. Client note as of
     2026-09:
     the confirmation prompt displays in Claude Desktop and Claude Code, and
     the claude.ai web client does not display it yet, so this call cannot
@@ -270,10 +314,19 @@ async def load_auth_state(
             raise common.auth_file_refusal(checked, cookies, exc) from exc
     for c in cookies:
         _credentials.VAULT.observe_cookie(c)
+    # Computed from the cookies actually present rather than read out of the
+    # block save_auth_state writes, so a file written before that block
+    # existed, exported from a profile, or edited by hand gets the same
+    # warning. The block is the file describing itself; this is the truth.
+    expiry = common.auth_expiry(cookies)
+    warning = common.expiry_note(expiry)
     return {
         "session": sess.session_id, "loaded_from": checked,
         "cookies_loaded": len(cookies),
         "origins_pending": len(data.get("origins", [])),
+        "auth_expiry": _expiry_report(expiry),
+        **({"warnings": [warning]} if warning else {}),
+        "saved_by": data.get("ks4web") or None,
         "note": ("cookies are active now; per-origin localStorage applies "
                  "on the next navigation to each origin"),
     }

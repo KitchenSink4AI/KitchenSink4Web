@@ -33,6 +33,7 @@ import http.server
 import json
 import socketserver
 import threading
+import time
 
 import pytest
 
@@ -360,3 +361,140 @@ def test_a_failed_auth_load_tears_the_session_down_and_says_why(
         assert "nothing partial was left behind" in message
     finally:
         packs.apply_startup_packs(before)
+
+
+# ---------------------------------------------------------- U10 and U17
+
+
+def test_the_saved_state_records_its_expiry_and_carries_the_engine_tag(
+        site, tmp_path, monkeypatch):
+    """U10 (asked twice in the log) and U17, which ride the same call. The
+    file records when its earliest authentication cookie expires, and the
+    default filename says which engine wrote it."""
+    monkeypatch.setenv("KS4WEB_MODE", "storage")
+    from kitchensink4web import packs
+    before = list(packs.loaded_packs())
+    packs.apply_startup_packs(["storage"])
+
+    async def go():
+        session, page = await _open(site, "/plain")
+        await session.context.add_cookies([
+            {"name": "session_token", "value": "KS4WEB-TEST-LIVE-a1b2c3d4",
+             "url": f"{site}/", "expires": time.time() + 45 * 86400},
+            {"name": "color_mode", "value": "light", "url": f"{site}/",
+             "expires": time.time() + 60},
+        ])
+        out = str(tmp_path / "auth.json")
+        saved = await storage.save_auth_state(session=session.session_id,
+                                              path=out)
+        # And a default path, to prove the engine tag without asserting on
+        # the user's real downloads directory.
+        default_name = f"auth_{session.spec.engine}_"
+        return saved, json.loads(open(out, encoding="utf-8").read()), \
+            default_name
+
+    try:
+        saved, on_disk, default_name = run(go())
+    finally:
+        packs.apply_startup_packs(before)
+
+    # The expiry belongs to the SESSION cookie, not to the theme cookie that
+    # dies in a minute.
+    assert "session_token" in saved["auth_expiry"]
+    assert "color_mode" not in saved["auth_expiry"]
+    assert "warnings" not in saved          # 45 days out is not worth a word
+    block = on_disk["ks4web"]
+    assert block["auth_expiry"]["name"] == "session_token"
+    assert block["engine"] == "chromium"
+    assert default_name == "auth_chromium_"
+    # The file is still a storage_state file: the extra key sits alongside
+    # the two Playwright reads, and neither moved.
+    assert isinstance(on_disk["cookies"], list) and on_disk["cookies"]
+    assert "origins" in on_disk
+
+
+def test_an_expired_state_file_warns_on_load(tmp_path, monkeypatch):
+    """The other half of U10, and the one that matters: a login that ran out
+    while nobody was looking says so at load rather than three navigations
+    later."""
+    from kitchensink4web import packs
+    before = list(packs.loaded_packs())
+    packs.apply_startup_packs(["storage"])
+    monkeypatch.setattr(gates.ENGINE, "ask", lambda *a, **k: None)
+    state = tmp_path / "stale.json"
+    state.write_text(json.dumps({"cookies": [{
+        "name": "sessionid", "value": "v", "domain": "127.0.0.1", "path": "/",
+        "expires": time.time() - 2 * 86400, "httpOnly": True,
+        "secure": False, "sameSite": "Lax"}], "origins": []}),
+        encoding="utf-8")
+
+    async def go():
+        session = await MANAGER.open(lane="A", engine="chromium",
+                                     headless=True)
+        return await storage.load_auth_state(session=session.session_id,
+                                             path=str(state))
+
+    try:
+        loaded = run(go())
+    finally:
+        packs.apply_startup_packs(before)
+    assert loaded["cookies_loaded"] == 1
+    warning = loaded["warnings"][0]
+    assert "expired 2 day(s) ago" in warning
+    assert "a fresh login is likely needed" in warning
+    assert "sessionid" in warning
+
+
+def test_a_healthy_state_file_loads_without_a_warning(tmp_path, monkeypatch):
+    """Silence is the common case; a note on every load is a note nobody
+    reads by the third one."""
+    from kitchensink4web import packs
+    before = list(packs.loaded_packs())
+    packs.apply_startup_packs(["storage"])
+    monkeypatch.setattr(gates.ENGINE, "ask", lambda *a, **k: None)
+    state = tmp_path / "fresh.json"
+    state.write_text(json.dumps({"cookies": [{
+        "name": "sessionid", "value": "v", "domain": "127.0.0.1", "path": "/",
+        "expires": time.time() + 30 * 86400, "httpOnly": True,
+        "secure": False, "sameSite": "Lax"}], "origins": []}),
+        encoding="utf-8")
+
+    async def go():
+        session = await MANAGER.open(lane="A", engine="chromium",
+                                     headless=True)
+        return await storage.load_auth_state(session=session.session_id,
+                                             path=str(state))
+
+    try:
+        loaded = run(go())
+    finally:
+        packs.apply_startup_packs(before)
+    assert "warnings" not in loaded
+    assert "expires" in loaded["auth_expiry"]
+
+
+def test_the_close_save_carries_the_expiry_line(site, tmp_path, monkeypatch):
+    """A5's message path, now carrying U10's line: a login saved at the end
+    of a run is the one most likely to be loaded next week, so the moment it
+    is written is the right moment to say it will not last that long."""
+    monkeypatch.setenv("KS4WEB_MODE", "storage")
+    from kitchensink4web import packs
+    before = list(packs.loaded_packs())
+    packs.apply_startup_packs(["storage"])
+
+    async def go():
+        session, page = await _open(site, "/plain")
+        await session.context.add_cookies([{
+            "name": "session_token", "value": "KS4WEB-TEST-CLOSE-a1b2c3d4",
+            "url": f"{site}/", "expires": time.time() + 2 * 3600}])
+        return await lite.manage_session(
+            action="close", session=session.session_id,
+            auth_state=str(tmp_path / "closing.json"))
+
+    try:
+        result = run(go())
+    finally:
+        packs.apply_startup_packs(before)
+    note = result["auth_state"]
+    assert note["warnings"][0].startswith("the earliest auth cookie")
+    assert "expires in 2 hour(s)" in note["warnings"][0]

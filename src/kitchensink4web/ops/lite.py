@@ -2140,9 +2140,16 @@ async def manage_session(
                 session=sess.session_id, path=path)
         result = await MANAGER.close(sess.session_id)
         if saved:
+            # The expiry line rides the close save too (field finding U10).
+            # A login saved at the end of a run is the one most likely to be
+            # loaded next week, so the moment it is written is the right
+            # moment to say it will not last that long.
             result["auth_state"] = {
                 "saved_to": saved["saved_to"],
                 "cookies_saved": saved["cookies_saved"],
+                "auth_expiry": saved.get("auth_expiry"),
+                **({"warnings": saved["warnings"]}
+                   if saved.get("warnings") else {}),
                 "note": saved["note"]}
         elif saved_earlier:
             # Field finding 41 (2026-09-05): this branch used to say "none
@@ -2328,8 +2335,12 @@ async def _load_auth_into(sess, checked: str) -> dict:
             raise _common.auth_file_refusal(checked, cookies, exc) from exc
     for c in cookies:
         _credentials.VAULT.observe_cookie(c)
+    from . import common as _common
+    expiry = _common.auth_expiry(cookies)
+    warning = _common.expiry_note(expiry)
     return {"loaded_from": checked, "cookies_loaded": len(cookies),
             "origins_pending": len(data.get("origins", [])),
+            **({"warnings": [warning]} if warning else {}),
             "note": ("cookies are active now; per-origin localStorage "
                      "applies on the next navigation to each origin")}
 

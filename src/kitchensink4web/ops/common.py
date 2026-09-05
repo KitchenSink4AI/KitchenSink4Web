@@ -35,6 +35,7 @@ from .. import envelope
 from ..engine.session import MANAGER
 from ..errors import UnsupportedContent, ValidationFailed
 from ..policy import audit as _audit
+from ..policy import credentials as _credentials
 from ..policy import sandbox
 
 ENV_DOWNLOAD_DIR = "KS4WEB_DOWNLOAD_DIR"
@@ -81,6 +82,78 @@ def auth_file_refusal(checked: str, cookies: list, exc: Exception):
         f"from a browser profile has to match Playwright's storage_state "
         f"shape (name, value, domain, path, expires in SECONDS, httpOnly, "
         f"secure, sameSite).")
+
+
+# ----------------------------------------------------------- cookie expiry
+
+#: Inside this much of its expiry, a saved login is worth a word at load
+#: time. A day is long enough that a state file saved last night still reads
+#: as fine this morning, and short enough to catch the case the field log
+#: asked about twice: a file that will die mid-run.
+NEAR_EXPIRY_S = 24 * 3600
+
+
+def _human_span(seconds: float) -> str:
+    seconds = abs(float(seconds))
+    if seconds < 90:
+        return f"{int(seconds)} second(s)"
+    if seconds < 90 * 60:
+        return f"{int(round(seconds / 60))} minute(s)"
+    if seconds < 36 * 3600:
+        return f"{int(round(seconds / 3600))} hour(s)"
+    return f"{int(round(seconds / 86400))} day(s)"
+
+
+def auth_expiry(cookies: list) -> dict | None:
+    """The earliest expiry among the AUTH-RELEVANT cookies, or None.
+
+    Auth-relevant is `credentials.cookie_is_credential`, the same classifier
+    the vault uses, so a preference cookie's short life never masquerades as
+    a login about to lapse. Session cookies (`expires` at or below zero) have
+    no expiry to report and are counted instead. A millisecond value is read
+    as milliseconds rather than as the year 55000, matching the units repair
+    the load refusal already teaches."""
+    earliest = None
+    session_cookies = 0
+    for cookie in cookies or []:
+        if not isinstance(cookie, dict):
+            continue
+        if not _credentials.cookie_is_credential(cookie):
+            continue
+        raw = cookie.get("expires")
+        if not isinstance(raw, (int, float)) or raw <= 0:
+            session_cookies += 1
+            continue
+        when = float(raw) / 1000.0 if raw > _MS_EXPIRY_FLOOR else float(raw)
+        if earliest is None or when < earliest["expires"]:
+            earliest = {"name": cookie.get("name") or "(unnamed)",
+                        "domain": cookie.get("domain") or "",
+                        "expires": when}
+    if earliest is None:
+        return {"session_cookies": session_cookies} if session_cookies else None
+    earliest["session_cookies"] = session_cookies
+    return earliest
+
+
+def expiry_note(info: dict | None, now: float | None = None) -> str | None:
+    """The one line a caller sees when a saved login is past or near its
+    expiry, or None when there is nothing worth saying. Silence is the
+    common case and is deliberate: a note on every load is a note nobody
+    reads by the third one."""
+    if not info or "expires" not in info:
+        return None
+    now = time.time() if now is None else now
+    left = info["expires"] - now
+    where = f' for {info["domain"]}' if info.get("domain") else ""
+    if left <= 0:
+        return (f'the earliest auth cookie in this file ({info["name"]}'
+                f'{where}) expired {_human_span(left)} ago; a fresh login is '
+                f'likely needed')
+    if left <= NEAR_EXPIRY_S:
+        return (f'the earliest auth cookie in this file ({info["name"]}'
+                f'{where}) expires in {_human_span(left)}; a fresh login is '
+                f'likely needed soon')
+    return None
 
 
 # ------------------------------------------------------- locate and annotate
