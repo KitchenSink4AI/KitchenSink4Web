@@ -22,6 +22,19 @@
 // The search reaches into OPEN shadow roots (2026-09-06). Closed roots stay
 // unreachable and are counted at creation instead. XPath is the exception and
 // searches the light DOM only.
+//
+// `opts.root` SCOPES the search to one subtree (2026-09-06). It arrived with
+// the location grammar and was never read: `find_elements(location={'region':
+// 'r7'})` computed a scope root, handed it here, and got a whole-page search
+// back with a result line that did not say so. A narrowing that silently does
+// not narrow is worse than no narrowing, because the caller reasons about a
+// region and receives the document. Scope is now enforced in three places at
+// once, since one of them alone leaks: the shadow sweep starts AT the root so
+// a component inside the region is reached and one outside it is not, every
+// selector query runs against the root, and every surviving candidate is
+// re-checked for containment with a climb that hops shadow boundaries. XPath
+// gets the root as its context node AND the containment check, because an
+// absolute expression ignores a context node.
 (opts) => {
   const query = opts.query || '';
   const kind = opts.kind || 'auto';
@@ -30,7 +43,19 @@
   const t0 = performance.now();
   const SHADOW_ON = !(opts && opts.shadow === false);
 
-  // ONE document-wide sweep, and it is the SAME sweep this pass already ran.
+  let scopeRoot = null;
+  if (opts.root) {
+    const map = window.__ks4web_refs;
+    scopeRoot = map ? map.get(opts.root) : null;
+    // Same refusal shape the extractor and the text pass return, so one
+    // Python branch covers all three.
+    if (!scopeRoot || !scopeRoot.isConnected) {
+      return { error: 'ROOT_GONE', asked_for: opts.root };
+    }
+  }
+  const searchBase = scopeRoot || document;
+
+  // ONE sweep, and it is the SAME sweep this pass already ran.
   //
   // Before traversal, `find.js` swept `document.querySelectorAll('*')` at the
   // very end purely to count open roots and iframes for the `not_searched`
@@ -42,9 +67,12 @@
   //
   // Roots come back in host order, depth first, so a match inside a root is
   // reported right after the light-DOM matches of the tree that holds it.
+  // Under a scope the sweep starts at the scope root, so the counts in
+  // `not_searched` describe the region the caller asked about rather than the
+  // page it happens to sit on.
   const openRoots = [];
   let frames = 0;
-  (function sweep(root) {
+  function sweep(root) {
     for (const el of root.querySelectorAll('*')) {
       if (el.tagName === 'IFRAME') frames++;
       if (el.shadowRoot) {
@@ -52,12 +80,30 @@
         sweep(el.shadowRoot);
       }
     }
-  })(document);
+  }
+  // A scope root that is ITSELF a shadow host owns a root the light-DOM
+  // sweep below cannot see: `host.querySelectorAll('*')` returns slotted
+  // light children, never the component's own tree. Scoping to a component
+  // and finding nothing inside it is the exact shape of the defect this
+  // block fixes, so the host's own root is taken first and swept.
+  if (scopeRoot && scopeRoot.shadowRoot) {
+    openRoots.push(scopeRoot.shadowRoot);
+    sweep(scopeRoot.shadowRoot);
+  }
+  sweep(searchBase);
   const openShadow = openRoots.length;
   const searchedRoots = SHADOW_ON ? openRoots : [];
 
   function queryAll(sel) {
-    const out = Array.from(document.querySelectorAll(sel));
+    const out = [];
+    // The scope root itself is a candidate. `querySelectorAll` on an element
+    // returns descendants only, and the extractor counts the root in its own
+    // scoped totals (`getElementsByTagName('*').length + 1`), so leaving it
+    // out here would make a search for the region's own button miss it.
+    if (scopeRoot) {
+      try { if (scopeRoot.matches(sel)) out.push(scopeRoot); } catch (e) { /* :has() etc */ }
+    }
+    for (const el of searchBase.querySelectorAll(sel)) out.push(el);
     for (const root of searchedRoots) {
       for (const el of root.querySelectorAll(sel)) out.push(el);
     }
@@ -95,6 +141,16 @@
     const r = el.getRootNode ? el.getRootNode() : document;
     if (r && typeof r.getElementById === 'function') return r.getElementById(id);
     return document.getElementById(id);
+  }
+  // The scope guarantee, checked per candidate rather than trusted from the
+  // query. `Node.contains` does not cross a shadow boundary and an absolute
+  // XPath ignores its context node, so a query-side narrowing alone is two
+  // silent leaks. The climb is `up`, which hops the boundary, so an element
+  // inside a component inside the region counts as inside the region.
+  function withinScope(el) {
+    if (!scopeRoot) return true;
+    for (let n = el; n; n = up(n)) if (n === scopeRoot) return true;
+    return false;
   }
   function hiddenAnywhere(el) {
     for (let n = el; n && n !== document.documentElement; n = up(n)) {
@@ -224,7 +280,10 @@
       // boundary, and faking it per root would give expressions like
       // `//body//button` a meaning they do not have. The docstring says so
       // rather than the search quietly answering a smaller question.
-      const it = document.evaluate(query, document, null,
+      // Under a scope the root is the context node, so `.//a` means what a
+      // caller expects. An ABSOLUTE expression ignores a context node, which
+      // is why the containment filter below is not optional here.
+      const it = document.evaluate(query, scopeRoot || document, null,
         XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
       for (let i = 0; i < it.snapshotLength; i++) candidates.push(it.snapshotItem(i));
       candidates = candidates.filter(n => n.nodeType === 1);
@@ -239,6 +298,7 @@
     selectorError = String(e && e.message || e);
     candidates = [];
   }
+  if (scopeRoot) candidates = candidates.filter(withinScope);
 
   const needle = query.toLowerCase();
   const matches = [];
@@ -305,9 +365,30 @@
   }
 
   const closedShadow = window.__ks4web_closed_shadow || 0;
+  // What the search actually covered, so the result line can say it. The
+  // whole-page case stays null and the sentence stays what it always was.
+  let scope = null;
+  if (scopeRoot) {
+    // A landmark names itself as the landmark the page view called it, not as
+    // the 'generic' its tag maps to: a caller who read `r1 | region | "Draft
+    // panel"` and scoped to it should see the same words back.
+    const explicit = (scopeRoot.getAttribute('role') || '')
+      .trim().split(/\s+/)[0];
+    const asLandmark = (explicit && LM_ROLE.has(explicit))
+      ? explicit : LM_TAG[scopeRoot.tagName];
+    const r = roleOf(scopeRoot);
+    scope = {
+      ref: opts.root,
+      role: asLandmark || r,
+      name: clip(nameOf(scopeRoot, r)
+        || squash(scopeRoot.getAttribute('aria-label')), 60),
+      tag: scopeRoot.tagName
+    };
+  }
 
   return {
     query: query, kind: kind, searched: how,
+    scope: scope,
     selector_error: selectorError,
     candidates_scanned: candidates.length,
     matches: matches,

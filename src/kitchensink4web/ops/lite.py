@@ -410,6 +410,14 @@ async def get_page_view(
     return payload
 
 
+def _located_ref(location: dict | None) -> str | None:
+    """The caller-facing ref in a location object, whichever key carries it."""
+    if not location:
+        return None
+    return (location.get("ref") or location.get("region")
+            or location.get("form") or location.get("table"))
+
+
 def _scope_root(sess, record, location: dict | None) -> str | None:
     """Turn a location object into the in-page id the extractor scopes on.
 
@@ -477,7 +485,9 @@ async def find_elements(
     other. Two things stay out and the result counts both: iframes, which
     are never searched, and closed shadow roots, which no tool can reach.
     XPath is the one kind that does not enter a shadow root. There is no
-    `frame` modifier.
+    `frame` modifier. `location={'region': 'r7'}` (or a ref, form, or table
+    from a read) narrows the search to that subtree, components inside it
+    included, and the first result line names the scope that was searched.
     """
     kinds = ("auto", "text", "any", "css", "xpath")
     if kind not in kinds:
@@ -503,6 +513,14 @@ async def find_elements(
     found = await _find(record.page, query, kind=kind, limit=limit, root=root,
                         role=(role or "").strip().lower() or None,
                         shadow=pierce)
+    if found.get("error"):
+        # Same branch shape get_text uses: the scope root was minted in this
+        # session but is not on the page any more. The ref NAMED is the
+        # caller's, not the in-page id the extractor keys on.
+        raise TargetNotFound(
+            f'location named {_located_ref(location)!r} and that ref is not '
+            f'on {record.handle} any more. Re-read the page and use the ref '
+            f'it returns.')
     if found.get("selector_error"):
         raise BadParams(
             f'{kind} selector {query!r} did not parse: '
@@ -524,9 +542,20 @@ async def find_elements(
                             ts=time.strftime("%Y-%m-%dT%H:%M:%S"),
                             scope="find")
 
+    # WHAT WAS SEARCHED, said in the first line whenever it was not the whole
+    # page. A scoped search that reads like an unscoped one is how a caller
+    # concludes a string is absent from the page when it is only absent from
+    # the region, and until 2026-09-06 a scoped search WAS an unscoped one.
+    scope = found.get("scope")
+    scope_bit = ""
+    if scope:
+        scope_bit = (f' within {_located_ref(location)} ({scope["role"]}'
+                     + (f' "{scope["name"]}"' if scope["name"] else '')
+                     + ')')
     lines = [f'{len(found["matches"])} of {found["total_matches"]} match(es) '
              f'for {query!r}'
              + (f' with role={role!r}' if role else '')
+             + scope_bit
              + f' ({found["searched"]}, '
              f'{found["candidates_scanned"]:,} candidates scanned)']
     for m in found["matches"]:
@@ -554,7 +583,9 @@ async def find_elements(
     ns = found["not_searched"]
     searched_roots = ns.get("shadow_roots_searched") or 0
     lines.append(
-        f'not searched: {ns["iframes"]} iframe(s), '
+        'not searched: '
+        + (f'everything outside {_located_ref(location)}, ' if scope else '')
+        + f'{ns["iframes"]} iframe(s), '
         f'{ns["closed_shadow_roots"]} closed shadow root(s) (unreachable by '
         f'any tool)'
         + (f'; searched {searched_roots} of {ns["open_shadow_roots"]} open '
@@ -567,6 +598,7 @@ async def find_elements(
     return {
         "page": record.handle, "session": sess.session_id,
         "query": query, "kind": kind,
+        "scope": location if scope else "whole page",
         "results": wrapped,
         "page_data": page_note,
         "matched": found["total_matches"], "returned": found["returned"],
