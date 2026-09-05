@@ -257,7 +257,16 @@ def classify(exc: BaseException) -> str:
             # A renderer crash (gauntlet 2026-09-06, M1): before this row it
             # fell through to BAD_PARAMS and inherited the location-selector
             # hint, which sent the caller to fix arguments that were fine.
-            or "page crashed" in text):
+            or "page crashed" in text
+            # The driver has TWO strings for one event and M1 only caught
+            # one. A tab that dies mid-call reports "Target crashed", which
+            # is what the shadow spike hit: bundled Chromium kills its own
+            # renderer laying out a chain of roughly 28 nested open shadow
+            # roots, before any code of ours runs. That is a page a hostile
+            # site can build on purpose, so the refusal has to be the honest
+            # typed one on the FIRST call that observes it, not only on the
+            # reuse afterward.
+            or "target crashed" in text):
         return "CONFLICT"
     return "BAD_PARAMS"
 
@@ -299,7 +308,8 @@ def refusal(exc: BaseException) -> dict:
     code = getattr(exc, "code", None) or classify(exc)
     message = str(exc)
     if not isinstance(exc, _err.WebMcpError) \
-            and "page crashed" in message.lower():
+            and ("page crashed" in message.lower()
+                 or "target crashed" in message.lower()):
         # The honest crash refusal (M1), built at the choke point so every
         # path that observes a renderer crash says the same true thing
         # instead of leaking the raw driver string. The handle is marked
@@ -309,7 +319,8 @@ def refusal(exc: BaseException) -> dict:
         message = (
             f"the page's renderer process crashed (driver detail: "
             f"{detail}). The arguments were fine; the page itself died, "
-            f"which extremely deep or pathological DOM nesting can cause. "
+            f"which extremely deep or pathological nesting can cause, in "
+            f"the DOM or in shadow roots. "
             f"This page handle is dead and will not recover: open a NEW "
             f"tab with manage_tabs(action='open', url=...) and continue "
             f"there. Refs minted on the crashed page are gone.")

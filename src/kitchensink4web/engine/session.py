@@ -364,7 +364,8 @@ class SessionManager:
                         f"url=...) and continue there; this handle can only "
                         f"be closed (manage_tabs action='close'). Refs "
                         f"minted on it are gone. Extremely deep or "
-                        f"pathological DOM nesting is a known crash cause.")
+                        f"pathological nesting is a known crash cause, in "
+                        f"the DOM or in shadow roots.")
                 return session, record
         known = sorted(h for s in self.sessions.values() for h in s.pages)
         raise TargetNotFound(
