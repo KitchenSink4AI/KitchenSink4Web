@@ -121,14 +121,14 @@ it off entirely.
 
 586 tests, of which 192 drive a real browser. Beyond the suite, every release passes gate
 batteries that re-run the adversarial findings of four attack rounds: prompt injection through
-page content, hidden-text smuggling, credential exfiltration attempts, gate bypasses, workflow
+page content, hidden-text smuggling, credential-theft attempts, gate bypasses, workflow
 replay tampering, and resource abuse. The gates are not aspirational; each one exists because an
 adversarial round or a field tester actually broke something, and the fix is pinned by the test
 that would catch its return.
 
-Two independent field logs from live use (a 34KB and a 141KB campaign across 12 real sites and
-three browser engines) drove the current tuning. The findings, and what shipped in response, are
-in the repository history rather than a marketing page.
+The current tuning came out of a live field campaign: two sessions, twelve real sites, three
+browser engines, and 141KB of logged friction, retests, and design notes. The findings, and what
+shipped in response, are in the repository history rather than a marketing page.
 
 ## Maturity: what the version number does and does not claim
 

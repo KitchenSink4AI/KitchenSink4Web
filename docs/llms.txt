@@ -167,7 +167,7 @@ human flips, which is a launch-time instruction and not an in-session route.
 
 586 tests, 192 of which drive a real browser. Gate batteries re-run the
 findings of four adversarial attack rounds covering prompt injection through
-page content, hidden-text smuggling, credential exfiltration attempts, gate
-bypasses, workflow replay tampering, and resource abuse. Two field logs from
-live use, 34KB and 141KB, across 12 real sites and three browser engines,
-drove the current tuning.
+page content, hidden-text smuggling, credential-theft attempts, gate
+bypasses, workflow replay tampering, and resource abuse. A live field
+campaign, two sessions across 12 real sites and three browser engines
+totaling 141KB of logs, drove the current tuning.
