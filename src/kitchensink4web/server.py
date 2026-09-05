@@ -28,7 +28,6 @@ from __future__ import annotations
 import argparse
 import functools
 import importlib
-import os
 import sys
 
 from fastmcp import FastMCP
@@ -179,10 +178,18 @@ def register(fn, pack: str | None = None) -> bool:
         return False
     if not packs.should_register(pack):
         return False
+    # Every tool must be classified, loudly, on every launch shape: when the
+    # server is not read-only should_register never consults the tables, so
+    # the check is explicit here rather than a side effect of the hint.
+    readonly.is_mutating(name)
+    # readOnlyHint is the GENUINE set, not merely the non-mutating one:
+    # navigate, scroll, and the session/tab/export tools all modify
+    # something, and an optimistic hint would be a false safety claim in
+    # metadata.
     mcp.tool(
         _wrap(fn),
         name=name,
-        annotations={"readOnlyHint": not readonly.is_mutating(name)},
+        annotations={"readOnlyHint": readonly.read_only_hint(name)},
     )
     packs.register(name, pack)
     return True
@@ -288,18 +295,19 @@ def main() -> None:
         )
 
     try:
-        state = configure(
-            cli_packs=cli_packs,
-            read_only=args.read_only if args.read_only is not None
-            else os.environ.get("KS4WEB_READ_ONLY"),
-        )
+        # A bare `configure(read_only=None)` resolves the env precedence
+        # itself: KS4WEB_ALLOW_ACTING (positive polarity, the Desktop
+        # checkbox), then the deprecated KS4WEB_READ_ONLY, then the shipped
+        # default. An empty value under either name fails closed to browse.
+        state = configure(cli_packs=cli_packs, read_only=args.read_only)
     except Exception as exc:  # startup misconfiguration: fail LOUDLY
         print(f"KS4Web refusing to start: {exc}", file=sys.stderr)
         raise SystemExit(2) from exc
 
     print(
         f"KS4Web: {len(state['registered'])} tools, packs="
-        f"{state['packs'] or ['lite']}, read_only={state['read_only']}",
+        f"{state['packs'] or ['lite']}, read_only={state['read_only']} "
+        f"(decided by {readonly.source()})",
         file=sys.stderr,
     )
     mcp.run()

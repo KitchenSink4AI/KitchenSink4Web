@@ -30,6 +30,7 @@ def launch(monkeypatch):
     """
     monkeypatch.delenv("KS4WEB_MODE", raising=False)
     monkeypatch.delenv("KS4WEB_READ_ONLY", raising=False)
+    monkeypatch.delenv("KS4WEB_ALLOW_ACTING", raising=False)
 
     yield server.configure
 

@@ -230,6 +230,7 @@ def test_explicit_env_beats_the_constant_in_both_directions(
         launch, monkeypatch):
     """The unlock UX: the .mcpb user_config checkbox maps to the env var,
     so an explicit value must win under either shipped default."""
+    monkeypatch.delenv(readonly.ENV_ALLOW, raising=False)
     monkeypatch.setattr(readonly, "DEFAULT_GRADE", "browse")
     monkeypatch.setenv("KS4WEB_READ_ONLY", "0")  # checkbox ON: allow acting
     state = server.configure()
@@ -242,3 +243,114 @@ def test_explicit_env_beats_the_constant_in_both_directions(
     assert state["read_only"] == "browse"
     assert "click" not in state["registered"]
     server.configure(read_only=False)
+
+
+# ------------------------------------- 4b. the positive-polarity grade env
+#                                            (Phase 7 release condition 1)
+
+
+def _grade_under(monkeypatch, allow=None, legacy=None, default="browse"):
+    monkeypatch.setattr(readonly, "DEFAULT_GRADE", default)
+    for name, value in ((readonly.ENV_ALLOW, allow),
+                        (readonly.ENV_LEGACY, legacy)):
+        if value is None:
+            monkeypatch.delenv(name, raising=False)
+        else:
+            monkeypatch.setenv(name, value)
+    state = server.configure()
+    return state
+
+
+def test_allow_acting_true_unlocks_and_false_locks(launch, monkeypatch):
+    """Desktop writes the LITERAL strings 'true'/'false' for a user_config
+    boolean; the polarity must read the way the checkbox does."""
+    state = _grade_under(monkeypatch, allow="true")
+    assert state["read_only"] is None
+    assert "click" in state["registered"]
+
+    state = _grade_under(monkeypatch, allow="false", default=None)
+    assert state["read_only"] == "browse"
+    assert "click" not in state["registered"]
+    server.configure(read_only=False)
+
+
+def test_an_empty_value_fails_closed_under_both_env_names(
+        launch, monkeypatch):
+    """The fail-open defect this release condition exists for: an empty env
+    value used to UNLOCK. Empty never unlocks now, under either name, even
+    when the shipped default is acting-allowed."""
+    state = _grade_under(monkeypatch, allow="", default=None)
+    assert state["read_only"] == "browse"
+    assert "click" not in state["registered"]
+
+    state = _grade_under(monkeypatch, legacy="", default=None)
+    assert state["read_only"] == "browse"
+    assert "click" not in state["registered"]
+    server.configure(read_only=False)
+
+
+def test_garbage_refuses_to_start_rather_than_guessing(launch, monkeypatch):
+    from kitchensink4web.errors import BadParams
+    with pytest.raises(BadParams):
+        _grade_under(monkeypatch, allow="banana")
+    monkeypatch.delenv(readonly.ENV_ALLOW, raising=False)
+    with pytest.raises(BadParams):
+        _grade_under(monkeypatch, legacy="banana")
+    monkeypatch.delenv(readonly.ENV_LEGACY, raising=False)
+    server.configure(read_only=False)
+
+
+def test_the_new_env_beats_the_deprecated_alias(launch, monkeypatch):
+    """KS4WEB_READ_ONLY is honored for one release as an alias; when both
+    are set, the positively-named env wins in both directions."""
+    state = _grade_under(monkeypatch, allow="true", legacy="1")
+    assert state["read_only"] is None
+
+    state = _grade_under(monkeypatch, allow="false", legacy="0", default=None)
+    assert state["read_only"] == "browse"
+
+    # And the alias still works alone, in both directions.
+    state = _grade_under(monkeypatch, legacy="1", default=None)
+    assert state["read_only"] == "browse"
+    state = _grade_under(monkeypatch, legacy="false")
+    assert state["read_only"] is None
+    server.configure(read_only=False)
+
+
+def test_grade_vocabulary_is_accepted_by_the_new_env(launch, monkeypatch):
+    state = _grade_under(monkeypatch, allow="strict")
+    assert state["read_only"] == "strict"
+    state = _grade_under(monkeypatch, allow="browse", default=None)
+    assert state["read_only"] == "browse"
+    server.configure(read_only=False)
+
+
+def test_the_startup_surface_names_what_decided_the_grade(
+        launch, monkeypatch):
+    _grade_under(monkeypatch, allow="false")
+    assert readonly.source() == readonly.ENV_ALLOW
+    _grade_under(monkeypatch, legacy="1")
+    assert "deprecated" in readonly.source()
+    _grade_under(monkeypatch)
+    assert readonly.source() == "default"
+    server.configure(read_only=False)
+
+
+def test_genuinely_read_only_hints_are_strict(launch):
+    """readOnlyHint carries only the genuinely read-only set: navigate,
+    scroll, and the session/tab tools all modify something and must not
+    claim otherwise, however read-shaped they feel."""
+    for name in ("navigate", "scroll", "manage_session", "manage_tabs",
+                 "click", "type_text"):
+        assert readonly.read_only_hint(name) is False, name
+    for name in ("get_page_view", "find_elements", "get_text", "get_audit",
+                 "get_workflows", "wait_for"):
+        assert readonly.read_only_hint(name) is True, name
+
+
+def test_the_hint_rides_the_registered_annotations(launch, live_tools):
+    launch(read_only=False)
+    tools = live_tools()
+    assert tools["get_page_view"].annotations.readOnlyHint is True
+    assert tools["navigate"].annotations.readOnlyHint is False
+    assert tools["click"].annotations.readOnlyHint is False

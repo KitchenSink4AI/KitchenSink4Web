@@ -53,15 +53,28 @@ from ..errors import BadParams
 #: appears to. The middle grade was assessed and rejected: it guts the
 #: provable absence property for exactly the two most dangerous tools.
 #:
-#:     None      -> acting allowed unless --read-only / KS4WEB_READ_ONLY set
+#:     None      -> acting allowed unless --read-only or a grade env is set
 #:     "browse"  -> read-only by default; acting needs an explicit opt-in
-#:                  (KS4WEB_READ_ONLY=0, or the .mcpb user_config checkbox
-#:                  "Allow this server to click and type")
+#:                  (KS4WEB_ALLOW_ACTING=true, or the .mcpb user_config
+#:                  checkbox "Allow this server to click and type")
 #:
 #: An explicit env value or CLI flag ALWAYS beats this constant, in either
 #: direction, which is what makes the checkbox UX work under both defaults.
 #: Both defaults remain fully built; the constant is the whole switch.
 DEFAULT_GRADE: str | None = "browse"
+
+#: The positively-named grade env (Phase 7 release condition). The .mcpb
+#: checkbox "Allow this server to click and type" maps here LITERALLY:
+#: Claude Desktop writes "true" or "false", and the polarity reads the way
+#: the checkbox does. An EMPTY value fails CLOSED to browse (the old env's
+#: empty-unlocks behavior was a fail-open defect); an unrecognized value
+#: refuses to start.
+ENV_ALLOW = "KS4WEB_ALLOW_ACTING"
+
+#: DEPRECATED alias, honored for one release. KS4WEB_ALLOW_ACTING wins when
+#: both are set. Its one behavior change: an EMPTY value now fails closed
+#: to browse instead of unlocking.
+ENV_LEGACY = "KS4WEB_READ_ONLY"
 
 #: The unlock teaching (the field test's BLOCKING condition): under a
 #: read-only default every new user meets the absent-tool wall on day one,
@@ -69,12 +82,21 @@ DEFAULT_GRADE: str | None = "browse"
 #: unlocks it. This is a LAUNCH-TIME instruction for the human, never an
 #: in-session route for the agent: nothing here is callable, redeemable, or
 #: echoable, which is what keeps the teaching from becoming a bypass.
+#:
+#: The in-conversation wording is CONFIRMED by field observation (the
+#: author watched the tool list grow 40 -> 69 live in the same chat):
+#: Claude Desktop restarts the server when its settings change and the
+#: client refreshes the tool list in place, so the change applies to the
+#: current conversation. The restart is still real, hence the open-pages
+#: nuance: a new server process owns a new browser.
 UNLOCK_TEACHING = (
-    "To allow acting (a launch-time choice a human makes, not something "
-    "any tool call can do): in Claude Desktop, tick 'Allow this server to "
+    "To allow acting (a settings choice a human makes, not something any "
+    "tool call can do): in Claude Desktop, tick 'Allow this server to "
     "click and type' in the server's settings; from a shell, restart the "
-    "server with KS4WEB_READ_ONLY=0 or without the --read-only flag. The "
-    "tool set is fixed at launch, so the change takes effect on restart."
+    "server with KS4WEB_ALLOW_ACTING=true or without the --read-only "
+    "flag. The settings change applies in this conversation: the server "
+    "restarts and the tool list refreshes in place. Note that the restart "
+    "closes the browser, so any open pages will reload."
 )
 
 #: `browse` is the default when the flag is bare: navigation, back and
@@ -116,13 +138,42 @@ NON_MUTATING: frozenset[str] = frozenset({
     "list_console", "get_page_errors", "list_workflows",
 })
 
+#: Tools that are GENUINELY read-only for the MCP readOnlyHint annotation:
+#: they modify nothing at all, not the page, not the browser, not the
+#: filesystem, not the web. This is deliberately STRICTER than NON_MUTATING:
+#: `navigate` issues requests and rewrites browser state, `scroll` moves the
+#: viewport, `manage_session`/`manage_tabs` create and destroy processes and
+#: pages, and the export/save/screenshot tools write files, so none of them
+#: may carry the hint however read-shaped they feel. An honest hint is what
+#: buys the client-side permission lenience and the safe-concurrency
+#: treatment; an optimistic one would be a false safety claim in metadata.
+GENUINELY_READ_ONLY: frozenset[str] = frozenset({
+    # lite core
+    "get_page_view", "find_elements", "get_text", "get_audit",
+    "get_workflows", "wait_for",
+    # packs
+    "get_table", "get_list", "get_links", "get_metadata", "extract_fields",
+    "list_requests", "get_request", "list_console", "get_page_errors",
+    "list_workflows",
+})
+
+
+def read_only_hint(tool_name: str) -> bool:
+    """The MCP readOnlyHint for one tool: true only for the genuinely
+    read-only set, never inferred from the mutating classification."""
+    return tool_name in GENUINELY_READ_ONLY
+
+
 _grade: str | None = None
+_source: str = "default"
 
 
 def parse_grade(value: str | bool | None) -> str | None:
     """Resolve a --read-only flag or KS4WEB_READ_ONLY value to a grade.
 
-    A bare flag means `browse`. An unrecognized value is an ERROR, never a
+    A bare flag means `browse`. An EMPTY value FAILS CLOSED to `browse`
+    (the Phase 7 fix: an empty env used to unlock, which is a fail-open
+    defect in a safety setting). An unrecognized value is an ERROR, never a
     shrug: silently downgrading a safety mode because of a typo is the exact
     inversion of chrome-devtools-mcp #2530 that DESIGN 8.3 names."""
     if value is None or value is False:
@@ -130,9 +181,11 @@ def parse_grade(value: str | bool | None) -> str | None:
     if value is True:
         return "browse"
     text = str(value).strip().lower()
-    if not text or text in ("0", "false", "off", "no"):
+    if not text:
+        return "browse"                       # empty NEVER unlocks
+    if text in ("0", "false", "off", "no"):
         return None
-    if text in ("1", "true", "on", "yes", ""):
+    if text in ("1", "true", "on", "yes"):
         return "browse"
     if text in GRADES:
         return text
@@ -144,6 +197,30 @@ def parse_grade(value: str | bool | None) -> str | None:
     )
 
 
+def parse_allow(value: str) -> str | None:
+    """Resolve a KS4WEB_ALLOW_ACTING value to a grade, POSITIVE polarity:
+    the value reads the way the Desktop checkbox does. Claude Desktop
+    writes the literal strings "true" and "false" for a user_config
+    boolean, and both are honored with the meaning the checkbox shows the
+    human. An EMPTY value fails CLOSED to browse; garbage refuses to
+    start."""
+    text = str(value).strip().lower()
+    if not text:
+        return "browse"                       # empty NEVER unlocks
+    if text in ("1", "true", "on", "yes", "act", "acting", "allow"):
+        return None                           # acting allowed
+    if text in ("0", "false", "off", "no"):
+        return "browse"
+    if text in GRADES:
+        return text
+    raise BadParams(
+        f"unknown {ENV_ALLOW} value {value!r}: use 'true' to allow "
+        f"acting, 'false' for read-only browsing, or a grade name from "
+        f"{list(GRADES)}. Refusing to start rather than guessing, because "
+        f"guessing here would silently weaken a safety mode."
+    )
+
+
 def apply(value: str | bool | None = None) -> str | None:
     """Resolve and record the grade ONCE, before registration. Returns the
     grade in force, or None when the server is not read-only.
@@ -151,21 +228,39 @@ def apply(value: str | bool | None = None) -> str | None:
     STARTUP ONLY. The only sanctioned caller is `server.configure`; the
     read-only invariant test scans the tree for any other call site, because
     a second caller is a runtime toggle wearing a disguise. Precedence:
-    explicit value (CLI) beats KS4WEB_READ_ONLY beats DEFAULT_GRADE, and an
-    explicit off-value ("0"/"false"/"off"/"no") beats the default in the
-    unlocking direction too."""
-    global _grade
-    if value is None:
-        value = os.environ.get("KS4WEB_READ_ONLY")
-    if value is None:
-        _grade = DEFAULT_GRADE
+    explicit value (CLI) beats KS4WEB_ALLOW_ACTING beats the deprecated
+    KS4WEB_READ_ONLY beats DEFAULT_GRADE, and an explicit unlocking value
+    beats the default in the unlocking direction too. An EMPTY env value
+    fails closed to browse under either name."""
+    global _grade, _source
+    if value is not None:
+        _grade = parse_grade(value)
+        _source = "cli"
         return _grade
-    _grade = parse_grade(value)
+    allow = os.environ.get(ENV_ALLOW)
+    if allow is not None:
+        _grade = parse_allow(allow)
+        _source = ENV_ALLOW
+        return _grade
+    legacy = os.environ.get(ENV_LEGACY)
+    if legacy is not None:
+        _grade = parse_grade(legacy)
+        _source = f"{ENV_LEGACY} (deprecated; use {ENV_ALLOW})"
+        return _grade
+    _grade = DEFAULT_GRADE
+    _source = "default"
     return _grade
 
 
 def grade() -> str | None:
     return _grade
+
+
+def source() -> str:
+    """What decided the grade in force: 'cli', an env var name, or
+    'default'. Surfaced at startup and in describe() so a surprising mode
+    names its own cause."""
+    return _source
 
 
 def active() -> bool:
@@ -201,10 +296,11 @@ def describe() -> dict:
     refusal message. States the limit alongside the permission, per the
     safety-copy grammar."""
     if not active():
-        return {"read_only": False}
+        return {"read_only": False, "decided_by": _source}
     return {
         "read_only": True,
         "grade": _grade,
+        "decided_by": _source,
         "permits": (
             "reads, navigation, and scrolling"
             if _grade == "browse"
