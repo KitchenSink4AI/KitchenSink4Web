@@ -662,12 +662,19 @@ what it did NOT see and why:
   the bounded sample: a large page prices its later units at the page rate
   rather than their own, and the count says how many.
 
-The two-layer phrasing on shadow roots is kept verbatim, on evidence: a blind
-agent singled out `shadow roots: 0 open (traversed=no), 0 closed (unreachable by
-any tool)` as the most useful line in the whole document, because it separates
-"I did not look" from "no one can look" where most tools collapse both into a
+The two-layer phrasing on shadow roots is kept, on evidence: a blind agent
+singled out `shadow roots: 0 open (traversed=no), 0 closed (unreachable by any
+tool)` as the most useful line in the whole document, because it separates "I
+did not look" from "no one can look" where most tools collapse both into a
 confident zero. **Every completeness field carries that distinction where it
-applies.**
+applies.** The traversal build (2026-09-06) moved open roots out of the first
+layer and left the sentence shape alone: the line now reads `shadow roots: 12
+open (traversed=yes, 12 read), 3 closed (unreachable by any tool)`, and
+`traversed=no` still appears for the two cases where it is true, a read that
+opted out with `shadow: false` and a page whose only roots sit under hidden
+content the walk never entered. Those roots are counted all the same, which is
+the point: the count is complete even where the walk is not, and it used to
+ride inside the walk and undercount by exactly the hosts that were skipped.
 
 **The accounting rule, and it is the important part of this block.** S1's
 completeness block printed `0 regions not expanded` while thirty regions carried
@@ -2799,12 +2806,31 @@ Anchors live server-side keyed by ref, and their ids reach the model only throug
 `get_audit` records and saved workflow files (Section 3.5), which is exactly what
 the key is for: replay and audit-driven recovery, not routine addressing.
 
-Two modifiers apply to any selector: `frame` (a frame ref from the completeness
-block, so cross-origin iframe addressing is a modifier and not a separate tool
-family) and `shadow` (pierce open roots; closed roots refuse honestly with
-`UNSUPPORTED_CONTENT` naming the count, because a closed shadow root is genuinely
-unreachable and a server should say so rather than reporting "element not
-found").
+Two modifiers apply to any selector: `shadow` and `exact`.
+
+**AS BUILT, 2026-09-06.** This paragraph described `frame` and `shadow` as
+working modifiers for most of the project's life and neither was: `selector_of`
+stripped both and no resolver read either one, so a caller who wrote one got a
+silent no-op. The field log and the shadow design spike found it the same day
+and the traversal build resolved it in opposite directions.
+
+`shadow` is real, and the default is ON. Every read and every live resolution
+descends into open shadow roots, so a control inside a component is projected,
+searchable, and actable like any other. `shadow: false` in a location turns
+that off for one call, which is the escape hatch on a page where piercing is
+expensive or noisy. Closed roots are counted as they are created and stay
+unreachable by any tool; XPath is the one selector that does not enter a root,
+because `document.evaluate` has no defined behaviour across the boundary. Slot
+assignment is not followed, so shadow content is reported in source order and
+the completeness block says so.
+
+`frame` is REMOVED from the grammar. Reaching into an iframe is different
+machinery: the resolver runs in one execution context and a frame has its own,
+so it means routing every branch through the driver's frame layer rather than
+reusing the shadow sweep. It did not ride along cheaply, so `{'frame': ...}`
+refuses with the selector list rather than being accepted and ignored. Iframes
+are still reported in the completeness block, same-origin and cross-origin
+counted separately.
 
 Zero matches refuse with nearest-miss candidates by name distance. That is
 directly aimed at the top reliability complaint in the field: *"even for static

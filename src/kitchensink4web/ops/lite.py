@@ -273,10 +273,10 @@ async def get_page_view(
     links at their real cost. `since=<read_token>` is the cheap repeat
     read: only what changed, refs kept, a few hundred tokens instead of a
     fresh read, and it falls back to a full read when the page navigated in
-    between and nothing survives to diff. Shadow roots are not traversed
-    and their contents cannot be read or targeted in this build; the
-    completeness block counts them so they are reported unread rather than
-    silently dropped.
+    between and nothing survives to diff. Open shadow roots are read and
+    their contents get refs you can act on; closed roots cannot be reached
+    by any tool and are counted at creation, so the completeness block
+    reports both numbers rather than one confident zero.
     """
     if cursor:
         _stub("get_page_view(cursor=...)",
@@ -421,6 +421,11 @@ def _scope_root(sess, record, location: dict | None) -> str | None:
         return None
     ref = (location.get("ref") or location.get("region")
            or location.get("form") or location.get("table"))
+    if not ref and set(location) <= {"shadow", "exact"}:
+        # A location carrying only modifiers scopes to nothing, which is the
+        # whole page. `{'shadow': False}` is a legitimate way to say "search
+        # everything, but do not enter the components".
+        return None
     if not ref:
         raise BadParams(
             f"location={location!r} is not something a page view can scope "
@@ -467,11 +472,12 @@ async def find_elements(
     look for, and this retrieves it for a fraction of a full read.
     Ambiguous results are listed rather than resolved, and zero results
     come back with the nearest misses so a miss is a one-turn recovery.
-    The main document only: iframes and shadow roots are not searched and
-    the result counts what it skipped. Shadow content cannot be reached at
-    all in this build, for reading or for targeting; a traversal build is
-    queued. The `shadow` and `frame` location modifiers are dead grammar
-    and are not the workaround.
+    The search covers the main document and every open shadow root in it,
+    and the matches it returns from a shadow root are actable like any
+    other. Two things stay out and the result counts both: iframes, which
+    are never searched, and closed shadow roots, which no tool can reach.
+    XPath is the one kind that does not enter a shadow root. There is no
+    `frame` modifier.
     """
     kinds = ("auto", "text", "any", "css", "xpath")
     if kind not in kinds:
@@ -490,8 +496,13 @@ async def find_elements(
                     url=record.page.url, lane=sess.spec.label)
     record.touch(record.page.url)
     root = _scope_root(sess, record, location)
+    # `shadow: False` is the escape hatch on a page where piercing every open
+    # root is expensive or noisy. It is the only job the modifier has left now
+    # that traversal is the default.
+    pierce = (location or {}).get("shadow", True) is not False
     found = await _find(record.page, query, kind=kind, limit=limit, root=root,
-                        role=(role or "").strip().lower() or None)
+                        role=(role or "").strip().lower() or None,
+                        shadow=pierce)
     if found.get("selector_error"):
         raise BadParams(
             f'{kind} selector {query!r} did not parse: '
@@ -538,13 +549,16 @@ async def find_elements(
                            for n in found["nearest_misses"])
         lines.append(f'nearest by name: {misses}' if misses
                      else 'no near misses either; the string may be inside an '
-                          'iframe, a shadow root, or content that has not '
-                          'rendered yet')
+                          'iframe, a closed shadow root, or content that has '
+                          'not rendered yet')
     ns = found["not_searched"]
+    searched_roots = ns.get("shadow_roots_searched") or 0
     lines.append(
         f'not searched: {ns["iframes"]} iframe(s), '
-        f'{ns["open_shadow_roots"]} open shadow root(s) (traversed=no), '
-        f'{ns["closed_shadow_roots"]} closed (unreachable by any tool)')
+        f'{ns["closed_shadow_roots"]} closed shadow root(s) (unreachable by '
+        f'any tool)'
+        + (f'; searched {searched_roots} of {ns["open_shadow_roots"]} open '
+           f'shadow root(s)' if ns["open_shadow_roots"] else ''))
     text = "\n".join(lines)
     # The result lines quote accessible names verbatim, which are
     # page-authored, so they ride the same labeled envelope as the
@@ -575,7 +589,8 @@ async def get_text(
     include_hidden=true returns it in a separately labeled section with the
     hiding technique named per block. There is no silent middle tier,
     because display:none is a real injection channel; the labeled route is
-    the whole design.
+    the whole design. Prose inside open shadow roots is read, the same as
+    get_page_view reads it; closed roots are counted and stay unreadable.
     """
     if include_hidden and not _policy.hidden_content_allowed():
         raise BadParams(
@@ -644,7 +659,13 @@ async def get_text(
                if hidden["injection_suspects"] else '')
             + (f'; zero-width characters were removed from '
                f'{hidden["zero_width_blocks"]} block(s)'
-               if hidden["zero_width_blocks"] else '')),
+               if hidden["zero_width_blocks"] else '')
+            + (f'; prose was read from {got["shadow_roots_read"]} open '
+               f'shadow root(s)'
+               if got.get("shadow_roots_read") else '')
+            + (f'; {got["closed_shadow_roots"]} closed shadow root(s) are '
+               f'unreadable by any tool'
+               if got.get("closed_shadow_roots") else '')),
         "budget": {"used": _ntok(got["text"]), "estimator": _ENCODING},
     }
 
@@ -2230,9 +2251,10 @@ async def get_workflows(topic: str | None = None) -> dict:
             "Page looks empty or wrong: read navigate's verdict first, "
             "since a bot wall or a CAPTCHA is a refusal to answer rather "
             "than an empty page. Then check the completeness block's "
-            "shadow-root count, because this build does not traverse "
-            "shadow roots and a component-heavy site can hide most of its "
-            "interface in them. Then check whether the site is turning "
+            "shadow-root count: open roots are read, but a site that puts "
+            "its interface inside CLOSED roots is one no tool can see "
+            "into, and the count is how you tell that apart from an empty "
+            "page. Then check whether the site is turning "
             "away headless Chromium: the Firefox lanes get through checks "
             "that block it, so manage_session(action='open', "
             "lane='B:moz-firefox') is the move. get_page_errors (the "
@@ -2243,9 +2265,9 @@ async def get_workflows(topic: str | None = None) -> dict:
             "named. Then mode='links' if it is a link inside prose, which "
             "a normal read suppresses. Then scroll, because lazy content "
             "is not in the DOM until it is on screen. If the count of "
-            "hidden elements or shadow roots is high, the element may be "
-            "somewhere no read reaches, and the read says so rather than "
-            "pretending the page is smaller than it is.",
+            "hidden elements or CLOSED shadow roots is high, the element "
+            "may be somewhere no read reaches, and the read says so rather "
+            "than pretending the page is smaller than it is.",
             "Auth not working: check the cookie count before anything "
             "else, since zero cookies means the login never happened and "
             "there is nothing to save. A login that worked yesterday and "
