@@ -728,9 +728,12 @@
     elementCount++;
     if (el.shadowRoot) openShadowRoots++;
     if (depth > 400) {                          // pathological nesting, reported
+      // No root sweep here, deliberately. The cut can fire once per sibling
+      // and a sweep per cut is the O(n^2) shape the hidden branch below
+      // warns about, on the exact pages that shape hurts most. Roots below
+      // 400 levels of nesting go uncounted; the cut itself is reported, so
+      // the read still says a subtree was skipped.
       deepestCut++;
-      countRootsUnder(el);
-      if (el.shadowRoot) countRootsUnder(el.shadowRoot);
       return;
     }
     const style = cs(el);
