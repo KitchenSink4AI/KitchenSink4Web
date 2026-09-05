@@ -14,6 +14,7 @@ from pathlib import Path
 import pytest
 
 from kitchensink4web.engine import hygiene, lanes
+from kitchensink4web.engine import session as _session_mod
 from kitchensink4web.engine.session import MANAGER
 from kitchensink4web.errors import (BadParams, LaneUnsupported, RangeOutOfBounds,
                                     TargetNotFound)
@@ -502,5 +503,37 @@ def test_closed_shadow_roots_are_counted_as_they_are_created(session_factory):
         # and stays unreachable, which is the half this test is about.
         assert "1 open (traversed=yes, 1 read), 1 closed (unreachable by any " \
                "tool)" in result["projection"]
+
+    run(go())
+
+
+def test_status_ages_every_session_and_names_the_quiet_ones(
+        session_factory, monkeypatch):
+    """Field log 2 item U1's cheap half. A conversation that timed out leaves
+    its browser running and nothing in the transcript says so; the status
+    call is where an orphan becomes visible. Reattaching to one is the
+    expensive half and is deliberately not built.
+
+    The bounds are moved rather than the clock, so the test does not sleep
+    through a five-minute park window to prove a threshold."""
+    async def go():
+        session = await session_factory()
+        status = await lite.manage_session(action="status")
+        row = next(s for s in status["sessions"]
+                   if s["session"] == session.session_id)
+        assert row["state"] == "active"
+        assert row["age_s"] >= 0 and row["idle_s"] >= 0
+        assert "idle_sessions" not in status
+
+        # Now the same session, judged against bounds it has already passed.
+        monkeypatch.setattr(_session_mod, "IDLE_PARK_S", 0.0)
+        stale = await lite.manage_session(action="status")
+        row = next(s for s in stale["sessions"]
+                   if s["session"] == session.session_id)
+        assert row["state"] in ("idle", "recyclable")
+        summary = stale["idle_sessions"]
+        assert "have gone quiet" in summary
+        assert f'session="{session.session_id}"' in summary
+        assert 'action="close"' in summary
 
     run(go())

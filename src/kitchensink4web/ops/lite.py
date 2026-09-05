@@ -2266,14 +2266,17 @@ async def manage_session(
             update = await _asyncio.to_thread(_updatecheck.status_line)
         except Exception:
             update = None
+        listed = [_session_status(s) for s in MANAGER.sessions.values()]
+        stale = [s for s in listed if s["state"] != "active"]
         return {
-            "sessions": [
-                {"session": s.session_id, "lane": s.spec.label,
-                 "pages": len(s.pages), "focused": s.focused,
-                 "profile_dir": s.profile_dir,
-                 "owned_pids": sorted(s.journal.pids),
-                 "counters": dict(s.counters)}
-                for s in MANAGER.sessions.values()],
+            "sessions": listed,
+            # Field log 2 item U1's cheap half. A conversation that timed out
+            # leaves its browser running, and the status call is where that
+            # becomes visible: every session carries how long it has been
+            # open and how long since anything touched it, and the ones past
+            # the park bound are named with the call that closes them.
+            # Reattaching to an orphan is the expensive half and is not here.
+            **({"idle_sessions": _idle_summary(stale)} if stale else {}),
             "read_only": readonly.describe(),
             # What this machine has and which lane suits what (field log 2
             # item 44, the user's own ask). Detected once per process from
@@ -2290,6 +2293,48 @@ async def manage_session(
         f"unknown manage_session action {action!r}: the actions are 'open', "
         f"'close', 'status', 'capabilities', 'budget', 'reset_budgets', and "
         f"'handoff'.")
+
+
+def _session_status(sess) -> dict:
+    """One session's row in the status report, with its age and its idleness.
+
+    `state` reads off the two bounds the idle park already enforces, so the
+    word a caller sees and the behaviour the manager applies come from one
+    place: 'active' below the park bound, 'idle' between the two, and
+    'recyclable' past the close bound, which is a session the next park sweep
+    would take away."""
+    now = time.time()
+    touched = max([p.last_used for p in sess.pages.values()] or [sess.opened])
+    idle_for = now - touched
+    if idle_for >= _session.IDLE_CLOSE_S:
+        state = "recyclable"
+    elif idle_for >= _session.IDLE_PARK_S:
+        state = "idle"
+    else:
+        state = "active"
+    return {
+        "session": sess.session_id, "lane": sess.spec.label,
+        "pages": len(sess.pages), "focused": sess.focused,
+        "profile_dir": sess.profile_dir,
+        "owned_pids": sorted(sess.journal.pids),
+        "counters": dict(sess.counters),
+        "age_s": round(now - sess.opened, 1),
+        "idle_s": round(idle_for, 1),
+        "parked_pages": sum(1 for p in sess.pages.values() if p.parked),
+        "state": state,
+    }
+
+
+def _idle_summary(stale: list[dict]) -> str:
+    """The one line about sessions nothing has touched in a while."""
+    from .common import human_span
+    worst = max(stale, key=lambda s: s["idle_s"])
+    calls = ", ".join(f'manage_session(action="close", session="{s["session"]}")'
+                      for s in stale[:4])
+    return (f'{len(stale)} session(s) have gone quiet, the longest for '
+            f'{human_span(worst["idle_s"])}, and each is holding a browser '
+            f'process. Close the ones you are done with: {calls}'
+            + ("; and more above" if len(stale) > 4 else ""))
 
 
 def _auth_state_precheck(what: str, path: str | None) -> str | None:

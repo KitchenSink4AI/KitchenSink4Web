@@ -93,7 +93,7 @@ def auth_file_refusal(checked: str, cookies: list, exc: Exception):
 NEAR_EXPIRY_S = 24 * 3600
 
 
-def _human_span(seconds: float) -> str:
+def human_span(seconds: float) -> str:
     seconds = abs(float(seconds))
     if seconds < 90:
         return f"{int(seconds)} second(s)"
@@ -147,11 +147,11 @@ def expiry_note(info: dict | None, now: float | None = None) -> str | None:
     where = f' for {info["domain"]}' if info.get("domain") else ""
     if left <= 0:
         return (f'the earliest auth cookie in this file ({info["name"]}'
-                f'{where}) expired {_human_span(left)} ago; a fresh login is '
+                f'{where}) expired {human_span(left)} ago; a fresh login is '
                 f'likely needed')
     if left <= NEAR_EXPIRY_S:
         return (f'the earliest auth cookie in this file ({info["name"]}'
-                f'{where}) expires in {_human_span(left)}; a fresh login is '
+                f'{where}) expires in {human_span(left)}; a fresh login is '
                 f'likely needed soon')
     return None
 
