@@ -251,7 +251,7 @@ async def run_workflow(
     report = await _dry_pass(record, steps)
     would_fail = [r for r in report
                   if r["verdict"] in ("STALE_ANCHOR", "AMBIGUOUS_LOCATION",
-                                      "MODAL_BLOCKED")]
+                                      "MODAL_BLOCKED", "not-replayable")]
     if dry_run:
         return {
             "session": sess.session_id, "page": record.handle,
@@ -285,7 +285,20 @@ async def _dry_pass(record, steps: list[dict]) -> list[dict]:
     for i, step in enumerate(steps):
         line = {"step": i, "line": _step_line(i, step)}
         anchor = step.get("anchor")
-        if step["tool"] == "navigate":
+        # L2 (gauntlet 2026-09-06): a hand-edited file can carry a step
+        # whose tool is outside the closed replayable set (an evaluate_script
+        # smuggled in with no anchor). Execution already refuses it, but the
+        # dry run used to report such a step "replays verbatim" and give the
+        # whole flow a green verdict. The dry run's one job is to predict
+        # execution, so an un-replayable tool fails the dry run too.
+        if step.get("tool") not in REPLAYABLE:
+            line.update(verdict="not-replayable",
+                        detail=f'step tool {step.get("tool")!r} is not in '
+                               f'the closed replayable set '
+                               f'{list(REPLAYABLE)}; the workflow file may '
+                               f'have been edited. Execution would refuse '
+                               f'this step, so the dry run does too.')
+        elif step["tool"] == "navigate":
             line.update(verdict="would-navigate",
                         detail=step["args"].get("url"))
         elif not anchor:
