@@ -400,13 +400,13 @@ async def _run_step(sess, record, step: dict) -> dict:
     if tool == "fill_form":
         fields = []
         for f in args.get("fields", []):
-            loc = await _anchor_location(record, f.get("anchor"))
+            loc = await _anchor_location(sess, record, f.get("anchor"))
             fields.append({**loc, "value": f.get("value")})
         return await _lite.fill_form(page=page, fields=fields,
                                      submit=bool(args.get("submit")))
     location = None
     if step.get("anchor"):
-        location = await _anchor_location(record, step["anchor"])
+        location = await _anchor_location(sess, record, step["anchor"])
     if tool == "click":
         return await _lite.click(page=page, location=location,
                                  button=args.get("button", "left"),
@@ -438,11 +438,16 @@ async def _run_step(sess, record, step: dict) -> dict:
                                                or 30000))
 
 
-async def _anchor_location(record, anchor: dict | None) -> dict:
+async def _anchor_location(sess, record, anchor: dict | None) -> dict:
     """A stored anchor becomes a live location: re-resolve it against a
-    fresh extraction and hand back the in-page ref it resolves to. Refusals
-    carry the ladder's own vocabulary, so a stale step fails exactly like a
-    stale ref would."""
+    fresh extraction, ABSORB the resolved unit into the session map, and
+    hand back the SESSION ref. This used to hand back the raw in-page node
+    id, which the field misdirect investigation (2026-09-05) closed as a
+    namespace confusion: a per-read node id spelled like a session ref can
+    collide with an unrelated session entry, and the action tool would then
+    resolve THAT entry's anchor instead of this step's. Refusals carry the
+    ladder's own vocabulary, so a stale step fails exactly like a stale ref
+    would."""
     if not anchor:
         raise ValidationFailed(
             "this step carries no anchor and no target-free form; the "
@@ -451,12 +456,22 @@ async def _anchor_location(record, anchor: dict | None) -> dict:
     outcome = ladder.resolve_anchor(anchor, data)
     v = outcome["outcome"]
     if v in (Outcome.OK, Outcome.REBOUND):
-        node_ref = (outcome["unit"] or {}).get("ref")
-        if node_ref:
-            return {"ref": node_ref}
+        unit = dict(outcome["unit"] or {})
+        node_ref = unit.get("ref")
+        if node_ref and unit.get("anchor"):
+            shim = {"identity": {"url": record.page.url,
+                                 "page_key": (data.get("identity") or {})
+                                 .get("page_key", "")},
+                    "affordances": [unit], "regions": [], "headings": [],
+                    "forms": [], "tables": []}
+            sess.element_map.absorb(
+                shim, record.handle,
+                sess.reads.mint_token(record.handle),
+                ts=time.strftime("%Y-%m-%dT%H:%M:%S"), scope="replay")
+            return {"ref": unit["ref"]}
         # The unit resolved but carries no live ref (a summarized unit);
         # fall through to the strongest printable selector.
-        a = outcome["unit"].get("anchor") or anchor
+        a = unit.get("anchor") or anchor
         if a.get("attr_testid"):
             return {"testid": a["attr_testid"]}
         if a.get("attr_id"):

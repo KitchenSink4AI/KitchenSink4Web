@@ -135,10 +135,30 @@ def resolve(element_map, ref: str, extraction: dict, handle: str,
     key = _keys.key_of(entry.anchor, entry.key_kind) \
         if entry.key_kind in _keys.KEY_KINDS else None
     hits = idx.get(entry.key_kind, {}).get(key or (), []) if key else []
-    # (a) found, still attached, fingerprint still matches.
+    # (a) found, still attached, fingerprint still matches. An ATTRIBUTE-rung
+    # hit (testid, id, named-control) is additionally held to the element's
+    # own identity: frameworks mint volatile ids (React's useId `:r1:` shape)
+    # that a remount can REASSIGN to a different element, so a key match whose
+    # role contradicts the stored anchor is treated as no match at all and
+    # falls to re-resolution, and a match whose name moved is a REBOUND
+    # reported in the transcript rather than a silent OK. The role-plus-name
+    # rungs carry both fields inside the key, so this check costs them
+    # nothing. Added by the 2026-09-05 field misdirect investigation.
     if len(hits) == 1 and not entry.gone:
-        return {"outcome": Outcome.OK, "ref": ref, "tier": "fingerprint",
-                "unit": units[hits[0]], "key_kind": entry.key_kind}
+        matched = anchors[hits[0]]
+        a = entry.anchor
+        if matched.get("role") == a.get("role"):
+            if matched.get("name") == a.get("name"):
+                return {"outcome": Outcome.OK, "ref": ref,
+                        "tier": "fingerprint",
+                        "unit": units[hits[0]], "key_kind": entry.key_kind}
+            return {"outcome": Outcome.REBOUND, "ref": ref,
+                    "tier": f"fingerprint ({entry.key_kind}), name changed",
+                    "unit": units[hits[0]],
+                    "was": f'{a.get("role")} "{a.get("name")}"',
+                    "now": f'{matched.get("role")} "{matched.get("name")}"'}
+        # A role change under a stable attribute key is the volatile-id
+        # theft shape: never proceed on it; re-resolve by identity below.
 
     # (b) handle detached or fingerprint changed: re-resolve the stored
     #     anchor. Exact role plus name within the original landmark, then role
@@ -236,6 +256,19 @@ def resolve_anchor(anchor: dict, extraction: dict,
             continue
         hits = idx.get(key_kind, {}).get(key, [])
         if len(hits) == 1:
+            # The same identity cross-check the session ladder applies: an
+            # attribute key reassigned to an element of a different role is
+            # no match, and a name change is a reported rebind.
+            matched = anchors[hits[0]]
+            if matched.get("role") != anchor.get("role"):
+                continue
+            if matched.get("name") != anchor.get("name"):
+                return {"outcome": Outcome.REBOUND,
+                        "tier": f"{key_kind}, name changed",
+                        "unit": units[hits[0]],
+                        "was": f'{anchor.get("role")} "{anchor.get("name")}"',
+                        "now": f'{matched.get("role")} '
+                               f'"{matched.get("name")}"'}
             return {"outcome": Outcome.OK, "tier": key_kind,
                     "unit": units[hits[0]]}
 

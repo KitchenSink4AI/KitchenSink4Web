@@ -445,9 +445,13 @@ async def find_elements(
     shim = {"identity": {"url": found["url"], "page_key": found["page_key"]},
             "affordances": found["matches"], "regions": [], "headings": [],
             "forms": [], "tables": []}
+    # scope="find" because this is a targeted lookup, not a whole-page read:
+    # a whole-page absorb would mark every unmatched element on the page
+    # GONE, turning the next use of any untouched ref into a spurious rebind.
     sess.element_map.absorb(shim, record.handle,
                             sess.reads.mint_token(record.handle),
-                            ts=time.strftime("%Y-%m-%dT%H:%M:%S"))
+                            ts=time.strftime("%Y-%m-%dT%H:%M:%S"),
+                            scope="find")
 
     lines = [f'{len(found["matches"])} of {found["total_matches"]} match(es) '
              f'for {query!r} ({found["searched"]}, '
@@ -778,7 +782,13 @@ def _action_result(record, tool: str, desc: dict, resolved: dict,
     result = {
         "page": record.handle,
         "tool": tool,
-        "target": {"ref": resolved.get("node_ref"), "role": desc.get("role"),
+        # The reported ref is the SESSION ref wherever one exists, because a
+        # caller will quote it back: a session ref rides the ladder on reuse,
+        # where the bare in-page id this used to leak rode a raw positional
+        # lookup (the field misdirect investigation, 2026-09-05).
+        "target": {"ref": resolved.get("session_ref")
+                   or resolved.get("node_ref"),
+                   "role": desc.get("role"),
                    "name": desc.get("name")},
         "changed": {"effect": outcome["effect"], "details": outcome["details"]},
         "url": record.page.url,
@@ -843,16 +853,21 @@ async def type_text(
     submit: bool = False,
     delay_ms: int = 0,
 ) -> dict:
-    """Type into a field addressed by any selector, optionally clearing it
-    first. `submit=true` is the one-call search idiom: it presses Enter
-    after typing AND waits for the resulting navigation or re-render to
-    settle, so the outcome reflects the page the submission produced
+    """Type into ONE field addressed by any selector, optionally clearing
+    it first; for several fields prefer fill_form, which re-checks each
+    target before its own turn. Keystrokes are bound to the resolved
+    element: if the page re-renders or steals focus mid-call, the call
+    refuses rather than typing into whatever now holds focus. Newlines:
+    pass real \\n characters; in a textarea they are inserted as newlines,
+    never dispatched as Enter keystrokes, and in a single-line field text
+    carrying a newline refuses (Enter there is a submission in disguise).
+    `submit=true` is the one-call search idiom: it presses Enter after
+    typing AND waits for the resulting navigation or re-render to settle
     (press_enter alone sends the keystroke without waiting). Refuses to
     write into a password, new-password, or one-time-code field and names
-    the sanctioned route instead, so a credential never passes through the
-    model's context. Returns a verified outcome including the field's value
-    state read back, so a silently rejected input is visible rather than
-    reported as success.
+    the sanctioned route instead. Returns a verified outcome including the
+    field's value state read back, so a silently rejected input is visible
+    rather than reported as success.
     """
     sess, record = MANAGER.locate(page)
     _audit.annotate(session=sess.session_id, page=record.handle,
@@ -883,8 +898,21 @@ async def type_text(
         if clear_first:
             await handle.fill(text, timeout=timeout_for(delay_ms, len(text)))
         else:
+            # ELEMENT-BOUND dispatch, the field misdirect fix (2026-09-05).
+            # This path used to be `handle.focus()` then
+            # `page.keyboard.type(...)`, and the page keyboard is PAGE-scoped:
+            # it delivers keystrokes to whatever holds focus at that instant.
+            # A re-render that replaced the target between the focus and the
+            # keystrokes dropped focus to <body>, a GitHub-style global
+            # hotkey then focused the search bar, and the comment landed
+            # there with a "\n" pressed as Enter submitting the search. The
+            # ladder had resolved the right element; the dispatch was the
+            # unanchored step. Now the focus is asserted before any key is
+            # sent and the typing itself is element-bound, so the text lands
+            # in the resolved target or the call refuses.
             await handle.focus()
-            await record.page.keyboard.type(text, delay=delay_ms)
+            await _assert_focus_held(record.page, handle)
+            await _type_bound(record.page, handle, text, delay_ms)
         if press_enter or submit:
             await handle.press("Enter")
         if submit:
@@ -914,6 +942,50 @@ def timeout_for(delay_ms: int, length: int) -> int:
     """A fill/type timeout generous enough for a per-key delay across a long
     string, so a slow deliberate type does not trip its own bound."""
     return max(15000, delay_ms * length + 5000)
+
+
+async def _assert_focus_held(page, handle) -> None:
+    """Refuse rather than type when the resolved target no longer holds
+    focus. Keystrokes bound for one element are never delivered to whatever
+    now holds focus instead: that is the positional dispatch the field
+    misdirect rode, and no positional fallback may silently win."""
+    focused = await page.evaluate(
+        "el => document.activeElement === el", handle)
+    if not focused:
+        raise StaleAnchor(
+            "the target lost focus between resolving it and typing: the "
+            "page re-rendered, replaced the element, or moved focus under "
+            "the action. NOTHING was typed; keystrokes are only ever "
+            "delivered to the resolved target. Repeat the call so the ref "
+            "re-resolves against the page as it is now, or re-read the "
+            "page first.")
+
+
+async def _type_bound(page, handle, text: str, delay_ms: int) -> None:
+    """Element-bound typing with the newline contract stated in the
+    docstring: newlines are INSERTED in multi-line targets, never pressed
+    as Enter (an Enter keydown is a submission on many pages and gets
+    intercepted by rich editors, which is the literal-\\n-versus-newline
+    split the field report observed), and a single-line target refuses
+    text that carries one."""
+    if "\n" not in text:
+        await handle.type(text, delay=delay_ms)
+        return
+    info = await page.evaluate(
+        "(el) => ({tag: el.tagName, ce: !!el.isContentEditable})", handle)
+    if info["tag"] != "TEXTAREA" and not info["ce"]:
+        raise BadParams(
+            "the text carries a newline and the target is a single-line "
+            "control, where a newline can only be an Enter keystroke: a "
+            "submission in disguise. Type the text without the newline and "
+            "use submit=true or press_enter=true to submit deliberately, "
+            "or use fill_form for multiple fields.")
+    for i, line in enumerate(text.split("\n")):
+        if i:
+            await _assert_focus_held(page, handle)
+            await page.keyboard.insert_text("\n")
+        if line:
+            await handle.type(line, delay=delay_ms)
 
 
 async def _set_field(page, resolved: dict, value) -> dict:

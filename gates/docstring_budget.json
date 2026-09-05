@@ -233,9 +233,9 @@
       "over_reference_caps": true
     },
     "type_text": {
-      "description_tokens": 160,
+      "description_tokens": 248,
       "schema_tokens": 107,
-      "total_tokens": 267,
+      "total_tokens": 355,
       "over_reference_caps": true
     },
     "upload_file": {

@@ -282,6 +282,38 @@ def test_a_rebind_is_never_silent():
     assert result["tier"].startswith("role+name")
 
 
+def test_a_stolen_attribute_key_never_wins_across_roles():
+    """The volatile-id theft shape from the field misdirect investigation
+    (2026-09-05): a framework-minted id (React useId's `:r2:`) reassigned
+    by a remount to an element of a DIFFERENT role. The attribute-rung hit
+    must not proceed; with no same-role element anywhere, the honest answer
+    is a STALE refusal, never a silent OK on the thief."""
+    element_map = anchors.ElementMap()
+    data = _extraction(affordances=[
+        _aff("e1", "Add a comment", role="textbox", attr_id=":r2:")])
+    element_map.absorb(data, "p1", "rt1")
+    ref = data["affordances"][0]["ref"]
+    stolen = _extraction(affordances=[
+        _aff("e1", "Search", role="searchbox", attr_id=":r2:")])
+    result = anchors.resolve(element_map, ref, stolen, "p1")
+    assert result["outcome"] == anchors.Outcome.STALE
+
+
+def test_a_name_change_under_an_attribute_key_is_a_reported_rebind():
+    """The element is the same one (its id held); its label moved. Proceed,
+    and say so: a silent OK here is a rebind the transcript cannot see."""
+    element_map = anchors.ElementMap()
+    data = _extraction(affordances=[_aff("e1", "Save", attr_id="save")])
+    element_map.absorb(data, "p1", "rt1")
+    ref = data["affordances"][0]["ref"]
+    renamed = _extraction(affordances=[_aff("e1", "Saved changes",
+                                            attr_id="save")])
+    result = anchors.resolve(element_map, ref, renamed, "p1")
+    assert result["outcome"] == anchors.Outcome.REBOUND
+    assert result["tier"].startswith("fingerprint")
+    assert "Saved changes" in result["now"]
+
+
 def test_two_matches_refuse_rather_than_acting_on_the_first():
     """House rule, inherited and absolute: no tool ever acts on first match."""
     element_map = anchors.ElementMap()

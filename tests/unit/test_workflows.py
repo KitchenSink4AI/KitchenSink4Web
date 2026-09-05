@@ -144,13 +144,29 @@ def test_resolve_anchor_ambiguous_never_first_match():
 
 def test_resolve_anchor_survives_a_name_change_via_id():
     # The id key holds where role+name does not: the anchor recorded an id.
+    # Since the field misdirect fix, a name change under an attribute key
+    # PROCEEDS as a reported REBOUND rather than a silent OK: the element
+    # is still found, and the transcript now says its label moved.
     anchor = {"role": "button", "name": "Add", "page_key": "p",
               "attr_id": "addbtn"}
     data = _extraction("p", [_aff("button", "Saved changes", "p",
                                   attr_id="addbtn")])
     out = ladder.resolve_anchor(anchor, data)
-    assert out["outcome"] == Outcome.OK
-    assert out["tier"] == "id"
+    assert out["outcome"] == Outcome.REBOUND
+    assert out["tier"].startswith("id")
+    assert "Saved changes" in out["now"]
+
+
+def test_resolve_anchor_refuses_an_id_reassigned_across_roles():
+    # The volatile-id theft shape (React useId on a remount): the stored id
+    # now sits on an element of a DIFFERENT role. The attribute key must not
+    # win; with no same-role match anywhere, the honest answer is STALE.
+    anchor = {"role": "textbox", "name": "Add a comment", "page_key": "p",
+              "attr_id": ":r2:"}
+    data = _extraction("p", [_aff("searchbox", "Search", "p",
+                                  attr_id=":r2:")])
+    out = ladder.resolve_anchor(anchor, data)
+    assert out["outcome"] == Outcome.STALE
 
 
 def test_replayable_set_excludes_evaluate_script():

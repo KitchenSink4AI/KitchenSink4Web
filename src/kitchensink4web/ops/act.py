@@ -247,10 +247,47 @@ _RESOLVE_JS = r"""
     const ac = (el.getAttribute && el.getAttribute('autocomplete') || '').toLowerCase();
     const inForm = !!(el.form || el.closest('form'));
     const formEl = el.form || el.closest('form');
+    // The landmark climb, a compact mirror of the extractor's, so a
+    // live-resolved element's anchor registers under the SAME keys a read
+    // would give it and the session map hands back the same ref for the
+    // same element whichever way it was reached.
+    const LM_TAG = { HEADER: 'banner', NAV: 'navigation', MAIN: 'main',
+      ASIDE: 'complementary', FOOTER: 'contentinfo', FORM: 'form',
+      SECTION: 'region', DIALOG: 'dialog' };
+    const LM_ROLE = new Set(['banner', 'navigation', 'main', 'complementary',
+      'contentinfo', 'form', 'region', 'search', 'dialog', 'alertdialog',
+      'tablist']);
+    function lmFrom(n) {
+      if (!n) return { kind: 'document', label: '' };
+      const explicit = (n.getAttribute && n.getAttribute('role') || '')
+        .trim().split(/\s+/)[0];
+      const kind = (explicit && LM_ROLE.has(explicit)) ? explicit
+        : LM_TAG[n.tagName];
+      if (kind) {
+        const label = squash(n.getAttribute('aria-label'))
+          || squash(n.getAttribute('name'))
+          || (n.getAttribute('aria-labelledby')
+              ? squash((document.getElementById(
+                  n.getAttribute('aria-labelledby').split(/\s+/)[0])
+                  || {}).textContent)
+              : '');
+        if (!(n.tagName === 'SECTION' && !label)) {
+          return { kind: kind, label: label };
+        }
+      }
+      return lmFrom(n.parentElement);
+    }
+    const lm = lmFrom(el.parentElement);
+    const pageKey = location.origin + location.pathname + location.hash;
     return { count: 1, how: how, ref: ref, role: r, name: d.name, path: d.path,
       tag: el.tagName, type: type, autocomplete: ac, secret: (type === 'password'),
       in_form: inForm, form_action: formEl ? (formEl.getAttribute('action') || '') : '',
-      page_key: location.origin + location.pathname + location.hash };
+      page_key: pageKey,
+      anchor: { page_key: pageKey, role: r, name: d.name,
+        landmark: lm.kind, landmark_label: lm.label,
+        attr_id: el.id || '',
+        attr_testid: (el.getAttribute && el.getAttribute('data-testid')) || '',
+        attr_name: (el.getAttribute && el.getAttribute('name')) || '' } };
   }
   if (uniq.length > 1) return { count: uniq.length, how: how, candidates: uniq.slice(0, 12).map(describe) };
 
@@ -410,18 +447,22 @@ async def resolve(sess, record, location: dict, *, tool: str) -> dict:
 async def _resolve_ref(sess, record, ref: str, *, tool: str) -> dict:
     entry = sess.element_map.entries.get(ref)
     if entry is None:
-        # Not a session ref. It may be a find/resolve-minted 'x' ref living in
-        # the in-page map but not in the sticky entries; try the live map.
-        handle = await _handle(record.page, ref)
-        if handle is None:
-            raise TargetNotFound(
-                f"{ref!r} was never minted in this session. Refs are minted "
-                f"only by a read in this session; call get_page_view(page="
-                f"{record.handle!r}) and use the ref it returns.")
-        unit = await _describe_handle(record.page, handle, ref)
-        return {"handle": handle, "node_ref": ref, "unit": unit,
-                "descriptor": target_descriptor(unit), "resolution": "ok",
-                "rebound": None}
+        # NOT a session ref, and that is the end of it. This branch used to
+        # fall back to the raw in-page map, which resolves a key to whatever
+        # element happens to hold it with no fingerprint, no staleness check,
+        # and no ladder: a positional lookup wearing a ref's clothes. The
+        # 2026-09-05 field misdirect investigation closed it: every ref an
+        # action accepts rides the session map and the rebind ladder, or the
+        # call refuses. Nothing the tools return hands out in-page-only ids
+        # any more (find_elements and live-selector resolutions both absorb
+        # into the session map), so anything landing here is a stale quote
+        # or an invention, and acting on it by position is exactly the
+        # wrong-element defect the ladder exists to prevent.
+        raise TargetNotFound(
+            f"{ref!r} was never minted in this session. Refs are minted "
+            f"only by a read in this session; call get_page_view(page="
+            f"{record.handle!r}) or find_elements and use the ref they "
+            f"return.")
 
     data = await extract(record.page)
     outcome = ladder.resolve(sess.element_map, ref, data, record.handle)
@@ -438,7 +479,8 @@ async def _resolve_ref(sess, record, ref: str, *, tool: str) -> dict:
         if verdict == Outcome.REBOUND:
             rebound = (f'{ref} was rebound: {outcome.get("was")} -> '
                        f'{outcome.get("now")} (tier {outcome.get("tier")})')
-        return {"handle": handle, "node_ref": node_ref, "unit": unit,
+        return {"handle": handle, "node_ref": node_ref, "session_ref": ref,
+                "unit": unit,
                 "descriptor": target_descriptor(unit),
                 "resolution": "rebound" if verdict == Outcome.REBOUND else "ok",
                 "rebound": rebound}
@@ -486,7 +528,29 @@ async def _resolve_live(sess, record, location: dict, *, tool: str) -> dict:
                 "the element left the DOM between resolving it and acting on "
                 "it. Re-read the page and try again.")
         unit = dict(found)
-        return {"handle": handle, "node_ref": found["ref"], "unit": unit,
+        # Absorb the resolved element into the SESSION map, so the ref this
+        # action reports (`target.ref`) is one the ladder can re-resolve.
+        # Before the field misdirect fix, action results surfaced the bare
+        # in-page 'x' id, and a caller reusing it rode a raw positional
+        # lookup instead of the ladder. The anchor came from the resolver's
+        # own landmark climb, so an element the page view already minted
+        # registers under the same keys and keeps the same session ref.
+        session_ref = None
+        if unit.get("anchor"):
+            import time as _time
+            shim_unit = {"ref": found["ref"], "anchor": unit["anchor"],
+                         "role": unit.get("role"), "name": unit.get("name"),
+                         "state": ""}
+            shim = {"identity": {"url": record.page.url,
+                                 "page_key": found.get("page_key", "")},
+                    "affordances": [shim_unit], "regions": [],
+                    "headings": [], "forms": [], "tables": []}
+            sess.element_map.absorb(
+                shim, record.handle, sess.reads.mint_token(record.handle),
+                ts=_time.strftime("%Y-%m-%dT%H:%M:%S"), scope="resolve")
+            session_ref = shim_unit["ref"]
+        return {"handle": handle, "node_ref": found["ref"],
+                "session_ref": session_ref, "unit": unit,
                 "descriptor": target_descriptor(unit), "resolution": "ok",
                 "rebound": None}
     if count and count > 1:
@@ -504,8 +568,12 @@ async def _resolve_live(sess, record, location: dict, *, tool: str) -> dict:
 
 
 async def _handle(page, node_ref: str):
+    # The isConnected check matters: a detached element still answers
+    # `as_element()`, and acting on it either fails late with a driver
+    # timeout or, worse, lands on nothing while reporting motion.
     jsh = await page.evaluate_handle(
-        "r => (window.__ks4web_refs && window.__ks4web_refs.get(r)) || null",
+        "r => { const el = window.__ks4web_refs && window.__ks4web_refs"
+        ".get(r); return (el && el.isConnected) ? el : null; }",
         node_ref)
     element = jsh.as_element()
     if element is None:
@@ -636,6 +704,15 @@ def wrap_driver_error(exc: Exception, *, what: str, timeout_ms: int) -> Exceptio
     intercepting element outright."""
     detail = str(exc).splitlines()[0][:200]
     lowered = str(exc).lower()
+    if "not attached" in lowered or "detached" in lowered:
+        # The element left the DOM between resolution and dispatch. That is
+        # a staleness fact, not a timeout, and the recovery is a re-read.
+        return StaleAnchor(
+            f"the target left the DOM while {what} was executing (the page "
+            f"re-rendered under the action). Nothing was dispatched to a "
+            f"different element. Re-read the page or repeat the call so the "
+            f"ref re-resolves against the page as it is now. Driver detail: "
+            f"{detail}.")
     if "intercepts pointer events" in lowered:
         cause = ("another element is on top of the target and intercepting the "
                  "click (an overlay, a cookie banner, or a modal). ")

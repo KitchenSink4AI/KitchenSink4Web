@@ -521,7 +521,32 @@
     ? window.__ks4web_refof : new WeakMap();
   window.__ks4web_refs = refMap;
   window.__ks4web_refof = refOf;
-  let eCounter = 0, rCounter = 0, hCounter = 0, fCounter = 0, tCounter = 0;
+  // In-page ids are minted MONOTONICALLY across the whole page lifetime
+  // (the counters live on `window`, not in this closure), and an element
+  // that already holds an id of the right kind keeps it. Both halves close
+  // the same defect, found by the 2026-09-05 field misdirect investigation:
+  // a per-read counter restarting at zero re-assigned existing keys to
+  // whatever the CURRENT document order put at that position, so any stale
+  // key held by a caller (a scoped read's root, a leaked node id) silently
+  // meant a different element after a re-render. A monotonic key can only
+  // ever mean one element or nothing.
+  const mintRef = (prefix, el) => {
+    const prior = refOf.get(el);
+    if (prior && prior.charAt(0) === prefix && refMap.get(prior) === el) {
+      return prior;
+    }
+    const ref = mintId(prefix);
+    refMap.set(ref, el);
+    refOf.set(el, ref);
+    return ref;
+  };
+  // An id with no map registration, for units counted past their cap: the
+  // id keeps the payload's cross-references unique without pretending an
+  // unreturned unit is resolvable.
+  const mintId = (prefix) => {
+    const slot = '__ks4web_ctr_' + prefix;
+    return prefix + (window[slot] = (window[slot] || 0) + 1);
+  };
   let affordancesUncollected = 0;
   let currentHeading = null;
   const roleOrdinals = {};
@@ -676,7 +701,7 @@
     if (kind && !hr && regions.length < MAX_REGIONS && regionStack.length < MAX_REGION_DEPTH) {
       const geo = geometryHidden(el, style);
       if (!geo.reason && (geo.rect.height >= 24 || geo.rect.width >= 24)) {
-        const ref = 'r' + (++rCounter);
+        const ref = mintRef('r', el);
         const named = accName(el, 'region');
         let label = named.name;
         if (!label) {
@@ -716,8 +741,6 @@
         if (rec.parent) {
           regionStack[regionStack.length - 1].children.push(ref);
         }
-        refMap.set(ref, el);
-        refOf.set(el, ref);
         regions.push(rec);
         regionStack.push(rec);
         pushed = true;
@@ -803,17 +826,14 @@
           // is still tracked, so no completeness figure moves.
           const keep = headings.length < MAX_HEADINGS;
           const rec = {
-            ref: 'h' + (++hCounter), level: +tag[1], text: named.name,
+            ref: keep ? mintRef('h', el) : mintId('h'),
+            level: +tag[1], text: named.name,
             anchor: keep ? anchorOf(el, 'heading', named.name) : null,
             name_quality: named.quality,
             region: region ? region.ref : null,
             section_chars: 0, section_words: 0, section_affordances: 0,
             section_known: true, sampler: newSampler()
           };
-          if (keep) {
-            refMap.set(rec.ref, el);
-            refOf.set(el, rec.ref);
-          }
           headings.push(rec);
           bump('headings', 1);
           // A section runs to the next heading of the same or higher level,
@@ -968,9 +988,7 @@
             }
             if (collect) {
               roleOrdinals[role] = (roleOrdinals[role] || 0) + 1;
-              const ref = 'e' + (++eCounter);
-              refMap.set(ref, el);
-              refOf.set(el, ref);
+              const ref = mintRef('e', el);
               affordances.push({
                 ref: ref, anchor: anchorOf(el, role, named.name),
                 role: role, name: named.name,
@@ -995,9 +1013,7 @@
       }
 
       if (tag === 'FORM') {
-        const fref = 'f' + (++fCounter);
-        refMap.set(fref, el);
-        refOf.set(el, fref);
+        const fref = mintRef('f', el);
         forms.push({ el: el, ref: fref, region: region ? region.ref : null });
       } else if (tag === 'TABLE') {
         const rows = el.rows ? el.rows.length : 0;
@@ -1005,9 +1021,7 @@
           const named = accName(el, 'table');
           const cols = el.rows[0] ? el.rows[0].cells.length : 0;
           const tableText = squash(el.textContent || '');
-          const tref = 't' + (++tCounter);
-          refMap.set(tref, el);
-          refOf.set(el, tref);
+          const tref = mintRef('t', el);
           tables.push({
             ref: tref, caption: named.name,
             anchor: anchorOf(el, 'table', named.name),
