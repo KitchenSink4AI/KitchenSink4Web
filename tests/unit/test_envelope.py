@@ -149,6 +149,12 @@ def test_redaction_seam_applies_to_refusals_and_successes():
             payload = {**payload, "cookie": "<redacted>"}
         return payload
 
+    # The seam is a process-global, and `server` installs the REAL redactor
+    # into it at import. Restoring None here rather than what was there
+    # disarmed credential redaction for everything that ran after this file,
+    # which is how `pytest tests/unit tests/browser` used to fail a cookie
+    # test five hundred tests later. Put back what was found.
+    previous = envelope._redactor
     envelope.set_redactor(redactor)
     try:
         ok = envelope.success({"cookie": "session=abc123"})
@@ -156,10 +162,15 @@ def test_redaction_seam_applies_to_refusals_and_successes():
         assert ok["cookie"] == "<redacted>"
         assert bad["ok"] is False
         assert len(seen) == 2
-    finally:
-        envelope.set_redactor(None)
 
-    assert envelope.success({"cookie": "raw"})["cookie"] == "raw"
+        # And the seam is genuinely removable, which is the other half of
+        # "it is a seam" and is checked while the real one is still parked.
+        envelope.set_redactor(None)
+        assert envelope.success({"cookie": "raw"})["cookie"] == "raw"
+    finally:
+        envelope.set_redactor(previous)
+
+    assert envelope._redactor is previous
 
 
 def test_success_shape_is_lane_canonical():
