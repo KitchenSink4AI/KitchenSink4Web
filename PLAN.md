@@ -1620,3 +1620,12 @@ not.
 - **The model-downgrade halt applies:** before every phase start and agent batch,
   check the session model. An undirected change means checkpoint everything and
   halt until the author rules.
+- **Firefox test doctrine (2026-09-06).** Bundled Playwright Firefox is NOT
+  installed on the author's machine; the author removed it. Firefox tests
+  therefore run against the STOCK INSTALLED Firefox (lane B `moz-firefox`,
+  `C:\Program Files\Mozilla Firefox\firefox.exe`), and bundled Chromium remains
+  the primary test browser for everything else. A periodic bundled-Firefox
+  compatibility check may reinstall on demand (`playwright install firefox`) and
+  may remove it again afterward; no agent installs a browser without the author
+  asking for it. A Firefox test that skips because the bundled build is absent
+  is the expected state, not a red gate.
