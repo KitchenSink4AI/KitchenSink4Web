@@ -1500,6 +1500,20 @@ so a read-mostly client is bounded work. It is written from the W3C spec, not
 lifted from Playwright's bidi sources, which keeps every license future open
 (Section 10).
 
+**S5 verified this on 2026-09-05, and the thesis holds.** A ~140-line
+spec-derived client (`spikes/attach/bidi_client.py`, websockets + JSON, no
+Playwright anywhere) attached to a stock user-style launch (`-no-remote
+-profile <dir> --remote-debugging-port`) and round-tripped `session.new`
+(1.9 s), `browsingContext.getTree`, `navigate` (293 ms), `script.evaluate`,
+`captureScreenshot` (241 ms), and an `input.performActions` click, verified by
+page state. Two measured notes carry forward: `about:` navigation refuses at
+the remote-agent level (so the S3 finding binds on raw BiDi too), and
+`browsingContext.traverseHistory` works truthfully over the raw client, so the
+4.5a history row is a Playwright-client defect that Lane C's own client does
+not inherit. Windows trap for the implementation: `firefox.exe` is a launcher
+that exits 0 after spawning the browser root, so the owned-PID journal must
+identify the root by command line, never by the launch PID.
+
 The security posture must be stated plainly in every user-facing surface: no
 auth, no encryption, loopback only, and **anything on the machine that can reach
 that port can drive the browser.**
@@ -1582,6 +1596,14 @@ become LOUD REFUSALS at the KS4Web layer rather than pass-throughs. Second,
 **`page.url` is not trusted after any history traversal on Firefox/BiDi**, so
 no anchor logic, `wait_for_url`, or load-state wait may derive from it there.
 
+**S5 localized the history gap (2026-09-05): it is Playwright's client, not
+the protocol.** Over the raw in-house BiDi client, `browsingContext.
+traverseHistory` returned in 163 ms and `getTree`'s URL, the page's
+`location`, and the DOM all agreed. So the history `LANE_UNSUPPORTED` row
+applies to the Playwright-driven Firefox lanes (A and B) only; Lane C's own
+client supports history truthfully, and the capability table must say so
+per-lane rather than per-browser.
+
 **One cost row that is not a gap.** `page.pdf()` works on Firefox/BiDi, which
 is itself a surprise, since PDF generation was assumed Chromium-only. It
 produced 232 KB in **8.7 seconds** against Chromium's 240 KB in **0.2
@@ -1638,6 +1660,20 @@ closed:
   because a profile copy is a credential copy and it belongs in the audit log.
 - After any seed, verify the SOURCE profile's `user.js` is untouched. This is a
   spike gate, not a hope.
+
+**S6 measured this on 2026-09-05 and the pattern works, with two refinements.**
+Sessions survive the copy (verified structurally on a live logged-in site, on
+a fresh throwaway seeded from the closed real profile, source hash-identical
+across 24,170 files afterward). First refinement: **the minimal set for
+session continuity is `cookies.sqlite` plus its `-wal` and `-shm` sidecars,
+alone** — `key4.db`/`logins.json` are the saved-password store, wanted for
+autofill but not for staying logged in, and a live profile can carry hundreds
+of KB of un-checkpointed WAL, so copying the bare `.sqlite` silently drops the
+newest cookies; copy all three, then `PRAGMA wal_checkpoint(TRUNCATE)` on the
+COPY. Second: a same-version stock launch against the seed mints its own
+`compatibility.ini`, `parent.lock`, `prefs.js`, and `cert9.db` without
+complaint (Firefox 154 also derives a `logins.db`), so none of those belong in
+the copy set. Version-skewed seeds remain untested.
 
 Whether copied Chrome profiles decrypt at a non-default path is an open
 empirical question (App-Bound Encryption), resolved by Spike 6, not guessed.

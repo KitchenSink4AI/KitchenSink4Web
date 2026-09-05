@@ -407,20 +407,41 @@ clicking inside a CSS-transformed element.
 - **FALLBACK:** Firefox lanes demote to read-mostly and Chromium becomes the
   only full-surface engine, documented honestly rather than papered over.
 
-### S5: Firefox live attach over raw BiDi — **DEFERRED BY SAFETY, 2026-09-05**
+### S5: Firefox live attach over raw BiDi — **DONE 2026-09-05, GATE PASSES**
 
-Not run, and the reason is a standing rule rather than a scheduling accident.
-S5 requires a user-launched Firefox on a real profile, and the author's Firefox
-was open throughout the engine round. **Agent rounds never attach to the
-author's live browser** (Section 3, standing safety rule), so the spike stopped
-rather than making an exception for itself.
+Run in the authorized Firefox-closed window it was deferred to (the deferral
+record is in git history: agent rounds never attach to the author's live
+browser, so the spike waited rather than making an exception for itself). The
+user side was simulated faithfully: stock installed `firefox.exe` launched the
+way a Lane C user would launch it (`-no-remote -profile <seeded>
+--remote-debugging-port=9667`), then a **thin in-house BiDi client** (~140
+lines, websocket + JSON written from the W3C spec, `spikes/attach/
+bidi_client.py`) attached to `ws://127.0.0.1:9667/session`.
 
-**Runs at the next Firefox-closed window**, on a deliberately-launched fixture
-Firefox. Until then the Lane C Firefox differentiator, which is the one
-capability no competing MCP server has, remains **UNVERIFIED**, and no public
-copy may claim it. Q9 (the dogfood commitment) should be ruled before that
-window opens, per the rulings checkpoint, so the effort is not spent on a lane
-the author declines to run.
+**All five commands round-trip.** `session.new` in 1.9 s (capabilities
+returned, including `moz:profile` and `moz:processID`), `browsingContext.
+getTree` enumerated the context, `navigate` with `wait:"complete"` in 293 ms,
+`script.evaluate` read title and text, `captureScreenshot` returned a valid
+23 KB PNG in 241 ms, and an `input.performActions` click landed (verified by
+the page's own state change). **Lane C Firefox is real**, and Playwright was
+not involved at any point: the client is spec-derived, which keeps the
+Section 10 license future open.
+
+**Two protocol quirks measured, and both flip S4/S3 findings in Lane C's
+favor.** `about:support` refuses over RAW BiDi with the same `unsupported
+operation` error S3 saw, so that is a Firefox remote-agent restriction rather
+than a Playwright artifact and it binds on every lane. But
+`browsingContext.traverseHistory` **works truthfully over the raw client**:
+back returned in 163 ms and `getTree`'s URL, `location.pathname`, and the DOM
+all agree. **The S4 history desync is Playwright's client-side URL tracking,
+not the protocol**, so the in-house Lane C client does NOT inherit the
+`LANE_UNSUPPORTED` history row that Playwright-driven Firefox lanes carry.
+
+**One Windows implementation trap for Phase C:** `firefox.exe` is a launcher
+process that spawns the real browser root and exits 0 within seconds, so a
+Popen PID is useless for the owned-PID journal. Track the browser by command
+line (profile dir + `-no-remote`, excluding `-contentproc`) and tree-kill that
+PID. The spike ended at a zero-firefox census.
 
 ### S5 (original definition)
 
@@ -439,13 +460,43 @@ connect a bare WebSocket, and drive `session.new`, `browsingContext.getTree`,
 - **FALLBACK:** Lane C Firefox moves to v1.1 and Lane C ships Chrome-only, which
   is the weaker story (DESIGN 4.4).
 
-### S6: Seeded-profile fidelity — **DEFERRED BY SAFETY, 2026-09-05**
+### S6: Seeded-profile fidelity — **DONE 2026-09-05, GATE PASSES**
 
-Not attempted, same constraint: seeding copies from a real profile, and a
-profile copy is a credential copy. It waits for the same Firefox-closed window
-as S5, and seeding remains a manual author-run operation in any case. Until it
-reports, "works with your logged-in browser" is an unverified claim and the
-weaker fallback wording is what stands.
+Run in the same authorized Firefox-closed window as S5, under the full safety
+protocol: firefox.exe-not-running gate before every copy, a hashed manifest of
+the real profile before and after (24,170 files, **IDENTICAL**), copies
+confined to the session scratchpad and random-overwritten then deleted at
+spike end (verified gone), and cookie content never read beyond one sanctioned
+HOST-presence query against a fixed low-stakes candidate list, booleans only.
+
+**Sessions survive the copy.** The DESIGN 4.6 subset (`cookies.sqlite` with
+`-wal` and `-shm`, `key4.db` + `logins.json` as a pair, `places.sqlite`,
+`permissions.sqlite`) was seeded into a fresh directory, stock Firefox
+launched against the COPY, and a logged-in session on a low-stakes site the
+author uses verified **structurally** (a boolean presence check, never account
+content): logged in. A second candidate site with cookies present reported
+logged-out, which is the honest note that cookie presence does not equal
+session validity; the gate needed one real session and got it.
+
+**The measured minimal set is smaller than the design's list: `cookies.sqlite`
++ `-wal` + `-shm` ALONE carries web sessions.** A second launch seeded with
+only the cookie store reproduced the logged-in state. `key4.db`/`logins.json`
+are the saved-password store (Firefox mints fresh ones when absent), wanted
+for autofill but not for session continuity; `places.sqlite` is history and
+awesomebar quality-of-life. The WAL sidecars matter: the live profile had a
+700 KB un-checkpointed WAL, so copying the bare `.sqlite` would silently drop
+the newest cookies. Seed copies checkpoint the WAL on the COPY after copying
+all three.
+
+**Breakage list, measured:** nothing user-visible broke. Firefox treated the
+seed as a normal profile, minting `compatibility.ini`, `parent.lock`,
+`prefs.js`, `cert9.db`, `times.json`, and (Firefox 154) a `logins.db` derived
+from the seeded pair. Omitting `compatibility.ini` from the copy caused no
+refresh prompt (same-version launch; version skew remains untested). The
+source profile's lock files were never touched and `user.js` hazards never
+reached the source because the launch was direct `firefox.exe`, not
+Playwright's `prepareUserDataDir` path. **The seeded-copy dogfood path is real
+for Lane B daily use**, with seeding kept manual and explicit per 4.6.
 
 ### S6 (original definition)
 
@@ -592,8 +643,8 @@ whole session and not just one call. Everything else is a delivery decision.
 | S2 anchor durability | **GREEN**, zero false rebinds over 396 resolutions, absorbed |
 | S3 `moz-firefox` | **GREEN**, HOLDS, absorbed |
 | S4 BiDi gaps | **GREEN**, lanes at full standing, absorbed |
-| S5 Firefox live attach | **DEFERRED BY SAFETY**, next Firefox-closed window |
-| S6 seeded profile | **DEFERRED BY SAFETY**, same window |
+| S5 Firefox live attach | **GREEN**, all five commands round-trip over the in-house raw BiDi client; Lane C Firefox is real |
+| S6 seeded profile | **GREEN**, sessions survive; minimal set is cookies.sqlite + WAL sidecars; source profile hash-identical |
 | S7 process hygiene (Windows slice) | **GREEN**, HOLDS; FastMCP integration half is Phase 1 |
 | S8 MCP conformance | not run |
 | S9 Chrome and Edge Lane B/C | not run |
@@ -610,10 +661,12 @@ now measured: 396 resolutions, zero false rebinds, zero false stickiness, with
 100 percent ref survival through a re-render that destroyed 77 percent of the
 DOM nodes. The architecture freezes. S8, S9, and S10 remain unrun and none of
 them is a gate blocker, since each is a delivery decision rather than a test of
-whether the product exists. S5 and S6 are deferred by a
-safety rule rather than by a finding, which is a different kind of outstanding:
-the Lane C Firefox differentiator stays **UNVERIFIED** and unclaimable in public
-copy until that window opens.
+whether the product exists. S5 and S6 ran on 2026-09-05 in the authorized
+Firefox-closed window and both gates PASS: **the Lane C Firefox differentiator
+is VERIFIED** (raw BiDi attach to a user-style stock launch, five commands
+round-tripping, no Playwright involved) and the seeded-copy dogfood path is
+real, with the source profile hash-verified untouched. Q9 (the dogfood
+commitment) is now the only thing between Lane C and its public claim.
 
 Spike outputs are saved as permanent artifacts to `Draft/Working Files/Agent
 Results/` with DTG names, per house rule.

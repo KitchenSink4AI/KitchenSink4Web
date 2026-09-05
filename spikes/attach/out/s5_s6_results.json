@@ -1,0 +1,289 @@
+{
+ "started_kst": "2026-09-05 10:58:28",
+ "s5": {
+  "probes": {
+   "session.new": {
+    "ok": true,
+    "ms": 1925,
+    "sessionId_present": true,
+    "capabilities_keys": [
+     "acceptInsecureCerts",
+     "browserName",
+     "browserVersion",
+     "moz:buildID",
+     "moz:headless",
+     "moz:platformVersion",
+     "moz:processID",
+     "moz:profile",
+     "moz:shutdownTimeout",
+     "platformName",
+     "setWindowRect",
+     "userAgent"
+    ]
+   },
+   "browsingContext.getTree": {
+    "ok": true,
+    "context_count": 1,
+    "urls": [
+     "about:blank"
+    ]
+   },
+   "browsingContext.navigate": {
+    "ok": true,
+    "ms": 293,
+    "reported_url": "http://127.0.0.1:8931/page1"
+   },
+   "script.evaluate": {
+    "ok": true,
+    "value": "P1|fixture page one"
+   },
+   "browsingContext.captureScreenshot": {
+    "ok": true,
+    "bytes": 23062,
+    "ms": 241
+   },
+   "input.performActions_click": {
+    "ok": true,
+    "title_after": "CLICKED"
+   }
+  },
+  "quirks": {
+   "about_support": {
+    "navigated": false,
+    "error": "unsupported operation: Navigation to \"about:support\" is not allowed in this context"
+   },
+   "traverseHistory": {
+    "returned": true,
+    "ms": 163,
+    "getTree_url_after_back": "http://127.0.0.1:8931/page1",
+    "page_truth": "/page1|P1",
+    "urls_agree": true
+   }
+  }
+ },
+ "s6": {
+  "seed_full_copied": [
+   [
+    "cookies.sqlite",
+    1048576
+   ],
+   [
+    "cookies.sqlite-wal",
+    721456
+   ],
+   [
+    "cookies.sqlite-shm",
+    32768
+   ],
+   [
+    "key4.db",
+    294912
+   ],
+   [
+    "logins.json",
+    83080
+   ],
+   [
+    "places.sqlite",
+    20971520
+   ],
+   [
+    "places.sqlite-wal",
+    3344816
+   ],
+   [
+    "places.sqlite-shm",
+    32768
+   ],
+   [
+    "permissions.sqlite",
+    163840
+   ]
+  ],
+  "candidate_cookie_presence": {
+   "github": true,
+   "wikipedia": true,
+   "stackoverflow": false,
+   "reddit": true
+  },
+  "full_seed_session": {
+   "pid": 115668,
+   "login": {
+    "github": {
+     "logged_in_structurally": true,
+     "type": "boolean"
+    },
+    "wikipedia": {
+     "logged_in_structurally": false,
+     "type": "boolean"
+    }
+   },
+   "session_end": "clean",
+   "killed_clean": true,
+   "profile_files_created_by_firefox": [
+    "4d17d498.sqlite",
+    "4d17d498.sqlite-shm",
+    "4d17d498.sqlite-wal",
+    "AlternateServices.bin",
+    "ExperimentStoreData.json",
+    "SiteSecurityServiceState.bin",
+    "WebDriverBiDiServer.json",
+    "activity-stream.shortcut_cache.json",
+    "addonStartup.json.lz4",
+    "bookmarkbackups",
+    "bounce-tracking-protection.sqlite",
+    "breach-alerts.db",
+    "breach-alerts.db-shm",
+    "breach-alerts.db-wal",
+    "cache2",
+    "cert9.db",
+    "compatibility.ini",
+    "containers.json",
+    "content-prefs.sqlite",
+    "cookies.sqlite-shm",
+    "cookies.sqlite-wal",
+    "crashes",
+    "datareporting",
+    "domain_to_categories.sqlite",
+    "domain_to_categories.sqlite-journal",
+    "extension-preferences.json",
+    "extension-store",
+    "extensions",
+    "extensions.json",
+    "favicons.sqlite",
+    "favicons.sqlite-shm",
+    "favicons.sqlite-wal",
+    "handlers.json",
+    "logins.db",
+    "minidumps",
+    "parent.lock",
+    "pkcs11.txt",
+    "places.sqlite-shm",
+    "places.sqlite-wal",
+    "prefs.js",
+    "protections.sqlite",
+    "safebrowsing",
+    "search.json.mozlz4",
+    "security_state",
+    "serviceworker.txt",
+    "sessionCheckpoints.json",
+    "sessionstore-backups",
+    "settings",
+    "shader-cache",
+    "shield-preference-experiments.json",
+    "startupCache",
+    "storage",
+    "storage.sqlite",
+    "thumbnails",
+    "times.json"
+   ]
+  },
+  "seed_min_copied": [
+   [
+    "cookies.sqlite",
+    1048576
+   ],
+   [
+    "cookies.sqlite-wal",
+    721456
+   ],
+   [
+    "cookies.sqlite-shm",
+    32768
+   ]
+  ],
+  "min_seed_session": {
+   "pid": 96996,
+   "login": {
+    "github": {
+     "logged_in_structurally": true,
+     "type": "boolean"
+    },
+    "wikipedia": {
+     "logged_in_structurally": false,
+     "type": "boolean"
+    }
+   },
+   "session_end": "clean",
+   "killed_clean": true,
+   "profile_files_created_by_firefox": [
+    "AlternateServices.bin",
+    "ExperimentStoreData.json",
+    "SiteSecurityServiceState.bin",
+    "WebDriverBiDiServer.json",
+    "activity-stream.shortcut_cache.json",
+    "addonStartup.json.lz4",
+    "bookmarkbackups",
+    "bounce-tracking-protection.sqlite",
+    "breach-alerts.db",
+    "breach-alerts.db-shm",
+    "breach-alerts.db-wal",
+    "c79c2cdf.sqlite",
+    "c79c2cdf.sqlite-shm",
+    "c79c2cdf.sqlite-wal",
+    "cache2",
+    "cert9.db",
+    "compatibility.ini",
+    "containers.json",
+    "content-prefs.sqlite",
+    "cookies.sqlite-shm",
+    "cookies.sqlite-wal",
+    "crashes",
+    "datareporting",
+    "domain_to_categories.sqlite",
+    "domain_to_categories.sqlite-journal",
+    "extension-preferences.json",
+    "extension-store",
+    "extensions.json",
+    "favicons.sqlite",
+    "favicons.sqlite-shm",
+    "favicons.sqlite-wal",
+    "handlers.json",
+    "key4.db",
+    "logins.db",
+    "minidumps",
+    "parent.lock",
+    "permissions.sqlite",
+    "pkcs11.txt",
+    "places.sqlite",
+    "places.sqlite-shm",
+    "places.sqlite-wal",
+    "prefs.js",
+    "protections.sqlite",
+    "safebrowsing",
+    "search.json.mozlz4",
+    "security_state",
+    "serviceworker.txt",
+    "sessionCheckpoints.json",
+    "sessionstore-backups",
+    "settings",
+    "shader-cache",
+    "shield-preference-experiments.json",
+    "startupCache",
+    "storage",
+    "storage.sqlite",
+    "thumbnails",
+    "times.json",
+    "webappsstore.sqlite",
+    "webappsstore.sqlite-shm",
+    "webappsstore.sqlite-wal"
+   ]
+  }
+ },
+ "quirks": {},
+ "safety": {
+  "firefox_closed_at_start": true,
+  "manifest_files": 24170,
+  "wipe_full": {
+   "wiped": 426,
+   "gone": true
+  },
+  "wipe_min": {
+   "wiped": 545,
+   "gone": true
+  },
+  "firefox_pids_at_end": [],
+  "real_profile_diff": "IDENTICAL"
+ },
+ "finished_kst": "2026-09-05 11:00:40"
+}
