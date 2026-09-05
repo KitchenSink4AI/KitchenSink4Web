@@ -38,8 +38,8 @@
   },
   "tests": {
    "browser": 192,
-   "total": 586,
-   "unit": 394
+   "total": 595,
+   "unit": 403
   }
  },
  "fill": {
@@ -52,6 +52,6 @@
   "PROJECTION_TOKENS": "4,426",
   "RAW_DUMP_TOKENS": "33,073",
   "RUNG_COUNT": 16,
-  "TEST_COUNT": 586
+  "TEST_COUNT": 595
  }
 }

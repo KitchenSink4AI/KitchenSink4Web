@@ -119,7 +119,7 @@ it off entirely.
 
 ## Testing
 
-586 tests, of which 192 drive a real browser. Beyond the suite, every release passes gate
+595 tests, of which 192 drive a real browser. Beyond the suite, every release passes gate
 batteries that re-run the adversarial findings of four attack rounds: prompt injection through
 page content, hidden-text smuggling, credential-theft attempts, gate bypasses, workflow
 replay tampering, and resource abuse. The gates are not aspirational; each one exists because an

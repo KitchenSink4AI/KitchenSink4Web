@@ -286,5 +286,37 @@ def test_published_numbers_match_the_measuring_snapshot():
     for key in ("RAW_DUMP_TOKENS", "PROJECTION_TOKENS"):
         assert str(fill[key]) in page, \
             f"the page does not carry the measured {key} ({fill[key]})"
-    assert str(fill["TEST_COUNT"]) in readme and str(fill["TEST_COUNT"]) in page
     assert str(fill["RUNG_COUNT"]) in readme
+
+    # The test count is the one published figure that moves every time
+    # somebody writes a test, so an exact match would turn "added a test"
+    # into "broke the suite". The rule is the family's own: never overstate,
+    # and do not go stale. An undercount is the honest direction, a claim of
+    # more tests than exist is not, and a figure more than 5 percent behind
+    # the suite is one nobody has looked at.
+    published = _published_test_counts()
+    measured = int(fill["TEST_COUNT"])
+    for where, claimed in published.items():
+        assert claimed <= measured, (
+            f"{where} claims {claimed} tests and the suite collects "
+            f"{measured}. Never publish more evidence than exists.")
+        assert claimed >= measured * 0.95, (
+            f"{where} claims {claimed} tests against a suite of {measured}. "
+            f"Re-run tools/measure_readme_numbers.py and restamp.")
+
+
+def _published_test_counts() -> dict[str, int]:
+    """The test figure as each surface states it, read out of the prose."""
+    files = _published_files()
+    out = {}
+    patterns = {
+        "README.md": r"(\d[\d,]*) tests, of which",
+        "docs/llms.txt": r"(\d[\d,]*) tests, \d+ of which",
+        "docs/index.html": r'<span class="n">(\d[\d,]*)</span>'
+                           r'<span class="l" data-i18n="spec\.tests">',
+    }
+    for where, pattern in patterns.items():
+        match = re.search(pattern, files.get(where, ""))
+        assert match, f"{where} does not state a test count where expected"
+        out[where] = int(match.group(1).replace(",", ""))
+    return out
