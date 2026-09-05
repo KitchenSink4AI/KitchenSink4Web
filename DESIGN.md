@@ -1448,7 +1448,7 @@ including the headless shell, ffmpeg, and winldd), 336.5 MB for Firefox
 memory on the same frozen Versailles page: headless bundled Chromium 129.6 MB
 private across 4 processes, headed 286.4 across 7, headed `moz-firefox`
 898.4 MB private across 12, plus a ~91 MB idle node driver in every case.
-**Ship with no browsers, install per engine on first use** — the S10 gate
+**Ship with no browsers, install per engine on first use.** The S10 gate
 decided it on these numbers: Chromium lazily on first use (the one-time 44 s /
 701 MB buys the cheapest runtime memory), Firefox and WebKit opt-in, and
 `moz-firefox` the zero-download lane at a disclosed memory premium. Lazy
@@ -1466,7 +1466,7 @@ most users get.
 KS4Web launches the user's **installed** Chrome or Firefox, still with a
 KS4Web-owned profile.
 
-- Chrome side: `channel="chrome"` / `"msedge"`. Mature, low risk — and
+- Chrome side: `channel="chrome"` / `"msedge"`. Mature, low risk, and
   **measured by S9 (2026-09-05) rather than assumed**: both branded channels
   ran the full S3-shaped battery 28 of 28 green on throwaway profiles,
   headless and headed, provenance proven from the process table. One
