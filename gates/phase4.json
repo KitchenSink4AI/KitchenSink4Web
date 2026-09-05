@@ -1,5 +1,5 @@
 {
- "measured_kst": "2026-09-05 13:27",
+ "measured_kst": "2026-09-05 14:17",
  "phase": 4,
  "corpus": "B (pathological) and C (toctou), synthetic, never networked",
  "lane": "A(chromium) headless",
@@ -56,32 +56,32 @@
    "rows": [
     {
      "nodes": 5012,
-     "projection_p95": 119.9,
+     "projection_p95": 131.4,
      "python_p95": 5.4,
      "budget_ms": 500
     },
     {
      "nodes": 10012,
-     "projection_p95": 145.4,
-     "python_p95": 3.9,
+     "projection_p95": 153.1,
+     "python_p95": 6.5,
      "budget_ms": 500
     },
     {
      "nodes": 25012,
-     "projection_p95": 207.8,
-     "python_p95": 4.9,
+     "projection_p95": 237.3,
+     "python_p95": 5.5,
      "budget_ms": 500
     },
     {
      "nodes": 50012,
-     "projection_p95": 332.9,
-     "python_p95": 4.4,
+     "projection_p95": 401.6,
+     "python_p95": 5.5,
      "budget_ms": 500
     },
     {
      "nodes": 100012,
-     "projection_p95": 574.1,
-     "python_p95": 5.6,
+     "projection_p95": 634.7,
+     "python_p95": 6.5,
      "budget_ms": 1000
     }
    ]

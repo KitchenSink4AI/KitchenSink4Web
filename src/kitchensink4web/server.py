@@ -35,10 +35,10 @@ from fastmcp import FastMCP
 from fastmcp.exceptions import NotFoundError, ToolError
 from fastmcp.server.middleware import Middleware
 
-from . import envelope, packs
-from .errors import BadParams, ReadOnlyMode
+from . import confirm, envelope, packs
+from .errors import BadParams, ConfirmationRequired, ReadOnlyMode
 from .ops import lite
-from .policy import audit, credentials, readonly
+from .policy import audit, credentials, gates, readonly
 
 # Redaction lives in the serializer (DESIGN 5.3): installed at import, before
 # any tool can run, so there is no window where a payload rides out unscrubbed.
@@ -116,7 +116,29 @@ def _wrap(fn):
     @functools.wraps(fn)
     async def inner(*args, **kwargs):
         try:
-            result = await fn(*args, **kwargs)
+            try:
+                result = await fn(*args, **kwargs)
+            except ConfirmationRequired as gate_exc:
+                # S8 wiring: put the gate's question to the client over
+                # elicitation. An explicit human ACCEPT redeems the gate,
+                # deposits it, and re-runs THIS call once; the re-run
+                # re-resolves its target and the TOCTOU re-validation holds
+                # it to the fingerprint the human confirmed. Anything short
+                # of an accept (headless auto-cancel, decline, timeout, a
+                # client with no elicitation) returns the original refusal:
+                # fail closed, exactly as measured.
+                #
+                # run_workflow never lets a step's gate reach here (a
+                # whole-workflow retry would re-execute completed steps); it
+                # confirms per step through the same confirm.attempt().
+                grant = await confirm.attempt(gate_exc)
+                if grant is None:
+                    raise
+                gates.deposit_grant(grant)
+                try:
+                    result = await fn(*args, **kwargs)
+                finally:
+                    gates.clear_grant()
         except envelope.CATCHABLE as exc:
             # The audit trail records refusals too (DESIGN 5.6: every tool
             # call appends a record), and it records them HERE so no tool can

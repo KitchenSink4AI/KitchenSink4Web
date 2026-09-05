@@ -1,0 +1,63 @@
+{
+ "measured_kst": "2026-09-05 14:15",
+ "phase": 6,
+ "corpus": "workflow_site.html (synthetic, deterministic, never networked) plus its cosmetic and structural variants",
+ "lane": "A(chromium) headless",
+ "confirmation_channel": "elicitation (S8: MRTR does not round-trip on the installed client; the gate rides elicitation and fails closed)",
+ "parts": {
+  "record_is_the_substrate": {
+   "green": true,
+   "steps": 5,
+   "tools": [
+    "navigate",
+    "type_text",
+    "fill_form",
+    "click",
+    "click"
+   ],
+   "anchors_only": true
+  },
+  "replays_after_reload": {
+   "green": true,
+   "would_fail": [],
+   "completed": 5
+  },
+  "replays_after_cosmetic": {
+   "green": true,
+   "completed": 5,
+   "added": 1
+  },
+  "dry_run_predicts_break": {
+   "green": true,
+   "would_fail": [
+    1,
+    4
+   ],
+   "refused": true,
+   "added_after_refusal": 0
+  },
+  "gate_fails_closed": {
+   "green": true,
+   "closed_stop": 2,
+   "accepted_stop": null
+  },
+  "no_eval_in_workflows": {
+   "green": true,
+   "replayable": [
+    "navigate",
+    "click",
+    "type_text",
+    "fill_form",
+    "press_keys",
+    "scroll",
+    "wait_for"
+   ]
+  },
+  "orphan_census": {
+   "green": true,
+   "opened": 24,
+   "survivors": []
+  }
+ },
+ "green": true
+}

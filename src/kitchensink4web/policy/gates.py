@@ -40,6 +40,7 @@ half of the read-only invariant (the registration half is the other).
 
 from __future__ import annotations
 
+import contextvars
 import secrets as _secrets
 import time
 from dataclasses import dataclass, field
@@ -94,6 +95,39 @@ class Gate:
     redeemed: bool = False
 
 
+#: The confirmation plumbing's hand-off slot (S8 wiring). When the server's
+#: elicitation plumbing obtains a human ACCEPT, it redeems the gate and
+#: deposits the resulting Gate here, then re-runs the refused call once in
+#: the same context. `ask()` consumes a matching deposit instead of raising,
+#: which is what lets the second pass proceed WITHOUT any tool argument ever
+#: carrying a token: the slot is context-local, single-use, and reachable
+#: only from server-side code. A model echoing a requestState still reaches
+#: `redeem()` never, exactly as before.
+_deposited: contextvars.ContextVar[Gate | None] = contextvars.ContextVar(
+    "ks4web_gate_grant", default=None)
+
+
+def deposit_grant(gate: Gate) -> None:
+    """Place a redeemed gate for the confirmation re-run. CALLERS: the
+    server's elicitation plumbing only, never anything reachable from a tool
+    argument."""
+    _deposited.set(gate)
+
+
+def clear_grant() -> None:
+    _deposited.set(None)
+
+
+def peek_grant(action_class: str | None) -> Gate | None:
+    """The deposited grant, if one exists for this action class, without
+    consuming it. The choke point uses this to skip re-charging a budget the
+    ask pass already charged for the same action."""
+    gate = _deposited.get()
+    if gate is not None and action_class and gate.action_class == action_class:
+        return gate
+    return None
+
+
 class GateEngine:
     """Pending gates, keyed by their requestState correlation token."""
 
@@ -103,11 +137,18 @@ class GateEngine:
     # ----------------------------------------------------------------- ask
 
     def ask(self, action_class: str, *, tool: str, session: str,
-            page: str | None, target: dict | None, summary: str) -> None:
+            page: str | None, target: dict | None, summary: str) -> Gate:
         """Record the gate and refuse with the confirmation payload.
 
-        Always raises. The captured fingerprint is what EXECUTE will be
-        held to."""
+        Raises on the first pass. On a confirmation re-run (the elicitation
+        plumbing redeemed the gate and deposited it), a deposit matching this
+        action class is CONSUMED and returned instead, and the caller runs
+        the TOCTOU re-validation (`verify_execute`) before acting. The
+        captured fingerprint is what EXECUTE will be held to."""
+        granted = peek_grant(action_class)
+        if granted is not None:
+            clear_grant()          # single-use, like the redemption it holds
+            return granted
         if action_class not in GATED_CLASSES:
             raise ValidationFailed(
                 f"unknown gated action class {action_class!r}; the closed "

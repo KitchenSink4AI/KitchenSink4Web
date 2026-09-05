@@ -2205,6 +2205,26 @@ are clipped at 200 characters, and storage is bounded twice (a ring of
 that with the dropped count carried in the read payload). The framing line
 rides in every `get_audit` result.
 
+**Replay as built (Phase 6, `ops/workflows.py`):** the audit trail is
+literally the recording substrate. Each replayable lite tool enriches its
+record with a `replay` block carrying the full arguments and the target's
+durable ANCHOR rather than its ref (`act.anchor_of` / `anchor_id_of`, a
+content-derived id that is the same across sessions, which is the second of
+the two sanctioned places an anchor id surfaces). `save_workflow` reads
+those blocks back into a JSON file of anchors; `run_workflow` re-resolves
+every anchor against the live page through `ladder.resolve_anchor` (page-key
+first, strongest keys, the two role+name tiers, no fuzzy tier, no
+first-match action), runs the MANDATORY dry run before anything executes,
+refuses outright when any step's anchor fails, and otherwise replays each
+step through the REAL lite tools so the whole policy ladder applies per
+step. The replayable set is CLOSED and excludes `evaluate_script`, so
+workflow reuse never requires the arbitrary-code tool the #1645 fork was
+about; a JS-predicate `wait_for` is also not recorded, so a workflow cannot
+smuggle evaluate-shaped work past that set. A gated step (a form submit)
+confirms per STEP through the S8 elicitation seam and FAILS CLOSED where no
+human accepts, stopping the replay with completed steps left completed
+(browser actions do not roll back) and the rest `not_attempted`.
+
 ### 5.7 Verified outcomes (the silent-false-success answer)
 
 Not one of SAFETY's eight pillars, but it belongs here because it is the same

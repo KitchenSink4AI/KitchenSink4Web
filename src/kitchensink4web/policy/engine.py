@@ -110,35 +110,51 @@ def approve(request: ActionRequest) -> dict:
     if domain:
         budgets.BOOK.check_domain(domain)
 
+    # A confirmed re-run (S8 wiring): the elicitation plumbing redeemed the
+    # gate the FIRST pass asked for and deposited it, and this pass is the
+    # same action moments later. The first pass already noted the call and
+    # charged the budget, so repeating either would bill one action twice
+    # and walk the loop detector at double speed for gated actions.
+    confirmed_rerun = (request.action_class is not None
+                       and request.gate_grant is None
+                       and gates.peek_grant(request.action_class) is not None)
+
     # 5. Loop detection, before the charge.
-    budgets.BOOK.note_call(
-        request.session, request.tool,
-        budgets.fingerprint(gates.fingerprint(request.target or {}))
-        if request.target else None,
-        budgets.fingerprint(request.args) if request.args else None)
+    if not confirmed_rerun:
+        budgets.BOOK.note_call(
+            request.session, request.tool,
+            budgets.fingerprint(gates.fingerprint(request.target or {}))
+            if request.target else None,
+            budgets.fingerprint(request.args) if request.args else None)
 
     # 6. The budget charge.
-    charge_kind = _KIND_CHARGE.get(request.kind)
-    if charge_kind:
-        budgets.BOOK.charge(request.session, charge_kind,
-                            origin=domain if request.kind == "navigate"
-                            else None)
-    for extra in request.extra_charges:
-        budgets.BOOK.charge(request.session, extra)
+    if not confirmed_rerun:
+        charge_kind = _KIND_CHARGE.get(request.kind)
+        if charge_kind:
+            budgets.BOOK.charge(request.session, charge_kind,
+                                origin=domain if request.kind == "navigate"
+                                else None)
+        for extra in request.extra_charges:
+            budgets.BOOK.charge(request.session, extra)
 
     # 7. The confirmation gate, last. With no redeemed grant this RAISES
     #    (CONFIRMATION_REQUIRED, failing closed on clients with no
-    #    confirmation channel). With a grant, the TOCTOU re-validation and
-    #    the rebind interlock run HERE, immediately before the caller acts.
+    #    confirmation channel), unless the elicitation plumbing deposited a
+    #    redeemed gate for this class, which ask() consumes and returns. With
+    #    a grant either way, the TOCTOU re-validation and the rebind
+    #    interlock run HERE, immediately before the caller acts.
     gate_record = None
     if request.action_class:
         if request.gate_grant is None:
-            gates.ENGINE.ask(
+            granted = gates.ENGINE.ask(
                 request.action_class, tool=request.tool,
                 session=request.session, page=request.page,
                 target=request.target,
                 summary=request.summary or f"{request.tool} on "
                                            f"{request.url or request.page}")
+            gate_record = gates.ENGINE.verify_execute(
+                granted, request.target,
+                resolution_outcome=request.resolution)
         else:
             gate_record = gates.ENGINE.verify_execute(
                 request.gate_grant if isinstance(request.gate_grant,

@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Workflow fixture: team roster</title>
+<style>
+  body { font-family: sans-serif; margin: 2rem; }
+  .decoy { color: #777; }
+</style>
+</head>
+<body>
+<nav aria-label="Site">
+  <a href="/tests/fixtures/workflow_site.html">Roster</a>
+  <a href="#help">Help</a>
+</nav>
+<main>
+  <h1>Team roster</h1>
+  <p>Add a member to the roster. This page is deterministic: the same steps
+     produce the same roster every time, which is what a replay gate needs.</p>
+  <form id="signup" action="#">
+    <label for="name">Your name</label>
+    <input id="name" type="text" autocomplete="off">
+    <label for="team">Team</label>
+    <select id="team">
+      <option value="">(pick one)</option>
+      <option>Red</option>
+      <option>Blue</option>
+      <option>Green</option>
+    </select>
+    <label><input id="subscribe" type="checkbox"> Subscribe to updates</label>
+    <button id="add" type="button">Add member</button>
+  </form>
+  <section aria-label="Roster">
+    <h2>Members</h2>
+    <ul id="roster"></ul>
+  </section>
+</main>
+<footer>
+  <p class="decoy">Fixture page for KS4Web Phase 6. No network calls.</p>
+</footer>
+<script>
+  window.__added = 0;
+  const qs = new URLSearchParams(location.search);
+
+  document.getElementById('add').addEventListener('click', (ev) => {
+    // The trusted-input discipline holds on this page too.
+    if (!ev.isTrusted) return;
+    const name = document.getElementById('name').value || '(anonymous)';
+    const teamEl = document.getElementById('team');
+    const team = teamEl ? teamEl.value : '';
+    const sub = document.getElementById('subscribe').checked;
+    const li = document.createElement('li');
+    li.textContent = 'Added: ' + name + (team ? ' [' + team + ']' : '')
+      + (sub ? ' (subscribed)' : '');
+    document.getElementById('roster').appendChild(li);
+    window.__added += 1;
+  });
+
+  if (qs.get('cosmetic')) {
+    // Cosmetic churn: classes, decoys, unrelated reordering. Every role,
+    // accessible name, and id survives, so every anchor must still resolve.
+    document.body.classList.add('theme-b');
+    document.querySelector('h1').textContent = 'Team roster';
+    const decoy = document.createElement('p');
+    decoy.className = 'decoy';
+    decoy.textContent = 'Cosmetic variant: the furniture moved, the ' +
+      'controls did not.';
+    document.querySelector('main').insertBefore(
+      decoy, document.getElementById('signup'));
+    const footer = document.querySelector('footer p');
+    footer.textContent = 'Cosmetic variant footer.';
+    document.querySelectorAll('#signup label').forEach(
+      (l) => l.classList.add('field-label'));
+  }
+
+  if (qs.get('structural')) {
+    // Structural change: the add button is renamed AND loses its id, and
+    // the name field is relabeled AND re-identified. Anchors recorded
+    // against them must fail on every rung; the select and the checkbox
+    // are untouched, so the dry run must predict EXACTLY the broken pair.
+    const btn = document.getElementById('add');
+    btn.textContent = 'Enroll';
+    btn.removeAttribute('id');
+    const field = document.getElementById('name');
+    field.removeAttribute('id');
+    field.setAttribute('data-field', 'fullname');
+    const label = document.querySelector('label[for=name]');
+    label.removeAttribute('for');
+    label.textContent = 'Full name';
+    label.setAttribute('id', 'fullname-label');
+    field.setAttribute('aria-labelledby', 'fullname-label');
+    // The renamed button still works, under its new identity.
+    btn.addEventListener('click', () => {});
+  }
+</script>
+</body>
+</html>

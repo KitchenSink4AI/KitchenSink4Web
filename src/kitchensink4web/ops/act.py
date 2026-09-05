@@ -324,6 +324,41 @@ _SETTLE_MS = 80
 
 # ----------------------------------------------------------- descriptors
 
+def anchor_of(resolved: dict) -> dict:
+    """The durable anchor descriptor for a resolved target, for the audit
+    trail and for saved workflows (DESIGN 3.5: the two places anchors
+    surface). A ladder-resolved unit carries its minted anchor whole; a
+    live-resolved unit contributes what the live resolver measured, which is
+    poorer (no landmark, no stable attributes) and still re-resolvable
+    through the role+name tiers."""
+    unit = resolved.get("unit") or {}
+    stored = unit.get("anchor")
+    if isinstance(stored, dict) and stored:
+        return dict(stored)
+    return {k: v for k, v in {
+        "role": unit.get("role"),
+        "name": unit.get("name"),
+        "page_key": unit.get("page_key"),
+        "attr_testid": unit.get("attr_testid") or unit.get("testid"),
+        "attr_id": unit.get("attr_id"),
+        "attr_name": unit.get("attr_name"),
+    }.items() if v not in (None, "")}
+
+
+def anchor_id_of(anchor: dict) -> str:
+    """A short stable id for an anchor descriptor, minted for the audit
+    record and the workflow file. Content-derived, so the same element gets
+    the same id across sessions."""
+    import hashlib
+    import json as _json
+    basis = _json.dumps(
+        {k: anchor.get(k) for k in ("role", "name", "page_key", "landmark",
+                                    "landmark_label", "attr_testid",
+                                    "attr_id", "attr_name")},
+        sort_keys=True)
+    return "a" + hashlib.sha1(basis.encode("utf-8")).hexdigest()[:6]
+
+
 def target_descriptor(unit: dict) -> dict:
     """Flatten a resolved unit (ladder or live) into the fields the credential
     check and the gate fingerprint read. One shape for both paths."""
@@ -436,7 +471,8 @@ async def _resolve_live(sess, record, location: dict, *, tool: str) -> dict:
             "the {'anchor': ...} selector addresses a durable anchor id, which "
             "surfaces only in audit records and saved workflows (DESIGN 3.5). "
             "Address a live element by ref, css, text, role+name, or testid; "
-            "anchor-driven replay arrives with the workflows pack.")
+            "anchor-driven replay runs through run_workflow, which re-resolves "
+            "stored anchors itself.")
     found = await record.page.evaluate(_RESOLVE_JS, {"location": location})
     if found.get("error"):
         raise BadParams(

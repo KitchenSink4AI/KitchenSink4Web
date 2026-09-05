@@ -593,6 +593,9 @@ async def navigate(
     status = None
     response = None
     action = (action or "goto").strip().lower()
+    if action == "goto" and url:
+        _audit.annotate(replay={"tool": "navigate", "args": {
+            "action": "goto", "url": url, "wait_until": wait_until}})
 
     if action == "goto" and not url:
         raise BadParams(
@@ -743,6 +746,22 @@ def _reraise_driver(exc: Exception, *, what: str, timeout_ms: int) -> None:
     raise _act.wrap_driver_error(exc, what=what, timeout_ms=timeout_ms) from exc
 
 
+def _replay_record(tool: str, resolved: dict | None, args: dict) -> dict:
+    """The audit enrichment save_workflow reads (DESIGN 5.6: the audit trail
+    is the recording substrate). Anchors rather than refs, and the FULL
+    arguments rather than the clipped summary, because a replay needs what
+    was actually done. The vault scrub still applies at write, so a secret
+    can no more land here than anywhere else in the log."""
+    anchor = _act.anchor_of(resolved) if resolved else {}
+    record: dict = {"tool": tool, "args": args}
+    if anchor:
+        record["anchor"] = anchor
+        record["anchor_id"] = _act.anchor_id_of(anchor)
+        record["page_key"] = anchor.get("page_key") \
+            or (resolved or {}).get("unit", {}).get("page_key")
+    return record
+
+
 def _action_result(record, tool: str, desc: dict, resolved: dict,
                    outcome: dict, **extra) -> dict:
     """The verified-outcome envelope every action shares (DESIGN 5.7)."""
@@ -751,7 +770,9 @@ def _action_result(record, tool: str, desc: dict, resolved: dict,
         warnings.append(resolved["rebound"])
     if outcome.get("none_observed"):
         warnings.append(outcome["warning"])
+    anchor = _act.anchor_of(resolved)
     _audit.annotate(target=f'{desc.get("role")} "{desc.get("name")}"',
+                    anchor_id=_act.anchor_id_of(anchor) if anchor else None,
                     effect=outcome["effect"],
                     rebind=resolved.get("rebound"))
     result = {
@@ -788,6 +809,10 @@ async def click(
                     url=record.page.url, lane=sess.spec.label)
     resolved = await _act.resolve(sess, record, location, tool="click")
     desc = resolved["descriptor"]
+    _audit.annotate(replay=_replay_record(
+        "click", resolved,
+        {"button": button, "click_count": click_count,
+         "modifiers": modifiers or []}))
     _policy.approve(_policy.ActionRequest(
         tool="click", kind="act", session=sess.session_id,
         page=record.handle, url=record.page.url, target=desc,
@@ -839,6 +864,10 @@ async def type_text(
             "this element is a <select>; typing into it does nothing useful. "
             "Set it with fill_form([{<selector>, 'value': '<option>'}]), which "
             "routes a select to the driver's select_option.")
+    _audit.annotate(replay=_replay_record(
+        "type_text", resolved,
+        {"text": text, "clear_first": clear_first, "press_enter": press_enter,
+         "submit": submit, "delay_ms": delay_ms}))
     _policy.approve(_policy.ActionRequest(
         tool="type_text", kind="act", session=sess.session_id,
         page=record.handle, url=record.page.url, target=desc,
@@ -950,6 +979,12 @@ async def fill_form(
         resolved = await _act.resolve(sess, record, loc, tool="fill_form")
         prepared.append((f, loc, resolved))
 
+    _audit.annotate(replay=_replay_record(
+        "fill_form", prepared[0][2] if prepared else None,
+        {"fields": [{"anchor": _act.anchor_of(r), "value": f.get("value")}
+                    for f, _loc, r in prepared],
+         "submit": submit}))
+
     # One budget charge for the batch, plus read-only, origin, and loop
     # checks. The submit, if any, is gated separately AFTER the fills.
     _policy.approve(_policy.ActionRequest(
@@ -999,25 +1034,106 @@ async def fill_form(
 
     batch = anchors.batch_outcome(per_item)
 
+    submitted = None
     if submit and not stopped:
-        # The submit is a gated class, and this build wires no confirmation
-        # channel, so it FAILS CLOSED: the gate asks and nothing is submitted
-        # until a human answers. The fields above ARE filled and the form
-        # state read-back is the authority on what the page now holds.
-        _gates.ENGINE.ask(
+        # The submit is a gated class. On the first pass the gate ASKS and
+        # this fails closed: nothing is submitted until a human answers. On
+        # a confirmed re-run (the elicitation plumbing redeemed the gate and
+        # deposited it, S8 wiring), ask() returns the grant instead, the
+        # TOCTOU re-validation holds it to the fingerprint the human
+        # confirmed, and the submission actually runs. The fields above ARE
+        # filled either way and the form state read-back is the authority on
+        # what the page now holds.
+        first = prepared[0][2] if prepared else None
+        granted = _gates.ENGINE.ask(
             "form_submit", tool="fill_form", session=sess.session_id,
             page=record.handle,
-            target=prepared[0][2]["descriptor"] if prepared else None,
+            target=first["descriptor"] if first else None,
             summary=f"Submit the form after filling {batch['completed']} "
                     f"field(s) on {record.handle}?")
+        # Only a confirmed re-run reaches this line. Re-resolve the anchor
+        # field NOW so the fingerprint comparison is against the page as it
+        # is at execution, not as it was at the ask.
+        fresh = await _act.resolve(sess, record, prepared[0][1],
+                                   tool="fill_form") if prepared else None
+        _gates.ENGINE.verify_execute(
+            granted, fresh["descriptor"] if fresh else None,
+            resolution_outcome=fresh["resolution"] if fresh else "ok")
+        before = await _act.observe(record.page,
+                                    fresh["node_ref"] if fresh else None)
+        submitted = await _submit_form(record, fresh)
+        outcome = await _act.verify(record.page,
+                                    fresh["node_ref"] if fresh else None,
+                                    before)
+        _audit.annotate(gate={"action_class": "form_submit",
+                              "gate": granted.token[:8]},
+                        effect=outcome["effect"])
+        submitted = {"submitted": True, "how": submitted,
+                     "changed": {"effect": outcome["effect"],
+                                 "details": outcome["details"]}}
 
     return {
         "session": sess.session_id, "page": record.handle, "tool": "fill_form",
         "url": record.page.url,
         "batch": batch,
+        **({"submit": submitted} if submitted else {}),
         "form_state": [{"label": r.get("label"), "set": r.get("set")}
                        for r in per_item if r.get("status") == "completed"],
     }
+
+
+async def _submit_form(record, fresh: dict | None) -> str:
+    """Submit the form the first filled field belongs to. The trusted route
+    is preferred: the form's own submit control is clicked through the
+    driver. Where the form has no submit control, `requestSubmit()` is the
+    standard programmatic path that still runs validation and fires the
+    submit event, and the outcome verification reports what actually
+    happened either way."""
+    if fresh is None:
+        raise BadParams("nothing was filled, so there is no form to submit.")
+    handle = fresh["handle"]
+    sub_ref = await record.page.evaluate(
+        r"""(el) => {
+          const f = el.form || (el.closest ? el.closest('form') : null);
+          if (!f) return null;
+          const c = f.querySelector('button[type=submit], input[type=submit], '
+                                    + 'button:not([type])');
+          if (!c) return '';
+          const map = (window.__ks4web_refs instanceof Map)
+            ? window.__ks4web_refs : (window.__ks4web_refs = new Map());
+          const ref = 'x' + (window.__ks4web_seq =
+                             (window.__ks4web_seq || 0) + 1);
+          map.set(ref, c);
+          return ref; }""", handle)
+    if sub_ref is None:
+        raise BadParams(
+            "the confirmed field is not inside a <form>; there is nothing "
+            "to submit.")
+    try:
+        if sub_ref:
+            btn = await record.page.evaluate_handle(
+                "r => window.__ks4web_refs.get(r)", sub_ref)
+            element = btn.as_element()
+            if element is not None:
+                await element.click(timeout=8000)
+                how = "clicked the form's submit control (trusted input)"
+            else:
+                await handle.evaluate(
+                    "el => { const f = el.form || el.closest('form'); "
+                    "f.requestSubmit ? f.requestSubmit() : f.submit(); }")
+                how = "requestSubmit()"
+        else:
+            await handle.evaluate(
+                "el => { const f = el.form || el.closest('form'); "
+                "f.requestSubmit ? f.requestSubmit() : f.submit(); }")
+            how = "requestSubmit(); the form has no submit control"
+        try:
+            await record.page.wait_for_load_state("load", timeout=8000)
+        except Exception:
+            pass                    # an in-place re-render is fine
+    except Exception as exc:
+        _reraise_driver(exc, what="form submit", timeout_ms=8000)
+    return how
 
 
 def _field_location(f: dict) -> dict:
@@ -1069,6 +1185,9 @@ async def press_keys(
         resolved = await _act.resolve(sess, record, location, tool="press_keys")
         desc = resolved["descriptor"]
         node_ref = resolved["node_ref"]
+    _audit.annotate(replay=_replay_record(
+        "press_keys", resolved,
+        {"keys": keys, "repeat": repeat, "delay_ms": delay_ms}))
     _policy.approve(_policy.ActionRequest(
         tool="press_keys", kind="act", session=sess.session_id,
         page=record.handle, url=record.page.url,
@@ -1126,9 +1245,12 @@ async def scroll(
         raise BadParams(
             f"scroll(action={action!r}) needs a location naming the element "
             f"or container to scroll.")
+    resolved = None
     if location:
         resolved = await _act.resolve(sess, record, location, tool="scroll")
         node_ref = resolved["node_ref"]
+    _audit.annotate(replay=_replay_record(
+        "scroll", resolved, {"action": action, "amount": int(amount)}))
     metrics = await record.page.evaluate(_SCROLL_JS, {
         "action": action, "amount": int(amount), "ref": node_ref})
     record.touch(record.page.url)
@@ -1211,6 +1333,13 @@ async def wait_for(
     cond = (condition or "").strip().lower()
     p = record.page
     known = ("text", "text_gone", "url", "visible", "hidden", "js", "load")
+    if cond in ("text", "text_gone", "url", "load"):
+        # Deterministic, target-free conditions replay verbatim; the two
+        # element conditions record their anchor at resolution below, and a
+        # JS predicate is deliberately NOT recorded (a workflow must never
+        # smuggle evaluate-shaped work past the gate that names it).
+        _audit.annotate(replay={"tool": "wait_for", "args": {
+            "condition": cond, "value": value, "timeout_ms": timeout_ms}})
     if cond not in known:
         raise BadParams(
             f"unknown wait condition {condition!r}: the conditions are "
@@ -1236,6 +1365,9 @@ async def wait_for(
                     f"the element to watch.")
             resolved = await _act.resolve(sess, record, location,
                                           tool="wait_for")
+            _audit.annotate(replay=_replay_record(
+                "wait_for", resolved,
+                {"condition": cond, "timeout_ms": timeout_ms}))
             await resolved["handle"].wait_for_element_state(
                 "visible" if cond == "visible" else "hidden",
                 timeout=timeout_ms)

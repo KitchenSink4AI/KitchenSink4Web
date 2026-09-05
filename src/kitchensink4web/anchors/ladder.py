@@ -196,6 +196,86 @@ def resolve(element_map, ref: str, extraction: dict, handle: str,
             "recovery": "re-read the page and use the ref it returns"}
 
 
+def resolve_anchor(anchor: dict, extraction: dict,
+                   kind: str = "affordance") -> dict:
+    """Resolve a STORED anchor descriptor against the page as it is right
+    now, with no session ref involved. This is replay's resolver (DESIGN
+    5.6): a saved workflow records anchors rather than refs because a later
+    session has no refs, and the dry run's whole job is to run this for
+    every step before anything executes.
+
+    Same weighting as `resolve()`: strongest keys first, the two role+name
+    tiers after, no fuzzy tier, no first-match action, ambiguity and absence
+    refuse with the same vocabulary. The page key is checked FIRST, because
+    an anchor minted on one page resolving on another is the cross-page
+    rebind S2 priced at 27 percent false."""
+    if extraction.get("modal"):
+        return {"outcome": Outcome.MODAL, "dialog": extraction["modal"],
+                "recovery": "dismiss the dialog with its own control first"}
+
+    identity = extraction.get("identity", {})
+    page_key = identity.get("page_key") or identity.get("url", "")
+    want_key = anchor.get("page_key")
+    if want_key and page_key and want_key != page_key:
+        return {"outcome": Outcome.STALE, "reason": "page-key-differs",
+                "was": f'{anchor.get("role")} "{anchor.get("name")}" on '
+                       f'{want_key}',
+                "now": page_key,
+                "recovery": "navigate to the page this anchor was recorded "
+                            "on; replay runs its own navigate steps first"}
+
+    units = _units(extraction, kind)
+    anchors = [u.get("anchor") or {} for u in units]
+    idx = _keys.index(anchors)
+
+    # Strongest first: every unique key the stored anchor offers, against
+    # the live read's own uniqueness index.
+    for key_kind in _keys.KEY_KINDS:
+        key = _keys.key_of(anchor, key_kind)
+        if key is None:
+            continue
+        hits = idx.get(key_kind, {}).get(key, [])
+        if len(hits) == 1:
+            return {"outcome": Outcome.OK, "tier": key_kind,
+                    "unit": units[hits[0]]}
+
+    tiers = (
+        ("role+name in landmark", [
+            i for i, m in enumerate(anchors)
+            if m.get("role") == anchor.get("role")
+            and m.get("name") == anchor.get("name")
+            and m.get("landmark") == anchor.get("landmark")
+            and m.get("landmark_label") == anchor.get("landmark_label")]),
+        ("role+name anywhere", [
+            i for i, m in enumerate(anchors)
+            if m.get("role") == anchor.get("role")
+            and m.get("name") == anchor.get("name")]),
+    )
+    for tier, positions in tiers:
+        if not positions:
+            continue
+        if len(positions) == 1:
+            return {"outcome": Outcome.REBOUND, "tier": tier,
+                    "unit": units[positions[0]],
+                    "was": f'{anchor.get("role")} "{anchor.get("name")}"',
+                    "now": f'{anchors[positions[0]].get("role")} '
+                           f'"{anchors[positions[0]].get("name")}"'}
+        return {"outcome": Outcome.AMBIGUOUS, "tier": tier,
+                "candidates": _candidates(anchor,
+                                          [anchors[i] for i in positions]),
+                "recovery": "the page now holds several elements this anchor "
+                            "matches; re-record the workflow against the "
+                            "current page"}
+
+    names = [m.get("name") for m in anchors if m.get("name")]
+    near = difflib.get_close_matches(anchor.get("name") or "", names, 1, 0.4)
+    return {"outcome": Outcome.STALE, "reason": "no match",
+            "was": f'{anchor.get("role")} "{anchor.get("name")}"',
+            "nearest_by_name": near[0] if near else None,
+            "recovery": "the element this step was recorded against is no "
+                        "longer on the page; re-record the workflow"}
+
+
 def _units(extraction: dict, kind: str) -> list[dict]:
     return {
         "affordance": extraction.get("affordances") or [],

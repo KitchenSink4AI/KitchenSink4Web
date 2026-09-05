@@ -1122,7 +1122,45 @@ pattern.
   sessions), and `list_console` on the thousand-line fixture returns a bounded,
   deduplicated result.
 
-### Phase 6: Workflows and replay
+### Phase 6: Workflows and replay — **RUN 2026-09-05, GATE GREEN, ALL SEVEN PARTS**
+
+**Status.** The suite is 438 tests, up from 415. The three honest Phase 5
+stubs are real tools. The audit trail is the recording substrate exactly as
+DESIGN 5.6 argues: every replayable lite tool now enriches its audit record
+with a `replay` block carrying the full arguments and the target's durable
+ANCHOR (never its ref); `save_workflow` reads those back into a JSON file of
+anchors; `run_workflow` re-resolves every anchor against the live page
+through a new `ladder.resolve_anchor` (page-key first, strongest keys, the
+two role+name tiers, no fuzzy tier, no first-match action), runs the
+mandatory dry run first, and replays each step through the REAL lite tools so
+every step inherits the whole policy ladder. `list_workflows` enumerates the
+store. Nothing here can evaluate script: the replayable set is CLOSED and
+excludes `evaluate_script`, which closes the #1645 fork.
+
+**The confirmation wiring is what S8 proved, not what the design assumed.**
+A gated step rides the elicitation channel (`confirm.attempt`): on an
+explicit human ACCEPT the gate is redeemed and DEPOSITED context-locally, the
+refused call re-runs once, `gates.ENGINE.ask` consumes the deposit instead of
+raising, and the TOCTOU re-validation holds the action to the confirmed
+fingerprint. No token ever rides a tool argument. Fail-closed is the default
+everywhere else (headless auto-cancel, decline, timeout, no elicitation).
+`fill_form(submit=True)` now actually submits behind that gate where it only
+asked before. Gate record `gates/phase6.json`; script `scripts/gate_phase6.py`.
+
+- `save_workflow` from the audit log, `run_workflow` with mandatory `dry_run`
+  reporting before execution, `list_workflows`.
+- **GATE (seven parts, all GREEN):** a recorded FIVE-step flow (the opening
+  navigate plus four actions) replays green after a full page reload and
+  after a cosmetic DOM change (and the replayed click really fires); the dry
+  run names EXACTLY the broken steps after a structural change (the name
+  field and the submit button lose their identity) and a real run refuses
+  OUTRIGHT rather than half-running; a gated submit step fails closed with no
+  human and COMPLETES on an explicit accept through the elicitation seam; the
+  replayable set excludes `evaluate_script`; every gate session closes with
+  zero owned browser PID surviving. **MET.** The original phase definition
+  follows.
+
+The original phase definition:
 
 - `save_workflow` from the audit log, `run_workflow` with mandatory `dry_run`
   reporting before execution, `list_workflows`.
@@ -1345,7 +1383,7 @@ Explicitly OUT of v1, with the reason:
 | Server-side secrets file (execution-time credential substitution) | DESIGN 5.3 names it as the second sanctioned credential route and NO mechanism backs it in this build; the 2026-09-05 field test caught the `CREDENTIAL_REFUSED` message promising it, and the message was corrected to the routes that exist (headed handoff, plus auth-state reuse via the storage pack). Build the substitution mechanism before the error copy names it again. |
 | Lane C Firefox, if S5 fails | Moves to v1.1; Lane C ships Chrome-only. |
 | Lane C at all, if S5 and S9 both disappoint | Lanes A and B alone are still a complete product. |
-| `workflows` pack, if Phase 6 runs long | Drops to v1.1. **No code depends on it and the positioning does**, so the drop is not free: DESIGN 6.8 calls workflows-without-eval the whole point of the pack, DESIGN 5.6 sells replay as the answer to the #1645 fork, and the Section 12 capability matrix ships "Audit trail and replay: yes." Dropping Phase 6 therefore also edits that matrix row and removes the eval-alternative line from the safety copy, in the same commit as the drop. Decide it as a positioning change, not a scheduling one. |
+| ~~`workflows` pack, if Phase 6 runs long~~ | **RESOLVED: workflows MAKE v1.** The standing ruling under author delegation kept the pack in v1 (Q10: positioning-load-bearing, the capability-matrix row and the eval-alternative safety story depend on it), and **Phase 6 ran on 2026-09-05 with its gate GREEN, seven parts.** `save_workflow` / `run_workflow` / `list_workflows` are real tools over durable anchors with a mandatory dry run, replaying through the whole policy ladder and never requiring `evaluate_script`. The Section 12 matrix "Audit trail and replay: yes" now stands on shipped code. |
 
 **Anti-scope-creep rule for this build:** every "while we are in here" addition
 must name which v1 gate it serves. If it serves none, it goes on the v1.1 list

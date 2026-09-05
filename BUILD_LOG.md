@@ -1955,3 +1955,112 @@ not modified): p95 341ms class holds.
 - The MRTR confirmation round-trip (S8) still gates every fail-closed class.
 - Server-side secrets file (execution-time credential substitution) added to
   the PLAN v1.1 scope fence, removed from the CREDENTIAL_REFUSED copy.
+
+---
+
+## Spike S8 + Phase 6 (2026-09-05, ~14:17 KST)
+
+### S8: what the installed client actually does
+
+Probed against **Claude Code 2.1.220** (the client of record, not the stale
+v2.1.92 baseline) with a raw stdio server that logs every wire message, plus
+a raw probe of the shipped FastMCP stack. Ten verdicts, full report at
+`internal notes/20260905_ks4web_spike_s8.md`; wire logs in
+`spikes/s8/`.
+
+The two that reshape the build: **MRTR does not round-trip** (the
+`input_required` result passes through as content, no protocol retry,
+`requestState` does not survive; the "retry" observed was the model
+paraphrasing arguments, the echoed-token path `redeem()` already refuses),
+and **elicitation does** (a headless client answers `elicitation/create` with
+an instant `cancel`, so a gated action fails closed in 0.0s; an interactive
+client can put it to a human). So the confirmation channel is elicitation,
+fail-closed everywhere else. The rest confirmed the design: the ~3k subagent
+cap is **refuted** (inline through 21k, spill at 24k, materially the 25k
+main-thread cap), `readOnlyHint` unlocks measured concurrency (3.2s vs 6.0s),
+2,048-char truncation with a model-facing marker, `alwaysLoad`/`searchHint`
+behave as documented, FastMCP 3.4.7 negotiates 2025-11-25 and lacks
+`server/discover` (Q4 trigger has NOT fired), tools/list identical across
+connections. The Desktop mid-conversation checkbox question is
+**DEFERRED-NEEDS-HUMAN**: the one installed .mcpb carries no `user_config`,
+so there is no checkbox on this machine to observe; the author's one-sentence
+manual check is in the report.
+
+### Phase 6: the workflows engine behind the Phase 5 stubs
+
+The three honest stubs became real tools. The build followed DESIGN 5.6: the
+audit trail is the recording substrate. Each replayable lite tool now
+enriches its audit record with a `replay` block carrying the full arguments
+and the target's durable ANCHOR (never its ref, via `act.anchor_of` /
+`anchor_id_of`). `save_workflow` reads those back into a JSON file of anchors;
+`run_workflow` re-resolves every anchor against the live page through a new
+`ladder.resolve_anchor` (page-key first, strongest keys, the two role+name
+tiers, no fuzzy tier, no first-match action), runs the **mandatory dry run**
+first, and replays each step through the REAL lite tools so every step
+inherits the whole policy ladder. `list_workflows` enumerates the store.
+Nothing here can evaluate script: the replayable set is closed and excludes
+`evaluate_script`, which is the whole point of the pack (#1645 fork).
+
+**The confirmation wiring, from S8.** A new `confirm.attempt` puts a raised
+gate's question to the client over elicitation and, on an explicit human
+ACCEPT, redeems the gate through the single-use `redeem()` and DEPOSITS it in
+a context-local slot; the server tool wrapper (and `run_workflow`'s per-step
+loop) then re-runs the refused call once, and `gates.ENGINE.ask` CONSUMES the
+deposit instead of raising, after which the TOCTOU re-validation holds the
+action to the fingerprint the human confirmed. No token ever rides a tool
+argument. `fill_form(submit=True)` now actually submits behind that gate
+(trusted click on the form's own submit control, `requestSubmit()` fallback),
+where before it only asked and failed closed.
+
+### Gate table (scripts/gate_phase6.py -> gates/phase6.json)
+
+| Part | Result |
+|---|---|
+| record_is_the_substrate (5-step flow recovered from the audit log as anchors, never refs; page-read excluded) | GREEN |
+| replays_after_reload (dry-run all-resolve, then real replay green after a full reload; every ref gone) | GREEN |
+| replays_after_cosmetic (replays green after class/decoy churn; the replayed click really fires) | GREEN |
+| dry_run_predicts_break (structural change: dry run names exactly the broken name field + submit button; real run refuses OUTRIGHT, nothing executed) | GREEN |
+| gate_fails_closed (a gated submit step stops the replay with no human, COMPLETES on an explicit accept via the elicitation seam) | GREEN |
+| no_eval_in_workflows (replayable set closed, excludes evaluate_script) | GREEN |
+| orphan_census (every gate session closed; zero owned browser PID survives) | GREEN |
+
+**Suite: 438 tests (up from 415), all green.** 318 unit (+12 workflows, +6
+confirm-wiring), 120 browser (+5 phase6). Phase 4 gate re-run **GREEN** after
+the choke-point edit (double-charge and loop-detector skip on a confirmed
+re-run). One unrelated flake in the full browser run
+(`test_lane_b_moz_firefox_launches_with_no_remote`, a Python 3.14 proactor
+teardown ResourceWarning) passes clean in isolation and touches none of the
+Phase 6 code.
+
+### Design findings (list only, for author review)
+
+- **The five-step flow includes its opening `navigate` as step 0.** A
+  recorded flow that begins by navigating replays the navigation too, which
+  is correct (a later session starts from a different page) and is what makes
+  the dry run's "deferred-to-execution" verdict necessary: a step recorded on
+  page B cannot be anchor-checked from page A until replay's own navigate
+  steps run. Named so the author sees the flow is not pure actions.
+- **Replay confirms per STEP, never per workflow.** A whole-workflow retry
+  would re-execute completed steps (browser actions do not roll back), so
+  `run_workflow` catches `ConfirmationRequired` inside its own loop and only
+  the gated step retries on accept. This is the batch-semantics rule from
+  DESIGN 3.5 applied to replay.
+- **`fill_form(submit=True)` now executes the submit behind the gate**, which
+  changes its Phase 4 behavior (it previously only asked and failed closed).
+  The fail-closed path is unchanged where no human accepts; the new code path
+  is reachable only through a redeemed, deposited grant.
+- **Anchor ids are content-derived** (`sha1` over role/name/page_key/landmark/
+  stable attrs), so the same element gets the same id across sessions, which
+  is what lets a workflow file recorded in one session resolve in another.
+  This is the second of the two sanctioned places an anchor id surfaces
+  (DESIGN 3.5), the audit record being the first.
+- **A JS-predicate `wait_for` is deliberately NOT recorded** into a workflow
+  (only text/url/load/element conditions are), so a workflow can never
+  smuggle evaluate-shaped work past the closed replayable set.
+
+### Open items carried forward
+
+- The interactive elicitation ACCEPT path (a human clicking allow in a live
+  Claude Code / Desktop session) cannot be exercised headlessly; it is the
+  author's one-line dogfood observation once a session runs the gate.
+- Desktop mid-conversation checkbox behavior: DEFERRED-NEEDS-HUMAN (S8).
