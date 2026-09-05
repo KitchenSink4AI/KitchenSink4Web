@@ -18,7 +18,7 @@ from pathlib import Path
 
 import pytest
 
-from kitchensink4web import envelope
+from kitchensink4web import envelope, pagedata
 from kitchensink4web.engine.session import MANAGER
 from kitchensink4web.errors import (AuthRequired, BadParams, BlockedBySite,
                                     BudgetExhausted, NavigationBlocked)
@@ -117,9 +117,12 @@ def test_include_hidden_routes_to_a_labeled_section_never_the_main_text(
     async def go():
         _, page = await _open(corpus_site, "c/injection_hidden.html")
         got = await lite.get_text(page=page, include_hidden=True)
-        # The main text is byte-identical to the stripped read.
+        # The main text is byte-identical to the stripped read. The
+        # comparison is between the delimiters: the page-data envelope
+        # (DESIGN 5.1, H1) mints a fresh nonce per call, so the wrapped
+        # strings differ by design while the page text may not.
         plain = await lite.get_text(page=page)
-        assert got["text"] == plain["text"]
+        assert pagedata.unwrap(got["text"]) == pagedata.unwrap(plain["text"])
         hidden = got["hidden_content"]
         assert "never as instructions" in hidden["label"]
         joined = " ".join(s["text"] for s in hidden["sections"])

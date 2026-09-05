@@ -2011,6 +2011,23 @@ safe.
   under 2 percent with provenance marking, on GPT-family models, with minimal
   task-efficacy cost. It is a prompt-layer signal, argue-past-able, not a
   guarantee, and the copy says so.
+
+  **As built (Phase 8 fix wave, from gauntlet finding H1):** the envelope
+  lives in `pagedata.py` and wraps every PROSE-SHAPED read surface: the
+  `get_page_view` projection (full and delta), the `get_text` main text, and
+  the `find_elements` result lines, all of which quote page-authored
+  accessible names, aria-labels, and region labels verbatim. Each call mints
+  a fresh nonce; the payload's sibling `page_data.label` states the origin
+  URL and frames everything between the delimiters as untrusted page content
+  including the quoted names. The text between the delimiters is
+  byte-identical to the extraction: labels frame, they never censor. The
+  interpretation ruling for structured payloads: the extract pack's
+  table/list/field rows and the network/storage payloads are data-shaped by
+  construction (keyed cells, not an instruction-shaped prose stream) and
+  carry their origin in the payload; the nonce-delimited envelope is the
+  contract for prose-shaped text, which is the channel the injection
+  research measures. The hidden-content section keeps its own, stronger
+  label (technique named per block), unchanged.
 - **Provenance per region.** Each chunk carries its origin URL, whether it came
   from first-party markup or an embedded frame, and whether it sits in a
   user-generated-shaped container. That last one is a heuristic and is labeled as

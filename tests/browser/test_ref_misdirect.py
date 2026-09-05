@@ -50,6 +50,7 @@ import pytest
 
 from kitchensink4web.engine.session import MANAGER
 from kitchensink4web.errors import WebMcpError
+from kitchensink4web import pagedata
 from kitchensink4web.ops import lite
 from kitchensink4web.policy import budgets, readonly
 
@@ -164,7 +165,7 @@ async def _open_issue(site):
 async def _comment_ref(page) -> str:
     found = await lite.find_elements(page=page, query="Add a comment")
     # The first token of the first result line after the header is the ref.
-    line = found["results"].splitlines()[1]
+    line = pagedata.unwrap(found["results"]).splitlines()[1]
     return line.split(" | ")[0].strip()
 
 

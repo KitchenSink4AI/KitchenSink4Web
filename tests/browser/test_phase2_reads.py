@@ -25,6 +25,7 @@ from pathlib import Path
 
 import pytest
 
+from kitchensink4web import pagedata
 from kitchensink4web.engine.session import MANAGER
 from kitchensink4web.ops import lite
 from kitchensink4web.projection import RUNGS, ntok, project
@@ -108,7 +109,7 @@ def test_find_retrieves_an_in_prose_link_the_page_view_cannot_carry(
         # And the ref it hands back is actionable, which is the rule that
         # separates this read layer from the incumbents': there is no
         # operation whose only purpose is to unlock other operations.
-        ref = found["results"].splitlines()[1].split(" | ")[0]
+        ref = pagedata.unwrap(found["results"]).splitlines()[1].split(" | ")[0]
         assert session.element_map.entries[ref].kind == "affordance"
 
     run(go())

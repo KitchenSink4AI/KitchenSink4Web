@@ -36,6 +36,7 @@ from kitchensink4web.engine.session import MANAGER
 from kitchensink4web.errors import (AmbiguousLocation, BadParams,
                                     ConfirmationRequired, CredentialRefused,
                                     TargetChanged, TargetNotFound, Timeout)
+from kitchensink4web import pagedata
 from kitchensink4web.ops import act, lite
 from kitchensink4web.policy import budgets, credentials, gates, readonly
 from kitchensink4web.projection import extract
@@ -221,7 +222,7 @@ def test_click_by_session_ref_resolves_through_the_rebind_ladder(corpus_site):
         # find the real Cancel button's ref from the affordances the read
         # minted, via find_elements which shares the same sticky map.
         found = await lite.find_elements(page=page, query="Cancel order")
-        ref = found["results"].split("\n")[1].split(" | ")[0]
+        ref = pagedata.unwrap(found["results"]).split("\n")[1].split(" | ")[0]
         result = await lite.click(page=page, location={"ref": ref},
                                   timeout_ms=4000)
         assert result["target"]["ref"]
