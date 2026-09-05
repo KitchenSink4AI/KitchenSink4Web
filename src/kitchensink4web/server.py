@@ -32,10 +32,13 @@ import sys
 
 from fastmcp import FastMCP
 from fastmcp.exceptions import NotFoundError, ToolError
+from fastmcp.exceptions import ValidationError as _FmcpValidationError
 from fastmcp.server.middleware import Middleware
+from pydantic import ValidationError as _PydanticValidationError
 
 from . import confirm, envelope, packs
-from .errors import BadParams, ConfirmationRequired, ReadOnlyMode
+from .errors import (BadParams, ConfirmationRequired, ReadOnlyMode,
+                     ValidationFailed)
 from .ops import lite
 from .policy import audit, credentials, gates, readonly
 
@@ -78,12 +81,22 @@ class GuidedAbsenceMiddleware(Middleware):
     """
 
     async def on_call_tool(self, context, call_next):
+        name = getattr(context.message, "name", None) or ""
         try:
             return await call_next(context)
+        except (_FmcpValidationError, _PydanticValidationError) as exc:
+            # M2 (gauntlet 2026-09-06): FastMCP's input coercion runs ABOVE
+            # the per-tool refusal wrapper, so a wrong-type scalar argument
+            # used to ride out as a raw pydantic string, leaking the
+            # pydantic version and the internal callable name. It becomes
+            # the same typed envelope every other refusal wears, here at
+            # the one layer that sees the validation failure.
+            refusal = BadParams(_argument_message(name, exc))
+            audit.LOG.record(name or "(unnamed tool)", "BAD_PARAMS", args={})
+            return envelope.refuse(refusal)
         except (NotFoundError, ToolError) as exc:
             if "unknown tool" not in str(exc).lower():
                 raise
-            name = getattr(context.message, "name", None) or ""
             if readonly.active() and name in readonly.MUTATING:
                 grade = readonly.grade()
                 refusal = ReadOnlyMode(
@@ -101,7 +114,55 @@ class GuidedAbsenceMiddleware(Middleware):
                     f"loaded in this process.")
                 refusal.hint_tools = (name,)
                 return envelope.refuse(refusal)
-            raise
+            # L1 (gauntlet 2026-09-06): a name that is neither an absent
+            # mutating tool nor an unloaded pack member used to fall through
+            # to the bare framework string. Nothing rides out raw, this
+            # included.
+            refusal = ValidationFailed(
+                f"no tool named {name!r} exists in this process, under any "
+                f"launch shape. tools/list is the authority on what is "
+                f"loaded; get_workflows lists the capability packs and "
+                f"their launch flags. Check the spelling before retrying.")
+            audit.LOG.record(name or "(unnamed tool)", "VALIDATION_FAILED",
+                             args={})
+            return envelope.refuse(refusal)
+
+
+def _argument_message(tool: str, exc: BaseException) -> str:
+    """One honest sentence per malformed argument, built from pydantic's
+    structured error entries rather than its rendered string, so neither the
+    pydantic version, its docs URLs, nor the internal callable naming
+    (`call[click]`) reaches a caller."""
+    entries = None
+    for source in (getattr(exc, "__cause__", None), exc):
+        errors = getattr(source, "errors", None)
+        if callable(errors):
+            try:
+                entries = errors(include_url=False)
+                break
+            except Exception:  # a shape this version does not serve
+                entries = None
+    label = tool or "this tool"
+    if not entries:
+        return (f"{label} was called with malformed arguments and nothing "
+                f"was executed. Check each argument against the tool's "
+                f"schema (get_workflows carries usage recipes).")
+    bits = []
+    for entry in entries[:6]:
+        loc = ".".join(str(p) for p in entry.get("loc", ())) or "(call)"
+        msg = entry.get("msg", "invalid value")
+        if "input" in entry:
+            got = entry["input"]
+            got_name = "null" if got is None else type(got).__name__
+            bits.append(f"{loc}: {msg} (got {got_name})")
+        else:
+            bits.append(f"{loc}: {msg}")
+    more = len(entries) - 6
+    return (f"{label} was called with malformed argument(s): "
+            + "; ".join(bits)
+            + (f"; and {more} more" if more > 0 else "")
+            + ". Nothing was executed. Fix the named argument(s) and "
+              "retry; the tool's schema in tools/list is the authority.")
 
 
 mcp.add_middleware(GuidedAbsenceMiddleware())
