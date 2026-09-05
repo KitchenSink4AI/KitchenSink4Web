@@ -116,6 +116,17 @@ class Session:
     #: package never learns what a browser is.
     element_map: Any = field(default_factory=anchors.ElementMap)
     reads: Any = field(default_factory=anchors.ReadStore)
+    #: Where and when this session's auth state was last written, if it ever
+    #: was. Field finding 41 (2026-09-05): close reported "none were saved"
+    #: minutes after an explicit save_auth_state, because it consulted only
+    #: the close call's own arguments. A save history the session remembers
+    #: is what lets the close message tell the truth.
+    saved_auth_at: float | None = None
+    saved_auth_path: str | None = None
+
+    def record_auth_save(self, path: str) -> None:
+        self.saved_auth_at = time.time()
+        self.saved_auth_path = path
 
     def invalidate_page(self, handle: str, why: str) -> dict:
         """A navigation, a page close, or a session end. Refs and read tokens
