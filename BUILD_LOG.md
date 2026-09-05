@@ -2383,3 +2383,69 @@ Re-ran the Phase 1 latency battery and the Phase 4 battery with no other suite o
 **Run conditions, recorded so the verdict is auditable.** No pytest, no competing suite; the idle node and python processes are MCP servers at ~0% CPU. `\Processor(_Total)\% Processor Time` 12.0% at idle, 19.7 to 22.9% during the runs. The machine is process-quiet but **CLOCK-THROTTLED**: `% Processor Performance` held 71 to 73% and the core clock 1,834 MHz against a 2,200 MHz base, sustained at 12% idle load, on an i7-1360P that boosts far above base when healthy. Both trees measure 40 to 60% slower than the 00:35 KST certified run of the same night. The 10 ms assembly budget is a knife-edge bound at 6 to 9 ms of headroom-free baseline, and a 30% clock haircut is enough to cross it.
 
 Re-certification is still owed, in a window where the clock is not capped. Report: `internal notes/20260906_web_latency_recert.md`.
+
+## 2026-09-06 07:22 KST - Phase 9 (the public surfaces, built not shipped)
+
+Master c24e78d -> 313add3, eight commits, suite **586 -> 594 green in BOTH
+orders**. Nothing is published and no remote exists; this wave builds the
+surfaces and the guards that hold them.
+
+**The order coupling wave 3 reported, fixed, and a second one it was hiding.**
+The `launch` fixture's teardown called `server.configure()` bare, which
+resolves the SHIPPED default grade, so every unit test that used it left the
+process read-only for whatever ran next. Teardown now passes
+`read_only=False`, which is the un-graded surface a fresh process actually
+starts with. Repro confirmed red before and green after
+(`test_manage_session_status_reports_the_hygiene_state`). With that out of the
+way `pytest tests/unit tests/browser` surfaced a second, worse one:
+`test_redaction_seam_applies_to_refusals_and_successes` installed a fake
+redactor and restored **None**, not what it found, and `server` installs the
+REAL credential redactor into that process-global at import. So every test
+after `test_envelope.py` ran with credential redaction disarmed, and the
+cookie-serializer gate failed five hundred tests later. The test now parks the
+previous redactor, still proves the seam is removable, and puts it back.
+
+**Every published number has a script.** New `tools/measure_readme_numbers.py`
+plus a committed snapshot; the reads go through the SHIPPED tools
+(`navigate`, `get_page_view`, `find_and_act`) against the frozen corpus over
+localhost with off-origin requests aborted, so they re-derive. The raw-dump
+comparison is measured three ways and the CHEAPEST is published, so the
+comparison understates the gap: visible text 33,073, flat role-and-name
+listing 64,596, serialized DOM 691,486, against a first read of **4,426** on
+the same frozen Treaty of Versailles page. Delta read after one real click:
+**82** tokens (`corpus/b/pathological.html`, portal dropdown, no client-side
+navigation, so it is a delta and not a disguised full read).
+
+**README, Garden page, llms.txt.** README built from the Fable copy file with
+every `{PLACEHOLDER}` filled from the snapshot and the pack table quoting the
+manifest sentences verbatim. `docs/index.html` follows the family pattern
+(switchbar, seven-language dictionary, non-affiliation line from the start)
+with the Garden aisle's fixture, a watering can that tips, and DEPT. 00 built
+as the copy file's own candidate: the real `document.body.innerText` of the
+frozen page as a scrolling wall of 49 lines of chrome before one word of
+article, against the real projection region rows with their real expansion
+prices, where the meter only moves when a bed is opened. `docs/llms.txt` is
+new and agent-facing.
+
+**MISSING COPY is rendered, not filled.** The DEPT. 02 comparison cells and
+the competitor survey behind them have no supplied sentences, so the twelve
+cells render as red dashed TODO markers, the way the family's unfilled
+numbers do, and the section cannot ship past.
+
+**Guards.** `test_copy_guards` now covers the published surfaces: em dashes in
+any of the seven languages, the non-affiliation line in the README and in all
+seven page dictionaries, the one-read overclaim, and a check that every
+published figure matches the measuring snapshot. Its scope note says out loud
+what it does NOT check and why. `test_pack_toggles` gained version parity
+across pyproject, both manifests, and the uvx pin inside them, plus the
+README-quotes-the-manifest check.
+
+Gate: full suite **594 green in both orders** (`pytest tests` and
+`pytest tests/unit tests/browser`). Phase 3 battery **12/12 GREEN**, Phase 5
+**8/8 GREEN**, Phase 4 acting arm **7/7 GREEN** run through a wrapper that
+does NOT re-run the latency arm and writes no gate file, so
+`gates/phase4.json` and `gates/phase1_latency.json` stay at their last
+CERTIFIED values per the recert ruling. `test_m1_renderer_crash` flaked once
+in isolation and passed three times after: the deep page does not always crash
+the renderer, which is the same flake the shadow wave recorded. Report:
+`internal notes/20260906_web_phase9.md`.
