@@ -44,10 +44,11 @@ def test_every_module_roster_matches_the_design_table():
             f"{sorted(designed)}")
 
 
-def test_full_surface_is_forty_tools(launch):
+def test_full_surface_is_forty_one_tools(launch):
+    """Forty until 2026-09-06, when find_and_act joined the lite core."""
     state = launch(cli_packs=packs.pack_names(), read_only=False)
-    assert len(state["registered"]) == 40
-    assert len(set(state["registered"])) == 40
+    assert len(state["registered"]) == 41
+    assert len(set(state["registered"])) == 41
 
 
 def test_full_surface_under_read_only_hides_every_mutating_pack_tool(launch):

@@ -27,6 +27,9 @@
   "React re-render": [
    "app.html"
   ],
+  "a stable key (volatile id + testid) reassigned to a same-role element on demand": [
+   "rename_on_demand.html"
+  ],
   "canvas-rendered UI over 80x80 with no text projection": [
    "canvas.html"
   ],

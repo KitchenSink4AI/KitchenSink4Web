@@ -19,10 +19,14 @@ from kitchensink4web.errors import BadParams
 from kitchensink4web.policy import readonly
 
 # DESIGN 2.1, with the review's arithmetic note applied.
+#: find_and_act joined on 2026-09-06. It goes in LITE rather than a pack
+#: because the tools it fuses are both lite: a composite that lived in a pack
+#: would be absent exactly where the two calls it replaces are present, which
+#: is the wrong way round.
 LITE_ROSTER = {
     "get_page_view", "find_elements", "get_text", "navigate", "click",
-    "type_text", "fill_form", "press_keys", "scroll", "wait_for",
-    "manage_tabs", "manage_session", "get_audit", "get_workflows",
+    "type_text", "fill_form", "find_and_act", "press_keys", "scroll",
+    "wait_for", "manage_tabs", "manage_session", "get_audit", "get_workflows",
 }
 
 
@@ -31,7 +35,7 @@ def test_lite_roster_is_exactly_the_design(launch):
     (DEFAULT_GRADE is 'browse' since the 2026-09-05 field-test ruling)."""
     state = launch(read_only=False)
     assert set(state["registered"]) == LITE_ROSTER
-    assert len(LITE_ROSTER) == 14
+    assert len(LITE_ROSTER) == 15
 
 
 def test_bare_launch_defaults_to_browse_read_only(launch, monkeypatch):

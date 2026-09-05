@@ -572,7 +572,15 @@ async def _resolve_ref(sess, record, ref: str, *, tool: str,
             f"{record.handle!r}) or find_elements and use the ref they "
             f"return.")
 
-    data = await extract(record.page)
+    # The pin (2026-09-06): the in-page id this ref last resolved to, handed
+    # to the extractor so an element `find_elements` located PAST the
+    # 300-affordance return cap is in the list the ladder searches. Without
+    # it, a ref minted for the 301st control on a page refused STALE on every
+    # action, which made the flagship read-then-search-then-act pairing fail
+    # on exactly the large pages it exists for. The ladder's matching is
+    # unchanged; only the candidate list is complete now.
+    pin = (sess.element_map.node_refs.get(record.handle) or {}).get(ref)
+    data = await extract(record.page, pin=pin)
     outcome = ladder.resolve(sess.element_map, ref, data, record.handle)
     verdict = outcome["outcome"]
     if verdict in (Outcome.OK, Outcome.REBOUND):

@@ -62,9 +62,16 @@ CLOSED_SHADOW_HOOK = """
 """
 
 
-async def extract(page, root: str | None = None) -> dict:
-    """Run the in-page pass. One evaluate, one walk, one style per element."""
-    return await page.evaluate(EXTRACT_JS, {"root": root})
+async def extract(page, root: str | None = None,
+                  pin: str | None = None) -> dict:
+    """Run the in-page pass. One evaluate, one walk, one style per element.
+
+    `pin` is one in-page ref that is collected even past the extractor's
+    300-affordance return cap. The acting path passes the ref it is about to
+    resolve, so an element `find_elements` located past the cap is in the
+    candidate list the rebind ladder searches. It widens the haystack only:
+    the ladder still matches by anchor key and still refuses."""
+    return await page.evaluate(EXTRACT_JS, {"root": root, "pin": pin})
 
 
 async def find(page, query: str, kind: str = "auto", limit: int = 20,

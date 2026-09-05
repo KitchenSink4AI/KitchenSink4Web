@@ -129,7 +129,8 @@ async def gate_surface_conformant():
             ev[f"{pack}_mismatch"] = sorted(built ^ designed)
     full = await _list(cli_packs=packs.pack_names(), read_only=False)
     ev["full_surface"] = len(full)
-    green = parity and len(full) == 40
+    # 40 until 2026-09-06, when find_and_act joined the lite core.
+    green = parity and len(full) == 41
     part("surface_conformant", green, **ev)
 
 

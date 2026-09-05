@@ -111,8 +111,11 @@ GRADES: tuple[str, ...] = ("browse", "strict")
 #: declare itself is caught by `test_readonly.py`, which asserts that every
 #: registered tool is classified explicitly.
 MUTATING: frozenset[str] = frozenset({
-    # lite core
-    "click", "type_text", "fill_form", "press_keys",
+    # lite core. find_and_act is here for the obvious reason and one less
+    # obvious one: it is the only tool whose NAME reads half read-shaped, and
+    # a tool that clicks must be absent under a mode whose whole claim is
+    # that nothing in it can click.
+    "click", "type_text", "fill_form", "find_and_act", "press_keys",
     # packs (planned; listed now so Phase 5 inherits the classification
     # instead of rediscovering it one tool at a time)
     "set_routing", "evaluate_script",

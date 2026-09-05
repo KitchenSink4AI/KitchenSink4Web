@@ -208,6 +208,31 @@ def test_the_guided_absent_tool_refusal_is_not_a_bypass_vector(launch):
     assert "type_text" not in asyncio.run(surface())
 
 
+def test_the_composite_is_absent_under_read_only_like_the_tools_it_fuses(
+        launch):
+    """find_and_act (2026-09-06) clicks and types, so the mode whose whole
+    claim is that nothing in it can click or type has to be missing it. This
+    is the one gate in the composite's parity set that cannot be proven by
+    driving a call, because it is a property of REGISTRATION: the proof is
+    that the name never reaches tools/list and a forced call gets the same
+    guided read-only refusal `click` gets."""
+    launch(read_only="browse")
+
+    async def surface():
+        async with Client(server.mcp) as c:
+            listed = {t.name for t in await c.list_tools()}
+            forced = await c.call_tool(
+                "find_and_act", {"page": "p1", "query": "Save"},
+                raise_on_error=False)
+            return listed, forced
+
+    listed, forced = asyncio.run(surface())
+    assert "find_and_act" not in listed
+    assert "find_elements" in listed, "the read half must stay available"
+    assert forced.is_error is True
+    assert forced.structured_content["error"]["code"] == "READ_ONLY_MODE"
+
+
 # ------------------------------------------------------------- 4. default
 
 

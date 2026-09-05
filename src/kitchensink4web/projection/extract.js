@@ -38,6 +38,23 @@
     if (!scopeRoot) return { error: 'ROOT_GONE', asked_for: opts.root };
     scopeRef = opts.root;
   }
+  // `opts.pin`: ONE element that is collected even past the affordance cap.
+  //
+  // The cap is right for a read and it broke the flagship pairing for an
+  // ACT. `find_elements` searches every candidate on purpose, because the
+  // link the design's own example names sits past the two thousandth on that
+  // page; it minted a ref for a match at position 301, and the acting path
+  // then resolved that ref against an extraction that stops at 300, so the
+  // rebind ladder found no candidate and refused STALE. A search whose
+  // results cannot be acted on is the operation DESIGN 3.5 says must not
+  // exist, and it shipped that way until 2026-09-06.
+  //
+  // The pin widens the HAYSTACK and never picks the needle: the ladder still
+  // matches by anchor key, still refuses ambiguity, and still refuses a
+  // fingerprint that moved. An element pinned in but no longer matching its
+  // stored anchor refuses exactly as it did before.
+  const pinEl = (opts.pin && window.__ks4web_refs instanceof Map)
+    ? window.__ks4web_refs.get(opts.pin) : null;
 
   const MAX_REGIONS = 40;       // listed regions; deeper ones fold into parents
   const MAX_REGION_DEPTH = 3;   // nesting depth that still earns its own ref
@@ -916,7 +933,8 @@
           if (role !== 'hidden') {
             bump('interactive', 1);
             if (currentHeading) currentHeading.section_affordances++;
-            const collect = affordances.length < MAX_AFFORDANCES;
+            const collect = affordances.length < MAX_AFFORDANCES
+              || (pinEl !== null && el === pinEl);
             const named = collect ? accName(el, role)
               : { name: '', quality: 'not-collected' };
             const formEl = el.form || el.closest('form');

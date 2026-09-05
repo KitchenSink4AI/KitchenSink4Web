@@ -410,6 +410,20 @@ async def get_page_view(
     return payload
 
 
+def _match_line(m: dict) -> str:
+    """One search hit, rendered. Shared so `find_and_act`'s ambiguity refusal
+    lists candidates in the SAME shape `find_elements` lists matches: the
+    caller reads one format, and the refs in a refusal are the refs a
+    follow-up call acts on."""
+    bits = [m["ref"], m["role"], f'"{m["name"] or "(unnamed)"}"']
+    if m["state"]:
+        bits.append(f'[{m["state"]}]')
+    if m["path"]:
+        bits.append(m["path"])
+    bits.append("in-view" if m["in_viewport"] else f'y={m["top"]}')
+    return " | ".join(bits)
+
+
 def _located_ref(location: dict | None) -> str | None:
     """The caller-facing ref in a location object, whichever key carries it."""
     if not location:
@@ -558,14 +572,7 @@ async def find_elements(
              + scope_bit
              + f' ({found["searched"]}, '
              f'{found["candidates_scanned"]:,} candidates scanned)']
-    for m in found["matches"]:
-        bits = [m["ref"], m["role"], f'"{m["name"] or "(unnamed)"}"']
-        if m["state"]:
-            bits.append(f'[{m["state"]}]')
-        if m["path"]:
-            bits.append(m["path"])
-        bits.append("in-view" if m["in_viewport"] else f'y={m["top"]}')
-        lines.append(" | ".join(bits))
+    lines.extend(_match_line(m) for m in found["matches"])
     if found["total_matches"] > found["returned"]:
         lines.append(f'{found["total_matches"] - found["returned"]} further '
                      f'match(es) not returned; raise limit or narrow the query')
@@ -1790,6 +1797,180 @@ async def _wait_precheck(p, cond: str, value: str | None,
     return False
 
 
+# ----------------------------------------------------------- the composite
+
+#: What `find_and_act` can do once it has found its one target, and the tool
+#: each verb hands off to. The handoff is the WHOLE parity argument: the
+#: composite resolves, then calls the same function the two-call path calls,
+#: with the ref it just minted. There is no second implementation of clicking
+#: to keep in step with the first, so the form-submit classification, the
+#: TARGET_CHANGED rebind refusal, the TOCTOU re-validation, the budget charge,
+#: the credential blindness, and the read-only absence cannot diverge between
+#: the two paths by construction rather than by test.
+_COMPOSITE_ACTIONS = ("click", "type", "press", "scroll_to")
+
+
+async def find_and_act(
+    page: str,
+    query: str = "",
+    action: str = "click",
+    text: str | None = None,
+    keys: str | None = None,
+    role: str | None = None,
+    kind: str = "auto",
+    within: dict | None = None,
+    clear_first: bool = False,
+    submit: bool = False,
+    button: str = "left",
+    timeout_ms: int = 15000,
+) -> dict:
+    """Search for one element and act on it in a single call: the fused
+    version of find_elements followed by click or type_text, for the common
+    case where the search is only there to produce a ref. Field measurement:
+    a four-step workflow cost sixteen calls, and half of them were this pair.
+    The target is resolved FRESH inside this call, so nothing here acts on a
+    ref that has been sitting in a transcript. The ambiguity contract is the
+    same one the two tools carry separately and is the reason this is safe to
+    fuse: several matches REFUSE and list every candidate with an actable
+    ref, exactly as find_elements lists them, and no match refuses with the
+    nearest misses, exactly as an action does. Nothing acts on first match.
+    `action` is 'click', 'type' (pass `text`), 'press' (pass `keys`), or
+    'scroll_to'. `role='button'` narrows the search the way it does in
+    find_elements, and `within={'region': 'r7'}` scopes it to one subtree.
+    Every gate the separate tools fire, this fires: the same policy choke
+    point, the same submit classification, the same rebind refusal, the same
+    budget. It returns the verified outcome of the action it performed, the
+    same one the separate tool returns, plus a line naming the element the
+    search settled on. To act on a ref you already hold, call click or
+    type_text.
+    """
+    action = (action or "click").strip().lower()
+    action = {"type_text": "type", "fill": "type", "press_keys": "press",
+              "scroll": "scroll_to", "scroll_into_view": "scroll_to"}.get(
+                  action, action)
+    if action not in _COMPOSITE_ACTIONS:
+        raise BadParams(
+            f"unknown find_and_act action {action!r}: the actions are "
+            f"{list(_COMPOSITE_ACTIONS)}. 'type' needs `text`, 'press' needs "
+            f"`keys`; the rest need neither.")
+    if action == "type" and text is None:
+        raise BadParams(
+            "find_and_act(action='type') needs `text`. Pass real newline "
+            "characters for a multi-line value; a single-line field refuses "
+            "one rather than pressing Enter behind your back.")
+    if action == "press" and not (keys or "").strip():
+        raise BadParams(
+            "find_and_act(action='press') needs `keys`, for example "
+            "keys='Enter' or keys='Control+A'.")
+    if not (query or "").strip() and kind not in ("css", "xpath") \
+            and not (role or "").strip():
+        raise BadParams(
+            "find_and_act needs a query (or a role filter) to find its "
+            "target with. It resolves the element itself; to act on a ref a "
+            "read already gave you, call click or type_text with "
+            "location={'ref': 'e12'}.")
+
+    sess, record = MANAGER.locate(page)
+    _audit.annotate(session=sess.session_id, page=record.handle,
+                    url=record.page.url, lane=sess.spec.label)
+    record.touch(record.page.url)
+    root = _scope_root(sess, record, within)
+    pierce = (within or {}).get("shadow", True) is not False
+    # 12 is the ambiguity listing width, not a cap on what was counted:
+    # `total_matches` sees every visible match, so a two-match page refuses
+    # even when only one match was returned.
+    found = await _find(record.page, query, kind=kind, limit=12, root=root,
+                        role=(role or "").strip().lower() or None,
+                        shadow=pierce)
+    if found.get("error"):
+        raise TargetNotFound(
+            f'within named {_located_ref(within)!r} and that ref is not on '
+            f'{record.handle} any more. Re-read the page and use the ref it '
+            f'returns.')
+    if found.get("selector_error"):
+        raise BadParams(
+            f'{kind} selector {query!r} did not parse: '
+            f'{found["selector_error"]}')
+
+    # The matches join the session map BEFORE anything is decided, so the
+    # refs in an ambiguity refusal are refs the caller's next call can act
+    # on. A refusal that lists candidates you cannot address is a dead end
+    # wearing a recovery's clothes.
+    shim = {"identity": {"url": found["url"], "page_key": found["page_key"]},
+            "affordances": found["matches"], "regions": [], "headings": [],
+            "forms": [], "tables": []}
+    sess.element_map.absorb(shim, record.handle,
+                            sess.reads.mint_token(record.handle),
+                            ts=time.strftime("%Y-%m-%dT%H:%M:%S"),
+                            scope="find")
+    scope_bit = ""
+    if found.get("scope"):
+        scope_bit = f' within {_located_ref(within)}'
+
+    # `total_matches` counts hidden matches too, and a hidden element is not
+    # a target: the live resolver filters them and this filters them the same
+    # way, so the ambiguity decision is made on the VISIBLE count.
+    visible = found["total_matches"] - found["hidden_matches"]
+    if visible > 1:
+        listed = "; ".join(_match_line(m) for m in found["matches"])
+        more = visible - found["returned"]
+        raise AmbiguousLocation(
+            f'{visible} visible elements match {query!r}'
+            + (f' with role={role!r}' if role else '') + scope_bit
+            + f' and no tool acts on first match. Candidates: {listed}'
+            + (f'; and {more} more' if more > 0 else '')
+            + f'. Nothing was done. Act on one of those refs directly '
+            f'({action if action != "type" else "type_text"}(page='
+            f'{record.handle!r}, location={{"ref": "..."}})), or narrow the '
+            f'search with role= or a longer query.')
+    if not visible:
+        misses = "; ".join(f'{n["role"]} "{n["name"]}"'
+                           for n in found["nearest_misses"])
+        hint = (f' Nearest by name: {misses}.' if misses else
+                ' No near misses either; the target may be inside an iframe, '
+                'a closed shadow root, or content that has not rendered yet. '
+                'Open shadow roots were searched.')
+        raise TargetNotFound(
+            f'nothing visible matches {query!r}'
+            + (f' with role={role!r}' if role else '') + scope_bit
+            + f' ({found["searched"]}, '
+            f'{found["candidates_scanned"]:,} candidates scanned).'
+            + hint
+            + (f' {found["hidden_matches"]} match(es) are in hidden content '
+               f'and were counted rather than returned.'
+               if found["hidden_matches"] else ''))
+
+    hit = found["matches"][0]
+    target = {"ref": hit["ref"]}
+    # THE HANDOFF. Same function, same choke point, same ladder, same
+    # verified outcome. The ref is one this call minted a moment ago, so the
+    # rebind ladder re-resolves it against the page as it is at execution
+    # time and refuses if the page moved in between.
+    if action == "click":
+        result = await click(page=page, location=target, button=button,
+                             timeout_ms=timeout_ms)
+    elif action == "type":
+        result = await type_text(page=page, location=target, text=text,
+                                 clear_first=clear_first, submit=submit)
+    elif action == "press":
+        result = await press_keys(page=page, keys=keys, location=target)
+    else:
+        result = await scroll(page=page, action="to", location=target,
+                              timeout_ms=timeout_ms)
+    result["tool"] = "find_and_act"
+    result["acted"] = action
+    # What the search settled on, so the caller can see WHICH element the one
+    # match was without a second read.
+    result["found"] = {
+        "query": query, "kind": found["searched"],
+        "role": role, "scope": within if found.get("scope") else "whole page",
+        "match": _match_line(hit),
+        "candidates_scanned": found["candidates_scanned"],
+        "hidden_matches": found["hidden_matches"],
+    }
+    return result
+
+
 # ------------------------------------------------------------ the plumbing
 
 
@@ -2347,6 +2528,7 @@ LITE_TOOLS = (
     click,
     type_text,
     fill_form,
+    find_and_act,
     press_keys,
     scroll,
     wait_for,
