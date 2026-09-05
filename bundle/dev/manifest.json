@@ -14,12 +14,18 @@
   },
   "icon": "icon.png",
   "keywords": [
+    "mcp",
+    "model-context-protocol",
     "browser",
     "web",
     "playwright",
     "automation",
     "read-only",
     "safety",
+    "token-efficient",
+    "accessibility-tree",
+    "shadow-dom",
+    "audit-trail",
     "scraping",
     "forms"
   ],

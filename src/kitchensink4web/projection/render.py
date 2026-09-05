@@ -70,7 +70,9 @@ def _q(nav: int, form: int, primary: int, other: int) -> dict[str, int]:
             "other": other, "prose_link": 0}
 
 
-#: Fourteen rungs, and the granularity between the top few is the point.
+#: Sixteen rungs, and the granularity between the top few is the point.
+#: (The count is published on the docs page and in the README, both of
+#: which read it from len(RUNGS) rather than from this line.)
 #:
 #: The frozen corpus A re-measure found the flagship page engaging the ladder
 #: at the DEFAULT budget through a cliff rather than a size problem: the

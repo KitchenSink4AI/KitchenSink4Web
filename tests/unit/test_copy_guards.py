@@ -161,3 +161,99 @@ def test_no_trademark_or_affiliation_claim():
         for phrase in ("official", "endorsed by", "in partnership with",
                        "certified by"):
             assert phrase not in low, f"{where} implies affiliation: {phrase}"
+
+
+# ---------------------------------------------------------------------------
+# Phase 9: the published surfaces. The skeleton's own docstring says these
+# arrive here when they land, and this is when they landed.
+#
+# SCOPE, stated so the gap is deliberate rather than forgotten. What is
+# checked here is MECHANICAL: em dashes in any of the seven languages, the
+# non-affiliation line, and the one-read overclaim. What is NOT checked here
+# is the safety-verb and attack-recipe grammar, because the author's approved
+# copy for these surfaces names "credential exfiltration attempts" as one item
+# in a list of what the gate batteries cover, and a guard that fails on
+# author-approved copy would be resolved by weakening the guard. That
+# conflict belongs to the main thread, not to a test file.
+# ---------------------------------------------------------------------------
+
+#: Every file a reader or a crawler sees. The docs pages carry seven
+#: languages in one file, so reading the bytes checks all seven at once.
+PUBLISHED = ("README.md", "docs/index.html", "docs/llms.txt")
+
+#: The line the xl ship proved a guard has to hold: a trademark page without
+#: it reads as an endorsement it never had.
+AFFILIATION_LINE = "Not affiliated with or endorsed by"
+
+
+def _published_files() -> dict[str, str]:
+    out = {}
+    for rel in PUBLISHED:
+        path = ROOT / rel
+        if path.exists():
+            out[rel] = path.read_text(encoding="utf-8")
+    return out
+
+
+def test_every_published_surface_exists():
+    """A missing page is a silent pass for every guard below it."""
+    missing = [rel for rel in PUBLISHED if not (ROOT / rel).exists()]
+    assert not missing, f"published surfaces missing: {missing}"
+
+
+def test_no_em_dashes_on_any_published_surface():
+    """In any language. The page ships seven dictionaries in one file, so a
+    translation that reached for an em dash is caught here too."""
+    for where, text in _published_files().items():
+        assert "—" not in text, f"em dash in {where}"
+
+
+def test_the_page_carries_its_non_affiliation_line():
+    """In all seven languages, since a reader who switched language is the
+    reader most likely to be looking at the footer."""
+    page = _published_files().get("docs/index.html", "")
+    assert page, "docs/index.html is missing"
+    assert page.count('data-i18n="f.affil"') >= 1, \
+        "the page has no non-affiliation line"
+    affil = re.findall(r'"f\.affil": "(.*?)"(?:,|\n)', page)
+    assert len(affil) == 7, (
+        f"the non-affiliation line is translated {len(affil)} times, "
+        f"expected 7 (one per language)")
+    for text in affil:
+        assert "Google" in text and "Mozilla" in text and "Microsoft" in text
+
+
+def test_the_readme_carries_its_non_affiliation_line():
+    readme = _published_files().get("README.md", "")
+    assert AFFILIATION_LINE in readme, \
+        "README has no non-affiliation line"
+
+
+def test_no_published_surface_overclaims_the_single_read():
+    for where, text in _published_files().items():
+        for pattern in BANNED_OVERCLAIM:
+            assert not re.search(pattern, text, re.IGNORECASE), \
+                f"{where} overclaims the single read"
+
+
+def test_published_numbers_match_the_measuring_snapshot():
+    """Every figure the README and the page publish is in the snapshot the
+    measuring script writes. A number that moved and was not re-published
+    fails here rather than being spotted by a reader."""
+    import json
+
+    snap = ROOT / "tools" / "readme_numbers_snapshot.json"
+    assert snap.exists(), "tools/readme_numbers_snapshot.json is missing"
+    fill = json.loads(snap.read_text(encoding="utf-8"))["fill"]
+    files = _published_files()
+    readme = files.get("README.md", "")
+    page = files.get("docs/index.html", "")
+    for key in ("RAW_DUMP_TOKENS", "PROJECTION_TOKENS", "DELTA_TOKENS",
+                "LITE_SURFACE_TOKENS", "FULL_SURFACE_TOKENS"):
+        assert str(fill[key]) in readme, \
+            f"README does not carry the measured {key} ({fill[key]})"
+    for key in ("RAW_DUMP_TOKENS", "PROJECTION_TOKENS"):
+        assert str(fill[key]) in page, \
+            f"the page does not carry the measured {key} ({fill[key]})"
+    assert str(fill["TEST_COUNT"]) in readme and str(fill["TEST_COUNT"]) in page
+    assert str(fill["RUNG_COUNT"]) in readme

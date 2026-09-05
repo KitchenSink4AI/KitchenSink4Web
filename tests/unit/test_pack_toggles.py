@@ -159,3 +159,34 @@ def test_empty_lane_boxes_resolve_to_the_bundled_default(monkeypatch):
     monkeypatch.setenv("KS4WEB_CHANNEL", "moz-firefox")
     spec = lanes.resolve()
     assert spec.lane == "B" and spec.engine == "firefox"
+
+
+def test_manifest_version_tracks_the_package_and_its_own_pin():
+    """One version, three places, checked rather than remembered: the
+    package, the manifest, and the uvx pin inside the manifest. A bundle
+    whose pin lags its own version installs a different server than the one
+    the install screen describes."""
+    import re
+
+    pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    version = re.search(r'^version = "([^"]+)"', pyproject, re.M).group(1)
+    for rel in ("manifest.json", "dev/manifest.json"):
+        manifest = json.loads((ROOT / "bundle" / rel)
+                              .read_text(encoding="utf-8"))
+        assert manifest["version"] == version, rel
+        assert manifest["server"]["mcp_config"]["args"] == \
+            [f"kitchensink4web=={version}"], rel
+
+
+def test_the_readme_pack_table_quotes_the_manifest_sentences():
+    """The README's pack table is the install screen's own wording, not a
+    paraphrase of it. Two descriptions of one pack is how a user learns that
+    the documentation and the product disagree."""
+    manifest = json.loads((ROOT / "bundle" / "manifest.json")
+                          .read_text(encoding="utf-8"))
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    for pack in ALL:
+        sentence = manifest["user_config"][f"pack_{pack}"]["description"]
+        assert sentence in readme, (
+            f"the README's {pack} row does not quote the manifest sentence "
+            f"verbatim: {sentence!r}")
