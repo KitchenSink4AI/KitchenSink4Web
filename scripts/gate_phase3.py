@@ -50,7 +50,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from fastmcp import Client  # noqa: E402
 
-from kitchensink4web import envelope, server  # noqa: E402
+from kitchensink4web import envelope, pagedata, server  # noqa: E402
 from kitchensink4web.engine.session import MANAGER  # noqa: E402
 from kitchensink4web.errors import (AuthRequired, BadParams,  # noqa: E402
                                     BlockedBySite, BudgetExhausted,
@@ -240,7 +240,11 @@ async def gate_injection(site: str):
         labeled = await lite.get_text(page=page, include_hidden=True)
         in_label = any("KS4WEB-INJ-DISPLAYNONE" in s["text"]
                        for s in labeled["hidden_content"]["sections"])
-        main_clean = labeled["text"] == text["text"]
+        # Byte-identity holds BETWEEN the page-data delimiters: the H1
+        # envelope mints a fresh nonce per call, so the wrapped strings
+        # differ by design while the page text must not.
+        main_clean = (pagedata.unwrap(labeled["text"])
+                      == pagedata.unwrap(text["text"]))
         part("hidden_injection",
              not leaks and counted and in_label and main_clean,
              leaks=leaks, counted=counted,

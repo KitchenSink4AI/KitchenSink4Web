@@ -1,5 +1,5 @@
 {
- "measured_kst": "2026-09-05 14:17",
+ "measured_kst": "2026-09-06 00:35",
  "phase": 4,
  "corpus": "B (pathological) and C (toctou), synthetic, never networked",
  "lane": "A(chromium) headless",
@@ -56,39 +56,39 @@
    "rows": [
     {
      "nodes": 5012,
-     "projection_p95": 131.4,
-     "python_p95": 5.4,
+     "projection_p95": 157.7,
+     "python_p95": 6.8,
      "budget_ms": 500
     },
     {
      "nodes": 10012,
-     "projection_p95": 153.1,
-     "python_p95": 6.5,
+     "projection_p95": 215.0,
+     "python_p95": 5.7,
      "budget_ms": 500
     },
     {
      "nodes": 25012,
-     "projection_p95": 237.3,
-     "python_p95": 5.5,
+     "projection_p95": 262.6,
+     "python_p95": 7.0,
      "budget_ms": 500
     },
     {
      "nodes": 50012,
-     "projection_p95": 401.6,
-     "python_p95": 5.5,
+     "projection_p95": 437.2,
+     "python_p95": 8.8,
      "budget_ms": 500
     },
     {
      "nodes": 100012,
-     "projection_p95": 634.7,
-     "python_p95": 6.5,
+     "projection_p95": 771.9,
+     "python_p95": 6.3,
      "budget_ms": 1000
     }
    ]
   },
   "docstring_measure": {
    "green": true,
-   "lite_tokens": 1931,
+   "lite_tokens": 2283,
    "largest_schema_tokens": "set_routing (180 tok)",
    "note": "budgets are SOFT (author ruling); the honest number is published, never trimmed into. The 1,500 lite figure and the 250 schema ceiling are advisory. The action tools' docstrings were written in Phase 0 and unchanged, so the bill did not grow."
   }
