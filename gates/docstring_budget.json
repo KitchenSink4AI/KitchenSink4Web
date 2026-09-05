@@ -1,6 +1,6 @@
 {
   "ruling": "2026-09-05: token budgets are SOFT; these figures are published honestly rather than enforced as caps. Estimator: chars/4 (approximate; page-read numbers use tiktoken o200k_base and the two are never mixed).",
-  "lite_total_tokens": 2420,
+  "lite_total_tokens": 2457,
   "reference_targets": {
     "lite": 1500,
     "description": [
@@ -65,9 +65,9 @@
       "over_reference_caps": true
     },
     "find_elements": {
-      "description_tokens": 202,
+      "description_tokens": 232,
       "schema_tokens": 108,
-      "total_tokens": 310,
+      "total_tokens": 340,
       "over_reference_caps": true
     },
     "get_audit": {
@@ -101,9 +101,9 @@
       "over_reference_caps": false
     },
     "get_page_view": {
-      "description_tokens": 220,
+      "description_tokens": 228,
       "schema_tokens": 160,
-      "total_tokens": 380,
+      "total_tokens": 388,
       "over_reference_caps": true
     },
     "get_request": {
@@ -149,9 +149,9 @@
       "over_reference_caps": false
     },
     "load_auth_state": {
-      "description_tokens": 187,
+      "description_tokens": 241,
       "schema_tokens": 47,
-      "total_tokens": 234,
+      "total_tokens": 288,
       "over_reference_caps": true
     },
     "manage_cookies": {

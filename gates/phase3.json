@@ -1,5 +1,5 @@
 {
- "measured": "2026-09-06 00:34",
+ "measured": "2026-09-06 02:14",
  "corpus": "C (corpus/c, synthetic, never networked)",
  "lane": "A(chromium) headless",
  "parts": {
@@ -18,7 +18,7 @@
    "green": true,
    "parked": true,
    "leaked": false,
-   "refusal": "http://localhost:53832/c/landing_blocked.html is on the deny list (KS4WEB_DENY_ORIGINS), evaluated before the allow list, always. The page h"
+   "refusal": "http://localhost:61147/c/landing_blocked.html is on the deny list (KS4WEB_DENY_ORIGINS), evaluated before the allow list, always. The page h"
   },
   "hidden_injection": {
    "green": true,
@@ -66,9 +66,9 @@
   },
   "walls": {
    "green": true,
-   "botwall": "http://127.0.0.1:53832/c/botwall.html answered with a bot-wall-or-captcha rather than the page (HTTP",
-   "captcha": "http://127.0.0.1:53832/c/captcha.html answered with a bot-wall-or-captcha rather than the page (HTTP",
-   "expired": "http://127.0.0.1:53832/c/expired_login.html needs an expired session (evidence: your session has exp"
+   "botwall": "http://127.0.0.1:61147/c/botwall.html answered with a bot-wall-or-captcha rather than the page (HTTP",
+   "captcha": "http://127.0.0.1:61147/c/captcha.html answered with a bot-wall-or-captcha rather than the page (HTTP",
+   "expired": "http://127.0.0.1:61147/c/expired_login.html needs an expired session (evidence: your session has exp"
   },
   "secret_fields": {
    "green": true,
@@ -87,6 +87,15 @@
    "refusal_recorded": true,
    "session_annotated": true,
    "paginates": true
+  },
+  "redaction_false_positives": {
+   "green": true,
+   "preference_not_vaulted": true,
+   "identity_not_vaulted": true,
+   "credential_vaulted": true,
+   "highlights_survives": true,
+   "github_url_survives": true,
+   "credential_still_redacted": true
   }
  },
  "green": true
