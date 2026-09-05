@@ -51,23 +51,31 @@ from ..projection import extract
 # --------------------------------------------------------------- selectors
 
 #: Location grammar (DESIGN 9). Exactly ONE selector group per call; the
-#: role-plus-name pair is one group. `frame`, `shadow`, and `exact` are
-#: modifiers, not selectors, so they may ride alongside the one selector.
+#: role-plus-name pair is one group. `shadow` and `exact` are modifiers, not
+#: selectors, so they may ride alongside the one selector.
 #:
-#: AUDIT 2026-09-06 (field log 2 item 1; confirmed independently by the
-#: shadow spike the same day): of the three, only `exact` is CONSUMED. The
-#: resolver reads `loc.exact` for text and role+name matching; nothing
-#: anywhere reads `loc.frame` or `loc.shadow`, `selector_of` silently
-#: strips both, and the resolver queries `document` alone, which pierces
-#: neither an iframe nor a shadow root. Both are DEAD grammar, not reserved
-#: behavior: shadow content is unreachable in this build for reading and
-#: for targeting alike, and a traversal build is queued. The find_elements
-#: and get_page_view docstrings say so, so no caller assumes a modifier the
-#: grammar accepts is a modifier that works.
+#: AUDIT 2026-09-06 (field log 2 item 1; confirmed independently by the shadow
+#: spike the same day) found that `frame` and `shadow` were both DEAD grammar:
+#: `selector_of` stripped them and nothing anywhere read them, so a caller who
+#: wrote one got a silent no-op instead of a refusal. The traversal build the
+#: same day resolved both, in opposite directions.
+#:
+#: `shadow` is now REAL. The resolver reaches into open shadow roots by
+#: default, and `shadow: False` turns that off for a call, which is the escape
+#: hatch on a page where piercing is expensive or ambiguous. Closed roots stay
+#: unreachable whatever the modifier says.
+#:
+#: `frame` is GONE. Reaching into an iframe is not the same machinery: the
+#: resolver runs in ONE execution context, and a frame has its own, so
+#: supporting it means routing every branch through the driver's frame layer
+#: rather than reusing the shadow sweep. It was not free, so it is not
+#: pretended: `{'frame': ...}` now REFUSES with the selector list instead of
+#: being stripped, because dead grammar that silently strips is worse than an
+#: honest absence.
 _LADDER_KEYS = ("ref", "region", "form", "table")
 _LIVE_KEYS = ("css", "xpath", "testid", "coordinate", "nth", "describe",
               "text", "anchor")
-_MODIFIERS = ("frame", "shadow", "exact")
+_MODIFIERS = ("shadow", "exact")
 
 
 def selector_of(location: dict | None) -> tuple[str, object]:
@@ -93,11 +101,18 @@ def selector_of(location: dict | None) -> tuple[str, object]:
             groups.append("ref")
         elif key in _LIVE_KEYS:
             groups.append(key)
+        elif key == "frame":
+            raise BadParams(
+                "there is no 'frame' modifier. It was accepted and silently "
+                "ignored until 2026-09-06; nothing in this build reaches "
+                "into an iframe, so the key refuses now rather than looking "
+                "like it worked. Read the page: the completeness block lists "
+                "every iframe it found and says which are same-origin.")
         else:
             raise BadParams(
                 f"location key {key!r} is not a selector. The selectors are "
                 f"ref/region/form/table, css, xpath, text, role+name, testid, "
-                f"nth, describe, coordinate; frame/shadow/exact are modifiers.")
+                f"nth, describe, coordinate; shadow/exact are modifiers.")
     groups = list(dict.fromkeys(groups))
     if len(groups) != 1:
         raise BadParams(
@@ -128,10 +143,51 @@ _RESOLVE_JS = r"""
   const clip = (s, n) => { s = squash(s); return s.length <= n ? s : s.slice(0, n) + '...'; };
   const map = (window.__ks4web_refs instanceof Map)
     ? window.__ks4web_refs : (window.__ks4web_refs = new Map());
+  // Open-shadow-root targeting (2026-09-06). Default ON, so an element the
+  // page view can SEE is an element this resolver can reach; `shadow: false`
+  // in the location opts out. The root list is built once and reused by every
+  // selector branch below.
+  // Built LAZILY: discovering roots costs a document-wide sweep, and the
+  // commonest resolution by far is `loc.ref`, which reads the map and queries
+  // nothing. The acting path pays for this only when it actually searches.
+  const SHADOW_ON = !(loc && loc.shadow === false);
+  let rootList = null;
+  function roots() {
+    if (rootList) return rootList;
+    rootList = [];
+    if (SHADOW_ON) {
+      (function sweep(root) {
+        for (const el of root.querySelectorAll('*')) {
+          if (el.shadowRoot) { rootList.push(el.shadowRoot); sweep(el.shadowRoot); }
+        }
+      })(document);
+    }
+    return rootList;
+  }
+  function queryAll(sel) {
+    const out = Array.from(document.querySelectorAll(sel));
+    for (const root of roots()) for (const el of root.querySelectorAll(sel)) out.push(el);
+    return out;
+  }
+  // THE SHADOW BOUNDARY HOP: the top child of a shadow root has
+  // `parentElement === null`, so a plain climb sees no hidden ancestor and
+  // lets content under a display:none host through the visible filter. It
+  // runs unconditionally, because a ref minted anywhere can arrive here.
+  function up(n) {
+    if (!n) return null;
+    if (n.parentElement) return n.parentElement;
+    const r = n.getRootNode && n.getRootNode();
+    return (r && r.host) ? r.host : null;
+  }
+  function byId(el, id) {
+    const r = el.getRootNode ? el.getRootNode() : document;
+    if (r && typeof r.getElementById === 'function') return r.getElementById(id);
+    return document.getElementById(id);
+  }
   const styleCache = new Map();
   const cs = (el) => { let v = styleCache.get(el); if (v === undefined) { v = getComputedStyle(el); styleCache.set(el, v); } return v; };
   function hiddenAnywhere(el) {
-    for (let n = el; n && n !== document.documentElement; n = n.parentElement) {
+    for (let n = el; n && n !== document.documentElement; n = up(n)) {
       if (n.getAttribute && n.getAttribute('aria-hidden') === 'true') return true;
       if (n.hasAttribute && n.hasAttribute('hidden')) return true;
       const s = cs(n);
@@ -159,7 +215,7 @@ _RESOLVE_JS = r"""
     const al = squash(el.getAttribute && el.getAttribute('aria-label'));
     if (al) return al;
     const lb = el.getAttribute && el.getAttribute('aria-labelledby');
-    if (lb) { const t = document.getElementById(lb.trim().split(/\s+/)[0]); if (t) { const s = squash(t.textContent); if (s) return s; } }
+    if (lb) { const t = byId(el, lb.trim().split(/\s+/)[0]); if (t) { const s = squash(t.textContent); if (s) return s; } }
     try { if (el.labels && el.labels.length) { const s = squash(Array.from(el.labels).map(l => l.textContent).join(' ')); if (s) return s; } } catch (e) {}
     if (el.tagName === 'INPUT') {
       const type = (el.type || '').toLowerCase();
@@ -182,22 +238,35 @@ _RESOLVE_JS = r"""
   let cands = [], how = '';
   try {
     if (loc.ref) { const el = map.get(loc.ref); cands = (el && el.isConnected) ? [el] : []; how = 'ref'; }
-    else if (loc.css) { cands = Array.from(document.querySelectorAll(loc.css)); how = 'css'; }
+    else if (loc.css) { cands = queryAll(loc.css); how = 'css'; }
     else if (loc.xpath) {
+      // The one selector that stays in the light DOM: `document.evaluate` has
+      // no defined behaviour across a shadow boundary.
       const it = document.evaluate(loc.xpath, document, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
       for (let i = 0; i < it.snapshotLength; i++) { const n = it.snapshotItem(i); if (n.nodeType === 1) cands.push(n); }
       how = 'xpath';
     }
-    else if (loc.testid) { cands = Array.from(document.querySelectorAll('[data-testid]')).filter(e => e.getAttribute('data-testid') === String(loc.testid)); how = 'testid'; }
-    else if (loc.coordinate) { const el = document.elementFromPoint(loc.coordinate.x, loc.coordinate.y); cands = el ? [el] : []; how = 'coordinate'; }
+    else if (loc.testid) { cands = queryAll('[data-testid]').filter(e => e.getAttribute('data-testid') === String(loc.testid)); how = 'testid'; }
+    else if (loc.coordinate) {
+      // A point over a component hits the HOST, and clicking the host is not
+      // clicking the control the user pointed at. Each open root gets asked
+      // the same question until the answer stops changing.
+      let el = document.elementFromPoint(loc.coordinate.x, loc.coordinate.y);
+      for (let i = 0; el && el.shadowRoot && i < 32; i++) {
+        const inner = el.shadowRoot.elementFromPoint(loc.coordinate.x, loc.coordinate.y);
+        if (!inner || inner === el) break;
+        el = inner;
+      }
+      cands = el ? [el] : []; how = 'coordinate';
+    }
     else if (loc.nth) {
-      const all = Array.from(document.querySelectorAll(INTERACTIVE)).filter(e => roleOf(e) === loc.nth.role);
+      const all = queryAll(INTERACTIVE).filter(e => roleOf(e) === loc.nth.role);
       const el = all[loc.nth.index]; cands = el ? [el] : []; how = 'nth';
     }
     else if (loc.role || loc.name) {
       const wantRole = loc.role ? String(loc.role).toLowerCase() : null;
       const wantName = loc.name ? String(loc.name).toLowerCase() : null;
-      cands = Array.from(document.querySelectorAll(INTERACTIVE)).filter(el => {
+      cands = queryAll(INTERACTIVE).filter(el => {
         const r = roleOf(el); if (wantRole && r !== wantRole) return false;
         if (wantName) { const nm = nameOf(el, r).toLowerCase(); return loc.exact ? nm === wantName : nm.indexOf(wantName) >= 0; }
         return true;
@@ -210,7 +279,7 @@ _RESOLVE_JS = r"""
       // and only its text and its handler give it away. So the haystack is
       // the accessible name PLUS the element's own bounded textContent.
       const needle = String(loc.text).toLowerCase();
-      cands = Array.from(document.querySelectorAll(INTERACTIVE)).filter(el => {
+      cands = queryAll(INTERACTIVE).filter(el => {
         const nm = nameOf(el, roleOf(el)).toLowerCase();
         const tx = squash(el.textContent).slice(0, 200).toLowerCase();
         return loc.exact ? (nm === needle || tx === needle)
@@ -221,7 +290,7 @@ _RESOLVE_JS = r"""
     else if (loc.describe) {
       const words = String(loc.describe).toLowerCase().split(/\s+/).filter(Boolean);
       const scored = [];
-      for (const el of document.querySelectorAll(INTERACTIVE)) {
+      for (const el of queryAll(INTERACTIVE)) {
         const r = roleOf(el);
         const hay = (nameOf(el, r) + ' ' + r + ' ' + (el.getAttribute('placeholder') || '') + ' ' + (el.getAttribute('title') || '')).toLowerCase();
         let sc = 0; for (const w of words) if (hay.indexOf(w) >= 0) sc++;
@@ -291,7 +360,7 @@ _RESOLVE_JS = r"""
         const label = squash(n.getAttribute('aria-label'))
           || squash(n.getAttribute('name'))
           || (n.getAttribute('aria-labelledby')
-              ? squash((document.getElementById(
+              ? squash((byId(n,
                   n.getAttribute('aria-labelledby').split(/\s+/)[0])
                   || {}).textContent)
               : '');
@@ -299,9 +368,9 @@ _RESOLVE_JS = r"""
           return { kind: kind, label: label };
         }
       }
-      return lmFrom(n.parentElement);
+      return lmFrom(up(n));
     }
-    const lm = lmFrom(el.parentElement);
+    const lm = lmFrom(up(el));
     const pageKey = location.origin + location.pathname + location.hash;
     return { count: 1, how: how, ref: ref, role: r, name: d.name, path: d.path,
       tag: el.tagName, type: type, autocomplete: ac, secret: (type === 'password'),
@@ -320,7 +389,7 @@ _RESOLVE_JS = r"""
   if (loc.text || loc.name || loc.describe || loc.role) {
     const needle = String(loc.text || loc.name || loc.describe || '').toLowerCase();
     const seenN = new Set();
-    for (const el of document.querySelectorAll(INTERACTIVE)) {
+    for (const el of queryAll(INTERACTIVE)) {
       const r = roleOf(el); const nm = nameOf(el, r); if (!nm || seenN.has(nm)) continue;
       let sc = 0; for (const w of needle.split(/\s+/)) if (w && nm.toLowerCase().indexOf(w) >= 0) sc++;
       if (sc) { seenN.add(nm); near.push({ role: r, name: clip(nm, 60), score: sc }); }
@@ -625,8 +694,9 @@ async def _resolve_live(sess, record, location: dict, *, tool: str) -> dict:
             f'or read the page and use a ref.')
     misses = found.get("nearest") or []
     hint = (" Nearest by name: " + _candidate_text(misses)) if misses else \
-        " No near misses either; the target may be inside an iframe, a shadow " \
-        "root, or content that has not rendered yet."
+        " No near misses either; the target may be inside an iframe, a " \
+        "closed shadow root, or content that has not rendered yet. Open " \
+        "shadow roots were searched."
     raise TargetNotFound(
         f'nothing visible matches this selector ({found.get("how")}).{hint}')
 
