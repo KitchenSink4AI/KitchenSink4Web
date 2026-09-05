@@ -1874,6 +1874,17 @@ async def manage_session(
                 **({"upgraded": upgraded} if upgraded else {}),
                 "pages": _tab_list(sess)}
     if action == "status":
+        # The 14-day update check: one calm line, only when a newer release
+        # is confirmed on PyPI, never an install, and a silent skip on any
+        # network trouble. Runs off the event loop; the fetch happens at
+        # most once per cache window.
+        import asyncio as _asyncio
+
+        from .. import updatecheck as _updatecheck
+        try:
+            update = await _asyncio.to_thread(_updatecheck.status_line)
+        except Exception:
+            update = None
         return {
             "sessions": [
                 {"session": s.session_id, "lane": s.spec.label,
@@ -1883,6 +1894,7 @@ async def manage_session(
                  "counters": dict(s.counters)}
                 for s in MANAGER.sessions.values()],
             "read_only": readonly.describe(),
+            **({"update": update} if update else {}),
             "hygiene": {"job_object": _session.hygiene.JOB.status,
                         "startup_reap": MANAGER.startup_reap,
                         "idle_park_s": _session.IDLE_PARK_S,

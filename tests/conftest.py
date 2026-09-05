@@ -20,6 +20,14 @@ import pytest
 from kitchensink4web import server
 
 
+@pytest.fixture(autouse=True)
+def _no_update_check(monkeypatch):
+    """No test touches the network. The 14-day update check is opted out
+    for the whole suite; its own tests delenv this and drive the fetch
+    through a monkeypatched urlopen."""
+    monkeypatch.setenv("KS4WEB_NO_UPDATE_CHECK", "1")
+
+
 @pytest.fixture
 def launch(monkeypatch):
     """Configure the server under a named launch shape and return the state.
