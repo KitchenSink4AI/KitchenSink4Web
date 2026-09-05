@@ -2256,3 +2256,76 @@ measure published honestly: lite 2,283 tokens (was 1,931; the growth is
 the newline contract, the auth recipe, and the mode teachings - budgets
 are SOFT by the 2026-09-05 ruling and no description nears the 2,048-char
 truncation).
+
+## 2026-09-05 17:21 KST - Pause checkpoint: Phase 7 opening landed (f2a29b1, 462 tests). Ref-seam case study complete: dispatch-level root cause (page-scoped keyboard + focus-remount race), two latent ladder holes fixed, punch list 9/9. Remaining: Phase 7 tail deferred items, Phase 8 gauntlet, Garden page copy, Phase 9 packaging.
+
+## 2026-09-06 00:36 KST - Phase 8 fix wave: every gauntlet finding remediated, config queue cleared
+
+The 2026-09-06 adversarial gauntlet (report:
+`internal notes/20260906_web_gauntlet.md`; verdict:
+core held, 1 CRITICAL + 2 HIGH + 2 MEDIUM + 2 LOW) is fully remediated.
+Per finding, fixed at the root:
+
+- **C1 (CRITICAL, submit-gate bypass by ref).** `extract.js` populated
+  affordance `type` only for `<input>`, so `<button type=submit>` (and the
+  spec-default typeless button in a form) carried `type:null` on the
+  read->ref->act path and the form_submit gate never fired. Both the
+  extractor and the live resolver now compute the effective submission
+  type per the HTML spec ('button'/'reset' opt out; explicit submit keeps
+  its semantics anywhere; missing/invalid defaults to submit inside a
+  form). Gate + TOCTOU now fire identically on every markup variant, both
+  paths, and workflow replay. The dead `_describe_handle` carrying the
+  same wrong rule is deleted.
+- **H2 (HIGH, same-role rename under a reused key).** An attribute-rung
+  hit (testid/id/named-control) whose accessible name materially changed
+  (case-folded, whitespace-squashed inequality) now REFUSES with
+  TARGET_CHANGED on acting paths, naming old vs new; a re-read re-binds
+  the key and the ref then acts on what the re-read showed. Reads
+  (screenshot, scroll, wait_for) pass `acting=False` and still proceed
+  with the rebind reported.
+- **H1 (HIGH, DESIGN 5.1 envelope unimplemented on primary reads).** New
+  `pagedata.py`: every prose-shaped read surface (get_page_view full and
+  delta, get_text, find_elements) delivers page text between per-call
+  nonce delimiters with a `page_data` label naming the origin URL and
+  framing element/region names as page-authored. Labels frame, never
+  censor; a spoofed delimiter without the nonce is inert. Interpretation
+  for structured payloads recorded in DESIGN 5.1 as built.
+- **M1 (renderer crash).** `classify()` maps "page crashed" to CONFLICT;
+  the refusal builder rewrites the raw driver string into the honest
+  message (arguments were fine, handle is dead, manage_tabs open is the
+  recovery, deep nesting is a known cause); the crash EVENT marks the
+  PageHandle and `locate()` refuses reuse while manage_tabs can still
+  close it. Verified against a real 6000-deep renderer crash.
+- **M2 (raw pydantic strings).** The middleware converts FastMCP's
+  input-validation failure into the typed BAD_PARAMS envelope, one honest
+  sentence per malformed argument from pydantic's structured entries; no
+  pydantic version, docs URL, or `call[tool]` naming leaks; refusals land
+  in the audit log.
+- **L1 (bare unknown-tool string).** The GuidedAbsenceMiddleware
+  fallthrough (name in neither MUTATING nor an unloaded pack) is now a
+  typed VALIDATION_FAILED refusal naming tools/list and get_workflows.
+- **L2 (dry-run green for tampered flow).** The dry pass pre-validates
+  every step tool against REPLAYABLE; an un-replayable step is a
+  `not-replayable` verdict counted in would_fail, and the real run's
+  mandatory dry pass refuses before anything executes.
+
+Config queue, all landed: **(a)** `bundle/manifest.json` (family shape)
+with the DESIGN 5.2 acting checkbox, a master load-all toggle, and one
+boolean per pack, one plain sentence each (ALL sentences flagged for
+author review); envs `KS4WEB_ALL_PACKS` / `KS4WEB_PACK_<NAME>` accept
+literal true/false, empty=off, garbage refuses at startup, precedence
+--packs > KS4WEB_MODE > master > per-pack, with a manifest/pack-table
+parity test. **(b)** `updatecheck.py`: 14-day PyPI version check, cached
+in the state dir, `KS4WEB_NO_UPDATE_CHECK` opt-out, one calm line in
+manage_session status only when behind, never installs, network failure =
+silent skip; the suite opts out globally (no test touches the network).
+**(c)** README.md scaffold with the install section and the Desktop
+read-only-group Always Allow tip, every sentence flagged in-file for
+review.
+
+Gate: full suite 502 tests green (462 + 24 gauntlet regressions + 9 pack
+toggles + 7 update check), Phase 3 battery 11/11 GREEN and Phase 4
+battery 8/8 GREEN re-run end to end (gate_phase3's byte-identity part now
+compares between the H1 delimiters), read-only invariant green, zero
+orphaned processes from the run (the live kitchensink4web.exe servers on
+the machine are the author's Desktop connection, untouched).
