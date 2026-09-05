@@ -2064,3 +2064,72 @@ Phase 6 code.
   Claude Code / Desktop session) cannot be exercised headlessly; it is the
   author's one-line dogfood observation once a session runs the gate.
 - Desktop mid-conversation checkbox behavior: DEFERRED-NEEDS-HUMAN (S8).
+
+---
+
+## Spikes S9 + S10: the branded lanes, the ABE answer, the install profile (2026-09-05 15:01 KST)
+
+The last two spikes. Every spike in the plan has now reported, and neither of
+these tripped a kill.
+
+### S9: Chrome and Edge, Lane B and C
+
+`spikes/s9/` (fixture server with server-side cookie observation, the
+census/kill helpers extended, four probe scripts), raw JSON in
+`spikes/s9/out/`. Chrome 152.0.7977.76, Edge 151.0.4129.107 with 152 staged.
+
+- **Lane B, both branded channels, 28/28 steps green** on throwaway profiles,
+  headless and headed, provenance from the process table. Edge is on the
+  record for the first time.
+- **Lane C works on both**: user-style launch (non-default --user-data-dir +
+  debug port), connect_over_cdp, read + click + screenshot, and
+  browser.close() DISCONNECTS, leaving the user-side browser running. That
+  teardown fact is the one Lane C cannot live without and it is now measured.
+- **The 136+ default-dir restriction, pinned harder than the blog post**: the
+  shipped source tag says PATH COMPARISON (IsUsingDefaultDataDirectory ->
+  kDisabledByDefaultUserDataDir, branded builds, plus the
+  DevToolsRemoteDebuggingAllowed policy pref and the 152-era
+  kDevToolsAcceptDebuggingConnections approval feature), and the refusal text
+  was extracted from the shipped binaries on this machine, byte-identical in
+  chrome.dll 152 and msedge.dll 151/152. **Edge ships the identical code
+  path**; the community claim no longer rides unverified. Two measured
+  wrinkles: headless=new never touches the default dir (ephemeral %TEMP%
+  profile, port opens), and a redirected LOCALAPPDATA bypasses the check
+  outright because the used dir is env-derived while the comparison default
+  is shell-derived. The live refusal on a TRUE default profile is the one
+  deferred residue: the only such directory on this machine is the author's
+  real profile, and the rule held. Needs any disposable-default machine.
+- **ABE, answered**: non-default dirs mint v10 DPAPI cookies (the provider
+  withholds the app-bound key there, per the shipped source), and a whole
+  User Data tree copied to a non-default path still serves its cookies on
+  both browsers, verified server-side. The flip side: a REAL default
+  profile's v20 values cannot be unwrapped off-default, so **Chrome seeding
+  from a real profile is expected NOT to carry sessions**, the opposite of
+  Firefox's S6. "Log in once inside KS4Web's profile" is the honest Chrome
+  story, and it went into DESIGN 4.6.
+- **Two hygiene findings became DESIGN 4.7 facts 8 and 9**: Edge's
+  startup-boost keep-alive respawns AFTER graceful close and holds the
+  Cookies lock while naming nothing of ours (its crashpad child carries the
+  evidence), so sweeps loop; and force-killing lagging children 1.5 s after
+  root exit cost a minted cookie where a 10 s descendant-wait recovered it.
+- Zero orphans of ours in every script. Third-party churn attributed, not
+  hidden: the author's Firefox restarted itself mid-run on its real profile
+  (untouched), and another tool's debug Chrome appeared and was refused by
+  both kill fences. The real Chrome profile scanned read-only afterward:
+  zero files modified. No spawn ever named a real profile path.
+
+### S10: weight and install
+
+`spikes/s10/`, everything in scratch and deleted after measuring. Install
+bill: venv 11.1 s; pip install playwright 11.0 s, +108.2 MB site-packages;
+chromium 43.9 s / 701.0 MB on disk (headless shell, ffmpeg, winldd
+included); firefox 21.3 s / 336.5 MB; webkit 10.7 s / 169.1 MB; all engines
+1,206.7 MB. Memory on the frozen Versailles page (private bytes, whole
+tree): headless Chromium 129.6 MB, headed Chromium 286.4, headed moz-firefox
+898.4, node driver ~91 idle. **Gate decided: ship no browsers, Chromium
+lazily on first use, Firefox/WebKit opt-in, moz-firefox the zero-download
+lane at a disclosed memory premium.** DESIGN 4.1 now carries the measured
+numbers next to the download figures it used to quote.
+
+The spike phase is CLOSED. PLAN's spike table shows ten of ten reported, S1
+and S2 green, and the architecture freeze stands on measurement end to end.

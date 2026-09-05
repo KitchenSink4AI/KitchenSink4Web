@@ -1,0 +1,72 @@
+{
+ "date_kst": "2026-09-05 14:57",
+ "python": "3.14.3",
+ "steps": [
+  {
+   "step": "python -m venv",
+   "seconds": 11.1,
+   "rc": 0
+  },
+  {
+   "step": "pip install playwright (--no-cache-dir)",
+   "seconds": 11.0,
+   "rc": 0,
+   "playwright_version": "1.62.0",
+   "site_packages_delta_mb": 108.2,
+   "pip_tail": "Successfully installed greenlet-3.5.5 playwright-1.62.0 pyee-13.0.1 typing-extensions-4.16.0"
+  },
+  {
+   "step": "playwright install chromium",
+   "seconds": 43.9,
+   "rc": 0,
+   "disk_delta_mb": 701.0,
+   "cumulative_mb": 701.0,
+   "dirs_present": [
+    ".links",
+    "chromium-1234",
+    "chromium_headless_shell-1234",
+    "ffmpeg-1011",
+    "winldd-1007"
+   ],
+   "tail": "Winldd (playwright winldd v1007) downloaded to C:\\Users\\user\\AppData\\Local\\Temp\\ks4web_spike_s10_r2x38r8s\\pw-browsers\\winldd-1007"
+  },
+  {
+   "step": "playwright install firefox",
+   "seconds": 21.3,
+   "rc": 0,
+   "disk_delta_mb": 336.5,
+   "cumulative_mb": 1037.6,
+   "dirs_present": [
+    ".links",
+    "chromium-1234",
+    "chromium_headless_shell-1234",
+    "ffmpeg-1011",
+    "firefox-1538",
+    "winldd-1007"
+   ],
+   "tail": "Firefox 153.0 (playwright firefox v1538) downloaded to C:\\Users\\user\\AppData\\Local\\Temp\\ks4web_spike_s10_r2x38r8s\\pw-browsers\\firefox-1538"
+  },
+  {
+   "step": "playwright install webkit",
+   "seconds": 10.7,
+   "rc": 0,
+   "disk_delta_mb": 169.1,
+   "cumulative_mb": 1206.7,
+   "dirs_present": [
+    ".links",
+    "chromium-1234",
+    "chromium_headless_shell-1234",
+    "ffmpeg-1011",
+    "firefox-1538",
+    "webkit-2336",
+    "winldd-1007"
+   ],
+   "tail": "WebKit 26.5 (playwright webkit v2336) downloaded to C:\\Users\\user\\AppData\\Local\\Temp\\ks4web_spike_s10_r2x38r8s\\pw-browsers\\webkit-2336"
+  }
+ ],
+ "totals": {
+  "all_engines_disk_mb": 1206.7,
+  "venv_disk_mb": 119.5
+ },
+ "scratch_removed": true
+}
