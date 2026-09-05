@@ -172,22 +172,26 @@ def _call(tool: str, args: dict):
     return asyncio.run(run())
 
 
-def test_unbuilt_tools_still_refuse_with_not_implemented(launch):
-    """Phase 2 built the read layer and Phase 3 built the policy layer and
-    the audit log. The ACTION tools are Phase 4, and every tool that is not
-    built yet says so in the envelope rather than returning plausible
-    output, because a tool that reports success without doing anything is
-    the exact disease this product argues against."""
+def test_action_tools_are_built_and_refuse_honestly_off_a_dead_page(launch):
+    """Phase 4 built the ACTION tools. They no longer stub NOT_IMPLEMENTED;
+    called against a page handle that was never minted they refuse NOT_FOUND
+    with the mint rule stated, which is a built tool being honest rather than
+    a scaffold refusing to exist. A tool that reported plausible output off a
+    dead page would be the exact silent-false-success this product argues
+    against."""
     launch()
-    for tool, args, phase in (
-            ("click", {"page": "p1", "location": {"ref": "e1"}}, "Phase 4"),
+    for tool, args in (
+            ("click", {"page": "p1", "location": {"ref": "e1"}}),
             ("type_text", {"page": "p1", "location": {"ref": "e1"},
-                           "text": "x"}, "Phase 4"),
-            ("fill_form", {"page": "p1", "fields": []}, "Phase 4")):
+                           "text": "x"}),
+            ("fill_form", {"page": "p1",
+                           "fields": [{"ref": "e1", "value": "x"}]}),
+            ("press_keys", {"page": "p1", "keys": "Enter"}),
+            ("scroll", {"page": "p1"}),
+            ("wait_for", {"page": "p1", "condition": "load"})):
         result = _call(tool, args)
         assert result.is_error is True, tool
-        assert result.structured_content["error"]["code"] == "NOT_IMPLEMENTED"
-        assert phase in result.structured_content["error"]["message"], tool
+        assert result.structured_content["error"]["code"] == "NOT_FOUND", tool
 
 
 def test_a_ref_from_no_session_refuses_by_naming_the_mint_rule(launch):

@@ -1,5 +1,5 @@
 {
- "measured_kst": "2026-09-05 11:42",
+ "measured_kst": "2026-09-05 12:27",
  "phase": 2,
  "green": true,
  "parts": {
@@ -21,14 +21,14 @@
      "target_revised_from": null
     },
     "wikipedia_gdp_table": {
-     "tokens": 3399,
+     "tokens": 3443,
      "target": 3500,
      "rung": 1,
      "pass": true,
      "target_revised_from": 3000
     },
     "wikipedia_versailles": {
-     "tokens": 4364,
+     "tokens": 4408,
      "target": 5000,
      "rung": 6,
      "pass": true,
@@ -44,7 +44,7 @@
   "2_3_6_9_suite": {
    "green": true,
    "command": "pytest tests/browser/test_anchors_s2.py tests/unit/test_anchors.py tests/browser/test_phase2_reads.py tests/unit/test_projection.py",
-   "result": "140 passed in 50.74s",
+   "result": "140 passed in 52.42s",
    "covers": [
     "2 sticky refs and zero false rebinds (the ported S2 battery)",
     "3 completeness accurate by construction on corpus B",
@@ -57,75 +57,75 @@
    "sizes": [
     {
      "rung": 1,
-     "tokens": 17917
+     "tokens": 17961
     },
     {
      "rung": 2,
-     "tokens": 17882
+     "tokens": 17926
     },
     {
      "rung": 3,
-     "tokens": 17847
+     "tokens": 17891
     },
     {
      "rung": 4,
-     "tokens": 3378
+     "tokens": 3422
     },
     {
      "rung": 5,
-     "tokens": 3073
+     "tokens": 3117
     },
     {
      "rung": 6,
-     "tokens": 2733
+     "tokens": 2777
     },
     {
      "rung": 7,
-     "tokens": 2467
+     "tokens": 2511
     },
     {
      "rung": 8,
-     "tokens": 2250
+     "tokens": 2294
     },
     {
      "rung": 9,
-     "tokens": 2072
+     "tokens": 2116
     },
     {
      "rung": 10,
-     "tokens": 1879
+     "tokens": 1923
     },
     {
      "rung": 11,
-     "tokens": 1713
+     "tokens": 1757
     },
     {
      "rung": 12,
-     "tokens": 1463
+     "tokens": 1507
     },
     {
      "rung": 13,
-     "tokens": 1353
+     "tokens": 1397
     },
     {
      "rung": 14,
-     "tokens": 1228
+     "tokens": 1272
     },
     {
      "rung": 15,
-     "tokens": 1068
+     "tokens": 1112
     },
     {
      "rung": 16,
-     "tokens": 968
+     "tokens": 1012
     }
    ],
    "truncated_rungs": [],
    "exposed_sequence": [
-    17919,
-    17884,
-    17849,
-    3380
+    17963,
+    17928,
+    17893,
+    3424
    ],
    "monotonic_as_exposed": true,
    "green": true
@@ -152,45 +152,45 @@
    "rows": [
     {
      "nodes": 5012,
-     "projection_p95": 171.8,
+     "projection_p95": 134.0,
      "budget_ms": 500,
-     "reference_p50": 128.1,
-     "cost_vs_reference_pct": -11
+     "reference_p50": 112.1,
+     "cost_vs_reference_pct": -2
     },
     {
      "nodes": 10012,
-     "projection_p95": 284.0,
+     "projection_p95": 173.6,
      "budget_ms": 500,
-     "reference_p50": 168.0,
+     "reference_p50": 132.1,
      "cost_vs_reference_pct": 1
     },
     {
      "nodes": 25012,
-     "projection_p95": 307.8,
+     "projection_p95": 239.8,
      "budget_ms": 500,
-     "reference_p50": 210.6,
-     "cost_vs_reference_pct": 0
+     "reference_p50": 199.0,
+     "cost_vs_reference_pct": 1
     },
     {
      "nodes": 50012,
-     "projection_p95": 492.4,
+     "projection_p95": 362.5,
      "budget_ms": 500,
-     "reference_p50": 400.7,
-     "cost_vs_reference_pct": 0
+     "reference_p50": 306.4,
+     "cost_vs_reference_pct": 2
     },
     {
      "nodes": 100012,
-     "projection_p95": 792.1,
+     "projection_p95": 552.1,
      "budget_ms": 1000,
-     "reference_p50": 650.1,
-     "cost_vs_reference_pct": 0
+     "reference_p50": 521.0,
+     "cost_vs_reference_pct": -1
     }
    ]
   },
   "8_completeness_is_derived": {
    "green": true,
    "result": [
-    "9 passed, 352 deselected in 3.98s"
+    "9 passed, 375 deselected in 3.95s"
    ],
    "named_regression": "0 regions not expanded while thirty regions carry expand costs"
   },
@@ -214,20 +214,20 @@
      "live_tokens": 833
     },
     "wikipedia_gdp_table": {
-     "delta": -173,
-     "delta_pct": -5.1,
+     "delta": -46,
+     "delta_pct": -1.3,
      "frozen_nodes": 5644,
-     "frozen_tokens": 3399,
-     "live_nodes": 5571,
-     "live_tokens": 3226
+     "frozen_tokens": 3443,
+     "live_nodes": 5652,
+     "live_tokens": 3397
     },
     "wikipedia_versailles": {
-     "delta": 129,
-     "delta_pct": 3.0,
+     "delta": -32,
+     "delta_pct": -0.7,
      "frozen_nodes": 10737,
-     "frozen_tokens": 4364,
+     "frozen_tokens": 4408,
      "live_nodes": 10633,
-     "live_tokens": 4493
+     "live_tokens": 4376
     }
    }
   },

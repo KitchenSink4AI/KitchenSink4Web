@@ -1,0 +1,589 @@
+"""The acting surface's shared machinery: resolve, approve, dispatch, verify.
+
+DESIGN 3.5, 5.4, 5.7. Phase 4's tools (`click`, `type_text`, `fill_form`,
+`press_keys`, `scroll`, `wait_for`) do NOT implement policy and do NOT invent
+their own resolution. They DESCRIBE an action to this module, which:
+
+1. **Resolves the target against the LIVE page, every time.** A stored session
+   ref goes through the rebind ladder (`anchors/ladder.py`) run over a FRESH
+   extraction, so a ref always acts on the element it resolves to right now or
+   refuses. A page that swaps its "Continue" button for a "Delete everything"
+   button between a read and a click cannot be clicked wrong: the fingerprint
+   no longer matches and the ladder refuses rather than acting on first match.
+   Live selectors (css, xpath, text, role+name, testid, coordinate, nth,
+   describe) resolve deterministically and refuse with the candidate list when
+   more than one matches, never acting on first match.
+
+2. **Routes every mutating action through the ONE policy choke point**
+   (`policy/engine.approve`): read-only grade, credential blindness, origin
+   policy, 429 backoff, loop detection, the budget charge, and the confirmation
+   gate last. Phase 4 wires no MRTR round-trip, so a gated class (form submit,
+   payment) FAILS CLOSED: the gate asks and nothing executes until a human
+   answers through a channel this build does not yet carry. That is the design.
+
+3. **Dispatches TRUSTED input through the driver, never synthesised DOM
+   events.** Modern React handlers check `event.isTrusted` and silently no-op on
+   a synthetic click (corpus B's `trusted-btn`), so a JS-synthesised click is
+   the exact silent-false-success this product argues against. Playwright's
+   input path dispatches real trusted input, which is why the acting tools go
+   through it and never through `page.evaluate` click synthesis.
+
+4. **Verifies the OUTCOME** (DESIGN 5.7). Every action reports what actually
+   changed: navigation, focus, the target's own state, or a DOM mutation. An
+   action Playwright could not land (an overlay intercepting the point, a
+   target that never stops moving) raises an honest refusal naming a recovery.
+   An action that landed but changed nothing observable returns
+   `effect: "none-observed"` WITH a warning. Nothing returns a bare ok.
+
+This module imports from `policy` and `anchors` and `projection`; it is `ops`,
+so that direction is allowed. It never imports playwright at module scope: it
+takes page-like handles the engine already holds.
+"""
+
+from __future__ import annotations
+
+from ..anchors import Outcome, ladder
+from ..errors import (AmbiguousLocation, BadParams, ModalBlocked, StaleAnchor,
+                      TargetNotFound, Timeout)
+from ..policy import credentials
+from ..projection import extract
+
+# --------------------------------------------------------------- selectors
+
+#: Location grammar (DESIGN 9). Exactly ONE selector group per call; the
+#: role-plus-name pair is one group. `frame`, `shadow`, and `exact` are
+#: modifiers, not selectors, so they may ride alongside the one selector.
+_LADDER_KEYS = ("ref", "region", "form", "table")
+_LIVE_KEYS = ("css", "xpath", "testid", "coordinate", "nth", "describe",
+              "text", "anchor")
+_MODIFIERS = ("frame", "shadow", "exact")
+
+
+def selector_of(location: dict | None) -> tuple[str, object]:
+    """Return the one selector group in a location object, or refuse.
+
+    Inherited house rule (DESIGN 9): every positional call carries exactly one
+    selector, and multiple matches REFUSE with every candidate rather than
+    acting on the first. Two selectors at once, or none, is a `BAD_PARAMS`."""
+    if not location or not isinstance(location, dict):
+        raise BadParams(
+            "this action needs a location: a ref from a read, or a selector "
+            "such as {'css': ...}, {'text': ...}, {'role': ..., 'name': ...}, "
+            "{'testid': ...}, or {'coordinate': {'x': .., 'y': ..}}.")
+    present = [k for k in location
+               if k not in _MODIFIERS and location.get(k) not in (None, "")]
+    # role+name is one selector group.
+    groups: list[str] = []
+    if "role" in present or "name" in present:
+        groups.append("role_name")
+        present = [k for k in present if k not in ("role", "name")]
+    for key in present:
+        if key in _LADDER_KEYS:
+            groups.append("ref")
+        elif key in _LIVE_KEYS:
+            groups.append(key)
+        else:
+            raise BadParams(
+                f"location key {key!r} is not a selector. The selectors are "
+                f"ref/region/form/table, css, xpath, text, role+name, testid, "
+                f"nth, describe, coordinate; frame/shadow/exact are modifiers.")
+    groups = list(dict.fromkeys(groups))
+    if len(groups) != 1:
+        raise BadParams(
+            f"a location carries exactly one selector; this one carries "
+            f"{sorted(groups) or 'none'}. Two selectors at once are refused "
+            f"rather than resolved by precedence, because guessing which one "
+            f"you meant is how the wrong element gets acted on.")
+    group = groups[0]
+    if group == "ref":
+        key = next(k for k in _LADDER_KEYS if location.get(k))
+        return "ref", location[key]
+    if group == "role_name":
+        return "role_name", location
+    return group, location[group]
+
+
+# ---------------------------------------------------------- the live resolver
+
+#: One in-page resolver for every selector the rebind ladder does not own. It
+#: refuses ambiguity (more than one visible match) with the candidate list and
+#: returns nearest misses on zero, so a miss is a one-turn recovery. It mints a
+#: ref into the same `window.__ks4web_refs` map the projection uses, so a
+#: resolved element is reached exactly the way a read-minted ref is.
+_RESOLVE_JS = r"""
+(opts) => {
+  const loc = opts.location || {};
+  const squash = (s) => (typeof s === 'string' ? s : '').replace(/\s+/g, ' ').trim();
+  const clip = (s, n) => { s = squash(s); return s.length <= n ? s : s.slice(0, n) + '...'; };
+  const map = (window.__ks4web_refs instanceof Map)
+    ? window.__ks4web_refs : (window.__ks4web_refs = new Map());
+  const styleCache = new Map();
+  const cs = (el) => { let v = styleCache.get(el); if (v === undefined) { v = getComputedStyle(el); styleCache.set(el, v); } return v; };
+  function hiddenAnywhere(el) {
+    for (let n = el; n && n !== document.documentElement; n = n.parentElement) {
+      if (n.getAttribute && n.getAttribute('aria-hidden') === 'true') return true;
+      if (n.hasAttribute && n.hasAttribute('hidden')) return true;
+      const s = cs(n);
+      if (s.display === 'none' || s.visibility === 'hidden') return true;
+      if (parseFloat(s.opacity) === 0) return true;
+    }
+    return false;
+  }
+  const TAG_ROLE = { A: 'link', BUTTON: 'button', SELECT: 'combobox', TEXTAREA: 'textbox',
+    SUMMARY: 'button', OPTION: 'option', IMG: 'img', TABLE: 'table' };
+  const INPUT_ROLE = { checkbox: 'checkbox', radio: 'radio', submit: 'button', button: 'button',
+    reset: 'button', image: 'button', range: 'slider', file: 'file-input', search: 'searchbox',
+    email: 'textbox', password: 'textbox', text: 'textbox', tel: 'textbox', url: 'textbox', number: 'spinbutton' };
+  function roleOf(el) {
+    const ex = el.getAttribute && el.getAttribute('role');
+    if (ex) return ex.trim().split(/\s+/)[0];
+    if (el.tagName === 'INPUT') return INPUT_ROLE[(el.type || 'text').toLowerCase()] || 'textbox';
+    if (el.tagName === 'A') return el.hasAttribute('href') ? 'link' : 'generic';
+    if (/^H[1-6]$/.test(el.tagName)) return 'heading';
+    return TAG_ROLE[el.tagName] || 'generic';
+  }
+  const NAME_FROM_CONTENT = new Set(['button', 'link', 'heading', 'tab', 'menuitem',
+    'option', 'checkbox', 'radio', 'switch', 'cell', 'columnheader', 'rowheader', 'gridcell', 'treeitem']);
+  function nameOf(el, role) {
+    const al = squash(el.getAttribute && el.getAttribute('aria-label'));
+    if (al) return al;
+    const lb = el.getAttribute && el.getAttribute('aria-labelledby');
+    if (lb) { const t = document.getElementById(lb.trim().split(/\s+/)[0]); if (t) { const s = squash(t.textContent); if (s) return s; } }
+    try { if (el.labels && el.labels.length) { const s = squash(Array.from(el.labels).map(l => l.textContent).join(' ')); if (s) return s; } } catch (e) {}
+    if (el.tagName === 'INPUT') {
+      const type = (el.type || '').toLowerCase();
+      if ((type === 'submit' || type === 'button' || type === 'reset') && typeof el.value === 'string') return squash(el.value);
+      const ph = el.getAttribute('placeholder'); if (squash(ph)) return squash(ph);
+      return '';
+    }
+    if (el.tagName === 'IMG') return squash(el.getAttribute('alt'));
+    if (NAME_FROM_CONTENT.has(role)) return squash(el.textContent);
+    return squash(el.getAttribute && el.getAttribute('title'));
+  }
+  function pathOf(el) {
+    if (el.tagName !== 'A') return null;
+    try { const u = new URL(el.href, location.href);
+      return u.origin !== location.origin ? u.origin + u.pathname : (u.pathname + u.search + u.hash); }
+    catch (e) { return el.getAttribute('href'); }
+  }
+  const INTERACTIVE = 'a[href],button,input,select,textarea,summary,[role],[onclick],[tabindex]:not([tabindex="-1"])';
+
+  let cands = [], how = '';
+  try {
+    if (loc.ref) { const el = map.get(loc.ref); cands = (el && el.isConnected) ? [el] : []; how = 'ref'; }
+    else if (loc.css) { cands = Array.from(document.querySelectorAll(loc.css)); how = 'css'; }
+    else if (loc.xpath) {
+      const it = document.evaluate(loc.xpath, document, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
+      for (let i = 0; i < it.snapshotLength; i++) { const n = it.snapshotItem(i); if (n.nodeType === 1) cands.push(n); }
+      how = 'xpath';
+    }
+    else if (loc.testid) { cands = Array.from(document.querySelectorAll('[data-testid]')).filter(e => e.getAttribute('data-testid') === String(loc.testid)); how = 'testid'; }
+    else if (loc.coordinate) { const el = document.elementFromPoint(loc.coordinate.x, loc.coordinate.y); cands = el ? [el] : []; how = 'coordinate'; }
+    else if (loc.nth) {
+      const all = Array.from(document.querySelectorAll(INTERACTIVE)).filter(e => roleOf(e) === loc.nth.role);
+      const el = all[loc.nth.index]; cands = el ? [el] : []; how = 'nth';
+    }
+    else if (loc.role || loc.name) {
+      const wantRole = loc.role ? String(loc.role).toLowerCase() : null;
+      const wantName = loc.name ? String(loc.name).toLowerCase() : null;
+      cands = Array.from(document.querySelectorAll(INTERACTIVE)).filter(el => {
+        const r = roleOf(el); if (wantRole && r !== wantRole) return false;
+        if (wantName) { const nm = nameOf(el, r).toLowerCase(); return loc.exact ? nm === wantName : nm.indexOf(wantName) >= 0; }
+        return true;
+      });
+      how = 'role+name';
+    }
+    else if (loc.text) {
+      // `text` means visible text, not just the accessible name: a <div
+      // onclick> button (corpus B's `divbtn`) has no accessible name at all,
+      // and only its text and its handler give it away. So the haystack is
+      // the accessible name PLUS the element's own bounded textContent.
+      const needle = String(loc.text).toLowerCase();
+      cands = Array.from(document.querySelectorAll(INTERACTIVE)).filter(el => {
+        const nm = nameOf(el, roleOf(el)).toLowerCase();
+        const tx = squash(el.textContent).slice(0, 200).toLowerCase();
+        return loc.exact ? (nm === needle || tx === needle)
+          : (nm.indexOf(needle) >= 0 || tx.indexOf(needle) >= 0);
+      });
+      how = 'text';
+    }
+    else if (loc.describe) {
+      const words = String(loc.describe).toLowerCase().split(/\s+/).filter(Boolean);
+      const scored = [];
+      for (const el of document.querySelectorAll(INTERACTIVE)) {
+        const r = roleOf(el);
+        const hay = (nameOf(el, r) + ' ' + r + ' ' + (el.getAttribute('placeholder') || '') + ' ' + (el.getAttribute('title') || '')).toLowerCase();
+        let sc = 0; for (const w of words) if (hay.indexOf(w) >= 0) sc++;
+        if (sc) scored.push([sc, el]);
+      }
+      const best = scored.length ? Math.max.apply(null, scored.map(s => s[0])) : 0;
+      cands = scored.filter(s => s[0] === best).map(s => s[1]);
+      how = 'describe';
+    }
+  } catch (e) { return { error: String(e && e.message || e), how: how }; }
+
+  // Visible only, except a coordinate hit which is a point on the page.
+  if (how !== 'coordinate') cands = cands.filter(el => el && el.nodeType === 1 && !hiddenAnywhere(el));
+  const uniq = []; const seen = new Set();
+  for (const el of cands) { if (!seen.has(el)) { seen.add(el); uniq.push(el); } }
+
+  function describe(el) {
+    const r = roleOf(el);
+    // Fall back to the element's own bounded text when it has no accessible
+    // name, so a <div onclick> candidate reads as its label rather than as
+    // "(unnamed)" in an ambiguity refusal.
+    let nm = nameOf(el, r);
+    if (!nm) nm = squash(el.textContent).slice(0, 80);
+    return { role: r, name: clip(nm, 80), path: pathOf(el) };
+  }
+
+  if (uniq.length === 1) {
+    const el = uniq[0];
+    const ref = 'x' + (window.__ks4web_seq = (window.__ks4web_seq || 0) + 1);
+    map.set(ref, el);
+    const d = describe(el);
+    const r = d.role;
+    const type = el.tagName === 'INPUT' ? (el.type || 'text').toLowerCase() : (el.tagName === 'BUTTON' ? (el.getAttribute('type') || '') : '');
+    const ac = (el.getAttribute && el.getAttribute('autocomplete') || '').toLowerCase();
+    const inForm = !!(el.form || el.closest('form'));
+    const formEl = el.form || el.closest('form');
+    return { count: 1, how: how, ref: ref, role: r, name: d.name, path: d.path,
+      tag: el.tagName, type: type, autocomplete: ac, secret: (type === 'password'),
+      in_form: inForm, form_action: formEl ? (formEl.getAttribute('action') || '') : '',
+      page_key: location.origin + location.pathname + location.hash };
+  }
+  if (uniq.length > 1) return { count: uniq.length, how: how, candidates: uniq.slice(0, 12).map(describe) };
+
+  // Zero: nearest misses by name, so a miss is a one-turn recovery.
+  const near = [];
+  if (loc.text || loc.name || loc.describe || loc.role) {
+    const needle = String(loc.text || loc.name || loc.describe || '').toLowerCase();
+    const seenN = new Set();
+    for (const el of document.querySelectorAll(INTERACTIVE)) {
+      const r = roleOf(el); const nm = nameOf(el, r); if (!nm || seenN.has(nm)) continue;
+      let sc = 0; for (const w of needle.split(/\s+/)) if (w && nm.toLowerCase().indexOf(w) >= 0) sc++;
+      if (sc) { seenN.add(nm); near.push({ role: r, name: clip(nm, 60), score: sc }); }
+      if (near.length > 60) break;
+    }
+    near.sort((a, b) => b.score - a.score); near.length = Math.min(near.length, 6);
+  }
+  return { count: 0, how: how, nearest: near };
+}
+"""
+
+#: Capture the page's observable state around an action, so the OUTCOME can be
+#: verified rather than assumed (DESIGN 5.7). A MutationObserver catches a DOM
+#: change even where nothing else moves; url, activeElement, and the target's
+#: own state (value / checked / aria-expanded) catch the rest.
+_OBSERVE_JS = r"""
+(opts) => {
+  const map = window.__ks4web_refs instanceof Map ? window.__ks4web_refs : null;
+  const el = (map && opts.ref) ? map.get(opts.ref) : null;
+  window.__ks4web_act = window.__ks4web_act || {};
+  const token = 'w' + (window.__ks4web_actseq = (window.__ks4web_actseq || 0) + 1);
+  const rec = { mutated: false };
+  try {
+    rec.obs = new MutationObserver(() => { rec.mutated = true; });
+    rec.obs.observe(document.documentElement, { subtree: true, childList: true, attributes: true, characterData: true });
+  } catch (e) {}
+  window.__ks4web_act[token] = rec;
+  function sig(node) { if (!node || node === document.body || node === document.documentElement) return '(body)';
+    const id = node.id ? '#' + node.id : ''; const nm = (node.getAttribute && node.getAttribute('aria-label')) || (node.textContent || '').slice(0, 30);
+    return (node.tagName || '?') + id + '|' + (nm || '').replace(/\s+/g, ' ').trim(); }
+  const t = el ? { value: ('value' in el) ? String(el.value).slice(0, 200) : null,
+    checked: (typeof el.checked === 'boolean') ? el.checked : null,
+    expanded: el.getAttribute ? el.getAttribute('aria-expanded') : null,
+    focused: document.activeElement === el } : null;
+  return { token: token, url: location.href, active: sig(document.activeElement), target: t };
+}
+"""
+
+_AFTER_JS = r"""
+(opts) => {
+  const store = window.__ks4web_act || {};
+  const rec = store[opts.token]; let mutated = false;
+  if (rec) { mutated = !!rec.mutated; try { rec.obs && rec.obs.disconnect(); } catch (e) {} delete store[opts.token]; }
+  const map = window.__ks4web_refs instanceof Map ? window.__ks4web_refs : null;
+  const el = (map && opts.ref) ? map.get(opts.ref) : null;
+  function sig(node) { if (!node || node === document.body || node === document.documentElement) return '(body)';
+    const id = node.id ? '#' + node.id : ''; const nm = (node.getAttribute && node.getAttribute('aria-label')) || (node.textContent || '').slice(0, 30);
+    return (node.tagName || '?') + id + '|' + (nm || '').replace(/\s+/g, ' ').trim(); }
+  const t = el ? { value: ('value' in el) ? String(el.value).slice(0, 200) : null,
+    checked: (typeof el.checked === 'boolean') ? el.checked : null,
+    expanded: el.getAttribute ? el.getAttribute('aria-expanded') : null,
+    focused: document.activeElement === el } : null;
+  return { mutated: mutated, url: location.href, active: sig(document.activeElement), target: t };
+}
+"""
+
+#: How long to let a MutationObserver flush after a trusted action before
+#: reading the outcome. A React setState re-render lands async, so a same-tick
+#: read would miss it and report a false none-observed.
+_SETTLE_MS = 80
+
+
+# ----------------------------------------------------------- descriptors
+
+def target_descriptor(unit: dict) -> dict:
+    """Flatten a resolved unit (ladder or live) into the fields the credential
+    check and the gate fingerprint read. One shape for both paths."""
+    a = unit.get("anchor") or {}
+    return {
+        "role": unit.get("role") or a.get("role"),
+        "name": unit.get("name") or a.get("name"),
+        "label": unit.get("name") or a.get("name"),
+        "page_key": unit.get("page_key") or a.get("page_key"),
+        "landmark": a.get("landmark"),
+        "landmark_label": a.get("landmark_label"),
+        "href": unit.get("href"),
+        "action": unit.get("form_action") or unit.get("action"),
+        "secret": unit.get("secret"),
+        "payment": unit.get("payment"),
+        "type": unit.get("type"),
+        "autocomplete": unit.get("autocomplete"),
+    }
+
+
+def action_class_for(desc: dict, *, submitting: bool = False) -> str | None:
+    """The gated class for an action on this target, or None. A submit-typed
+    control and an explicit form submission are `form_submit`; a payment-shaped
+    field is `payment_form`. Everything else acts without a gate (DESIGN 5.4)."""
+    if credentials.is_payment_field(desc):
+        return "payment_form"
+    if submitting or (desc.get("type") or "").lower() == "submit":
+        return "form_submit"
+    return None
+
+
+# ------------------------------------------------------------- resolution
+
+async def resolve(sess, record, location: dict, *, tool: str) -> dict:
+    """Resolve one location to a live element handle, refusing rather than
+    guessing. Returns a dict carrying the handle, the descriptor, the gate
+    fingerprint source, and the rebind resolution outcome ('ok'/'rebound').
+
+    A stored session ref goes through the rebind ladder over a FRESH extraction,
+    so the resolution is against the page as it is right now; every other
+    selector resolves live and refuses on more than one visible match."""
+    group, value = selector_of(location)
+
+    if group == "ref":
+        return await _resolve_ref(sess, record, value, tool=tool)
+    return await _resolve_live(sess, record, location, tool=tool)
+
+
+async def _resolve_ref(sess, record, ref: str, *, tool: str) -> dict:
+    entry = sess.element_map.entries.get(ref)
+    if entry is None:
+        # Not a session ref. It may be a find/resolve-minted 'x' ref living in
+        # the in-page map but not in the sticky entries; try the live map.
+        handle = await _handle(record.page, ref)
+        if handle is None:
+            raise TargetNotFound(
+                f"{ref!r} was never minted in this session. Refs are minted "
+                f"only by a read in this session; call get_page_view(page="
+                f"{record.handle!r}) and use the ref it returns.")
+        unit = await _describe_handle(record.page, handle, ref)
+        return {"handle": handle, "node_ref": ref, "unit": unit,
+                "descriptor": target_descriptor(unit), "resolution": "ok",
+                "rebound": None}
+
+    data = await extract(record.page)
+    outcome = ladder.resolve(sess.element_map, ref, data, record.handle)
+    verdict = outcome["outcome"]
+    if verdict in (Outcome.OK, Outcome.REBOUND):
+        unit = outcome["unit"]
+        node_ref = unit.get("ref")
+        handle = await _handle(record.page, node_ref)
+        if handle is None:
+            raise StaleAnchor(
+                f"{ref!r} resolved to an element that is no longer in the DOM. "
+                f"Re-read the page and use the ref it returns.")
+        rebound = None
+        if verdict == Outcome.REBOUND:
+            rebound = (f'{ref} was rebound: {outcome.get("was")} -> '
+                       f'{outcome.get("now")} (tier {outcome.get("tier")})')
+        return {"handle": handle, "node_ref": node_ref, "unit": unit,
+                "descriptor": target_descriptor(unit),
+                "resolution": "rebound" if verdict == Outcome.REBOUND else "ok",
+                "rebound": rebound}
+    # Every non-proceeding outcome is a typed, recovery-naming refusal.
+    if verdict == Outcome.MODAL:
+        raise ModalBlocked(
+            f'a dialog ({outcome.get("dialog")}) is open and blocks '
+            f'interaction. {outcome.get("recovery")}')
+    if verdict == Outcome.AMBIGUOUS:
+        raise AmbiguousLocation(
+            f'{ref!r} no longer resolves to one element ({outcome.get("tier")}): '
+            f'{_candidate_text(outcome.get("candidates"))}. '
+            f'{outcome.get("recovery")}')
+    if verdict == Outcome.BAD_PARAMS:
+        raise BadParams(
+            f'{ref!r} belongs to page {outcome.get("minted_on")}, not '
+            f'{record.handle}. {outcome.get("recovery")}')
+    if verdict == Outcome.NOT_FOUND:
+        raise TargetNotFound(f'{ref!r}: {outcome.get("recovery")}')
+    # STALE
+    raise StaleAnchor(
+        f'{ref!r} does not resolve on this page any more '
+        f'(reason: {outcome.get("reason")}; was {outcome.get("was")}). '
+        f'{outcome.get("recovery")}')
+
+
+async def _resolve_live(sess, record, location: dict, *, tool: str) -> dict:
+    if "anchor" in location:
+        raise BadParams(
+            "the {'anchor': ...} selector addresses a durable anchor id, which "
+            "surfaces only in audit records and saved workflows (DESIGN 3.5). "
+            "Address a live element by ref, css, text, role+name, or testid; "
+            "anchor-driven replay arrives with the workflows pack.")
+    found = await record.page.evaluate(_RESOLVE_JS, {"location": location})
+    if found.get("error"):
+        raise BadParams(
+            f'the selector did not resolve: {found["error"]}. Check the css or '
+            f'xpath syntax, or address the element by ref from a read.')
+    count = found.get("count", 0)
+    if count == 1:
+        handle = await _handle(record.page, found["ref"])
+        if handle is None:
+            raise StaleAnchor(
+                "the element left the DOM between resolving it and acting on "
+                "it. Re-read the page and try again.")
+        unit = dict(found)
+        return {"handle": handle, "node_ref": found["ref"], "unit": unit,
+                "descriptor": target_descriptor(unit), "resolution": "ok",
+                "rebound": None}
+    if count and count > 1:
+        raise AmbiguousLocation(
+            f'{count} visible elements match ({found.get("how")}); no tool acts '
+            f'on first match. Candidates: '
+            f'{_candidate_text(found.get("candidates"))}. Narrow the selector, '
+            f'or read the page and use a ref.')
+    misses = found.get("nearest") or []
+    hint = (" Nearest by name: " + _candidate_text(misses)) if misses else \
+        " No near misses either; the target may be inside an iframe, a shadow " \
+        "root, or content that has not rendered yet."
+    raise TargetNotFound(
+        f'nothing visible matches this selector ({found.get("how")}).{hint}')
+
+
+async def _handle(page, node_ref: str):
+    jsh = await page.evaluate_handle(
+        "r => (window.__ks4web_refs && window.__ks4web_refs.get(r)) || null",
+        node_ref)
+    element = jsh.as_element()
+    if element is None:
+        await jsh.dispose()
+        return None
+    return element
+
+
+async def _describe_handle(page, handle, ref: str) -> dict:
+    """Descriptor for an element reached by a bare 'x' ref, computed in-page."""
+    return await page.evaluate(
+        r"""(el) => { if (!el) return {};
+          const squash = (s) => (typeof s === 'string' ? s : '').replace(/\s+/g, ' ').trim();
+          const type = el.tagName === 'INPUT' ? (el.type || 'text').toLowerCase()
+            : (el.tagName === 'BUTTON' ? (el.getAttribute('type') || '') : '');
+          const formEl = el.form || (el.closest ? el.closest('form') : null);
+          return { role: (el.getAttribute && el.getAttribute('role')) || el.tagName.toLowerCase(),
+            name: squash(el.getAttribute && el.getAttribute('aria-label')) || squash(el.textContent).slice(0, 80),
+            type: type, tag: el.tagName, secret: (type === 'password'),
+            autocomplete: (el.getAttribute && el.getAttribute('autocomplete') || '').toLowerCase(),
+            in_form: !!formEl, form_action: formEl ? (formEl.getAttribute('action') || '') : '',
+            page_key: location.origin + location.pathname + location.hash }; }""",
+        handle)
+
+
+def _candidate_text(candidates) -> str:
+    if not candidates:
+        return "(none)"
+    bits = []
+    for c in candidates[:8]:
+        label = f'{c.get("role", "?")} "{c.get("name") or "(unnamed)"}"'
+        if c.get("path"):
+            label += f' {c["path"]}'
+        bits.append(label)
+    return "; ".join(bits)
+
+
+# --------------------------------------------------------- verified outcomes
+
+async def observe(page, node_ref: str | None) -> dict:
+    return await page.evaluate(_OBSERVE_JS, {"ref": node_ref})
+
+
+async def verify(page, node_ref: str | None, before: dict) -> dict:
+    """Diff the page's observable state across the action and name the effect.
+
+    Returns `{effect, details, none_observed}`. `effect` is a short verb where
+    something changed and `"none-observed"` where nothing did, and the caller
+    surfaces the none-observed case as a warning rather than a bare ok."""
+    await page.wait_for_timeout(_SETTLE_MS)
+    after = await page.evaluate(_AFTER_JS,
+                                {"ref": node_ref, "token": before["token"]})
+    changes: list[str] = []
+    effect = None
+    if after["url"] != before["url"]:
+        changes.append(f'navigated: {before["url"]} -> {after["url"]}')
+        effect = effect or "navigated"
+    b_t, a_t = before.get("target"), after.get("target")
+    if b_t and a_t:
+        if b_t.get("value") != a_t.get("value"):
+            changes.append(f'value: {a_t.get("value")!r}')
+            effect = effect or "value-changed"
+        if b_t.get("checked") != a_t.get("checked"):
+            changes.append(f'checked: {a_t.get("checked")}')
+            effect = effect or "state-changed"
+        if b_t.get("expanded") != a_t.get("expanded"):
+            changes.append(f'aria-expanded: {a_t.get("expanded")}')
+            effect = effect or "state-changed"
+        if b_t.get("focused") != a_t.get("focused") and a_t.get("focused"):
+            changes.append("focus moved to the target")
+            effect = effect or "focus-moved"
+    if before.get("active") != after.get("active"):
+        changes.append(f'active element: {after.get("active")}')
+        effect = effect or "focus-moved"
+    if after.get("mutated"):
+        changes.append("the DOM changed")
+        effect = effect or "dom-changed"
+    if changes:
+        return {"effect": effect or "changed", "details": changes,
+                "none_observed": False}
+    return {
+        "effect": "none-observed",
+        "details": [],
+        "none_observed": True,
+        "warning": (
+            "the action was dispatched as trusted input and the driver "
+            "reported no error, but nothing observable changed: no navigation, "
+            "no focus move, no target-state change, and no DOM mutation. The "
+            "handler may have ignored it, or the effect may be one this check "
+            "does not see. Verify with get_page_view before building on it."),
+    }
+
+
+# -------------------------------------------------------- driver dispatch
+
+def wrap_driver_error(exc: Exception, *, what: str, timeout_ms: int) -> Exception:
+    """Turn a Playwright actionability failure into an honest, typed refusal.
+
+    An overlay intercepting the point and a target that never stops moving both
+    surface from Playwright as a timeout after it retries actionability, so both
+    become a `TIMEOUT` naming the likely cause and a recovery rather than a bare
+    ok. The driver's own detail is kept, trimmed, because it often names the
+    intercepting element outright."""
+    detail = str(exc).splitlines()[0][:200]
+    lowered = str(exc).lower()
+    if "intercepts pointer events" in lowered:
+        cause = ("another element is on top of the target and intercepting the "
+                 "click (an overlay, a cookie banner, or a modal). ")
+    elif "not stable" in lowered or "stable" in lowered:
+        cause = ("the target never stopped moving, so it never became "
+                 "clickable (an animation with no still frame). ")
+    else:
+        cause = ""
+    return Timeout(
+        f"{what} did not complete within {timeout_ms} ms: {cause}the browser "
+        f"is still usable. Driver detail: {detail}. Verify the page with "
+        f"get_page_view, dismiss any overlay, or raise timeout_ms.")

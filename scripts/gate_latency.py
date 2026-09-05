@@ -181,10 +181,25 @@ async def main() -> int:
                     f'{row["projection_p95"]} ms over the {budget_ms} ms '
                     f'budget' + note)
             if row["python_p95"] > PYTHON_ASSEMBLY_BUDGET_MS:
-                failures.append(
+                # The SAME load control the projection check has, folded in
+                # with Phase 4. Phase 3 found the assembly p95 wobbling 0.3 to
+                # 1.5 ms against its 10.0 ms budget on back-to-back runs of
+                # identical code, all clearing at idle: a scheduler hiccup was
+                # getting charged to the code because this check, unlike the
+                # projection check, had no machine-load escape. When the JS
+                # reference arm is ALSO over 80 percent of its budget on the
+                # same interleaved run, this machine cannot certify a
+                # sub-millisecond assembly bound today, so the miss is
+                # UNCERTIFIED rather than RED. It still exits non-zero; it
+                # never turns a red into a green.
+                target = uncertified if reference_over else failures
+                note = (' (reference arm also over its budget on this run, so '
+                        'the machine is loaded; a sub-ms assembly bound cannot '
+                        'be certified here today)' if reference_over else '')
+                target.append(
                     f'{row["nodes"]} nodes: Python assembly p95 '
                     f'{row["python_p95"]} ms over the '
-                    f'{PYTHON_ASSEMBLY_BUDGET_MS} ms budget')
+                    f'{PYTHON_ASSEMBLY_BUDGET_MS} ms budget' + note)
             rows.append(row)
             print(f'{row["nodes"]:>7} nodes | extract p50 {row["extract_p50"]:>7} '
                   f'p95 {row["extract_p95"]:>7} | python p95 {row["python_p95"]:>6} '

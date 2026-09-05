@@ -42,11 +42,14 @@ import time
 from urllib.parse import urlparse
 
 from .. import anchors
+from . import act as _act
 from ..engine import lanes, session as _session
-from ..errors import (AuthRequired, BadParams, BlockedBySite, LaneUnsupported,
-                      NotImplementedYet, TargetNotFound)
+from ..errors import (AmbiguousLocation, AuthRequired, BadParams,
+                      BlockedBySite, LaneUnsupported, ModalBlocked,
+                      NotImplementedYet, StaleAnchor, TargetNotFound)
 from ..policy import audit as _audit
 from ..policy import budgets as _budgets
+from ..policy import credentials as _credentials
 from ..policy import engine as _policy
 from ..policy import gates as _gates
 from ..policy import origins as _origins
@@ -684,6 +687,43 @@ def _auth_refusal(url: str, marker: str | None = None):
         f"the login happens outside the model's context.")
 
 
+def _reraise_driver(exc: Exception, *, what: str, timeout_ms: int) -> None:
+    """A driver-side failure becomes an honest typed refusal, never a bare ok.
+
+    A typed KS4Web refusal (a credential refusal that surfaced mid-batch, say)
+    is re-raised as itself; only a Playwright actionability failure is wrapped
+    into a TIMEOUT that names the likely cause and a recovery."""
+    from ..errors import WebMcpError
+    if isinstance(exc, WebMcpError):
+        raise exc
+    raise _act.wrap_driver_error(exc, what=what, timeout_ms=timeout_ms) from exc
+
+
+def _action_result(record, tool: str, desc: dict, resolved: dict,
+                   outcome: dict, **extra) -> dict:
+    """The verified-outcome envelope every action shares (DESIGN 5.7)."""
+    warnings = []
+    if resolved.get("rebound"):
+        warnings.append(resolved["rebound"])
+    if outcome.get("none_observed"):
+        warnings.append(outcome["warning"])
+    _audit.annotate(target=f'{desc.get("role")} "{desc.get("name")}"',
+                    effect=outcome["effect"],
+                    rebind=resolved.get("rebound"))
+    result = {
+        "page": record.handle,
+        "tool": tool,
+        "target": {"ref": resolved.get("node_ref"), "role": desc.get("role"),
+                   "name": desc.get("name")},
+        "changed": {"effect": outcome["effect"], "details": outcome["details"]},
+        "url": record.page.url,
+    }
+    if warnings:
+        result["warnings"] = warnings
+    result.update(extra)
+    return result
+
+
 async def click(
     page: str,
     location: dict,
@@ -699,8 +739,30 @@ async def click(
     clicks. Returns a VERIFIED outcome: what actually changed, or an
     explicit none-observed with a warning rather than a bare ok.
     """
-    _stub("click", "Phase 4")
-    return {}
+    sess, record = MANAGER.locate(page)
+    _audit.annotate(session=sess.session_id, page=record.handle,
+                    url=record.page.url, lane=sess.spec.label)
+    resolved = await _act.resolve(sess, record, location, tool="click")
+    desc = resolved["descriptor"]
+    _policy.approve(_policy.ActionRequest(
+        tool="click", kind="act", session=sess.session_id,
+        page=record.handle, url=record.page.url, target=desc,
+        action_class=_act.action_class_for(desc),
+        args={"location": location, "button": button},
+        resolution=resolved["resolution"],
+        summary=f'click {desc.get("role")} "{desc.get("name")}" on '
+                f'{record.handle}'))
+    before = await _act.observe(record.page, resolved["node_ref"])
+    try:
+        await resolved["handle"].click(
+            button=button, click_count=click_count,
+            modifiers=modifiers or [], timeout=timeout_ms)
+    except Exception as exc:
+        _reraise_driver(exc, what="click", timeout_ms=timeout_ms)
+    outcome = await _act.verify(record.page, resolved["node_ref"], before)
+    result = _action_result(record, "click", desc, resolved, outcome)
+    result["session"] = sess.session_id
+    return result
 
 
 async def type_text(
@@ -718,8 +780,86 @@ async def type_text(
     Returns a verified outcome including the field's value state read back,
     so a silently rejected input is visible rather than reported as success.
     """
-    _stub("type_text", "Phase 4")
-    return {}
+    sess, record = MANAGER.locate(page)
+    _audit.annotate(session=sess.session_id, page=record.handle,
+                    url=record.page.url, lane=sess.spec.label)
+    resolved = await _act.resolve(sess, record, location, tool="type_text")
+    desc = resolved["descriptor"]
+    if (resolved["unit"].get("tag") or "").upper() == "SELECT":
+        raise BadParams(
+            "this element is a <select>; typing into it does nothing useful. "
+            "Set it with fill_form([{<selector>, 'value': '<option>'}]), which "
+            "routes a select to the driver's select_option.")
+    _policy.approve(_policy.ActionRequest(
+        tool="type_text", kind="act", session=sess.session_id,
+        page=record.handle, url=record.page.url, target=desc,
+        writes_value=True, action_class=_act.action_class_for(desc),
+        args={"location": location, "clear_first": clear_first,
+              "press_enter": press_enter},
+        resolution=resolved["resolution"],
+        summary=f'type into {desc.get("role")} "{desc.get("name")}" on '
+                f'{record.handle}'))
+    before = await _act.observe(record.page, resolved["node_ref"])
+    handle = resolved["handle"]
+    try:
+        if clear_first:
+            await handle.fill(text, timeout=timeout_for(delay_ms, len(text)))
+        else:
+            await handle.focus()
+            await record.page.keyboard.type(text, delay=delay_ms)
+        if press_enter:
+            await handle.press("Enter")
+    except Exception as exc:
+        _reraise_driver(exc, what="type_text", timeout_ms=15000)
+    outcome = await _act.verify(record.page, resolved["node_ref"], before)
+    try:
+        value_state = await handle.input_value()
+    except Exception:
+        value_state = None
+    result = _action_result(record, "type_text", desc, resolved, outcome,
+                            value_state=value_state)
+    result["session"] = sess.session_id
+    return result
+
+
+def timeout_for(delay_ms: int, length: int) -> int:
+    """A fill/type timeout generous enough for a per-key delay across a long
+    string, so a slow deliberate type does not trip its own bound."""
+    return max(15000, delay_ms * length + 5000)
+
+
+async def _set_field(page, resolved: dict, value) -> dict:
+    """Set one control by its kind: select_option for a <select>, set_checked
+    for a checkbox or radio, fill for everything else. The kind is read from
+    the live element rather than guessed, so a mislabeled field descriptor
+    cannot route a checkbox through a text fill."""
+    handle = resolved["handle"]
+    info = await page.evaluate(
+        "(el) => ({tag: el.tagName, type: (el.type || '').toLowerCase(), "
+        "ce: !!el.isContentEditable})", handle)
+    tag, ftype = info["tag"], info["type"]
+    if tag == "SELECT":
+        try:
+            await handle.select_option(value=str(value))
+        except Exception:
+            await handle.select_option(label=str(value))
+        return {"kind": "select", "value": str(value)}
+    if ftype in ("checkbox", "radio"):
+        want = value if isinstance(value, bool) else \
+            str(value).strip().lower() in ("1", "true", "yes", "on", "checked")
+        if ftype == "radio":
+            # A radio is set by checking the chosen one; it cannot be
+            # unchecked directly, so a falsey value is a no-op rather than an
+            # error the driver would raise.
+            if want:
+                await handle.check()
+        elif want:
+            await handle.check()
+        else:
+            await handle.uncheck()
+        return {"kind": ftype, "value": want}
+    await handle.fill(str(value))
+    return {"kind": "text", "value": str(value)}
 
 
 async def fill_form(
@@ -735,8 +875,110 @@ async def fill_form(
     field routinely re-renders its siblings. A failure stops the batch:
     completed items stay completed, the rest report not_attempted.
     """
-    _stub("fill_form", "Phase 4")
-    return {}
+    sess, record = MANAGER.locate(page)
+    _audit.annotate(session=sess.session_id, page=record.handle,
+                    url=record.page.url, lane=sess.spec.label)
+    if not fields or not isinstance(fields, list):
+        raise BadParams(
+            "fill_form needs a non-empty list of fields, each carrying one "
+            "selector (ref, css, text, role+name, or testid) and a 'value'. "
+            "For a checkbox pass a boolean; for a select pass the option.")
+
+    # Resolve every ref BEFORE executing any (DESIGN 3.5 batch semantics).
+    prepared = []
+    for f in fields:
+        loc = _field_location(f)
+        resolved = await _act.resolve(sess, record, loc, tool="fill_form")
+        prepared.append((f, loc, resolved))
+
+    # One budget charge for the batch, plus read-only, origin, and loop
+    # checks. The submit, if any, is gated separately AFTER the fills.
+    _policy.approve(_policy.ActionRequest(
+        tool="fill_form", kind="act", session=sess.session_id,
+        page=record.handle, url=record.page.url, action_class=None,
+        args={"fields": len(fields), "submit": submit},
+        summary=f"fill {len(fields)} field(s) on {record.handle}"))
+
+    per_item: list[dict] = []
+    stopped = False
+    for f, loc, first in prepared:
+        if stopped:
+            per_item.append({"ref": first.get("node_ref"),
+                             "status": "not_attempted"})
+            continue
+        # Re-check THIS target immediately before its own execution, because
+        # an earlier field can legitimately re-render a later one (E6).
+        try:
+            rr = await _act.resolve(sess, record, loc, tool="fill_form")
+        except (AmbiguousLocation, StaleAnchor, TargetNotFound, ModalBlocked,
+                BadParams) as exc:
+            per_item.append({
+                "ref": first.get("node_ref"),
+                "outcome": _outcome_name(exc), "status": "failed",
+                "error": str(exc)[:200]})
+            stopped = True
+            continue
+        desc = rr["descriptor"]
+        # A secret field refuses the whole call: a credential must not be
+        # written from the model's context, batch or not (DESIGN 5.3).
+        _credentials.refuse_secret_write(desc, "fill_form")
+        try:
+            set_result = await _set_field(record.page, rr, f.get("value"))
+        except Exception as exc:
+            per_item.append({
+                "ref": rr.get("node_ref"),
+                "outcome": anchors.Outcome.STALE, "status": "failed",
+                "error": str(exc).splitlines()[0][:200]})
+            stopped = True
+            continue
+        outcome = (anchors.Outcome.REBOUND if rr["resolution"] == "rebound"
+                   else anchors.Outcome.OK)
+        per_item.append({
+            "ref": rr.get("node_ref"), "outcome": outcome, "status": "completed",
+            "label": desc.get("name"), "set": set_result,
+            "rebound": rr.get("rebound")})
+
+    batch = anchors.batch_outcome(per_item)
+
+    if submit and not stopped:
+        # The submit is a gated class, and this build wires no confirmation
+        # channel, so it FAILS CLOSED: the gate asks and nothing is submitted
+        # until a human answers. The fields above ARE filled and the form
+        # state read-back is the authority on what the page now holds.
+        _gates.ENGINE.ask(
+            "form_submit", tool="fill_form", session=sess.session_id,
+            page=record.handle,
+            target=prepared[0][2]["descriptor"] if prepared else None,
+            summary=f"Submit the form after filling {batch['completed']} "
+                    f"field(s) on {record.handle}?")
+
+    return {
+        "session": sess.session_id, "page": record.handle, "tool": "fill_form",
+        "url": record.page.url,
+        "batch": batch,
+        "form_state": [{"label": r.get("label"), "set": r.get("set")}
+                       for r in per_item if r.get("status") == "completed"],
+    }
+
+
+def _field_location(f: dict) -> dict:
+    """A fill_form field carries its selector inline alongside `value`. Pull
+    the selector out; `value` and `action` are not selectors."""
+    if not isinstance(f, dict):
+        raise BadParams(
+            "each fill_form field is an object with one selector and a "
+            "'value', for example {'ref': 'e12', 'value': 'a@b.com'} or "
+            "{'css': '#country', 'value': 'Canada'}.")
+    return {k: v for k, v in f.items() if k not in ("value", "action")}
+
+
+def _outcome_name(exc: Exception) -> str:
+    return {AmbiguousLocation: anchors.Outcome.AMBIGUOUS,
+            StaleAnchor: anchors.Outcome.STALE,
+            TargetNotFound: anchors.Outcome.NOT_FOUND,
+            ModalBlocked: anchors.Outcome.MODAL,
+            BadParams: anchors.Outcome.BAD_PARAMS}.get(
+                type(exc), anchors.Outcome.STALE)
 
 
 async def press_keys(
@@ -753,8 +995,47 @@ async def press_keys(
     ignored is reported as none-observed instead of as a success the agent
     then builds several more steps on top of.
     """
-    _stub("press_keys", "Phase 4")
-    return {}
+    sess, record = MANAGER.locate(page)
+    _audit.annotate(session=sess.session_id, page=record.handle,
+                    url=record.page.url, lane=sess.spec.label)
+    if not (keys or "").strip():
+        raise BadParams(
+            "press_keys needs a key or chord, for example 'Enter', "
+            "'Control+A', or 'Shift+Tab'.")
+    repeat = max(1, min(int(repeat), 100))
+    resolved = None
+    desc: dict = {}
+    node_ref = None
+    if location:
+        resolved = await _act.resolve(sess, record, location, tool="press_keys")
+        desc = resolved["descriptor"]
+        node_ref = resolved["node_ref"]
+    _policy.approve(_policy.ActionRequest(
+        tool="press_keys", kind="act", session=sess.session_id,
+        page=record.handle, url=record.page.url,
+        target=desc or None,
+        resolution=(resolved or {}).get("resolution", "ok"),
+        args={"keys": keys, "repeat": repeat},
+        summary=f"press {keys!r} x{repeat} on {record.handle}"))
+    before = await _act.observe(record.page, node_ref)
+    try:
+        if resolved is not None:
+            await resolved["handle"].focus()
+        for _ in range(repeat):
+            if resolved is not None:
+                await resolved["handle"].press(keys, delay=delay_ms)
+            else:
+                await record.page.keyboard.press(keys)
+    except Exception as exc:
+        _reraise_driver(exc, what="press_keys", timeout_ms=15000)
+    outcome = await _act.verify(record.page, node_ref, before)
+    return {
+        "session": sess.session_id, "page": record.handle, "tool": "press_keys",
+        "keys": keys, "repeat": repeat, "url": record.page.url,
+        "changed": {"effect": outcome["effect"], "details": outcome["details"]},
+        **({"warnings": [outcome["warning"]]} if outcome.get("none_observed")
+           else {}),
+    }
 
 
 async def scroll(
@@ -771,8 +1052,84 @@ async def scroll(
     virtualized containers where the DOM holds far fewer rows than the page
     claims, rather than presenting a partial list as complete.
     """
-    _stub("scroll", "Phase 4")
-    return {}
+    sess, record = MANAGER.locate(page)
+    _audit.annotate(session=sess.session_id, page=record.handle,
+                    url=record.page.url, lane=sess.spec.label)
+    action = (action or "by").strip().lower()
+    if action not in ("by", "to", "end", "top", "container", "next"):
+        raise BadParams(
+            f"unknown scroll action {action!r}: the actions are 'by' (by "
+            f"`amount` screens), 'to' (a located element into view), 'end', "
+            f"'top', 'container' (scroll a located inner container), and "
+            f"'next' (the next chunk, remembering position across calls).")
+    node_ref = None
+    if action in ("to", "container") and not location:
+        raise BadParams(
+            f"scroll(action={action!r}) needs a location naming the element "
+            f"or container to scroll.")
+    if location:
+        resolved = await _act.resolve(sess, record, location, tool="scroll")
+        node_ref = resolved["node_ref"]
+    metrics = await record.page.evaluate(_SCROLL_JS, {
+        "action": action, "amount": int(amount), "ref": node_ref})
+    record.touch(record.page.url)
+    return {
+        "session": sess.session_id, "page": record.handle, "tool": "scroll",
+        "url": record.page.url,
+        "action": action,
+        "position": {"y": metrics["y"], "doc_height": metrics["docH"],
+                     "viewport": metrics["vpH"]},
+        "reachable": (
+            f'{metrics["screens_above"]} screen(s) above, '
+            f'{metrics["screens_below"]} below the current view'),
+        "virtualized": metrics["virtual"],
+        "at_end": metrics["at_end"],
+    }
+
+
+_SCROLL_JS = r"""
+(opts) => {
+  const map = window.__ks4web_refs instanceof Map ? window.__ks4web_refs : null;
+  const el = (map && opts.ref) ? map.get(opts.ref) : null;
+  const vpH = window.innerHeight || 900;
+  const step = Math.max(1, opts.amount) * vpH;
+  if (opts.action === 'by' || opts.action === 'next') {
+    const by = opts.action === 'next' ? Math.round(vpH * 0.9) : step;
+    window.scrollBy(0, by);
+  } else if (opts.action === 'end') {
+    window.scrollTo(0, document.documentElement.scrollHeight);
+  } else if (opts.action === 'top') {
+    window.scrollTo(0, 0);
+  } else if (opts.action === 'to' && el) {
+    el.scrollIntoView({ block: 'center' });
+  } else if (opts.action === 'container' && el) {
+    el.scrollTop = el.scrollHeight;
+  }
+  const docH = document.documentElement.scrollHeight;
+  const y = window.scrollY;
+  // A windowed list is a scrollable box whose scroll extent is far larger
+  // than what it holds, which is the shape a projection would otherwise
+  // report as a complete short list.
+  const virtual = [];
+  const boxes = document.querySelectorAll('*');
+  let scanned = 0;
+  for (const b of boxes) {
+    if (scanned > 4000) break; scanned++;
+    if (b.scrollHeight > b.clientHeight * 3 && b.clientHeight > 60) {
+      const kids = b.children ? b.children.length : 0;
+      if (kids && kids < 80) {
+        virtual.push({ tag: b.tagName, id: b.id || null, dom_children: kids,
+          scroll_extent: b.scrollHeight, client: b.clientHeight });
+      }
+    }
+    if (virtual.length >= 4) break;
+  }
+  return { y: Math.round(y), docH: docH, vpH: vpH,
+    screens_above: Math.round((y / vpH) * 10) / 10,
+    screens_below: Math.round(((docH - y - vpH) / vpH) * 10) / 10,
+    at_end: (y + vpH) >= docH - 4, virtual: virtual };
+}
+"""
 
 
 async def wait_for(
@@ -789,8 +1146,59 @@ async def wait_for(
     guessing at sleeps: a wait that names its condition is also a wait the
     audit log can explain afterward.
     """
-    _stub("wait_for", "Phase 4")
-    return {}
+    sess, record = MANAGER.locate(page)
+    _audit.annotate(session=sess.session_id, page=record.handle,
+                    url=record.page.url, lane=sess.spec.label)
+    cond = (condition or "").strip().lower()
+    p = record.page
+    known = ("text", "text_gone", "url", "visible", "hidden", "js", "load")
+    if cond not in known:
+        raise BadParams(
+            f"unknown wait condition {condition!r}: the conditions are "
+            f"{list(known)}. 'text'/'text_gone' take the string in `value`, "
+            f"'url' a URL or glob, 'visible'/'hidden' a `location`, 'js' a "
+            f"predicate expression, and 'load' a load state.")
+    from ..errors import Timeout as _TO
+    try:
+        if cond == "text":
+            await p.wait_for_function(
+                "t => document.body && document.body.innerText.includes(t)",
+                arg=value, timeout=timeout_ms)
+        elif cond == "text_gone":
+            await p.wait_for_function(
+                "t => !document.body || !document.body.innerText.includes(t)",
+                arg=value, timeout=timeout_ms)
+        elif cond == "url":
+            await p.wait_for_url(value, timeout=timeout_ms)
+        elif cond in ("visible", "hidden"):
+            if not location:
+                raise BadParams(
+                    f"wait_for(condition={cond!r}) needs a location naming "
+                    f"the element to watch.")
+            resolved = await _act.resolve(sess, record, location,
+                                          tool="wait_for")
+            await resolved["handle"].wait_for_element_state(
+                "visible" if cond == "visible" else "hidden",
+                timeout=timeout_ms)
+        elif cond == "js":
+            await p.wait_for_function(value, timeout=timeout_ms)
+        elif cond == "load":
+            await p.wait_for_load_state(value or "load", timeout=timeout_ms)
+    except BadParams:
+        raise
+    except Exception as exc:
+        observed = str(exc).splitlines()[0][:160]
+        raise _TO(
+            f"waiting for {cond!r}"
+            + (f" ({value!r})" if value else "")
+            + f" did not resolve within {timeout_ms} ms. Observed instead: "
+            f"{observed}. The condition may never have held, or the page may "
+            f"be blocked; verify with get_page_view.") from exc
+    return {
+        "session": sess.session_id, "page": record.handle, "tool": "wait_for",
+        "condition": cond, "value": value, "url": p.url,
+        "resolved": True,
+    }
 
 
 # ------------------------------------------------------------ the plumbing

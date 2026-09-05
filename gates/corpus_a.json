@@ -4,42 +4,9 @@
  "corpus": "A (frozen)",
  "estimator": "o200k_base (DESIGN 3.4, PLAN W1)",
  "lane": "A(chromium) headless, all off-origin requests aborted",
- "live_drift_check": {
-  "example_com": {
-   "delta": -11,
-   "delta_pct": -1.9,
-   "frozen_nodes": 13,
-   "frozen_tokens": 573,
-   "live_nodes": 12,
-   "live_tokens": 562
-  },
-  "httpbin_form": {
-   "delta": -9,
-   "delta_pct": -1.1,
-   "frozen_nodes": 47,
-   "frozen_tokens": 842,
-   "live_nodes": 46,
-   "live_tokens": 833
-  },
-  "wikipedia_gdp_table": {
-   "delta": -173,
-   "delta_pct": -5.1,
-   "frozen_nodes": 5644,
-   "frozen_tokens": 3399,
-   "live_nodes": 5571,
-   "live_tokens": 3226
-  },
-  "wikipedia_versailles": {
-   "delta": 129,
-   "delta_pct": 3.0,
-   "frozen_nodes": 10737,
-   "frozen_tokens": 4364,
-   "live_nodes": 10633,
-   "live_tokens": 4493
-  }
- },
+ "live_drift_check": "not run (pass --live)",
  "manifest_fetched_kst": "2026-09-05 02:20",
- "measured_kst": "2026-09-05 11:42",
+ "measured_kst": "2026-09-05 12:28",
  "rows": {
   "example_com": {
    "affordances_seen": 1,
@@ -78,7 +45,7 @@
    "s1_cl100k_live": 404,
    "superseded_target": null,
    "target": null,
-   "url": "http://127.0.0.1:52706/example_com.html"
+   "url": "http://127.0.0.1:62468/example_com.html"
   },
   "httpbin_form": {
    "affordances_seen": 13,
@@ -117,38 +84,38 @@
    "s1_cl100k_live": 758,
    "superseded_target": null,
    "target": 900,
-   "url": "http://127.0.0.1:52706/httpbin_form.html"
+   "url": "http://127.0.0.1:62468/httpbin_form.html"
   },
   "wikipedia_gdp_table": {
    "affordances_seen": 300,
    "budget": 5000,
    "cl100k_base": {
-    "floor_tokens": 3392,
+    "floor_tokens": 3437,
     "rung": 1,
     "shape": "app",
-    "tokens": 3392,
+    "tokens": 3437,
     "trace": [
      {
       "dominated": false,
       "rung": 1,
-      "tokens": 3392
+      "tokens": 3437
      }
     ]
    },
-   "delta_o200k_vs_cl100k": 7,
+   "delta_o200k_vs_cl100k": 6,
    "delta_pct": 0.2,
    "hidden_elements": null,
    "nodes": 5644,
    "o200k_base": {
-    "floor_tokens": 3399,
+    "floor_tokens": 3443,
     "rung": 1,
     "shape": "app",
-    "tokens": 3399,
+    "tokens": 3443,
     "trace": [
      {
       "dominated": false,
       "rung": 1,
-      "tokens": 3399
+      "tokens": 3443
      }
     ]
    },
@@ -156,88 +123,88 @@
    "s1_cl100k_live": 2854,
    "superseded_target": 3000,
    "target": 3500,
-   "url": "http://127.0.0.1:52706/wikipedia_gdp_table.html"
+   "url": "http://127.0.0.1:62468/wikipedia_gdp_table.html"
   },
   "wikipedia_versailles": {
    "affordances_seen": 300,
    "budget": 5000,
    "cl100k_base": {
-    "floor_tokens": 4400,
+    "floor_tokens": 4445,
     "rung": 6,
     "shape": "article",
-    "tokens": 4400,
+    "tokens": 4445,
     "trace": [
      {
       "dominated": false,
       "rung": 1,
-      "tokens": 5218
+      "tokens": 5263
      },
      {
       "dominated": false,
       "rung": 2,
-      "tokens": 5088
+      "tokens": 5133
      },
      {
       "dominated": false,
       "rung": 3,
-      "tokens": 4940
+      "tokens": 4985
      },
      {
       "dominated": false,
       "rung": 4,
-      "tokens": 4776
+      "tokens": 4821
      },
      {
       "dominated": false,
       "rung": 5,
-      "tokens": 4598
+      "tokens": 4643
      },
      {
       "dominated": false,
       "rung": 6,
-      "tokens": 4400
+      "tokens": 4445
      }
     ]
    },
-   "delta_o200k_vs_cl100k": -36,
+   "delta_o200k_vs_cl100k": -37,
    "delta_pct": -0.8,
    "hidden_elements": null,
    "nodes": 10737,
    "o200k_base": {
-    "floor_tokens": 4364,
+    "floor_tokens": 4408,
     "rung": 6,
     "shape": "article",
-    "tokens": 4364,
+    "tokens": 4408,
     "trace": [
      {
       "dominated": false,
       "rung": 1,
-      "tokens": 5171
+      "tokens": 5215
      },
      {
       "dominated": false,
       "rung": 2,
-      "tokens": 5041
+      "tokens": 5085
      },
      {
       "dominated": false,
       "rung": 3,
-      "tokens": 4895
+      "tokens": 4939
      },
      {
       "dominated": false,
       "rung": 4,
-      "tokens": 4733
+      "tokens": 4777
      },
      {
       "dominated": false,
       "rung": 5,
-      "tokens": 4557
+      "tokens": 4601
      },
      {
       "dominated": false,
       "rung": 6,
-      "tokens": 4364
+      "tokens": 4408
      }
     ]
    },
@@ -245,7 +212,7 @@
    "s1_cl100k_live": 3726,
    "superseded_target": null,
    "target": 5000,
-   "url": "http://127.0.0.1:52706/wikipedia_versailles.html"
+   "url": "http://127.0.0.1:62468/wikipedia_versailles.html"
   }
  }
 }

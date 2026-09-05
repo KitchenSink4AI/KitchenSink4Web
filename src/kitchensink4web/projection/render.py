@@ -638,6 +638,21 @@ class Renderer:
                 f'{c["depth_cut_subtrees"]} subtree(s) below 400 levels of '
                 f'nesting were not walked')
 
+        # How many priced units fell back to the page-wide rate because their
+        # own text sample was unavailable or this read's 40,000-character
+        # sample budget (first-come) was already spent. Folded in with
+        # Phase 4: one honest count, emitted only when a fallback happened,
+        # like the zero-width line above it, so a page that never spends its
+        # sample budget carries no extra line.
+        fell = len(self.meter.page_rate_units)
+        if fell:
+            lines.append(
+                f'priced at page rate: {fell} of '
+                f'{len(self.meter.priced_units)} priced unit(s) used the '
+                f'page-wide characters-per-token rate because their own text '
+                f'sample was unavailable or this read\'s 40,000-character '
+                f'sample budget was already spent')
+
         # The budget accounting is a SEPARATE statement from the content
         # accounting above it. Printing the first while implying the second is
         # what produced S1's "0 regions not expanded" on a page carrying
@@ -813,7 +828,7 @@ def _render_to_fixpoint(data: dict, meta: dict, meter: BudgetMeter,
     and is usually exact."""
     text, tokens = "", 0
     for _ in range(4):
-        meter.ledger = type(meter.ledger)()
+        meter.begin_pass()
         renderer = Renderer(data, meta, meter, rung, view)
         text = renderer.build()
         tokens = ntok(text)
