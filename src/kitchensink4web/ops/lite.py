@@ -49,7 +49,7 @@ from ..engine import lanes, session as _session
 from ..errors import (AmbiguousLocation, AuthRequired, BadParams,
                       BlockedBySite, LaneUnsupported, ModalBlocked,
                       NotImplementedYet, PageUnreachable, ReadOnlyMode,
-                      StaleAnchor, TargetNotFound)
+                      StaleAnchor, TargetNotFound, ValidationFailed)
 from ..policy import audit as _audit
 from ..policy import budgets as _budgets
 from ..policy import credentials as _credentials
@@ -273,9 +273,10 @@ async def get_page_view(
     links at their real cost. `since=<read_token>` is the cheap repeat
     read: only what changed, refs kept, a few hundred tokens instead of a
     fresh read, and it falls back to a full read when the page navigated in
-    between and nothing survives to diff. Shadow roots are not traversed on
-    any read path; the completeness block counts them so their content is
-    reported unread rather than silently dropped.
+    between and nothing survives to diff. Shadow roots are not traversed
+    and their contents cannot be read or targeted in this build; the
+    completeness block counts them so they are reported unread rather than
+    silently dropped.
     """
     if cursor:
         _stub("get_page_view(cursor=...)",
@@ -467,8 +468,10 @@ async def find_elements(
     Ambiguous results are listed rather than resolved, and zero results
     come back with the nearest misses so a miss is a one-turn recovery.
     The main document only: iframes and shadow roots are not searched and
-    the result counts what it skipped. The `shadow` location modifier is
-    reserved grammar and reaches nothing in this build.
+    the result counts what it skipped. Shadow content cannot be reached at
+    all in this build, for reading or for targeting; a traversal build is
+    queued. The `shadow` and `frame` location modifiers are dead grammar
+    and are not the workaround.
     """
     kinds = ("auto", "text", "any", "css", "xpath")
     if kind not in kinds:
@@ -1847,7 +1850,7 @@ async def manage_session(
             # loading real credentials is consequential whichever call
             # spells it.
             _gates.ENGINE.ask(
-                "storage_clear", tool="manage_session", session=None,
+                "storage_load", tool="manage_session", session=None,
                 page=None, target=None,
                 summary=f"Open a session and load saved authentication "
                         f"state from {checked_state}? This restores a real "
@@ -1855,7 +1858,20 @@ async def manage_session(
         sess = await MANAGER.open(**_parse_lane(lane))
         loaded = None
         if checked_state:
-            loaded = await _load_auth_into(sess, checked_state)
+            # A failed load used to leave the browser running with no handle
+            # ever returned: the ship-route test (2026-09-06) watched eleven
+            # Firefox processes outlive a rejected state file. The gate
+            # being asked early covers a DECLINED gate, not a bad file, so
+            # the load owns its own teardown. Close first, then re-raise, so
+            # the caller gets the real refusal and no session to clean up.
+            try:
+                loaded = await _load_auth_into(sess, checked_state)
+            except Exception:
+                try:
+                    await MANAGER.close(sess.session_id)
+                except Exception:
+                    pass
+                raise
         return {
             "session": sess.session_id, "lane": sess.spec.lane,
             "engine": sess.spec.label, "pages": _tab_list(sess),
@@ -2071,7 +2087,11 @@ async def _load_auth_into(sess, checked: str) -> dict:
             f"{type(exc).__name__}.") from exc
     cookies = data.get("cookies", [])
     if cookies:
-        await sess.context.add_cookies(cookies)
+        try:
+            await sess.context.add_cookies(cookies)
+        except Exception as exc:
+            from . import common as _common
+            raise _common.auth_file_refusal(checked, cookies, exc) from exc
     for c in cookies:
         _credentials.VAULT.observe_cookie(c)
     return {"loaded_from": checked, "cookies_loaded": len(cookies),

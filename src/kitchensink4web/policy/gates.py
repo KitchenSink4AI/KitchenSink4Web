@@ -57,6 +57,12 @@ GATED_CLASSES: dict[str, str] = {
     "file_upload": "uploading a file from disk",
     "download_to_disk": "saving a download to disk",
     "storage_clear": "clearing cookies or site storage",
+    # Loading a saved login is consequential in the OTHER direction, and the
+    # ship-route test (2026-09-06) caught it borrowing storage_clear's
+    # words: the human was asked to allow "clearing cookies or site
+    # storage" for an operation that clears nothing. Someone reading
+    # carefully declines a load because it looks like a wipe.
+    "storage_load": "loading a saved signed-in session into this browser",
     "evaluate_script": "evaluating script in the page",
     "navigation_offlist": "navigating to an origin outside the allowlist",
     "action_offlist": "acting inside an origin outside the allowlist",

@@ -127,9 +127,15 @@ def test_no_gate_class_touches_policy_state():
     `action_offlist` gate GOING off the list, never changing it."""
     assert set(gates.GATED_CLASSES) == {
         "form_submit", "payment_form", "file_upload", "download_to_disk",
-        "storage_clear", "evaluate_script", "navigation_offlist",
-        "action_offlist", "budget_reset",
+        "storage_clear", "storage_load", "evaluate_script",
+        "navigation_offlist", "action_offlist", "budget_reset",
     }
+    # storage_load split off from storage_clear on 2026-09-06: the live
+    # ship-route test caught a LOAD asking the human to allow "clearing
+    # cookies or site storage", and someone reading carefully declines a
+    # load that describes itself as a wipe.
+    assert "clear" not in gates.GATED_CLASSES["storage_load"]
+    assert "load" in gates.GATED_CLASSES["storage_load"]
     for name in gates.GATED_CLASSES:
         for forbidden in ("read_only", "readonly", "unlock", "disable",
                           "enable", "allow", "policy", "safety"):

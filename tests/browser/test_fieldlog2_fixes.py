@@ -13,21 +13,35 @@ fixed behavior:
   fresh read, because nothing survived to diff against.
 - A5: session close said "none were saved" minutes after an explicit
   save_auth_state.
+
+Plus the three the live ship-route test found the same night
+(20260906_web_ship_route_test.md), all on the auth-state open path:
+
+- D1: the load gate borrowed storage_clear's words and asked the human to
+  allow "clearing cookies or site storage" for an operation that clears
+  nothing.
+- D2: a FAILED load left the browser running with no handle returned. The
+  ship route watched eleven Firefox processes outlive a rejected file.
+- D3: the refusal hint talked about location objects and refs, neither of
+  which is anywhere near an auth-state load.
 """
 
 from __future__ import annotations
 
 import asyncio
 import http.server
+import json
 import socketserver
 import threading
 
 import pytest
 
 from kitchensink4web.engine.session import MANAGER
-from kitchensink4web.errors import BadParams, PageUnreachable, TargetNotFound
+from kitchensink4web.errors import (BadParams, PageUnreachable,
+                                    TargetNotFound, ValidationFailed)
 from kitchensink4web.ops import extract, lite, storage
-from kitchensink4web.policy import audit, budgets, credentials, readonly
+from kitchensink4web.policy import (audit, budgets, credentials, gates,
+                                    readonly)
 
 pytestmark = pytest.mark.browser
 
@@ -276,3 +290,73 @@ def test_close_reports_an_earlier_save_instead_of_contradicting_it(
     assert "saved earlier this session" in note
     assert "none were saved" not in note
     assert out in note
+
+
+# ------------------------------------------------- ship-route test (D1-D3)
+
+
+def test_the_auth_load_gate_asks_about_loading_not_clearing():
+    """D1: the human was asked to allow "clearing cookies or site storage"
+    for an operation that clears nothing. A carefully read decline of a load
+    that describes itself as a wipe is the failure this prevents."""
+    text = gates.GATED_CLASSES["storage_load"]
+    assert "clear" not in text
+    engine = gates.GateEngine()
+    with pytest.raises(Exception) as exc:
+        engine.ask("storage_load", tool="manage_session", session=None,
+                   page=None, target=None,
+                   summary="Open a session and load saved authentication "
+                           "state from state.json?")
+    message = str(exc.value)
+    assert "loading a saved signed-in session" in message
+    assert "clearing cookies" not in message
+
+
+def test_a_failed_auth_load_tears_the_session_down_and_says_why(
+        tmp_path, monkeypatch):
+    """D2 and D3 together, on the ship route's own repro: a state file whose
+    cookie expiry is in MILLISECONDS (which is how a Firefox profile stores
+    it) is rejected by the driver for the whole batch.
+
+    D2: the session must not survive the failure. The ship route watched
+    eleven browser processes outlive a rejected file with no handle ever
+    returned to the caller.
+    D3: the refusal must name the file, the offending cookie, and the units,
+    not location objects and refs."""
+    from kitchensink4web import packs
+    before = list(packs.loaded_packs())
+    packs.apply_startup_packs(["storage"])
+    # The gate is not the subject here; the teardown and the refusal are.
+    monkeypatch.setattr(gates.ENGINE, "ask",
+                        lambda *a, **k: None)
+    state = tmp_path / "bad_state.json"
+    state.write_text(json.dumps({"cookies": [{
+        "name": "probe", "value": "v", "domain": "127.0.0.1", "path": "/",
+        "expires": 1788000000000, "httpOnly": False, "secure": False,
+        "sameSite": "Lax"}], "origins": []}), encoding="utf-8")
+
+    async def go():
+        """The assertions about MANAGER.sessions have to run INSIDE the
+        loop, before this module's own close_all sweep, or the sweep would
+        hide exactly the leak under test."""
+        try:
+            await lite.manage_session(
+                action="open", lane="A", auth_state=str(state))
+        except ValidationFailed as exc:
+            return {"stranded": list(MANAGER.sessions), "message": str(exc)}
+        raise AssertionError("the bad state file was accepted")
+
+    try:
+        out = run(go())
+        # D2: nothing stranded, checked before any teardown of ours.
+        assert out["stranded"] == [], (
+            f"a failed auth load stranded {out['stranded']}")
+        # D3: the refusal is about the file, not about refs.
+        message = out["message"]
+        assert str(state) in message
+        assert "MILLISECOND" in message
+        assert "probe" in message
+        assert "location object" not in message
+        assert "nothing partial was left behind" in message
+    finally:
+        packs.apply_startup_packs(before)

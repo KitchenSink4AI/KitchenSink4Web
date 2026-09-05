@@ -33,12 +33,54 @@ from pathlib import Path
 
 from .. import envelope
 from ..engine.session import MANAGER
-from ..errors import UnsupportedContent
+from ..errors import UnsupportedContent, ValidationFailed
 from ..policy import audit as _audit
 from ..policy import sandbox
 
 ENV_DOWNLOAD_DIR = "KS4WEB_DOWNLOAD_DIR"
 ENV_SPILL_DIR = "KS4WEB_SPILL_DIR"
+
+
+# --------------------------------------------------- auth-state refusals
+
+#: Anything past this is not a plausible seconds-since-epoch expiry (it is
+#: the year 5138), so a value above it is milliseconds. Firefox writes
+#: `moz_cookies.expiry` in milliseconds and Playwright asserts
+#: `expires <= 253402300799`, rejecting the WHOLE add_cookies call over one
+#: cookie (ship-route test, 2026-09-06).
+_MS_EXPIRY_FLOOR = 1e11
+
+
+def auth_file_refusal(checked: str, cookies: list, exc: Exception):
+    """Name the state file, the offending cookie, and the units.
+
+    The ship-route test caught the old behavior: a rejected add_cookies came
+    back as generic BAD_PARAMS whose hint talked about location objects and
+    refs, neither of which is anywhere near an auth-state load. A refusal
+    that misdirects is worse than a bare one."""
+    detail = str(exc).splitlines()[0][:200]
+    offenders = [c.get("name") for c in cookies
+                 if isinstance(c.get("expires"), (int, float))
+                 and c["expires"] > _MS_EXPIRY_FLOOR]
+    scale = ""
+    if offenders:
+        shown = ", ".join(str(n) for n in offenders[:4] if n)
+        scale = (
+            f" {len(offenders)} cookie(s) in the file carry an `expires` "
+            f"value past the year 5138 ({shown}), which is what a "
+            f"MILLISECOND timestamp looks like where seconds are expected. "
+            f"Firefox stores cookie expiry in milliseconds and Playwright "
+            f"rejects the whole batch over a single one, so divide those "
+            f"values by 1000 (or use -1 for a session cookie) and load "
+            f"again.")
+    return ValidationFailed(
+        f"the browser rejected the cookies in the state file {checked}, so "
+        f"no authentication was loaded and nothing partial was left behind. "
+        f"Driver detail: {detail}.{scale} A state file written by "
+        f"save_auth_state loads as-is; a file built by hand or exported "
+        f"from a browser profile has to match Playwright's storage_state "
+        f"shape (name, value, domain, path, expires in SECONDS, httpOnly, "
+        f"secure, sameSite).")
 
 
 # ------------------------------------------------------- locate and annotate

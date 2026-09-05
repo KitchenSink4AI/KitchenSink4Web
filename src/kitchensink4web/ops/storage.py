@@ -228,7 +228,11 @@ async def load_auth_state(
     session is consequential it is a gated action that fails closed until a
     human confirms. Cookies apply immediately; per-origin storage is
     applied on the next navigation to each origin, which the result states.
-    Returns what was loaded, never the values. Client note as of 2026-09:
+    Returns what was loaded, never the values. A file this server wrote
+    loads as-is; a hand-built or profile-exported one must carry `expires`
+    in SECONDS, since a browser profile may store milliseconds and the
+    driver rejects the whole batch over one such cookie. Client note as of
+    2026-09:
     the confirmation prompt displays in Claude Desktop and Claude Code, and
     the claude.ai web client does not display it yet, so this call cannot
     complete there and refuses instead of loading credentials unconfirmed.
@@ -241,7 +245,7 @@ async def load_auth_state(
     sess = common.session_of(session)
     checked = sandbox.check_path(path, "load auth state")
     _gates.ENGINE.ask(
-        "storage_clear", tool="load_auth_state", session=sess.session_id,
+        "storage_load", tool="load_auth_state", session=sess.session_id,
         page=None, target=None,
         summary=f"Load saved authentication state from {checked} into "
                 f"session {sess.session_id}? This restores a real login.")
@@ -257,7 +261,13 @@ async def load_auth_state(
             f"{type(exc).__name__}.") from exc
     cookies = data.get("cookies", [])
     if cookies:
-        await sess.context.add_cookies(cookies)
+        try:
+            await sess.context.add_cookies(cookies)
+        except Exception as exc:
+            # Names the file, the offending cookie, and the units. The
+            # generic BAD_PARAMS this used to raise carried a hint about
+            # location objects and refs (ship-route test, 2026-09-06).
+            raise common.auth_file_refusal(checked, cookies, exc) from exc
     for c in cookies:
         _credentials.VAULT.observe_cookie(c)
     return {
