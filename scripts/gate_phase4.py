@@ -203,7 +203,9 @@ async def gate_read_only_invisible():
                  and ev["strict_click_call_errors"])
         part("read_only_invisible", green, **ev)
     finally:
-        server.configure()
+        # Restore ACTING: the shipped default is browse since 2026-09-05,
+        # so a bare configure() would leave read-only on for later parts.
+        server.configure(read_only=False)
 
 
 async def gate_verified_outcomes(site: str):
@@ -268,7 +270,8 @@ async def gate_credentials_gates(site: str):
                                  location={"css": "input[type=password]"},
                                  text="hunter2")
         except CredentialRefused as exc:
-            secret_refused = "secrets file" in str(exc) and "handoff" in str(exc)
+            secret_refused = ("handoff" in str(exc)
+                              and "save_auth_state" in str(exc))
         ev["secret_write_refused"] = secret_refused
         await session.pages[page].page.goto(f"{site}/b/bigform.html")
         submit_gated = False

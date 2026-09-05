@@ -1,6 +1,6 @@
 {
   "ruling": "2026-09-05: token budgets are SOFT; these figures are published honestly rather than enforced as caps. Estimator: chars/4 (approximate; page-read numbers use tiktoken o200k_base and the two are never mixed).",
-  "lite_total_tokens": 2723,
+  "lite_total_tokens": 1931,
   "reference_targets": {
     "lite": 1500,
     "description": [
@@ -15,6 +15,48 @@
       "schema_tokens": 112,
       "total_tokens": 212,
       "over_reference_caps": false
+    },
+    "download": {
+      "description_tokens": 147,
+      "schema_tokens": 140,
+      "total_tokens": 287,
+      "over_reference_caps": true
+    },
+    "emulate": {
+      "description_tokens": 137,
+      "schema_tokens": 118,
+      "total_tokens": 255,
+      "over_reference_caps": true
+    },
+    "evaluate_script": {
+      "description_tokens": 140,
+      "schema_tokens": 49,
+      "total_tokens": 189,
+      "over_reference_caps": true
+    },
+    "export_data": {
+      "description_tokens": 147,
+      "schema_tokens": 119,
+      "total_tokens": 266,
+      "over_reference_caps": true
+    },
+    "export_har": {
+      "description_tokens": 137,
+      "schema_tokens": 70,
+      "total_tokens": 207,
+      "over_reference_caps": true
+    },
+    "export_pdf": {
+      "description_tokens": 118,
+      "schema_tokens": 72,
+      "total_tokens": 190,
+      "over_reference_caps": false
+    },
+    "extract_fields": {
+      "description_tokens": 165,
+      "schema_tokens": 58,
+      "total_tokens": 223,
+      "over_reference_caps": true
     },
     "fill_form": {
       "description_tokens": 101,
@@ -34,11 +76,47 @@
       "total_tokens": 183,
       "over_reference_caps": false
     },
+    "get_links": {
+      "description_tokens": 133,
+      "schema_tokens": 111,
+      "total_tokens": 244,
+      "over_reference_caps": true
+    },
+    "get_list": {
+      "description_tokens": 146,
+      "schema_tokens": 100,
+      "total_tokens": 246,
+      "over_reference_caps": true
+    },
+    "get_metadata": {
+      "description_tokens": 131,
+      "schema_tokens": 29,
+      "total_tokens": 160,
+      "over_reference_caps": true
+    },
+    "get_page_errors": {
+      "description_tokens": 103,
+      "schema_tokens": 47,
+      "total_tokens": 150,
+      "over_reference_caps": false
+    },
     "get_page_view": {
       "description_tokens": 119,
       "schema_tokens": 148,
       "total_tokens": 267,
       "over_reference_caps": false
+    },
+    "get_request": {
+      "description_tokens": 140,
+      "schema_tokens": 102,
+      "total_tokens": 242,
+      "over_reference_caps": true
+    },
+    "get_table": {
+      "description_tokens": 155,
+      "schema_tokens": 100,
+      "total_tokens": 255,
+      "over_reference_caps": true
     },
     "get_text": {
       "description_tokens": 102,
@@ -52,11 +130,47 @@
       "total_tokens": 140,
       "over_reference_caps": false
     },
+    "list_console": {
+      "description_tokens": 138,
+      "schema_tokens": 60,
+      "total_tokens": 198,
+      "over_reference_caps": true
+    },
+    "list_requests": {
+      "description_tokens": 145,
+      "schema_tokens": 116,
+      "total_tokens": 261,
+      "over_reference_caps": true
+    },
+    "list_workflows": {
+      "description_tokens": 117,
+      "schema_tokens": 36,
+      "total_tokens": 153,
+      "over_reference_caps": false
+    },
+    "load_auth_state": {
+      "description_tokens": 127,
+      "schema_tokens": 47,
+      "total_tokens": 174,
+      "over_reference_caps": true
+    },
+    "manage_cookies": {
+      "description_tokens": 130,
+      "schema_tokens": 98,
+      "total_tokens": 228,
+      "over_reference_caps": true
+    },
     "manage_session": {
       "description_tokens": 99,
       "schema_tokens": 87,
       "total_tokens": 186,
       "over_reference_caps": false
+    },
+    "manage_storage": {
+      "description_tokens": 128,
+      "schema_tokens": 84,
+      "total_tokens": 212,
+      "over_reference_caps": true
     },
     "manage_tabs": {
       "description_tokens": 100,
@@ -76,17 +190,59 @@
       "total_tokens": 186,
       "over_reference_caps": false
     },
+    "run_workflow": {
+      "description_tokens": 106,
+      "schema_tokens": 78,
+      "total_tokens": 184,
+      "over_reference_caps": false
+    },
+    "save_auth_state": {
+      "description_tokens": 140,
+      "schema_tokens": 55,
+      "total_tokens": 195,
+      "over_reference_caps": true
+    },
+    "save_page": {
+      "description_tokens": 132,
+      "schema_tokens": 60,
+      "total_tokens": 192,
+      "over_reference_caps": true
+    },
+    "save_workflow": {
+      "description_tokens": 107,
+      "schema_tokens": 59,
+      "total_tokens": 166,
+      "over_reference_caps": false
+    },
     "scroll": {
       "description_tokens": 101,
       "schema_tokens": 92,
       "total_tokens": 193,
       "over_reference_caps": false
     },
+    "set_routing": {
+      "description_tokens": 134,
+      "schema_tokens": 180,
+      "total_tokens": 314,
+      "over_reference_caps": true
+    },
+    "take_screenshot": {
+      "description_tokens": 156,
+      "schema_tokens": 141,
+      "total_tokens": 297,
+      "over_reference_caps": true
+    },
     "type_text": {
-      "description_tokens": 104,
-      "schema_tokens": 95,
-      "total_tokens": 199,
-      "over_reference_caps": false
+      "description_tokens": 160,
+      "schema_tokens": 107,
+      "total_tokens": 267,
+      "over_reference_caps": true
+    },
+    "upload_file": {
+      "description_tokens": 147,
+      "schema_tokens": 73,
+      "total_tokens": 220,
+      "over_reference_caps": true
     },
     "wait_for": {
       "description_tokens": 95,

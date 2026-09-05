@@ -27,12 +27,16 @@ from __future__ import annotations
 
 import argparse
 import functools
+import importlib
 import os
 import sys
 
 from fastmcp import FastMCP
+from fastmcp.exceptions import NotFoundError, ToolError
+from fastmcp.server.middleware import Middleware
 
 from . import envelope, packs
+from .errors import BadParams, ReadOnlyMode
 from .ops import lite
 from .policy import audit, credentials, readonly
 
@@ -49,9 +53,59 @@ mcp = FastMCP(
         "with references you can act on; find_elements is the cheap "
         "targeted follow-up when what you need was not in that read. Call "
         "get_workflows for recipes and for the capability packs and their "
-        "launch flags."
+        "launch flags. This server may be running read-only (the shipped "
+        "default), in which case mutating tools are absent from the tool "
+        "list; manage_session(action='status') names the grade in force and "
+        "how a human unlocks acting at the next launch."
     ),
 )
+
+
+class GuidedAbsenceMiddleware(Middleware):
+    """The field test's blocking finding, fixed at the one conformant layer.
+
+    A forced call to an absent mutating tool used to return the bare
+    framework string ("Unknown tool: 'type_text'"), which names neither the
+    mode, the grade, nor the unlock. The tool stays UNREGISTERED, so
+    tools/list is untouched and the launch-time contract holds; only the
+    error a call gets back improves. The message teaches the HUMAN the
+    launch-time unlock and hands the AGENT nothing callable or redeemable,
+    which the read-only invariant test asserts over this text directly.
+
+    The same interception serves discoverability rule 2 for packs: a call
+    to a tool that exists in the design but lives in an unloaded pack gets
+    the pack name and the launch flag instead of the bare unknown-tool
+    string.
+    """
+
+    async def on_call_tool(self, context, call_next):
+        try:
+            return await call_next(context)
+        except (NotFoundError, ToolError) as exc:
+            if "unknown tool" not in str(exc).lower():
+                raise
+            name = getattr(context.message, "name", None) or ""
+            if readonly.active() and name in readonly.MUTATING:
+                grade = readonly.grade()
+                refusal = ReadOnlyMode(
+                    f"{name} is not registered because this server is "
+                    f"running read-only (grade {grade!r}), the shipped "
+                    f"default. No tool in this mode can click, type, "
+                    f"submit, upload, download, evaluate script, or write "
+                    f"storage; the read surface is fully available. "
+                    f"{readonly.UNLOCK_TEACHING}")
+                return envelope.refuse(refusal)
+            pack = packs.pack_of(name)
+            if pack not in (None, "lite") and not packs.is_pack_loaded(pack):
+                refusal = BadParams(
+                    f"{name} exists in the design but its pack is not "
+                    f"loaded in this process.")
+                refusal.hint_tools = (name,)
+                return envelope.refuse(refusal)
+            raise
+
+
+mcp.add_middleware(GuidedAbsenceMiddleware())
 
 
 def _wrap(fn):
@@ -71,6 +125,16 @@ def _wrap(fn):
                              getattr(exc, "code", None)
                              or envelope.classify(exc),
                              args=kwargs)
+            return envelope.refuse(exc)
+        except Exception as exc:  # noqa: BLE001 - the no-raw-string backstop
+            # NOTHING rides out raw. The field test caught a driver error
+            # ("Execution context was destroyed", a mid-keystroke navigation)
+            # reaching the caller as a bare Playwright string because it is
+            # not in CATCHABLE. Typed refusals are still the rule and ops
+            # guards still fire first with better messages; this backstop
+            # exists so an exception class nobody anticipated becomes an
+            # honest envelope refusal instead of a traceback.
+            audit.LOG.record(fn.__name__, envelope.classify(exc), args=kwargs)
             return envelope.refuse(exc)
         audit.LOG.record(fn.__name__, "ok", args=kwargs)
         if isinstance(result, dict) and "ok" not in result:
@@ -102,13 +166,36 @@ def register(fn, pack: str | None = None) -> bool:
     return True
 
 
+#: Pack -> ops module (relative to this package). Imported ONLY when the
+#: launch selection includes the pack, so an unselected pack costs nothing
+#: and its recorders never attach. Every module exports `TOOLS`.
+_PACK_MODULES: dict[str, str] = {
+    "extract": ".ops.extract",
+    "capture": ".ops.capture",
+    "network": ".ops.net",
+    "storage": ".ops.storage",
+    "files": ".ops.files",
+    "diagnostics": ".ops.diag",
+    "workflows": ".ops.workflows",
+}
+
+
 def register_all() -> list[str]:
-    """Register everything this launch selection calls for. Phase 0: the
-    lite core only."""
+    """Register everything this launch selection calls for: the lite core
+    always, plus every selected pack's roster (Phase 5). Pack tools pass the
+    same registration gate as lite ones, so read-only absence and the
+    launch-time pack contract hold identically across the whole surface."""
     registered = []
     for fn in lite.LITE_TOOLS:
         if register(fn, pack=None):
             registered.append(fn.__name__)
+    for pack, modname in _PACK_MODULES.items():
+        if not packs.should_register(pack):
+            continue
+        module = importlib.import_module(modname, __package__)
+        for fn in module.TOOLS:
+            if register(fn, pack=pack):
+                registered.append(fn.__name__)
     return registered
 
 

@@ -1,0 +1,67 @@
+{
+ "measured_kst": "2026-09-05 13:19",
+ "phase": 5,
+ "packs": [
+  "capture",
+  "diagnostics",
+  "extract",
+  "files",
+  "network",
+  "storage",
+  "workflows"
+ ],
+ "surface_tools": 40,
+ "corpus": "B (pathological) plus a local meta/download fixture, synthetic, never networked",
+ "lane": "A(chromium) headless",
+ "default_grade": "browse",
+ "parts": {
+  "surface_conformant": {
+   "green": true,
+   "full_surface": 40
+  },
+  "read_only_invariant": {
+   "green": true,
+   "mutating_leaked": [],
+   "read_tools_present": true,
+   "surface_size": 25
+  },
+  "media_type_correct": {
+   "green": true,
+   "png_media_type": "image/png",
+   "jpeg_media_type": "image/jpeg",
+   "garbage_refused": true
+  },
+  "console_bounded": {
+   "green": true,
+   "needles_kept": true,
+   "lines_seen": 4002,
+   "rows_returned": 6,
+   "collapsed": 3996
+  },
+  "extract_deterministic": {
+   "green": true,
+   "rectangular": true,
+   "span_carried": true,
+   "divtable_named": true,
+   "inventory_refuses": true,
+   "fields_honest": true
+  },
+  "network_redacts": {
+   "green": true,
+   "recorded": 1,
+   "masked_ok": true
+  },
+  "default_and_unlock": {
+   "green": true,
+   "default": "browse",
+   "guided_code": "READ_ONLY_MODE",
+   "not_bypass": true
+  },
+  "orphan_census": {
+   "green": true,
+   "open_sessions": [],
+   "owned_survivors": []
+  }
+ },
+ "green": true
+}

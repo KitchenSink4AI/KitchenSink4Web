@@ -1970,15 +1970,31 @@ only conformant as a launch flag, which is a genuine synthesis point across two
 research reports that did not talk to each other.
 
 **BUILT IN PHASE 3, under an author ruling (2026-09-05) with a CONDITIONAL
-default.** Three facts, each load-bearing:
+default; the condition RESOLVED the same day.** Three facts, each
+load-bearing:
 
-- **The default is UNDECIDED, and both defaults are fully built.** Whether a
-  bare launch acts or browses will be chosen from FIELD-TEST EVIDENCE at the
-  pre-production review, not from taste now. The whole switch is one constant,
-  `policy/readonly.py: DEFAULT_GRADE` (`None` = acting allowed unless the flag
-  is set; `"browse"` = read-only unless explicitly unlocked). An explicit env
-  value or CLI flag beats the constant in BOTH directions, which is what makes
-  the same unlock UX work under either shipped default.
+- **The default is DECIDED: `DEFAULT_GRADE = "browse"` (read-only by
+  default), from field-test evidence rather than taste** (ruled 2026-09-05;
+  the record is `internal notes/20260905_ks4web_readonly_
+  field_test.md`). The evidence chain, condensed: read-only carried 7 of 8
+  everyday read-shaped tasks over a live MCP connection with ZERO
+  mode-caused friction; the predicted killer, the search box, failed
+  identically under full grade in a controlled re-test, because the wall is
+  the site's bot detection keyed on the headless client rather than the
+  missing keyboard; the credential gate refuses passwords under BOTH
+  grades, so a full default buys a first-run user far less than it appears
+  to; and a middle grade (heuristically permitted "safe" clicks) was
+  assessed and rejected because it guts the provable absence property for
+  exactly the two most dangerous tools. The blocking condition attached to
+  the ruling, that every mode surface must teach the UNLOCK and not only
+  the absence, landed in Phase 5: `readonly.describe()` carries the unlock
+  teaching, and a forced call to an absent mutating tool returns a guided
+  refusal naming the grade and the launch-time unlock instead of the bare
+  framework string, with the tool still unregistered so the launch-time
+  contract is untouched. Both defaults remain fully built; the switch is
+  still the one constant, and an explicit env value or CLI flag beats it in
+  BOTH directions, which is what makes the same unlock UX work under either
+  shipped default.
 - **The unlock UX.** The `.mcpb` manifest (a Phase 9 artifact; the block is
   specified here so ship cannot get it wrong) exposes a `user_config` CHECKBOX
   labeled **"Allow this server to click and type"** mapping to

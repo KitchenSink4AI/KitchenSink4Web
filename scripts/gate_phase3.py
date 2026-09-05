@@ -289,7 +289,9 @@ async def gate_readonly_registration():
                  and evidence["default_open_registers_click"] is True)
         part("read_only_registration", green, **evidence)
     finally:
-        server.configure()
+        # Restore ACTING explicitly: the shipped default is now browse
+        # (2026-09-05 ruling), so a bare configure() would leave read-only on.
+        server.configure(read_only=False)
 
 
 async def gate_readonly_invariant(site: str):
@@ -335,7 +337,7 @@ async def gate_readonly_invariant(site: str):
              surface_unchanged=after == before,
              grade_unchanged=readonly.grade() == grade_before)
     finally:
-        server.configure()
+        server.configure(read_only=False)
 
 
 def gate_fail_closed():
@@ -461,8 +463,10 @@ async def gate_secrets(site: str):
                 target={"type": "password", "name": "password"}))
             write_refused = False
         except CredentialRefused as exc:
-            write_refused = ("secrets file" in str(exc)
-                             and "handoff" in str(exc))
+            # Corrected copy (field test 2026-09-05): names the routes that
+            # exist, not the unbuilt secrets file.
+            write_refused = ("handoff" in str(exc)
+                             and "save_auth_state" in str(exc))
         part("secret_fields", value_absent and marked and write_refused,
              value_absent=value_absent, marked_secret=marked,
              write_refused=write_refused)
@@ -476,7 +480,7 @@ async def gate_audit(site: str):
     saved = audit.LOG
     audit.LOG = audit.AuditLog()
     try:
-        server.configure()
+        server.configure(read_only=False)
         session_id = None
         async with Client(server.mcp) as client:
             opened = await client.call_tool(

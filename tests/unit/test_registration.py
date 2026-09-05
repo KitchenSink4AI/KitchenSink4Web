@@ -27,9 +27,21 @@ LITE_ROSTER = {
 
 
 def test_lite_roster_is_exactly_the_design(launch):
-    state = launch()
+    """The full lite roster needs the read-only default explicitly unlocked
+    (DEFAULT_GRADE is 'browse' since the 2026-09-05 field-test ruling)."""
+    state = launch(read_only=False)
     assert set(state["registered"]) == LITE_ROSTER
     assert len(LITE_ROSTER) == 14
+
+
+def test_bare_launch_defaults_to_browse_read_only(launch, monkeypatch):
+    """THE SHIPPED DEFAULT, decided 2026-09-05 from the read-only field
+    test: a bare launch browses. The registered surface is the lite roster
+    minus the mutating tools, and the state says which grade did it."""
+    monkeypatch.delenv("KS4WEB_READ_ONLY", raising=False)
+    state = launch()
+    assert state["read_only"] == "browse"
+    assert set(state["registered"]) == LITE_ROSTER - readonly.MUTATING
 
 
 def test_request_handoff_folded_and_emulate_dropped(launch, live_tools):
@@ -47,7 +59,7 @@ def test_request_handoff_folded_and_emulate_dropped(launch, live_tools):
 def test_lists_over_an_in_process_client(launch):
     """The surface is reachable over a real MCP client, not just in the
     registry."""
-    launch()
+    launch(read_only=False)
 
     async def run():
         async with Client(server.mcp) as c:
@@ -66,7 +78,7 @@ def test_every_tool_is_packed(launch, live_tools):
 def test_reads_are_marked_read_only_hint(launch, live_tools):
     """Free and inherited: a browser tool without readOnlyHint=true is
     serialized by the client and cannot run in parallel."""
-    launch()
+    launch(read_only=False)
     tools = live_tools()
     for name in ("get_page_view", "find_elements", "get_text", "get_audit"):
         assert tools[name].annotations.readOnlyHint is True
@@ -179,7 +191,7 @@ def test_action_tools_are_built_and_refuse_honestly_off_a_dead_page(launch):
     a scaffold refusing to exist. A tool that reported plausible output off a
     dead page would be the exact silent-false-success this product argues
     against."""
-    launch()
+    launch(read_only=False)
     for tool, args in (
             ("click", {"page": "p1", "location": {"ref": "e1"}}),
             ("type_text", {"page": "p1", "location": {"ref": "e1"},

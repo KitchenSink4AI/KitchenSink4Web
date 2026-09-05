@@ -64,9 +64,16 @@ def _measure(label: str, **kw) -> None:
 def main() -> None:
     print("KS4Web surface report. Targets (DESIGN 3.2): lite under 1.5k, "
           "full surface under 4k, largest single schema under 250.")
-    _measure("LITE (no flags)")
-    _measure("LITE, READ-ONLY 'browse'", read_only="browse")
-    _measure("FULL (--packs full)", cli_packs=packs.pack_names())
+    # The shipped default is browse (2026-09-05 ruling), so a bare launch
+    # registers the read tools only. Both the default and the unlocked
+    # surface are reported, because "what a first-run user sees" and "the
+    # whole surface a tool schema budget must fit" are different questions.
+    _measure("LITE, DEFAULT (no flags = read-only browse)")
+    _measure("LITE, ACTING (KS4WEB_READ_ONLY=0)", read_only=False)
+    _measure("FULL, DEFAULT (--packs full, read-only browse)",
+             cli_packs=packs.pack_names())
+    _measure("FULL, ACTING (--packs full, KS4WEB_READ_ONLY=0)",
+             cli_packs=packs.pack_names(), read_only=False)
 
     tools = {t.name: t for t in asyncio.run(server.mcp.list_tools())}
     planned = packs.surface_report(tools)["planned_unregistered"]

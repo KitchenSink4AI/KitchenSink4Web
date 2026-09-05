@@ -1836,3 +1836,122 @@ are per-session.
 - The `{'anchor': ...}` selector refuses by naming the workflows/replay path
   (Phase 6); anchor-driven addressing arrives with that pack.
 - `cursor=` on get_page_view still refuses by naming Phase 5.
+
+---
+
+## Phase 5: the capability packs, plus the read-only default decided (2026-09-05 13:28 KST)
+
+Built the five Phase 5 waves (extract, capture, network, storage, files,
+diagnostics) and registered the workflows pack as honest Phase-6 stubs so
+`--packs full` and the menu are complete. **Suite 384 -> 415 (+31). Full
+acting surface: 40 tools**, matching DESIGN 2.2's 40-44 estimate. Every pack
+tool passes the same registration gate as the lite core, so read-only
+absence and the launch-time pack contract hold identically across the whole
+surface.
+
+Folded in the completed read-only field test's rulings as first-class Phase
+5 items (report: `internal notes/20260905_ks4web_readonly
+_field_test.md`).
+
+### What landed
+
+- **`ops/common.py`**: the shared pack plumbing. Locate-and-annotate, the
+  sandbox-governed downloads/spill directories, redacted text writes, and
+  the **media-type chokepoint** (`sniff_image`: format, media type, and file
+  extension all derived from one sniff of the magic bytes, so the #1211
+  PNG-under-image/jpeg mismatch is structurally impossible; unidentifiable
+  bytes refuse rather than mislabel).
+- **extract**: `get_table` (deterministic spanned-grid walk, rowspan/colspan
+  carried into every covered cell so rows come back rectangular and aligned;
+  div-tables detected and named), `get_list`, `get_links` (dedup + per-class
+  counts), `get_metadata` (OG/Twitter/JSON-LD/microdata/feeds), `extract_fields`
+  (deterministic multi-source matching, honest `found:false`), `export_data`
+  (CSV/JSON to a scoped file, the KS4XL handoff).
+- **capture**: `take_screenshot` (media-type chokepoint, fail-closed secret
+  masking, byte cap + spill), `export_pdf` (PDF magic-verified, Firefox cost
+  row named), `save_page` (MHTML on Chromium / HTML any lane), `emulate`.
+- **network**: recording attaches at SESSION OPEN via a new engine hook seam
+  (`session.SESSION_OPEN_HOOKS`), pack-loaded-guarded; `list_requests`
+  (analytics hidden-and-counted), `get_request` (credential headers observed
+  into the vault then masked; request-body reads refuse loudly on
+  Firefox/BiDi), `export_har`, `set_routing` (block/ads/mock/offline/headers/
+  throttle).
+- **storage**: `manage_cookies`, `manage_storage`, `save_auth_state` /
+  `load_auth_state`, all masked-by-default, unmask refused under the strict
+  credential-blind default.
+- **files**: `download` (explicit lifecycle, suggested extension preserved,
+  never a bare UUID), `upload_file` (dropzone refusal names the hidden input
+  route).
+- **diagnostics**: `list_console` (dedup by message shape, errors-only
+  default, needles survive the flood), `get_page_errors`, `evaluate_script`
+  (named RCE-equivalent, gated).
+- **workflows**: three Phase-6 stubs refusing NOT_IMPLEMENTED honestly.
+
+### Field-test rulings, folded in
+
+1. **The default is DECIDED: `DEFAULT_GRADE = "browse"`** (read-only).
+   DESIGN 5.2 updated from CONDITIONAL to DECIDED, citing the field test
+   (7/8 read tasks zero friction; search walls orthogonal to grade; middle
+   grade rejected for gutting provability).
+2. **The blocking unlock fix.** `readonly.describe()` (and thus
+   `manage_session(status)` and `get_workflows('read-only')`) now carries an
+   `unlock` teaching. A forced call to an absent mutating tool returns a
+   GUIDED refusal (grade, why, human unlock) via a new
+   `GuidedAbsenceMiddleware` on `on_call_tool`, intercepting FastMCP's bare
+   "Unknown tool" string; the tool stays unregistered so tools/list is
+   untouched. The same middleware gives an unloaded-pack call the pack name
+   and launch flag. The server `instructions` string now mentions the mode.
+3. **Four hygiene fixes.** (a) The envelope wrapper gained a
+   catch-all backstop and `act.verify` guards navigation-during-verify, so a
+   raw Playwright "Execution context was destroyed" can no longer ride out
+   (proven in `test_field_test_fixes.py`). (b) Wall taxonomy gained the 202
+   anomaly shell, the 503 sorry page, and the login-redirect (with a
+   requested-vs-landed guard so deliberately opening a login page is not a
+   wall). (c) `type_text` gained `submit=true`, the one-call search idiom
+   that presses Enter and settles the navigation. (d) `CREDENTIAL_REFUSED`
+   copy corrected to the routes that exist (handoff + auth-state reuse); the
+   unbuilt secrets file is now a PLAN v1.1 item, not an error-string promise.
+4. **The read-only invariant test extended** to assert the guided-refusal
+   text teaches the human and offers the agent nothing redeemable (no
+   in-session tool route, no confirmation token).
+
+### Gate table (scripts/gate_phase5.py -> gates/phase5.json)
+
+| Part | Result |
+|---|---|
+| surface_conformant (40 tools; each module TOOLS == design row; full registers over a real client) | GREEN |
+| read_only_invariant (extended to packs: zero mutating pack tools under browse, read tools survive) | GREEN |
+| media_type_correct (png/jpeg media types derived from bytes; garbage bytes refused) | GREEN |
+| console_bounded (flood fixture: >1000 lines seen, <60 rows, needles TypeError+401 kept) | GREEN |
+| extract_deterministic (spanned table rectangular + carried; div-table named; fields honest; inventory refuses) | GREEN |
+| network_redacts (recording attaches at open; credential headers masked) | GREEN |
+| default_and_unlock (bare launch = browse; absent-tool call returns guided READ_ONLY_MODE, non-redeemable) | GREEN |
+| orphan_census (every gate session closed; zero owned browser PID survives) | GREEN |
+
+Re-verified after the copy/default changes: **phase3, phase4, phase5,
+latency gates all GREEN**; suite 415 passed. Latency untouched (projection
+not modified): p95 341ms class holds.
+
+### Design findings (list only, for author review)
+
+- The **all-packs ACTING surface is ~8.5k tokens** (chars/4) for 40 tools,
+  over DESIGN 3.2's advisory 4,000 full-surface ceiling. Budgets are SOFT so
+  the honest number is published, not trimmed; packs are opt-in and no real
+  launch loads all six at once. Largest single schema is `set_routing` at
+  ~180 tok, under the 250 ceiling.
+- `load_auth_state`, `download`, `upload_file`, `evaluate_script`, form
+  submit, storage clear, and payment forms all **fail closed** at the gate
+  with no MRTR wiring (S8). This is the correct pre-S8 state, but it means
+  the download and auth-load lifecycles cannot complete end to end until the
+  confirmation round-trip lands. Flagged so the beta copy does not overclaim
+  those two.
+- `emulate` cannot change locale/timezone (launch-time session properties);
+  the refusal names the reopen route.
+
+### Open items carried forward
+
+- Workflows pack is stubs; the engine (save-from-audit, dry-run
+  re-resolution, replay) is Phase 6.
+- The MRTR confirmation round-trip (S8) still gates every fail-closed class.
+- Server-side secrets file (execution-time credential substitution) added to
+  the PLAN v1.1 scope fence, removed from the CREDENTIAL_REFUSED copy.

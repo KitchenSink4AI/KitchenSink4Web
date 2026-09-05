@@ -87,17 +87,25 @@ def is_payment_field(field: dict) -> bool:
 
 
 def refuse_secret_write(field: dict, tool: str) -> None:
-    """The write refusal, with the two sanctioned routes named."""
+    """The write refusal, naming only the routes that exist in this build.
+
+    The field test (2026-09-05) caught the previous message promising a
+    server-side secrets file no mechanism backs; that route is recorded as
+    a future-phase item in PLAN and stays OUT of the error text until it is
+    real, because a refusal that names an unpaved road is a broken
+    recovery."""
     if not is_secret_field(field):
         return
     label = field.get("name") or field.get("label") or "(unnamed)"
     raise CredentialRefused(
         f'{tool} will not write into {label!r}: it is a secret field '
         f'(password, new-password, or one-time-code), and a credential must '
-        f'never pass through the model\'s context. The two sanctioned routes: '
-        f'a server-side secrets file, where the value is substituted at '
-        f'execution time; or manage_session(action="handoff"), where the run '
-        f'pauses and the human types it in the headed window.')
+        f'never pass through the model\'s context. The sanctioned route is '
+        f'manage_session(action="handoff"): the run pauses and the human '
+        f'types it in the headed window. A completed login can then be '
+        f'reused across runs with save_auth_state / load_auth_state '
+        f'(storage pack), which move it through a file, never through the '
+        f'transcript.')
 
 
 def mask_value(value: Any) -> str:

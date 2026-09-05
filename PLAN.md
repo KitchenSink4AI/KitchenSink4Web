@@ -1288,6 +1288,7 @@ Explicitly OUT of v1, with the reason:
 | Visual regression diffing | Same. |
 | Video recording | Same, and it is heavy. |
 | Code mode / programmatic execution surface | Cannot be inherited from the platform (MCP tools are excluded from programmatic tool calling), so building it is a real project. v1.1 at the earliest. |
+| Server-side secrets file (execution-time credential substitution) | DESIGN 5.3 names it as the second sanctioned credential route and NO mechanism backs it in this build; the 2026-09-05 field test caught the `CREDENTIAL_REFUSED` message promising it, and the message was corrected to the routes that exist (headed handoff, plus auth-state reuse via the storage pack). Build the substitution mechanism before the error copy names it again. |
 | Lane C Firefox, if S5 fails | Moves to v1.1; Lane C ships Chrome-only. |
 | Lane C at all, if S5 and S9 both disappoint | Lanes A and B alone are still a complete product. |
 | `workflows` pack, if Phase 6 runs long | Drops to v1.1. **No code depends on it and the positioning does**, so the drop is not free: DESIGN 6.8 calls workflows-without-eval the whole point of the pack, DESIGN 5.6 sells replay as the answer to the #1645 fork, and the Section 12 capability matrix ships "Audit trail and replay: yes." Dropping Phase 6 therefore also edits that matrix row and removes the eval-alternative line from the safety copy, in the same commit as the drop. Decide it as a positioning change, not a scheduling one. |

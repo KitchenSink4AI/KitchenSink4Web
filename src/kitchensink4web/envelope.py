@@ -147,10 +147,10 @@ HINTS: dict[str, str] = {
         "window"
     ),
     "CREDENTIAL_REFUSED": (
-        "secret fields are never read or written through the model. Use "
-        "the server-side secrets file, where the value is substituted at "
-        "execution time, or hand off so the human types it in the headed "
-        "window"
+        "secret fields are never read or written through the model. Hand "
+        "off with manage_session(action='handoff') so the human types it "
+        "in the headed window, then reuse the login across runs with "
+        "save_auth_state / load_auth_state (storage pack)"
     ),
     "BUDGET_EXHAUSTED": (
         "a session budget tripped and every counter is printed above; the "
@@ -233,6 +233,20 @@ def classify(exc: BaseException) -> str:
     for etype, code in CODE_MAP:
         if isinstance(exc, etype):
             return code
+    # The driver backstop (field test 2026-09-05: a mid-keystroke navigation
+    # surfaced as a raw "Execution context was destroyed" string). Playwright
+    # errors are not importable here without breaking the lazy-import rule,
+    # so the classification is by name and message, which is exactly enough
+    # to keep the closed vocabulary closed.
+    name = type(exc).__name__
+    text = str(exc).lower()
+    if "timeout" in name.lower():
+        return "TIMEOUT"
+    if ("execution context was destroyed" in text
+            or "target closed" in text
+            or "has been closed" in text
+            or "frame was detached" in text):
+        return "CONFLICT"
     return "BAD_PARAMS"
 
 

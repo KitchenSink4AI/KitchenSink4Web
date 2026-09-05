@@ -42,13 +42,18 @@ def test_payment_classification():
     assert not credentials.is_payment_field({"autocomplete": "email"})
 
 
-def test_secret_write_refuses_and_names_both_sanctioned_routes():
+def test_secret_write_refuses_and_names_only_routes_that_exist():
+    """Field test 2026-09-05: the old message promised a server-side secrets
+    file no mechanism backs. The refusal now names the routes that exist
+    (headed handoff, then auth-state reuse) and the phantom route is a PLAN
+    future item, not an error-string promise."""
     with pytest.raises(CredentialRefused) as exc:
         credentials.refuse_secret_write(
             {"type": "password", "name": "Password"}, "type_text")
     text = str(exc.value)
-    assert "secrets file" in text
     assert "handoff" in text
+    assert "save_auth_state" in text
+    assert "secrets file" not in text
     # A non-secret field passes silently.
     credentials.refuse_secret_write({"type": "text"}, "type_text")
 

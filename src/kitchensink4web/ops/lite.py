@@ -38,6 +38,7 @@ target is an open author call.
 
 from __future__ import annotations
 
+import re
 import time
 from urllib.parse import urlparse
 
@@ -171,14 +172,29 @@ _AUTH_MARKERS = (
 )
 
 
-async def _wall_verdict(page, status: int | None) -> dict:
+#: A landed path that looks like a login page. Only consulted when the
+#: navigation REDIRECTED (the landed URL differs from the requested one), so
+#: deliberately opening a login page is never classified as a wall.
+_LOGIN_PATH = re.compile(
+    r"/(login|log-in|signin|sign-in|sign_in|sessions?(/new)?|auth(orize)?)"
+    r"(/|$|\?)", re.IGNORECASE)
+
+
+async def _wall_verdict(page, status: int | None,
+                        requested: str | None = None) -> dict:
     """Detect a bot wall, a CAPTCHA interstitial, or an auth wall and say so.
 
     Cloudflare interstitials, CAPTCHAs, rate limits, and expired sessions all
     currently surface to an agent as a timeout or an empty page, so the agent
     burns turns retrying against a wall it cannot pass. The stakes argument is
     not "requests get blocked": a user's App Store Connect account was
-    terminated for fraud after an agent filled forms."""
+    terminated for fraud after an agent filled forms.
+
+    Three shapes added from the 2026-09-05 field test, which caught all
+    three answering `wall: null`: a 202 anomaly shell (a top-level document
+    has no honest reason to answer 202, and the observed case was a search
+    engine returning an empty results shell to a headless client), a 503
+    sorry page, and a redirect that lands on a login path."""
     verdict = {"wall": None, "status": status}
     try:
         title = (await page.title() or "").lower()
@@ -194,13 +210,37 @@ async def _wall_verdict(page, status: int | None) -> dict:
     marker = next((m for m in _WALL_MARKERS if m in title or m in body), None)
     auth_marker = next(
         (m for m in _AUTH_MARKERS if m in title or m in body), None)
+    landed = None
+    try:
+        landed = page.url
+    except Exception:
+        pass
+    login_redirect = bool(
+        requested and landed and landed != requested
+        and _LOGIN_PATH.search(urlparse(landed).path or "")
+        and not _LOGIN_PATH.search(urlparse(requested).path or ""))
     if marker:
         verdict["wall"] = "bot-wall-or-captcha"
         verdict["marker"] = marker
+    elif status == 202:
+        verdict["wall"] = "bot-wall-or-captcha"
+        verdict["marker"] = ("HTTP 202 anomaly shell: a top-level page load "
+                             "answered 202, which is the shape of an "
+                             "anti-automation shell rather than content")
     elif status == 429:
         verdict["wall"] = "rate-limited"
+    elif status == 503:
+        verdict["wall"] = "service-unavailable-or-bot-wall"
+        verdict["marker"] = ("HTTP 503 with an apology page, which is how "
+                             "some large retailers answer automated clients"
+                             if "sorry" in body or "sorry" in title
+                             else "HTTP 503")
     elif status == 403 and ("captcha" in body or "blocked" in title):
         verdict["wall"] = "forbidden-challenge"
+    elif login_redirect:
+        verdict["wall"] = "auth-wall"
+        verdict["marker"] = (f"redirected to a login page ({landed}) instead "
+                             f"of the requested {requested}")
     elif auth_marker or status == 401:
         verdict["wall"] = "auth-wall"
         verdict["marker"] = auth_marker or "HTTP 401"
@@ -229,7 +269,10 @@ async def get_page_view(
     `since` gives a delta, `budget_tokens=2500` suits a subagent.
     """
     if cursor:
-        _stub("get_page_view(cursor=...)", "Phase 5 (spill-to-file paging)")
+        _stub("get_page_view(cursor=...)",
+              "a later phase (spill-to-file paging is not built; the "
+              "region and section reads plus get_text pagination cover the "
+              "cases it was for)")
     if include_hidden:
         # The policy ruling, not a stub: the ORIENTATION never carries hidden
         # content. The labeled route is get_text, where hidden blocks arrive
@@ -647,7 +690,8 @@ async def navigate(
             urlparse(record.page.url).hostname or "",
             float(raw) if raw.replace(".", "", 1).isdigit() else None)
 
-    verdict = await _wall_verdict(record.page, status)
+    verdict = await _wall_verdict(
+        record.page, status, requested=url if action == "goto" else None)
     if verdict["wall"] == "auth-wall":
         raise _auth_refusal(record.page.url, verdict.get("marker"))
     if verdict["wall"]:
@@ -771,14 +815,19 @@ async def type_text(
     text: str,
     clear_first: bool = False,
     press_enter: bool = False,
+    submit: bool = False,
     delay_ms: int = 0,
 ) -> dict:
     """Type into a field addressed by any selector, optionally clearing it
-    first or pressing Enter after. Refuses to write into a password,
-    new-password, or one-time-code field and names the two sanctioned routes
-    instead, so a credential never passes through the model's context.
-    Returns a verified outcome including the field's value state read back,
-    so a silently rejected input is visible rather than reported as success.
+    first. `submit=true` is the one-call search idiom: it presses Enter
+    after typing AND waits for the resulting navigation or re-render to
+    settle, so the outcome reflects the page the submission produced
+    (press_enter alone sends the keystroke without waiting). Refuses to
+    write into a password, new-password, or one-time-code field and names
+    the sanctioned route instead, so a credential never passes through the
+    model's context. Returns a verified outcome including the field's value
+    state read back, so a silently rejected input is visible rather than
+    reported as success.
     """
     sess, record = MANAGER.locate(page)
     _audit.annotate(session=sess.session_id, page=record.handle,
@@ -795,7 +844,7 @@ async def type_text(
         page=record.handle, url=record.page.url, target=desc,
         writes_value=True, action_class=_act.action_class_for(desc),
         args={"location": location, "clear_first": clear_first,
-              "press_enter": press_enter},
+              "press_enter": press_enter, "submit": submit},
         resolution=resolved["resolution"],
         summary=f'type into {desc.get("role")} "{desc.get("name")}" on '
                 f'{record.handle}'))
@@ -807,8 +856,18 @@ async def type_text(
         else:
             await handle.focus()
             await record.page.keyboard.type(text, delay=delay_ms)
-        if press_enter:
+        if press_enter or submit:
             await handle.press("Enter")
+        if submit:
+            # The one-call idiom must not race its own navigation (field
+            # test finding: a separate Enter call died mid-navigation). A
+            # submission that navigates settles here; one that re-renders
+            # in place times this wait out harmlessly and the verified
+            # outcome below reports what actually changed.
+            try:
+                await record.page.wait_for_load_state("load", timeout=8000)
+            except Exception:
+                pass
     except Exception as exc:
         _reraise_driver(exc, what="type_text", timeout_ms=15000)
     outcome = await _act.verify(record.page, resolved["node_ref"], before)

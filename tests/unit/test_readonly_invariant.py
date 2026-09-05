@@ -146,6 +146,68 @@ def test_the_mrtr_path_cannot_flip_it_either(launch):
     assert readonly.grade() == "browse"
 
 
+# ------------------------------------------- 5. the guided refusal teaches
+#                                                the human, offers the agent
+#                                                nothing redeemable
+
+def test_the_unlock_teaching_hands_the_agent_nothing_callable():
+    """The field-test blocking fix added an UNLOCK teaching to every mode
+    surface. It must teach the HUMAN a launch-time action and never hand the
+    AGENT anything it can call, redeem, or echo to flip the mode in-session:
+    a describe() that offered a tool name or a token would be a bypass
+    wearing an instruction's clothes."""
+    text = readonly.UNLOCK_TEACHING.lower()
+    # It names a human, launch-time action.
+    assert "restart" in text or "launch" in text
+    assert "human" in text or "settings" in text or "checkbox" in text \
+        or "tick" in text
+    # It never offers an in-session route: no tool invocation the agent
+    # could issue to flip the mode, and no redeemable confirmation hook.
+    for forbidden in ("manage_session(action", "(action=", "redeem",
+                      "requeststate", "elicitation/create", "inputrequest"):
+        assert forbidden not in text, (
+            f"the unlock teaching names {forbidden!r}, which points the "
+            f"agent at an in-session route rather than a human restart")
+
+
+def test_the_guided_absent_tool_refusal_is_not_a_bypass_vector(launch):
+    """A forced call to an absent mutating tool now returns a GUIDED refusal
+    (grade, why, human unlock) instead of the bare framework string. That
+    message must teach the human and stay non-redeemable: it names no tool
+    the agent can call to flip the mode and carries no confirmation token."""
+    launch(read_only="browse")
+
+    async def run():
+        async with Client(server.mcp) as c:
+            return await c.call_tool("type_text",
+                                     {"page": "p1",
+                                      "location": {"ref": "e1"},
+                                      "text": "x"},
+                                     raise_on_error=False)
+
+    result = asyncio.run(run())
+    assert result.is_error is True
+    err = result.structured_content["error"]
+    assert err["code"] == "READ_ONLY_MODE"
+    blob = json.dumps(err).lower()
+    # Teaches the state.
+    assert "read-only" in blob
+    # Teaches the human unlock, offers the agent nothing redeemable.
+    assert "restart" in blob or "settings" in blob or "tick" in blob
+    for forbidden in ("requeststate", "redeem", "inputrequest",
+                      "elicitation/create", "allow this action now"):
+        assert forbidden not in blob, (
+            f"the guided refusal carries {forbidden!r}, a redeemable hook")
+    # The mode did not move, and the tool is still absent.
+    assert readonly.grade() == "browse"
+
+    async def surface():
+        async with Client(server.mcp) as c:
+            return {t.name for t in await c.list_tools()}
+
+    assert "type_text" not in asyncio.run(surface())
+
+
 # ------------------------------------------------------------- 4. default
 
 

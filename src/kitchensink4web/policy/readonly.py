@@ -42,9 +42,16 @@ import os
 from ..errors import BadParams
 
 #: THE DEFAULT, deliberately a single constant (author ruling, 2026-09-05).
-#: The shipped default is UNDECIDED: it will be chosen from field-test
-#: evidence at the pre-production review. Both defaults are fully built and
-#: this constant is the whole switch:
+#: DECIDED 2026-09-05 from field-test evidence, per the conditional ruling:
+#: the read-only field test (internal notes/20260905_ks4web_readonly_field_
+#: test.md) ran ten everyday tasks over a real MCP connection and read-only
+#: carried 7 of 8 read-shaped tasks with ZERO mode-caused friction; the
+#: predicted killer (search boxes) failed identically under full grade in a
+#: controlled re-test, because the wall is the site's bot detection rather
+#: than the missing keyboard; and the credential gate refuses passwords in
+#: BOTH grades, so a full default buys a first-run user far less than it
+#: appears to. The middle grade was assessed and rejected: it guts the
+#: provable absence property for exactly the two most dangerous tools.
 #:
 #:     None      -> acting allowed unless --read-only / KS4WEB_READ_ONLY set
 #:     "browse"  -> read-only by default; acting needs an explicit opt-in
@@ -53,7 +60,22 @@ from ..errors import BadParams
 #:
 #: An explicit env value or CLI flag ALWAYS beats this constant, in either
 #: direction, which is what makes the checkbox UX work under both defaults.
-DEFAULT_GRADE: str | None = None
+#: Both defaults remain fully built; the constant is the whole switch.
+DEFAULT_GRADE: str | None = "browse"
+
+#: The unlock teaching (the field test's BLOCKING condition): under a
+#: read-only default every new user meets the absent-tool wall on day one,
+#: so every surface that says WHAT the mode is must also say HOW a human
+#: unlocks it. This is a LAUNCH-TIME instruction for the human, never an
+#: in-session route for the agent: nothing here is callable, redeemable, or
+#: echoable, which is what keeps the teaching from becoming a bypass.
+UNLOCK_TEACHING = (
+    "To allow acting (a launch-time choice a human makes, not something "
+    "any tool call can do): in Claude Desktop, tick 'Allow this server to "
+    "click and type' in the server's settings; from a shell, restart the "
+    "server with KS4WEB_READ_ONLY=0 or without the --read-only flag. The "
+    "tool set is fixed at launch, so the change takes effect on restart."
+)
 
 #: `browse` is the default when the flag is bare: navigation, back and
 #: forward, scroll, and every read tool. `strict` is the same tool set with
@@ -196,4 +218,5 @@ def describe() -> dict:
             "remains an outbound channel, so this does not mean nothing "
             "can change on a server you visit."
         ),
+        "unlock": UNLOCK_TEACHING,
     }

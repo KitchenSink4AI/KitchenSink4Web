@@ -51,6 +51,17 @@ IDLE_CLOSE_S = float(os.environ.get("KS4WEB_IDLE_CLOSE_S", "1800"))
 
 PARKED_URL = "about:blank"
 
+#: The pack-recorder seam. Ops modules (network, diagnostics, files) append
+#: a callable here at import; every newly opened session is passed through
+#: each one so recorders attach their event listeners at open rather than at
+#: first read, which is the difference between "the log starts when the
+#: session does" and "the log starts when somebody remembered to ask".
+#: Each hook checks its own pack is loaded before doing anything, so an
+#: imported-but-unselected pack records nothing. Hooks are synchronous and
+#: their failures propagate: a recorder that cannot attach is a launch
+#: problem to surface, not one to swallow.
+SESSION_OPEN_HOOKS: list = []
+
 
 @dataclass
 class PageHandle:
@@ -211,6 +222,8 @@ class SessionManager:
             if not session.pages:
                 self._attach_page(session, await context.new_page())
             self.sessions[sid] = session
+            for hook in SESSION_OPEN_HOOKS:
+                hook(session)
             return session
 
     def _attach_page(self, session: Session, page: Any) -> PageHandle:

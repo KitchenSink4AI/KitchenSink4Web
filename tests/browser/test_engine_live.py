@@ -439,14 +439,15 @@ def test_the_parameters_that_are_still_unbuilt_refuse_honestly(
     """`location` and `since` landed in Phase 2, and Phase 3 ruled on
     `include_hidden`: the ORIENTATION never carries hidden content, and the
     refusal names the labeled get_text route instead. `cursor` is still
-    unbuilt and names Phase 5 rather than returning something plausible."""
+    unbuilt (spill-to-file paging was not built in Phase 5) and refuses
+    honestly rather than returning something plausible."""
     async def go():
         session = await session_factory()
         page = session.focused
         await lite.navigate(page=page, url=fixture_site + "/form")
         with pytest.raises(Exception) as caught:
             await lite.get_page_view(page=page, cursor="aff:40")
-        assert "Phase 5" in str(caught.value)
+        assert "not built" in str(caught.value)
         with pytest.raises(Exception) as caught:
             await lite.get_page_view(page=page, include_hidden=True)
         assert "get_text" in str(caught.value)

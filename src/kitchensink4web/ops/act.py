@@ -518,10 +518,35 @@ async def verify(page, node_ref: str | None, before: dict) -> dict:
 
     Returns `{effect, details, none_observed}`. `effect` is a short verb where
     something changed and `"none-observed"` where nothing did, and the caller
-    surfaces the none-observed case as a warning rather than a bare ok."""
-    await page.wait_for_timeout(_SETTLE_MS)
-    after = await page.evaluate(_AFTER_JS,
-                                {"ref": node_ref, "token": before["token"]})
+    surfaces the none-observed case as a warning rather than a bare ok.
+
+    A verification probe that dies because the ACTION navigated the page
+    (execution context destroyed, frame detached) is the action SUCCEEDING,
+    not failing, so that case reports `navigated` honestly instead of
+    leaking a driver string; the field test caught exactly this on a
+    press_keys Enter that raced its own navigation."""
+    try:
+        await page.wait_for_timeout(_SETTLE_MS)
+        after = await page.evaluate(_AFTER_JS,
+                                    {"ref": node_ref, "token": before["token"]})
+    except Exception as exc:
+        text = str(exc).lower()
+        if ("execution context was destroyed" in text
+                or "frame was detached" in text
+                or "navigation" in text):
+            url_now = None
+            try:
+                url_now = page.url
+            except Exception:
+                pass
+            detail = (f'navigated: {before["url"]} -> {url_now}'
+                      if url_now and url_now != before["url"]
+                      else "the page navigated or re-rendered while the "
+                           "outcome was being read; the action itself "
+                           "completed")
+            return {"effect": "navigated", "details": [detail],
+                    "none_observed": False}
+        raise
     changes: list[str] = []
     effect = None
     if after["url"] != before["url"]:

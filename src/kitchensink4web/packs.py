@@ -74,10 +74,12 @@ PACK_SUMMARIES: dict[str, str] = {
     ),
 }
 
-#: PLANNED membership, for the Phase 7 surface arithmetic. These tools are
-#: NOT registered yet (Phase 5 lands them). Kept here so measure_surface can
-#: report the planned shape alongside the real one and the gap is visible
-#: rather than assumed. Every name here is from DESIGN 2.2.
+#: The DESIGNED pack rosters (DESIGN 2.2). Phase 5 built every row except
+#: `workflows`, whose engine is Phase 6 and whose tools register as honest
+#: stubs until then. This table stays authoritative: a parity test asserts
+#: each ops module's TOOLS matches its row exactly, so the designed surface
+#: and the built one cannot drift apart silently, and `measure_surface`
+#: still reports any planned-but-unregistered gap.
 PLANNED_MEMBERS: dict[str, tuple[str, ...]] = {
     "extract": ("get_table", "get_list", "get_links", "get_metadata",
                 "extract_fields", "export_data"),

@@ -327,7 +327,11 @@ def test_type_text_into_a_secret_field_refuses_with_the_routes(corpus_site):
             await lite.type_text(page=page,
                                  location={"css": "input[type=password]"},
                                  text="hunter2")
-        assert "secrets file" in str(exc.value) and "handoff" in str(exc.value)
+        # Corrected 2026-09-05 (field test): names only routes that exist,
+        # the handoff and auth-state reuse, not the unbuilt secrets file.
+        text = str(exc.value)
+        assert "handoff" in text and "save_auth_state" in text
+        assert "secrets file" not in text
 
     run(go())
 

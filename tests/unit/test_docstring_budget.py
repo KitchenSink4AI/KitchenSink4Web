@@ -36,7 +36,11 @@ GATES_DIR = Path(__file__).resolve().parents[2] / "gates"
 
 
 def _tools(launch, live_tools):
-    launch()
+    # The whole surface, honestly: read-only is the shipped default (browse),
+    # which would register only the read tools, but the docstring report
+    # covers every tool that CAN ship. Unlock and load every pack.
+    from kitchensink4web import packs
+    launch(cli_packs=packs.pack_names(), read_only=False)
     return list(live_tools().values())
 
 
