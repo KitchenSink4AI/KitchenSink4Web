@@ -170,6 +170,18 @@ chrome-devtools' 6,460, a 3.1x and 4.3x beat. At the family's observed
 docstring density that buys roughly 10 to 14 tools, and the largest single
 schema must stay under 250 tokens (the incumbents' worst are 413 and 459).
 
+**AUTHOR RULING 2026-09-05: these budgets are SOFT.** A delivering browser
+tool may cost what it costs (the author's own bound: 7 to 10k for a tool
+that delivers), and useful docstring information is NEVER deleted to hit a
+cap. The lite ratchet and the per-tool caps are therefore ADVISORY WITH
+MEASURED HONESTY: every number is measured on every run
+(`gates/docstring_budget.json`, written by the suite), the published copy
+quotes the honest figure, and the only HARD limits are the ones that protect
+information rather than chase a number (the 2,048-character client
+truncation, since a description over it silently loses its tail; the
+description floor; the no-em-dash rule). The measured lite surface at Phase 3
+close is ~2.7k tokens for 14 tools, published as such.
+
 | # | Tool | What it does |
 |---|---|---|
 | 1 | `get_page_view` | THE flagship read. Projection + detail + budget + cursor + delta. Section 3. |
@@ -280,7 +292,7 @@ because they are correct, not because they are unclaimed.
 
 | Read | Incumbents | KS4Web target | Measured, o200k, frozen corpus A | Multiple |
 |---|---|---|---|---|
-| Tool-schema bill (lite) | 4,637 / 6,460 | **under 1,500** | **2,720** (Phase 0, unchanged) | 1.7x / 2.4x |
+| Tool-schema bill (lite) | 4,637 / 6,460 | **under 1,500** (ADVISORY since 2026-09-05: budgets ruled SOFT, Section 2.1; the honest number is published, never trimmed into) | **2,720** (Phase 0, unchanged) | 1.7x / 2.4x |
 | Full-surface ceiling | n/a | under 4,000 | not yet built | undercuts the incumbent DEFAULT |
 | Largest single schema | 413 / 459 | under 250 | **148** (`get_page_view`) | |
 | Article page (Wikipedia, Treaty of Versailles) | 156,347 / 177,168 | **under 5,000, regardless of page size** | **4,356 at rung 6**; the undegraded read is 4,846 | 36x / 41x at the delivered rung |
@@ -1881,6 +1893,18 @@ safe.
   mixed into the main text. This technique class is what the Comet exfiltration
   depended on, and it is definitionally bypassable (image-rendered text, plausible
   visible text), which the copy states.
+
+  **As built (Phase 3):** the labeled route lives on `get_text` alone, with
+  the main text byte-identical whichever way the flag is set and each hidden
+  block labeled with its hiding technique; `get_page_view(include_hidden)`
+  refuses and names that route, because an ORIENTATION never carries hidden
+  content. `KS4WEB_HIDDEN_CONTENT=off` removes even the labeled route at
+  launch. **And the corpus C gate caught a real parity defect building
+  this:** `get_text`'s hidden detector carried no contrast, geometry, or
+  text-indent rule, so a white-on-white injection stripped from the page
+  view rode out of the prose read as content. The two detectors now share
+  every technique rule, and the gate's nine-technique page is the standing
+  regression.
 - **Read/act separation** is the MCP-colors direction: reads are red (exposed to
   untrusted content), acting tools are blue. Advertised in `_meta`, **enforced
   server-side**, because the spec is explicit that clients "MUST consider tool
@@ -1919,6 +1943,33 @@ without varying the tool set per connection, which the 2026-07-28 spec forbids
 (Section 7.1). The strongest safety differentiator in the design is therefore
 only conformant as a launch flag, which is a genuine synthesis point across two
 research reports that did not talk to each other.
+
+**BUILT IN PHASE 3, under an author ruling (2026-09-05) with a CONDITIONAL
+default.** Three facts, each load-bearing:
+
+- **The default is UNDECIDED, and both defaults are fully built.** Whether a
+  bare launch acts or browses will be chosen from FIELD-TEST EVIDENCE at the
+  pre-production review, not from taste now. The whole switch is one constant,
+  `policy/readonly.py: DEFAULT_GRADE` (`None` = acting allowed unless the flag
+  is set; `"browse"` = read-only unless explicitly unlocked). An explicit env
+  value or CLI flag beats the constant in BOTH directions, which is what makes
+  the same unlock UX work under either shipped default.
+- **The unlock UX.** The `.mcpb` manifest (a Phase 9 artifact; the block is
+  specified here so ship cannot get it wrong) exposes a `user_config` CHECKBOX
+  labeled **"Allow this server to click and type"** mapping to
+  `KS4WEB_READ_ONLY` (checked -> `0`, unchecked -> `browse`); the env var and
+  `--read-only` remain the developer route. Off means browse/read only.
+- **THE AGENT CAN NEVER FLIP IT IN-SESSION.** No tool, no argument, and no
+  MRTR or elicitation path may change the grade once the process started; that
+  invariant is what makes the safety provable rather than asserted, and it is
+  ENFORCED BY TEST (`tests/unit/test_readonly_invariant.py`): a static AST
+  scan proves `readonly.apply()` has exactly one call site (server startup)
+  and nothing else writes the grade; no registered schema carries a
+  mode-shaped parameter; every flip-shaped call from corpus C's
+  `disable_gates.html` refuses with the grade and the tool set byte-identical
+  afterward; and the gate engine's closed class table contains no
+  policy-mutation class, so the MRTR path has nothing to redeem that could
+  touch the mode.
 
 ### 5.3 P4: credential blindness
 
@@ -1996,6 +2047,19 @@ under bypass permissions, requires Claude Code v2.1.199+ and is **absent from
 2.1.92**, the version verified in the research. The gate design therefore cannot
 depend on it today. It is set when present and never assumed.
 
+**As built (Phase 3, `policy/gates.py`): fail-closed is STRUCTURAL, not a
+branch.** `ask()` always refuses with the `input_required` payload carrying
+`requestState`; a gated action executes only after `redeem()` returns the
+Gate record; `redeem()` is callable only by the server's confirmation
+plumbing and never from a tool argument (an echoed token refuses, tested),
+so a client that advertises neither MRTR nor elicitation simply never
+produces a redemption and the refusal stands. Gates are single-use with a
+180s TTL, the class table is CLOSED and pinned by test with no
+policy-mutation member, and `verify_execute` runs the TOCTOU fingerprint
+comparison plus the E6 rebind interlock immediately before the caller acts.
+The live MRTR round-trip against the installed client remains S8's check;
+nothing executes without it either way, which is the point.
+
 **The permissions paradox**, which nobody in any thread answers and which this
 design answers directly:
 
@@ -2027,6 +2091,17 @@ OWASP LLM10, Unbounded Consumption.
 - **Per-domain rate limiting**, respecting HTTP 429 and `Retry-After`, which
   also serves the honest-tool posture.
 
+**As built (Phase 3, `policy/budgets.py` + `policy/engine.py`):** the
+enforcing ledgers are policy-owned per session id, checked at the ONE choke
+point every acting call describes itself to, in a fixed order (read-only,
+credential blindness, origin policy, 429 backoff, loop detection, budget
+charge, confirmation gate last) so a refused action is never charged and the
+human is only asked about an action everything else already passed. The
+window is 20 calls; repetition trips at 5 identical, alternation at 4 full
+cycles. The reset is `manage_session(action='reset_budgets')` behind a
+`budget_reset` gate, and `navigate` is live on the whole ladder as of this
+phase; Phase 4's tools inherit it by construction.
+
 ### 5.6 P7: audit trail and replay
 
 Unserved. No browser agent ships a user-facing action log. The vendor features
@@ -2050,6 +2125,16 @@ evaluation for safety does not lose workflow reuse.
 Honest framing, and it is a marketing caution not a technical one: this is an
 operational log for the user. It is **not** forensic and **not** evidence.
 Calling it forensic invites reliance the implementation cannot bear.
+
+**As built (Phase 3, `policy/audit.py`):** the base record for EVERY tool
+call, refusals included, is written by the server's tool wrapper, so no tool
+can forget to log; ops enrich the current call's record through a
+context-local `annotate()` channel that cannot cross concurrent calls.
+Every record passes the credential vault's scrub at write, argument values
+are clipped at 200 characters, and storage is bounded twice (a ring of
+5,000 records serving `get_audit`, and the JSONL file rotating at twice
+that with the dropped count carried in the read payload). The framing line
+rides in every `get_audit` result.
 
 ### 5.7 Verified outcomes (the silent-false-success answer)
 
@@ -2630,6 +2715,12 @@ them compatibility surface.
    for a browser server and an agent hitting a canvas app on turn one will feel
    it. Ruling requested (Section 2.1).
 
+   **RULED by the author, 2026-09-05: screenshots are OUT of lite.** They
+   live in the `capture` pack, and refusals signpost it (the canvas case in
+   the completeness block names the pack and the launch flag, per
+   discoverability rule 2 as adapted in 7.4). Lite carries no pixel path,
+   exactly as Section 2.1 argues.
+
 3. **Chrome Lane C friction.** Chrome 136 means Lane C on Chrome always requires
    the user to relaunch Chrome with a non-default profile. Does Chrome Lane C
    ship in v1 anyway for market parity, or wait, given that Firefox Lane C is the
@@ -2651,6 +2742,16 @@ them compatibility surface.
    explicit flag to act, would be the strongest possible brand statement and the
    most differentiated default in the category. It would also surprise every user
    who expects a browser server to click things. Ruling requested.
+
+   **RULED by the author, 2026-09-05, and the ruling is CONDITIONAL: the
+   default stays UNDECIDED until pre-production review, where field-test
+   evidence chooses it.** What is decided now: the mode is built COMPLETELY
+   under both defaults, switchable by the single constant
+   `policy/readonly.py: DEFAULT_GRADE`; the unlock UX is the `.mcpb`
+   user_config checkbox ("Allow this server to click and type") mapping to
+   `KS4WEB_READ_ONLY`, with the env var as the developer route; and the
+   agent can NEVER flip the mode in-session by any path, enforced by test.
+   Full build record in Section 5.2.
 
 6. **The browser verb extension** to the family naming grammar (Section 8.2).
    Approve `navigate` / `click` / `type` / `press` / `hover` / `scroll` / `wait`

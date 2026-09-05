@@ -1636,3 +1636,108 @@ a cache rather than an approximation.
   author call.
 - **`cursor=` and `include_hidden=` are still unbuilt** and refuse by naming
   Phase 5 and Phase 3 respectively.
+
+## Part XII: Phase 3, the policy layer, built before the action tools (2026-09-05 11:49 KST)
+
+The ordering is the design decision PLAN states: if the action tools existed
+first, some of them would be written outside the policy path. So the policy
+layer shipped first, `navigate` was wired through it as the one live acting
+tool, and Phase 4's tools will DESCRIBE their action to one choke point
+rather than implementing policy per tool.
+
+**Suite: 361 tests, up from 285. Gate: `scripts/gate_phase3.py`, ELEVEN
+parts, ALL GREEN on live Chromium against corpus C
+(`gates/phase3.json`).** Zero orphan processes after every run; the Phase 2
+gate was re-run to full green afterward, because one Phase 3 fix touched a
+shared instrument (below).
+
+### What landed
+
+Six new policy modules, none importing ops/ or engine/ (the import-direction
+test still binds): `credentials.py` (secret-field classification shared with
+the extractor, the vault, the serializer redactor, masking, strict mode),
+`origins.py` (deny-first allow/deny evaluator with the landed-phase check),
+`budgets.py` (per-session budgets, loop detection over
+(tool, target fingerprint, args hash), 429/Retry-After honor),
+`gates.py` (the TOCTOU-re-validating confirmation engine, requestState
+correlation, single-use, TTL, the E6 rebind interlock), `audit.py` (bounded
+ring + rotating JSONL, redacted at write, context-local annotation), and
+`engine.py` (the choke point: read-only, credentials, origins, backoff,
+loops, budget, gate, in that order, so a refused action is never charged).
+
+Wired live: the serializer redactor installs at import in `server.py`; the
+tool wrapper records EVERY call, refusals included, so no tool can forget to
+log; `navigate` runs the whole ladder plus the landed-origin re-check that
+parks a mid-action redirect to about:blank; `get_audit` is built;
+`get_text(include_hidden=True)` returns hidden blocks in a separately
+labeled section with the main text byte-identical either way;
+`manage_session` gained enforced `budget` and gated `reset_budgets`.
+
+### The three fresh author rulings, executed
+
+1. **Read-only: built completely, default UNDECIDED.** Both defaults exist
+   behind the single constant `policy/readonly.py: DEFAULT_GRADE`; field
+   evidence picks the shipped value at pre-production review. The .mcpb
+   user_config checkbox ("Allow this server to click and type") maps to
+   KS4WEB_READ_ONLY, specified in DESIGN 5.2 for the Phase 9 manifest. THE
+   INVARIANT: the agent can never flip the mode in-session, by any tool,
+   argument, or MRTR path, enforced by `tests/unit/test_readonly_invariant.py`
+   (static AST scan proving `readonly.apply()` has exactly one caller, a
+   schema sweep, the disable_gates.html attempt list run over a real client
+   with surface and grade asserted byte-identical, and the pinned gate-class
+   table containing nothing policy-shaped).
+2. **Screenshots stay OUT of lite** (Q2 ruled; refusals signpost `capture`).
+3. **Token budgets are SOFT.** The docstring test now publishes honest
+   numbers to `gates/docstring_budget.json` instead of failing on the
+   1,500/250 references; hard limits remain only where they protect
+   information (the 2,048-char client truncation, the description floor, the
+   em-dash rule). DESIGN 2.1/3.2 and the PLAN Phase 7 gate carry the ruling.
+
+### The defect the gate caught, and it is the reason corpus C exists
+
+`get_text`'s hidden detector had NO contrast, geometry, or text-indent rule.
+A white-on-white injection that the projection's hygiene layer stripped from
+the page view rode out of the prose read as ordinary content: the same page,
+two detectors, one honest and one blind. The nine-technique injection page
+caught it on the first run. The two detectors now share every rule
+(parseColor/lum ported into text.js), and the Phase 2 gate re-ran green
+afterward, which matters because gate part 7 measures prices AGAINST
+get_text: the instrument changed and no measured number moved.
+
+### Gate table
+
+| Part | Result |
+|---|---|
+| serializer_redaction (leaky tool, real cookie, caught on the wire) | GREEN |
+| toctou (live swap -> TARGET_CHANGED; rebind interlock) | GREEN |
+| redirect_blocked (mid-action redirect parked, nothing read) | GREEN |
+| hidden_injection (9 techniques + base64 + zero-width; counts not content) | GREEN |
+| read_only_registration (zero mutating tools, both grades, both defaults) | GREEN |
+| read_only_invariant (disable_gates.html: no mechanical path) | GREEN |
+| fail_closed (no channel -> no execution; forged/unredeemed refuse) | GREEN |
+| budgets_loops (trip with counters, cycle printed, 429 honored, reset gated) | GREEN |
+| walls (bot wall, CAPTCHA, expired session named with routes) | GREEN |
+| secret_fields (values reach no payload; writes refuse at the choke point) | GREEN |
+| audit (wrapper-recorded, redacted, bounded, paginated, honest framing) | GREEN |
+
+### Instrument note, flagged for the author
+
+The Phase 2 latency part flickers at its boundaries on this machine when run
+warm: assembly p95 misses of 0.3 to 1.5 ms against the 10.0 ms budget and a
+50k-node projection p95 within 5 percent of its 500 ms budget appeared on
+back-to-back runs of identical code, all clearing at idle (final record
+green). The projection check has a reference-arm load control for exactly
+this; the ASSEMBLY check has none, so a 0.3 ms scheduler wobble gets charged
+to the code. Left as a gate-instrument gap for an author call rather than
+patched unilaterally.
+
+### Open items carried forward
+
+- The MRTR round-trip against the installed client is still S8's check; the
+  engine fails closed without it by construction, so nothing blocks on it.
+- `KS4WEB_HIDDEN_CONTENT`, `KS4WEB_CREDENTIAL_BLIND`, the five budget
+  limits, and the two origin-list variables join the Q11a env inventory
+  awaiting the supported-surface ruling.
+- The .mcpb manifest user_config block is specified in DESIGN 5.2 and built
+  at Phase 9 with the rest of the packaging.
+- `cursor=` on get_page_view still refuses by naming Phase 5.

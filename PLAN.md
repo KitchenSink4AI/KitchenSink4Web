@@ -118,7 +118,7 @@ the spikes report" has one stated exception and this is it. The sequence:
 | Corpus A: the four MEASURED pages fetched and frozen to disk as snapshots, with the fetch date and page revision recorded | **Before S1 starts.** S1 measures against the frozen copies, not the live pages. **NOT MET as run (2026-09-05):** S1 ran against live pages and froze the extraction outputs afterward (`spikes/s1/out/raw/*.extract.json`), plus the eleven blind-trial inputs byte-for-byte. Its ladder numbers re-derive offline and its per-page numbers do not. **MET 2026-09-05 02:20 KST**, ahead of the Phase 2 harness: `corpus/a/` holds the four pages with `corpus/a/MANIFEST.json` recording the fetch DTG, the final URL, the MediaWiki revision id where one is published, a sha256 per file, and what the capture strips. `scripts/freeze_corpus_a.py` rebuilds it and `scripts/measure_corpus_a.py --live` re-measures it with the live drift check. Every DESIGN 3.2 figure now comes from this corpus. |
 | Corpus B subset: React re-render page, react-window virtualized list, client-side route change, plus the 50,000-node DOM (S1 needs it for the degradation rungs and the latency measurement) | **Before S1 and S2 start.** **BUILT 2026-09-05 as part of S2**, at `spikes/s2/fixtures/`: a React SPA carrying a node-replacing remount, a label change, a list reorder, hash routing, duplicate control names and a modal; a real react-window `FixedSizeList` rendering 20 of 5,000; and a look-alike page for the cross-navigation case. React 18.3.1 and react-window 1.8.10 are vendored as UMD builds, so there is no build step and no network at run time. The 50,000-node DOM was built in Phase 1 as the latency ladder. **These move into the repo's corpus B proper before Phase 2 closes**; they live under `spikes/` today because S2 built them. |
 | The rest of corpus B: iframes, shadow roots, canvas, mutating page, rowspan tables, div-tables, lazy images, `isTrusted` control, `<div onclick>`, moving target, overlay, portal dropdown, console flood, secret fields | Before **Phase 2** opens, since the Phase 2 gate is verified against them. |
-| Corpus C in full | Before **Phase 3** opens, since the Phase 3 gate IS corpus C driven end to end. |
+| Corpus C in full | Before **Phase 3** opens, since the Phase 3 gate IS corpus C driven end to end. **MET 2026-09-05**: `corpus/c/`, nine synthetic pages with `MANIFEST.json`, never networked; `scripts/gate_phase3.py` drives it. |
 
 The widened benchmark set (heavy SPA, documentation site, e-commerce product
 page, login page, GitHub repo page) is frozen with the rest of B, before Phase 2.
@@ -935,7 +935,44 @@ require sticky refs and sticky refs are only useful because reads are cheap.
      lead paragraph comes from the readable region only, tested against a
      fixture carrying a DRM-style error string ahead of the real content.
 
-### Phase 3: The policy layer (built BEFORE the action tools, deliberately)
+### Phase 3: The policy layer (built BEFORE the action tools, deliberately) — **RUN 2026-09-05, GATE GREEN, ALL ELEVEN PARTS**
+
+**Status.** The suite is 361 tests, up from 285. Corpus C is built (9
+adversarial pages, `corpus/c/`) and the gate (`scripts/gate_phase3.py`,
+record in `gates/phase3.json`) drives it end to end on live Chromium: the
+leaky tool caught by the SERIALIZER on the wire, the TOCTOU swap aborting
+`TARGET_CHANGED` against the live page with the E6 rebind interlock
+asserted, the mid-action redirect to a denied origin parked to about:blank
+with nothing read from the landing, all nine hiding techniques in the counts
+and never in the content (base64 and zero-width included), read-only
+registering zero mutating tools under both grades and BOTH defaults behind
+the one `DEFAULT_GRADE` constant, the disable-gates page finding no
+mechanical path, gates failing closed structurally (forged and unredeemed
+tokens never execute), budgets and loops tripping with the reset gated, the
+three walls named, secret values reaching no payload, and the whole run
+recorded redacted and bounded in the audit log.
+
+**Three fresh author rulings landed this phase and are recorded in DESIGN**
+(5.2 + Q5: read-only built completely under a CONDITIONAL default, one
+constant, the .mcpb checkbox UX, and the never-flippable-in-session
+invariant enforced by `tests/unit/test_readonly_invariant.py`; Q2:
+screenshots stay out of lite; 2.1/3.2: token budgets are SOFT, the lite
+ratchet advisory with measured honesty in `gates/docstring_budget.json`).
+
+**One real defect found by the gate and fixed:** `get_text`'s hidden
+detector had no contrast, geometry, or text-indent rule, so a
+white-on-white injection stripped from the page view rode out of the prose
+read as content. The two detectors now share every technique rule (DESIGN
+5.1), and the Phase 2 gate was re-run green afterward to prove the shared
+instrument moved no measured number.
+
+**Wired live this phase:** `navigate` runs the full policy ladder including
+the landed-origin re-check and Retry-After honor; `get_audit` is built;
+`get_text(include_hidden=True)` returns the labeled hidden section;
+`manage_session` gained `budget` (enforced) and `reset_budgets` (gated).
+Phase 4's action tools call `policy/engine.approve()` and inherit all of it.
+
+The original phase definition follows, kept as the record of what was asked.
 
 This ordering is a design decision, not a convenience. If the action tools exist
 first, some of them will be written outside the policy path, and the incumbent's
@@ -1012,13 +1049,17 @@ pattern.
 - `_meta` hints: `alwaysLoad` on the lite core, `searchHint` on the long tail,
   `readOnlyHint: true` on every read tool.
 - Description budget enforcement against the 2,048-character client truncation.
-- **GATE:** `measure_surface` reports **lite under 1,500 tokens** and the
-  largest single schema **under 250**; full surface under 4,000. Plus the
+- **GATE (REVISED 2026-09-05 by the soft-budget ruling, DESIGN 2.1):**
+  `measure_surface` reports the HONEST numbers and they are published as
+  measured; the 1,500-token lite figure, the 250-token schema ceiling, and
+  the 4,000-token full surface are ADVISORY references, never a reason to
+  delete useful docstring information. What stays red-gateable: the
+  2,048-character client truncation (information loss), and the
   **discoverability round**: fresh agents given tasks requiring each pack must
   correctly name the pack and the launch flag they need, unprompted, from a lite
   session, and must not attempt a workaround (lite carries no degraded stand-in,
-  by rule). Any failure is a red gate and a docstring or refusal-message fix, not
-  a waiver.
+  by rule). Any discoverability failure is a red gate and a docstring or
+  refusal-message fix, not a waiver.
 
 ### Phase 8: Adversarial rounds (RED GATES, plural)
 
