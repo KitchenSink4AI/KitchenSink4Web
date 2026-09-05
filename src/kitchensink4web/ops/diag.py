@@ -193,6 +193,9 @@ async def evaluate_script(
     script's JSON-serializable return value. Prefer the structured read and
     action tools for anything they can do; reach for this only when no
     other tool expresses what you need, and expect the confirmation prompt.
+    As of 2026-09 that prompt displays in Claude Desktop and Claude Code;
+    the claude.ai web client does not display it yet, so this tool stays
+    refused there.
     """
     if not (script or "").strip():
         raise BadParams("evaluate_script needs a script to run.")

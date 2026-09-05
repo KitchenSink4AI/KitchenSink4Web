@@ -166,7 +166,11 @@ class GateEngine:
             f"client supports interactive requests the confirmation prompt "
             f"is attached; where it supports neither MRTR nor elicitation "
             f"this action FAILS CLOSED and cannot be performed from this "
-            f"client. The target is re-validated at execution time, so a "
+            f"client. As of 2026-09 that is the claude.ai web client, "
+            f"which receives the prompt and does not display it; Claude "
+            f"Desktop and Claude Code both display it and this action "
+            f"completes there. The target is re-validated at execution "
+            f"time, so a "
             f"page that swaps the element after this confirmation gets "
             f"TARGET_CHANGED, not the click.")
         exc.detail = {

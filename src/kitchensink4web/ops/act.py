@@ -53,6 +53,14 @@ from ..projection import extract
 #: Location grammar (DESIGN 9). Exactly ONE selector group per call; the
 #: role-plus-name pair is one group. `frame`, `shadow`, and `exact` are
 #: modifiers, not selectors, so they may ride alongside the one selector.
+#:
+#: AUDIT 2026-09-06 (field log 2, discoverability item 1): of the three,
+#: only `exact` is CONSUMED. The resolver reads `loc.exact` for text and
+#: role+name matching; nothing reads `loc.frame` or `loc.shadow`, and the
+#: resolver queries `document` alone, which pierces neither an iframe nor a
+#: shadow root. Both are reserved grammar, and the find_elements and
+#: get_page_view docstrings now say so rather than leaving a caller to
+#: assume a modifier the grammar accepts is a modifier that works.
 _LADDER_KEYS = ("ref", "region", "form", "table")
 _LIVE_KEYS = ("css", "xpath", "testid", "coordinate", "nth", "describe",
               "text", "anchor")

@@ -48,8 +48,8 @@ from . import act as _act
 from ..engine import lanes, session as _session
 from ..errors import (AmbiguousLocation, AuthRequired, BadParams,
                       BlockedBySite, LaneUnsupported, ModalBlocked,
-                      NotImplementedYet, ReadOnlyMode, StaleAnchor,
-                      TargetNotFound)
+                      NotImplementedYet, PageUnreachable, ReadOnlyMode,
+                      StaleAnchor, TargetNotFound)
 from ..policy import audit as _audit
 from ..policy import budgets as _budgets
 from ..policy import credentials as _credentials
@@ -268,10 +268,14 @@ async def get_page_view(
     regions each priced with the cost to expand it, the interactive surface
     with refs you can act on, a digest or app skeleton, form and table
     inventories, an account of what was NOT read and why, and the next call
-    for anything unexpanded. `location` scopes to one region or frame,
-    `since` gives a delta, `budget_tokens=2500` suits a subagent.
-    `mode='links'` includes in-prose links in the affordance list (normally
-    suppressed by design) at their real token cost.
+    for anything unexpanded. `location` scopes to one region ref,
+    `budget_tokens=2500` suits a subagent, `mode='links'` includes in-prose
+    links at their real cost. `since=<read_token>` is the cheap repeat
+    read: only what changed, refs kept, a few hundred tokens instead of a
+    fresh read, and it falls back to a full read when the page navigated in
+    between and nothing survives to diff. Shadow roots are not traversed on
+    any read path; the completeness block counts them so their content is
+    reported unread rather than silently dropped.
     """
     if cursor:
         _stub("get_page_view(cursor=...)",
@@ -375,6 +379,27 @@ async def get_page_view(
         # full projection and a delta would charge the caller twice for the
         # thing they asked to stop paying for.
         delta = anchors.diff(baseline, state["read"])
+        if delta["navigated"] and not sum(delta["stable"].values()):
+            # Field finding 25 (2026-09-05): after a client-side navigation
+            # nothing survives to diff against, so every old unit reads
+            # "gone" and every new one reads "+", and the delta comes out
+            # LARGER than the fresh read it exists to replace. The full
+            # projection is already computed above, so it rides out instead
+            # and the delta block says why.
+            payload["delta"] = {
+                "since": delta["since"], "read": delta["read"],
+                "navigated": True, "stable": delta["stable"],
+                "fell_back_to_full_read": True,
+                "url_before": delta["url_before"],
+                "url_after": delta["url_after"],
+                "why": (f'the page navigated from {delta["url_before"]} to '
+                        f'{delta["url_after"]} and no unit survived it, so '
+                        f'a delta would list every old unit as gone and '
+                        f'every new one as added, which costs more than the '
+                        f'full read above. Pass since={delta["read"]!r} '
+                        f'next time to resume delta reads from this page.'),
+            }
+            return payload
         rendered = anchors.render(delta, record.handle)
         payload["projection"], payload["page_data"] = _pagedata.wrap(
             rendered, url=record.page.url)
@@ -441,6 +466,9 @@ async def find_elements(
     look for, and this retrieves it for a fraction of a full read.
     Ambiguous results are listed rather than resolved, and zero results
     come back with the nearest misses so a miss is a one-turn recovery.
+    The main document only: iframes and shadow roots are not searched and
+    the result counts what it skipped. The `shadow` location modifier is
+    reserved grammar and reaches nothing in this build.
     """
     kinds = ("auto", "text", "any", "css", "xpath")
     if kind not in kinds:
@@ -696,14 +724,23 @@ async def navigate(
                 f'[lane {sess.spec.label}] {row["message"]}'
                 + (f' The previous URL on this page was {previous}.'
                    if previous else ''))
-        response = await _session.with_timeout(
-            record.page.go_back() if action == "back"
-            else record.page.go_forward(), timeout_ms, f"navigate({action})")
+        try:
+            response = await _session.with_timeout(
+                record.page.go_back() if action == "back"
+                else record.page.go_forward(), timeout_ms,
+                f"navigate({action})")
+        except Exception as exc:
+            _raise_if_unreachable(exc, f"navigate({action})")
+            raise
         status = response.status if response else None
     elif action == "reload":
-        response = await _session.with_timeout(
-            record.page.reload(wait_until=wait_until), timeout_ms,
-            "navigate(reload)")
+        try:
+            response = await _session.with_timeout(
+                record.page.reload(wait_until=wait_until), timeout_ms,
+                "navigate(reload)")
+        except Exception as exc:
+            _raise_if_unreachable(exc, "navigate(reload)")
+            raise
         status = response.status if response else None
     elif action == "stop":
         await record.page.evaluate("() => window.stop()")
@@ -712,9 +749,14 @@ async def navigate(
             record.page.wait_for_load_state(wait_until), timeout_ms,
             f"navigate(wait_for_load, {wait_until})")
     elif action == "goto":
-        response = await _session.with_timeout(
-            record.page.goto(url, wait_until=wait_until, timeout=timeout_ms),
-            timeout_ms + 2000, f"navigate(goto, {url})")
+        try:
+            response = await _session.with_timeout(
+                record.page.goto(url, wait_until=wait_until,
+                                 timeout=timeout_ms),
+                timeout_ms + 2000, f"navigate(goto, {url})")
+        except Exception as exc:
+            _raise_if_unreachable(exc, f"navigate(goto, {url})")
+            raise
         status = response.status if response else None
         sess.counters["navigations"] += 1
         sess.origins.add(urlparse(record.page.url).netloc)
@@ -768,12 +810,28 @@ async def navigate(
     if verdict["wall"] == "auth-wall":
         raise _auth_refusal(record.page.url, verdict.get("marker"))
     if verdict["wall"]:
+        # LANE STEERING, not evasion (standing rule): nothing here patches a
+        # user agent or pretends to be a browser it is not. The field test
+        # 2026-09-05 measured that both Firefox lanes read pages the
+        # Chromium lane was turned away from, so the refusal names the lane
+        # that has a real chance instead of leaving the agent to retry the
+        # same one.
+        lane_hint = ""
+        if sess.spec.engine == "chromium" and verdict["wall"] in (
+                "bot-wall-or-captcha", "forbidden-challenge",
+                "service-unavailable-or-bot-wall"):
+            lane_hint = (
+                'Sites that turn away automated Chromium often serve '
+                'Firefox normally, so manage_session(action="open", '
+                'lane="B:moz-firefox") (your installed Firefox) or '
+                'lane="A:firefox" (the bundled one) is worth one try before '
+                'the handoff. ')
         raise BlockedBySite(
             f'{record.page.url} answered with a {verdict["wall"]} rather than '
             f'the page (HTTP {status}). KS4Web does not retry against a wall '
-            f'and does not defeat one: open the page in a headed window with '
-            f'manage_session(action="handoff") so a human can clear it, or '
-            f'come back later. '
+            f'and does not defeat one: {lane_hint}open the page in a headed '
+            f'window with manage_session(action="handoff") so a human can '
+            f'clear it, or come back later. '
             + (f'Retry-After honored: {retry_after_s:.0f}s. '
                if retry_after_s else '')
             + f'Evidence: {verdict.get("marker") or "HTTP status"}.')
@@ -792,6 +850,47 @@ async def navigate(
         "invalidated": invalidated or "nothing; the URL did not change, so "
                                      "refs and read tokens still hold",
     }
+
+
+#: What the drivers say when the request never reached a server, mapped to
+#: the plain-English cause. Chromium prints `net::ERR_*`; Firefox and WebKit
+#: print prose, so both vocabularies are matched. Field finding 26
+#: (2026-09-05): with the network down, navigate refused BAD_PARAMS, which
+#: reads as "you typed the URL wrong" and sends an agent off rewriting a URL
+#: that was already correct.
+_NET_CAUSES: tuple[tuple[str, str], ...] = (
+    ("err_internet_disconnected", "this machine has no network connection"),
+    ("err_network_changed", "the network changed underneath the request"),
+    ("err_name_not_resolved", "DNS could not resolve the host name"),
+    ("err_name_resolution_failed", "DNS could not resolve the host name"),
+    ("neterror&e=dnsnotfound", "DNS could not resolve the host name"),
+    ("err_connection_refused", "the host refused the connection"),
+    ("err_connection_reset", "the connection was reset before a reply"),
+    ("err_connection_closed", "the connection closed before a reply"),
+    ("err_connection_timed_out", "the connection timed out"),
+    ("err_address_unreachable", "the address is unreachable from here"),
+    ("err_proxy_connection_failed", "the configured proxy refused"),
+    ("err_cert_", "the TLS certificate was rejected"),
+    ("ssl_error", "the TLS handshake failed"),
+    ("ns_error_unknown_host", "DNS could not resolve the host name"),
+    ("ns_error_connection_refused", "the host refused the connection"),
+    ("ns_error_net_reset", "the connection was reset before a reply"),
+    ("ns_error_offline", "this machine has no network connection"),
+)
+
+
+def _raise_if_unreachable(exc: Exception, what: str) -> None:
+    """Re-raise a driver transport failure as PAGE_UNREACHABLE, naming the
+    cause. Anything unrecognized is left alone for the envelope to map."""
+    text = str(exc).lower()
+    for marker, cause in _NET_CAUSES:
+        if marker in text:
+            raise PageUnreachable(
+                f"{what} never reached a server: {cause} (driver reported "
+                f"{marker.strip('&=')}). The URL itself is not the problem, "
+                f"so rewriting it will not help. Check the connection or "
+                f"the host name, and retry once conditions change rather "
+                f"than in a loop.") from exc
 
 
 def _validated_url(url: str | None) -> str:
@@ -1137,7 +1236,9 @@ async def fill_form(
     category. Every ref resolves before anything executes, and each target
     is re-checked immediately before its own turn, because typing into one
     field routinely re-renders its siblings. A failure stops the batch:
-    completed items stay completed, the rest report not_attempted.
+    completed items stay completed, the rest report not_attempted. Each
+    entry is one target plus its value: fields=[{"ref": "e12", "value":
+    "hello"}], any selector in place of "ref", true/false for a checkbox.
     """
     sess, record = MANAGER.locate(page)
     _audit.annotate(session=sess.session_id, page=record.handle,
@@ -1339,9 +1440,10 @@ async def press_keys(
     repeat: int = 1,
     delay_ms: int = 0,
 ) -> dict:
-    """Press a key or a chord, optionally repeated, either globally or with
-    a named element focused first. Accepts the usual spellings for modifiers
-    and named keys. Dispatched as trusted input through the driver rather
+    """Press a key or a chord named in `keys` (keys='Enter',
+    keys='Control+A'), optionally repeated, either globally or with a named
+    element focused first. Accepts the usual spellings for modifiers and
+    named keys. Dispatched as trusted input through the driver rather
     than synthesized, and returns a verified outcome so a chord the page
     ignored is reported as none-observed instead of as a success the agent
     then builds several more steps on top of.
@@ -1662,9 +1764,14 @@ async def manage_tabs(
         record = MANAGER._attach_page(sess, new_page)
         sess.focused = record.handle
         if url:
-            await _session.with_timeout(
-                new_page.goto(url), _session.DEFAULT_TIMEOUT_MS,
-                f"manage_tabs(open, {url})")
+            url = _validated_url(url)
+            try:
+                await _session.with_timeout(
+                    new_page.goto(url), _session.DEFAULT_TIMEOUT_MS,
+                    f"manage_tabs(open, {url})")
+            except Exception as exc:
+                _raise_if_unreachable(exc, f"manage_tabs(open, {url})")
+                raise
             record.touch(new_page.url)
             sess.counters["navigations"] += 1
     elif action == "select":
@@ -1757,8 +1864,8 @@ async def manage_session(
             "profile": (
                 "a freshly created KS4Web-owned directory. KS4Web never opens "
                 "your real browser profile, and every Firefox launch carries "
-                "-no-remote so it cannot be adopted by a Firefox you are "
-                "already running."),
+                "Firefox's -no-remote launch flag, which stops a running "
+                "Firefox from adopting the window."),
             "hygiene": {"job_object": _session.hygiene.JOB.status,
                         "owned_pids": len(sess.journal.pids),
                         "startup_reap": MANAGER.startup_reap},
@@ -1771,6 +1878,7 @@ async def manage_session(
         except Exception:
             pass
         saved = None
+        saved_earlier = sess.saved_auth_path
         if auth_state:
             _auth_state_precheck(
                 "manage_session(action='close', auth_state=...)", None)
@@ -1786,6 +1894,20 @@ async def manage_session(
                 "saved_to": saved["saved_to"],
                 "cookies_saved": saved["cookies_saved"],
                 "note": saved["note"]}
+        elif saved_earlier:
+            # Field finding 41 (2026-09-05): this branch used to say "none
+            # were saved" minutes after an explicit save_auth_state,
+            # because it consulted only this call's own arguments. The
+            # session remembers its save history now, and a security
+            # message that contradicts what the caller just did is the one
+            # place a wrong word costs the most trust.
+            result["auth_state"] = (
+                f"this session held {n_cookies} cookie(s), and its auth "
+                f"state was saved earlier this session to {saved_earlier}. "
+                f"Anything that changed after that save is not in the file; "
+                f"closing with auth_state='save' writes a fresh one. Reuse "
+                f"it with manage_session(action='open', auth_state=...) or "
+                f"load_auth_state.")
         elif n_cookies:
             # The OFFER, after the fact and never silent in either
             # direction: an authenticated session was closed and its login
@@ -1793,9 +1915,9 @@ async def manage_session(
             # next one.
             result["auth_state"] = (
                 f"this session held {n_cookies} cookie(s), which is the "
-                f"shape of a signed-in state, and none were saved (nothing "
-                f"is ever auto-saved). To keep a login for reuse, close "
-                f"with auth_state='save' (or a path), or call "
+                f"shape of a signed-in state, and none were saved on close "
+                f"(nothing is ever auto-saved). To keep a login for reuse, "
+                f"close with auth_state='save' (or a path), or call "
                 f"save_auth_state before closing (storage pack).")
         return result
     if action == "capabilities":
@@ -1922,8 +2044,12 @@ def _auth_state_precheck(what: str, path: str | None) -> str | None:
     if not packs.is_pack_loaded("storage"):
         raise BadParams(
             f"{what} needs the storage pack, which is not loaded in this "
-            f"process. Restart with --packs storage (or KS4WEB_MODE=full); "
-            f"packs are a launch-time selection.")
+            f"process. On a Desktop install, reopen the extension's "
+            f"settings and turn on the \"Cookies and logins\" capability, "
+            f"then restart the server; from a command "
+            f"line, relaunch with --packs storage or KS4WEB_MODE=full. "
+            f"Packs are a launch-time selection either way, so there is no "
+            f"call that turns one on mid-session.")
     if path:
         from ..policy import sandbox
         return sandbox.check_path(path, "load auth state")
@@ -1947,7 +2073,7 @@ async def _load_auth_into(sess, checked: str) -> dict:
     if cookies:
         await sess.context.add_cookies(cookies)
     for c in cookies:
-        _credentials.VAULT.observe(c.get("value", ""))
+        _credentials.VAULT.observe_cookie(c)
     return {"loaded_from": checked, "cookies_loaded": len(cookies),
             "origins_pending": len(data.get("origins", [])),
             "note": ("cookies are active now; per-origin localStorage "
@@ -1978,10 +2104,11 @@ async def get_audit(
 
 async def get_workflows(topic: str | None = None) -> dict:
     """Get recipes for this server: the cheap-read-then-act pattern, the
-    auth workflow (headed handoff plus saved state), the subagent budget
-    setting, lanes, what each capability pack contains with the exact
-    launch flag that loads it, and how to record and replay a multi-step
-    flow. Packs are chosen at launch rather than at runtime, so this is
+    auth workflow (headed handoff plus saved state), reading strategy,
+    budgeting, troubleshooting a page that will not read, the subagent
+    budget setting, lanes, what each capability pack contains with the
+    exact launch flag that loads it, and how to record and replay a
+    multi-step flow. Packs are chosen at launch rather than at runtime, so this is
     where you learn which flag you need before restarting. Tool
     availability reflects the extension's current settings; when settings
     change, the tool list refreshes in this conversation.
@@ -2022,12 +2149,101 @@ async def get_workflows(topic: str | None = None) -> dict:
             "manage_session(action='open', lane='B:chrome')      your "
             "installed Chrome, still on a KS4Web-owned profile",
             "manage_session(action='open', lane='B:moz-firefox') your "
-            "installed Firefox, with -no-remote so it cannot be adopted by a "
-            "Firefox you already have open",
+            "installed Firefox, launched with Firefox's -no-remote flag so a "
+            "Firefox you already have open cannot adopt the window",
             "add '+headed' to any of them for a visible window",
             "manage_session(action='capabilities') reports what the running "
             "lane supports, degrades, and cannot do, with the lane that would "
             "support each gap named",
+        ],
+        # The three steering topics below come from the 2026-09-05 field
+        # test, where the tester wrote up the patterns he had arrived at
+        # over ~130 calls across twelve sites. They are his findings, kept
+        # as instructions.
+        "reading": [
+            "Start with a cheap read, not a big one. get_page_view(page="
+            "'p1', budget_tokens=2000) returns the page shape and a region "
+            "inventory, and the shape tells you which tool to reach for "
+            "next: on an article, get_text for prose and get_table for "
+            "data; on an app, find_elements for targets and fill_form for "
+            "entry. get_text on an app page buys empty prose at full "
+            "price.",
+            "Expand one region instead of raising the budget. Read the "
+            "page at 2000 to get the region inventory, then re-read with "
+            "location={'region': 'r4'} for detail on the part you want. "
+            "Two scoped reads cost less than one wide read and you choose "
+            "what you paid for.",
+            "Chain deltas after the first read. Every read returns a "
+            "read_token; passing it back as since= returns only what "
+            "changed, which is a few hundred tokens against a fresh read's "
+            "one to two thousand. Over a five-step interaction that is the "
+            "difference between one page-read bill and five. A page that "
+            "navigates in between breaks the chain, and the call says so "
+            "and falls back to a full read.",
+            "Prefer text and role selectors over refs for anything you "
+            "will repeat or save. A ref is one token and survives ordinary "
+            "re-renders, but find_elements(query='Submit', role='button') "
+            "survives anything that does not rename the button, and it is "
+            "what makes a saved workflow replay months later.",
+        ],
+        "budgeting": [
+            "budget_tokens is a ceiling the read never exceeds, so the "
+            "question is never whether a page fits, only how much detail "
+            "you bought. Start unknown pages at 2000 and raise only when "
+            "the read tells you something was cut.",
+            "Every read reports the rung it printed at and how many rungs "
+            "exist. A read near the top of the ladder kept its detail; a "
+            "read deep down the ladder dropped some, and the completeness "
+            "block names what went and what it would cost to get it back.",
+            "Most pages are readable at 2000 to 3000. Above 5000 is rarely "
+            "worth it outside a complex app where you need the whole "
+            "affordance list at once, and a region-scoped second read "
+            "usually beats it anyway.",
+            "Inside a subagent, use budget_tokens=2500. Tool results are "
+            "capped more tightly there and the cap is delivered remotely, "
+            "so it can move under you.",
+            "The cheapest page you ever read is the one you read once. A "
+            "full read followed by deltas is the pattern; a full read "
+            "repeated after every click is the bill.",
+        ],
+        "troubleshooting": [
+            "Page looks empty or wrong: read navigate's verdict first, "
+            "since a bot wall or a CAPTCHA is a refusal to answer rather "
+            "than an empty page. Then check the completeness block's "
+            "shadow-root count, because this build does not traverse "
+            "shadow roots and a component-heavy site can hide most of its "
+            "interface in them. Then check whether the site is turning "
+            "away headless Chromium: the Firefox lanes get through checks "
+            "that block it, so manage_session(action='open', "
+            "lane='B:moz-firefox') is the move. get_page_errors (the "
+            "diagnostics pack) shows JavaScript that failed before the "
+            "page could render.",
+            "Element not found: try a role filter first, since a name that "
+            "matches twelve things matches one button once the role is "
+            "named. Then mode='links' if it is a link inside prose, which "
+            "a normal read suppresses. Then scroll, because lazy content "
+            "is not in the DOM until it is on screen. If the count of "
+            "hidden elements or shadow roots is high, the element may be "
+            "somewhere no read reaches, and the read says so rather than "
+            "pretending the page is smaller than it is.",
+            "Auth not working: check the cookie count before anything "
+            "else, since zero cookies means the login never happened and "
+            "there is nothing to save. A login that worked yesterday and "
+            "fails today is usually an expired session cookie, so sign in "
+            "again with a handoff and save fresh state. Cookies are bound "
+            "to the browser that created them more often than people "
+            "expect, so a state file saved on one lane may need a fresh "
+            "login on another.",
+            "Firefox lanes take longer to fire the load event than "
+            "Chromium does. A navigation that times out there is usually "
+            "waiting for a load that is coming, so pass "
+            "wait_until='domcontentloaded' rather than raising the "
+            "timeout.",
+            "What not to do: do not reuse refs across a navigation, do not "
+            "ask for a delta after a page navigated, do not type multiple "
+            "lines into a single-line field, and do not retry a wall. Each "
+            "of those refuses with the reason and the next call, and the "
+            "refusal is cheaper to read than the retry is to run.",
         ],
         "packs": packs.menu(),
         "packs-are-launch-time": (

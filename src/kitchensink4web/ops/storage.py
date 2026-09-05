@@ -33,7 +33,12 @@ from . import common
 
 def _mask_cookie(cookie: dict, unmask: bool) -> dict:
     value = cookie.get("value", "")
-    _credentials.VAULT.observe(value)
+    # Vault only the credential-shaped ones. Vaulting every cookie is what
+    # the 2026-09-05 field test caught shredding ordinary reads: a
+    # preference cookie's value gets redacted out of unrelated page text
+    # for the rest of the session. The VALUE is still masked in this
+    # payload either way; masking and vaulting are different guarantees.
+    _credentials.VAULT.observe_cookie(cookie)
     return {
         "name": cookie.get("name"),
         "domain": cookie.get("domain"),
@@ -160,7 +165,8 @@ async def manage_storage(
         _STORAGE_JS, {"which": kind, "unmask": unmask})
     for item in got["items"]:
         if item.get("value") is not None:
-            _credentials.VAULT.observe(item["value"])
+            _credentials.VAULT.observe_storage_item(
+                item.get("key"), item["value"])
     if key:
         got["items"] = [i for i in got["items"] if i["key"] == key]
     if action == "clear":
@@ -199,6 +205,9 @@ async def save_auth_state(
     state = await sess.context.storage_state(path=checked)
     n_cookies = len(state.get("cookies", []))
     n_origins = len(state.get("origins", []))
+    # The session remembers the save, so close can say "saved earlier" (field
+    # finding 41) instead of contradicting a save made minutes ago.
+    sess.record_auth_save(checked)
     return {
         "session": sess.session_id, "saved_to": checked,
         "cookies_saved": n_cookies, "origins_saved": n_origins,
@@ -219,7 +228,10 @@ async def load_auth_state(
     session is consequential it is a gated action that fails closed until a
     human confirms. Cookies apply immediately; per-origin storage is
     applied on the next navigation to each origin, which the result states.
-    Returns what was loaded, never the values.
+    Returns what was loaded, never the values. Client note as of 2026-09:
+    the confirmation prompt displays in Claude Desktop and Claude Code, and
+    the claude.ai web client does not display it yet, so this call cannot
+    complete there and refuses instead of loading credentials unconfirmed.
     """
     import json
     if not path:
@@ -247,7 +259,7 @@ async def load_auth_state(
     if cookies:
         await sess.context.add_cookies(cookies)
     for c in cookies:
-        _credentials.VAULT.observe(c.get("value", ""))
+        _credentials.VAULT.observe_cookie(c)
     return {
         "session": sess.session_id, "loaded_from": checked,
         "cookies_loaded": len(cookies),

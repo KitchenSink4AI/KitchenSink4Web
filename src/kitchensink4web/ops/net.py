@@ -421,6 +421,10 @@ async def set_routing(
     always one call away (action='status' reads it without changing
     anything). Routing mutates what pages see, so this tool is absent
     under read-only mode and every change passes the policy choke point.
+    `preset=` belongs to action='throttle' alone and its values are
+    'slow-3g', 'fast-3g', and 'off'; blocking is driven by `patterns` or by
+    action='block_ads', and analytics traffic is a listing filter on
+    list_requests, not a routing preset.
     """
     actions = ("status", "block", "block_ads", "mock", "offline",
                "headers", "throttle", "clear")
