@@ -4,7 +4,7 @@ browser code vocabulary, and the one place redaction can be enforced.
 Ported in SHAPE from word-mcp `envelope.py` (itself carried from KS4PPT).
 The machinery is the family's; the code map is entirely new, because the
 browser vocabulary shares only eight codes with the document family and adds
-twelve of its own (DESIGN 8.3).
+thirteen of its own (DESIGN 8.3).
 
 Three things this module is responsible for, all of them load-bearing:
 
@@ -44,7 +44,7 @@ from . import errors as _err
 # --------------------------------------------------------------- vocabulary
 
 #: The SHIPPED closed vocabulary (DESIGN 8.3). Eight inherited from the
-#: document family, twelve browser additions. Nothing outside this set may
+#: document family, thirteen browser additions. Nothing outside this set may
 #: appear in a shipped refusal.
 CLOSED_CODES: frozenset[str] = frozenset({
     # inherited
@@ -53,6 +53,7 @@ CLOSED_CODES: frozenset[str] = frozenset({
     "CONFLICT", "BAD_PARAMS",
     # browser additions
     "TARGET_CHANGED", "NAVIGATION_BLOCKED", "BLOCKED_BY_SITE",
+    "PAGE_UNREACHABLE",
     "AUTH_REQUIRED", "CREDENTIAL_REFUSED", "BUDGET_EXHAUSTED",
     "LOOP_DETECTED", "CONFIRMATION_REQUIRED", "READ_ONLY_MODE",
     "LANE_UNSUPPORTED", "MODAL_BLOCKED", "TIMEOUT",
@@ -76,6 +77,7 @@ CODE_MAP: tuple[tuple[type[BaseException], str], ...] = (
     (_err.TargetNotFound, "NOT_FOUND"),
     (_err.NavigationBlocked, "NAVIGATION_BLOCKED"),
     (_err.BlockedBySite, "BLOCKED_BY_SITE"),
+    (_err.PageUnreachable, "PAGE_UNREACHABLE"),
     (_err.AuthRequired, "AUTH_REQUIRED"),
     (_err.CredentialRefused, "CREDENTIAL_REFUSED"),
     (_err.BudgetExhausted, "BUDGET_EXHAUSTED"),
@@ -140,6 +142,12 @@ HINTS: dict[str, str] = {
         "the site is refusing automated access; do not retry in a loop. "
         "The message names the wall type, any Retry-After, and the handoff "
         "route that lets a human clear it"
+    ),
+    "PAGE_UNREACHABLE": (
+        "the request never reached a server, so the URL is not the thing "
+        "to fix. The message names what the network reported (no "
+        "connection, DNS failure, refused connection). Check connectivity "
+        "or the host name, and do not retry in a tight loop"
     ),
     "AUTH_REQUIRED": (
         "the page needs a signed-in session; use load_auth_state with a "

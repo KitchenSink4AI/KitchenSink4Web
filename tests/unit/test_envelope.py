@@ -20,6 +20,10 @@ DESIGN_CODES = {
     "AMBIGUOUS_LOCATION", "NOT_FOUND", "RANGE_OUT_OF_BOUNDS", "STALE_ANCHOR",
     "UNSUPPORTED_CONTENT", "VALIDATION_FAILED", "CONFLICT", "BAD_PARAMS",
     "TARGET_CHANGED", "NAVIGATION_BLOCKED", "BLOCKED_BY_SITE",
+    # Added 2026-09-06 (field finding 26): a request that never reached a
+    # server is not a malformed argument, and BAD_PARAMS told agents to go
+    # rewrite a URL that was already correct.
+    "PAGE_UNREACHABLE",
     "AUTH_REQUIRED", "CREDENTIAL_REFUSED", "BUDGET_EXHAUSTED",
     "LOOP_DETECTED", "CONFIRMATION_REQUIRED", "READ_ONLY_MODE",
     "LANE_UNSUPPORTED", "MODAL_BLOCKED", "TIMEOUT",

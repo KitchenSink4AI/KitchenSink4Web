@@ -2745,6 +2745,7 @@ Browser additions, each with a named recovery in every message:
 | `TARGET_CHANGED` | TOCTOU re-validation failed between gate and execution | the fingerprint fields that differ |
 | `NAVIGATION_BLOCKED` | origin policy denied a navigation | the origin, the policy, and the flag that would allow it |
 | `BLOCKED_BY_SITE` | bot wall, CAPTCHA, 403 challenge, rate limit | the wall type, any `Retry-After`, and the handoff route |
+| `PAGE_UNREACHABLE` | the request never reached a server: no connection, DNS failure, refused or reset connection, TLS failure | what the network reported, and that the URL is not the thing to fix |
 | `AUTH_REQUIRED` | login wall or expired session detected | which, and the handoff or `load_auth_state` route |
 | `CREDENTIAL_REFUSED` | secret-field read or write attempted outside a sanctioned route | the two sanctioned routes |
 | `BUDGET_EXHAUSTED` | any budget tripped | every counter and the gated reset route |

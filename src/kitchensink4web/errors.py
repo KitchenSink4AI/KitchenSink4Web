@@ -88,6 +88,17 @@ class BlockedBySite(WebMcpError):
     agent stops burning turns against a wall it cannot pass (DESIGN 5.8)."""
 
 
+class PageUnreachable(WebMcpError):
+    """The request never reached a server: no network, DNS did not resolve,
+    the connection was refused or reset, TLS failed.
+
+    Separate from NAVIGATION_BLOCKED (this server's own policy said no) and
+    from BLOCKED_BY_SITE (a server answered, hostilely). The field test
+    2026-09-05 is why it exists: navigating with the network down came back
+    as BAD_PARAMS, which tells an agent it typed the URL wrong and sends it
+    off rewriting a URL that was correct."""
+
+
 class AuthRequired(WebMcpError):
     """A login wall or an expired session. Names which, and the handoff or
     load_auth_state route."""
