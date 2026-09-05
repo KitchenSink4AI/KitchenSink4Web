@@ -2136,3 +2136,123 @@ and S2 green, and the architecture freeze stands on measurement end to end.
 
 ## 2026-09-05 15:56 KST - Session pause checkpoint
 Phases 0-6 green (438 tests), ALL 10 SPIKES CLOSED (S9: Edge-inherits binary-verified, lane C works via non-default dir both browsers, ABE: Chrome seeding cannot carry sessions = Firefox-unique position strengthened; S10: ship no browsers, lazy Chromium). Read-only default browse DECIDED by field test + IMPLEMENTED. Dev mcpb delivered to author; live field log captured (34KB, untriaged). Release conditions queued for Phase 7: positive-polarity settings rename + real toggles (Desktop passes literal true/false), FAIL-OPEN fix (empty value currently unlocks), auto-session inside navigate, readOnlyHint on read tools, guided-refusal wording updates, prompt-count disclosure, tool-name legibility. Remaining: Phases 7-9 (Garden page English = Fable-authored), adversarial gauntlet, ship prep.
+
+## 2026-09-05 17:14 KST - Phase 7 opening: the field misdirect investigation, plus the release-condition and punch-list rounds
+
+### The investigation (field friction #3), the case study
+
+The field report's critical finding: after a click that re-rendered the DOM
+(a GitHub upvote), type_text on the comment box ref landed in the SEARCH
+BAR, no refusal fired, and `effect: navigated` arrived only after the
+damage. That contradicted two green subsystems, so the hypothesis space was
+walked with the code open:
+
+- (c) pre-action re-validation firing only on click: FALSE. Both tools
+  resolve through the same `_act.resolve`.
+- (d) the E7 entry-condition table routing a stale-epoch ref wrong: FALSE.
+  URL-first ordering held; doc_epoch binds nothing.
+- (b) a false rebind failing open: LATENT BUT REAL. The fingerprint tier
+  accepted an attribute-rung hit (testid/id/named-control) with NO identity
+  cross-check, so a framework-minted volatile id (React useId's `:r1:`
+  shape) reassigned by a remount to a DIFFERENT element would return a
+  silent OK at the strongest tier. Landmark scoping makes it an unlikely
+  fit for the GitHub case, but the hole was real.
+- (a) a resolution path bypassing the ladder: REAL, twice. `_resolve_ref`'s
+  entry-None branch fell back to the raw in-page map (position, no
+  fingerprint, no staleness); and action results LEAKED per-read node ids
+  as `target.ref`, handing callers refs that ride that raw path on reuse.
+  Workflow replay had the same namespace confusion internally.
+- THE FIELD MECHANISM ITSELF sat one step past all four: the DISPATCH.
+  type_text's non-clearing path was `handle.focus()` then
+  `page.keyboard.type(...)` - and the page keyboard is PAGE-scoped. The
+  ladder resolved the RIGHT element; then GitHub's editor remount replaced
+  the node between focus and keystrokes, focus fell to <body>, GitHub's
+  global hotkey moved it to the search bar on the first printable key, the
+  rest of the comment landed there, and the "\n" in the text was pressed
+  as Enter: search submitted, full-page navigation. No resolution error
+  ever existed for the gates to catch. The unbound keyboard was a
+  positional fallback wearing trusted-input clothes.
+
+Reproduced byte-for-byte on a deterministic fixture through the real tool
+surface (tests/browser/test_ref_misdirect.py): the pre-fix run produced
+`url=.../results?q=Confirming+this+issue` - the field signature exactly.
+
+Why the gates missed it: S2 proved RESOLUTION (zero false rebinds across
+396 resolutions) and Phase 4's TOCTOU gate re-validates GATED classes at
+execution. Neither claim covers the window between resolution and an
+UNBOUND dispatch, and plain typing is not a gated class. The property that
+was actually needed: keystrokes bound for one element must never be
+deliverable to another, whatever the page does in between.
+
+Fixes, at the architecture:
+- type_text asserts the target still holds focus before any key is sent
+  and types ELEMENT-BOUND; newlines are INSERTED (never Enter keydowns) in
+  textareas and refuse on single-line controls (an Enter there is a
+  submission in disguise).
+- the raw in-page-map fallback is DELETED: a ref the session map cannot
+  resolve refuses NOT_FOUND, never resolves by position.
+- action results report SESSION refs; live-selector resolutions absorb
+  into the session map (same anchor keys as a read, so the same element
+  keeps the same ref either way); workflow replay hands session refs to
+  the tools it drives.
+- the ladder's fingerprint tier cross-checks identity on attribute-rung
+  hits: a role change is NO match (the volatile-id theft shape), a name
+  change proceeds as a REPORTED rebind, never a silent OK. Same in
+  resolve_anchor for replay.
+- in-page extractor ids mint MONOTONICALLY across the page lifetime
+  (window-held counters, ids reused per element), so a stale key can only
+  ever mean one element or nothing - the recycling that made position lie
+  is structurally gone.
+- `_handle` refuses disconnected elements; a driver 'not attached' surfaces
+  as STALE_ANCHOR naming the recovery instead of a misleading TIMEOUT.
+
+Also found on the way: find_elements' absorb was marking every unmatched
+element on the page GONE (whole-page scope on a targeted lookup), turning
+untouched refs into spurious rebinds; and the get_text claim that refs ride
+the prose was false and is out of the docstring.
+
+### Release conditions (all four implemented)
+
+1. KS4WEB_ALLOW_ACTING (positive polarity, Desktop's literal true/false,
+   grade vocabulary accepted, garbage refuses to start); KS4WEB_READ_ONLY
+   honored one release as a deprecated alias; EMPTY VALUE FAILS CLOSED to
+   browse under both names (the old empty-unlocks was a fail-open defect);
+   readonly.source() names what decided the grade.
+2. Auto-session inside navigate: the first navigate opens the session and
+   says so; manage_session stays the explicit route.
+3. readOnlyHint now carries only the GENUINELY read-only set (navigate,
+   scroll, session/tab/export tools no longer claim it).
+4. Unlock teaching states the CONFIRMED in-conversation hot-reload (author
+   observed 40->69 live) plus the open-pages-reload nuance; the
+   toolset-reflects-settings line rides manage_session and get_workflows.
+
+### Punch list
+
+fill_form steering in type_text's docstring; AUTH_REQUIRED teaches the
+4-step recipe and get_workflows gains topic='auth'; manage_session open
+accepts auth_state= (gated, storage pack, absent under read-only) and
+close OFFERS save (never silent); headless handoff auto-upgrades to headed
+carrying cookies and the focused page; newline dispatch made consistent
+(the literal-backslash-n split was the model's escaping, the REAL defect
+was Enter-keydown newlines, both now answered by the insert contract);
+scroll aliases; wait_for checks EVERY condition before waiting and
+wildcard-free URL values match as substrings; find_elements role= filter;
+get_page_view mode='links'; malformed URL -> BAD_PARAMS. DECLINED, in
+DESIGN's ledger: include_hidden='safe' (display:none is a real injection
+channel; the labeled route serves the need). DEFERRED, in PLAN: composite
+tool, shadow-root spike, structured extraction, mutation observer,
+cross-tab refs, budget-by-goal.
+
+### Gate
+
+Suite 462 green (438 + 24 new: 4 misdirect regressions, 3 ladder unit, 9
+punch-list browser, invariant matrix). Read-only invariant re-verified
+under the renamed env: both polarities, empty, garbage, precedence, alias.
+Latency re-verified: 5k/10k/25k PASS, 50k/100k UNCERTIFIED by the
+harness's own reference-arm rule (machine loaded; treatment -1%/+4% vs
+reference at p50), and an A/B against the pre-change tree under the same
+load failed identically, so no regression is in the code. Docstring
+measure published honestly: lite 2,283 tokens (was 1,931; the growth is
+the newline contract, the auth recipe, and the mode teachings - budgets
+are SOFT by the 2026-09-05 ruling and no description nears the 2,048-char
+truncation).

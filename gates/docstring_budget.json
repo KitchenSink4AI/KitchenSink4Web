@@ -1,6 +1,6 @@
 {
   "ruling": "2026-09-05: token budgets are SOFT; these figures are published honestly rather than enforced as caps. Estimator: chars/4 (approximate; page-read numbers use tiktoken o200k_base and the two are never mixed).",
-  "lite_total_tokens": 1931,
+  "lite_total_tokens": 2283,
   "reference_targets": {
     "lite": 1500,
     "description": [
@@ -65,10 +65,10 @@
       "over_reference_caps": false
     },
     "find_elements": {
-      "description_tokens": 118,
-      "schema_tokens": 89,
-      "total_tokens": 207,
-      "over_reference_caps": false
+      "description_tokens": 154,
+      "schema_tokens": 108,
+      "total_tokens": 262,
+      "over_reference_caps": true
     },
     "get_audit": {
       "description_tokens": 104,
@@ -101,10 +101,10 @@
       "over_reference_caps": false
     },
     "get_page_view": {
-      "description_tokens": 119,
-      "schema_tokens": 148,
-      "total_tokens": 267,
-      "over_reference_caps": false
+      "description_tokens": 149,
+      "schema_tokens": 160,
+      "total_tokens": 309,
+      "over_reference_caps": true
     },
     "get_request": {
       "description_tokens": 140,
@@ -119,16 +119,16 @@
       "over_reference_caps": true
     },
     "get_text": {
-      "description_tokens": 102,
+      "description_tokens": 144,
       "schema_tokens": 96,
-      "total_tokens": 198,
-      "over_reference_caps": false
+      "total_tokens": 240,
+      "over_reference_caps": true
     },
     "get_workflows": {
-      "description_tokens": 104,
+      "description_tokens": 130,
       "schema_tokens": 36,
-      "total_tokens": 140,
-      "over_reference_caps": false
+      "total_tokens": 166,
+      "over_reference_caps": true
     },
     "list_console": {
       "description_tokens": 138,
@@ -161,10 +161,10 @@
       "over_reference_caps": true
     },
     "manage_session": {
-      "description_tokens": 99,
-      "schema_tokens": 87,
-      "total_tokens": 186,
-      "over_reference_caps": false
+      "description_tokens": 168,
+      "schema_tokens": 108,
+      "total_tokens": 276,
+      "over_reference_caps": true
     },
     "manage_storage": {
       "description_tokens": 128,
@@ -179,10 +179,10 @@
       "over_reference_caps": false
     },
     "navigate": {
-      "description_tokens": 98,
-      "schema_tokens": 86,
-      "total_tokens": 184,
-      "over_reference_caps": false
+      "description_tokens": 144,
+      "schema_tokens": 93,
+      "total_tokens": 237,
+      "over_reference_caps": true
     },
     "press_keys": {
       "description_tokens": 98,
@@ -245,10 +245,10 @@
       "over_reference_caps": true
     },
     "wait_for": {
-      "description_tokens": 95,
+      "description_tokens": 138,
       "schema_tokens": 100,
-      "total_tokens": 195,
-      "over_reference_caps": false
+      "total_tokens": 238,
+      "over_reference_caps": true
     }
   }
 }
