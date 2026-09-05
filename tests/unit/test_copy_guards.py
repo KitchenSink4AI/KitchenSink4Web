@@ -103,19 +103,50 @@ def test_the_one_read_claim_is_never_overclaimed():
                 f"{where} overclaims the single read"
 
 
-def test_no_license_claim_exists_yet():
-    """DESIGN 10.3 rule 5: no license text, badge, or claim in any file
-    until Q1 is ruled. The LICENSE file is a Phase 9 artifact, and a
-    placeholder now is how a deferred decision becomes an accidental one."""
-    assert not (ROOT / "LICENSE").exists()
-    assert not (ROOT / "LICENSE.txt").exists()
+def test_the_license_landed_whole():
+    """DESIGN 10.3 rule 5 held every license claim out of every file until
+    the decision landed, and named the LICENSE file a Phase 9 artifact. Q1
+    was ruled 2026-09-06 (the family AGPL), so the guard inverts: what used
+    to be checked as absent is now checked as COMPLETE.
+
+    Whole means all four pieces agree. A repository that claims AGPL in its
+    README and ships a wheel with no license metadata has made the decision
+    twice and landed it once, which is the failure this replaces."""
+    license_file = ROOT / "LICENSE"
+    notice = ROOT / "NOTICE.md"
+    assert license_file.exists(), "the AGPL claim has no LICENSE file"
+    assert notice.exists(), "the AGPL claim has no NOTICE.md"
+
+    # The stock AGPL text, not a summary of it, and the same file the
+    # siblings ship. Two structural markers rather than a digest, so a
+    # line-ending normalization does not read as a licence change.
+    text = license_file.read_text(encoding="utf-8")
+    assert "GNU AFFERO GENERAL PUBLIC LICENSE" in text
+    assert "Version 3, 19 November 2007" in text
+    assert "TERMS AND CONDITIONS" in text
+    assert len(text.splitlines()) > 600, \
+        "LICENSE is too short to be the AGPL text"
+
+    # NOTICE.md is the retargeted half, and retargeted means retargeted.
+    note = notice.read_text(encoding="utf-8")
+    assert "KitchenSink4Web" in note
+    assert "AGPL-3.0" in note
+    for sibling in ("KitchenSink4XL", "KitchenSink4Word", "KitchenSink4PPT"):
+        assert sibling not in note, \
+            f"NOTICE.md still names {sibling}: it was copied, not retargeted"
+
+    # And the package metadata says the same thing as the prose.
     pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
-    for line in pyproject.splitlines():
-        stripped = line.strip()
-        if stripped.startswith("#"):
-            continue
-        assert not stripped.startswith("license"), \
-            f"pyproject declares a license before Q1 is ruled: {stripped!r}"
+    assert 'license = "AGPL-3.0-only"' in pyproject
+    assert 'license-files = ["LICENSE", "NOTICE.md"]' in pyproject
+
+
+def test_every_published_surface_agrees_on_the_license():
+    """One licence, stated the same way everywhere a reader meets it."""
+    for where, text in _published_files().items():
+        if where == "docs/llms.txt":
+            continue          # the agent-facing file states no licence
+        assert "AGPL-3.0" in text, f"{where} does not name the licence"
 
 
 def _projection_strings() -> dict[str, str]:

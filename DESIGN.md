@@ -2945,6 +2945,14 @@ Binding from Phase 0 regardless of the eventual choice:
 5. No license text, badge, or claim in any file until the decision lands. The
    `LICENSE` file is a Phase 9 artifact.
 
+   **DISCHARGED 2026-09-06, in Phase 9.** The decision landed (Q1 below), so
+   the rule delivered what it was holding: `LICENSE` is the stock AGPL-3.0
+   text, byte-identical to the sibling repos'; `NOTICE.md` carries the
+   retargeted per-product notice; `pyproject.toml` declares
+   `license = "AGPL-3.0-only"` and both files. The guard test inverted with
+   it: `test_the_license_landed_whole` now fails if any one of the four
+   pieces is missing, which is the same rule pointing the other way.
+
 ---
 
 ## 11. Open questions for the author
@@ -2968,6 +2976,15 @@ them compatibility surface.
 
 1. **The license.** Which of the three, and if open-core, where does the seam
    run given that the safety layer is the differentiator (Section 10.2c)?
+
+   **RULED 2026-09-06, relayed through the main thread during Phase 9: the
+   family AGPL.** AGPL-3.0-only, the same wording and the same
+   LICENSE/NOTICE.md split the three shipped siblings use, free for
+   individuals and personal use, with a commercial license negotiated case by
+   case through the issue tracker. The open-core seam is NOT drawn: the
+   `policy/` / `engine/` / `ops/` boundary (rule 3 above) still exists and
+   still points one direction, so drawing one later stays cheap, but nothing
+   ships closed today.
 
 2. **`take_screenshot` out of the lite core.** The design argues structured-first
    and makes the refusal the signpost to the `capture` pack. That is aggressive

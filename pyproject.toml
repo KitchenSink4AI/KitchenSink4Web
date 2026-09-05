@@ -3,9 +3,13 @@ name = "kitchensink4web"
 version = "0.0.0"
 description = "Kitchen-sink browser MCP server: a cheap first read of any page, durable refs, and a shipped safety layer"
 readme = "README.md"
-# NO license field and NO LICENSE file. DESIGN 10.3 rule 5: no license text,
-# badge, or claim in any file until the author's ruling lands (open question
-# Q1). The LICENSE file is a Phase 9 artifact.
+# DESIGN 10.3 rule 5 held the license out of every file until the decision
+# landed and named the LICENSE file a Phase 9 artifact. The decision landed
+# 2026-09-06 (Q1: the family AGPL), so this is Phase 9 delivering it. LICENSE
+# is the stock AGPL-3.0 text, byte-identical to the sibling repos'; NOTICE.md
+# carries the retargeted per-product notice, the same split the siblings use.
+license = "AGPL-3.0-only"
+license-files = ["LICENSE", "NOTICE.md"]
 authors = [{ name = "nometalalchemist" }]
 keywords = [
     "mcp", "browser", "playwright", "web", "automation", "claude",
