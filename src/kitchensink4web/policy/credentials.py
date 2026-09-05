@@ -55,7 +55,45 @@ ENV_STRICT = "KS4WEB_CREDENTIAL_BLIND"
 #: Values shorter than this never enter the vault. Redacting "1" or "ok"
 #: out of every payload would shred ordinary output while adding nothing: a
 #: secret that short is not protected by redaction anyway.
-MIN_SECRET_LENGTH = 4
+#:
+#: Raised from 4 to 8 after the 2026-09-05 field test, where a preference
+#: cookie holding the five-character value "light" garbled the word
+#: "highlights" in every subsequent read for the rest of the session. No
+#: real credential is under eight characters; plenty of preference values
+#: are.
+MIN_SECRET_LENGTH = 8
+
+#: At or above this length, accidental containment inside ordinary prose is
+#: implausible, so a vaulted value is matched as a raw substring (a leaked
+#: cookie rides inside a sentence at least as often as it rides alone).
+#: Below it, matching is token-bounded: the value is redacted where it
+#: stands alone, not where it happens to sit inside a longer word.
+SUBSTRING_MIN_LENGTH = 16
+
+#: Characters that continue a token. A short vaulted value surrounded by
+#: any of these on either side is part of a longer word and is left alone.
+_TOKEN_CHARS = frozenset(
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_")
+
+#: Cookie and storage NAMES that mark a value as credential-shaped. Checked
+#: as substrings of a lowercased name, so `_gh_sess`, `user_session`,
+#: `PHPSESSID`, `csrftoken`, and `remember_user_token` all classify.
+SECURITY_NAME_TOKENS = (
+    "session", "sess", "token", "auth", "csrf", "xsrf", "secret",
+    "credential", "jwt", "password", "passwd", "bearer", "signature",
+    "api_key", "apikey", "access_key",
+)
+
+#: Names known to carry a display or locale PREFERENCE rather than a
+#: credential. Checked first, so a name that contains a security token by
+#: coincidence still passes through. These are the values the field test
+#: watched shred ordinary reads.
+PREFERENCE_NAME_TOKENS = (
+    "color_mode", "colour_mode", "color_scheme", "theme", "locale", "lang",
+    "language", "timezone", "tz", "cpu_bucket", "font", "layout", "density",
+    "sidebar", "collapsed", "dismissed", "consent", "banner", "screen",
+    "viewport", "width", "height", "zoom",
+)
 
 MASK = "[REDACTED:secret]"
 
@@ -108,6 +146,42 @@ def refuse_secret_write(field: dict, tool: str) -> None:
         f'transcript.')
 
 
+def classify_name(name: Any) -> str:
+    """Classify a cookie or storage NAME as 'credential', 'preference', or
+    'unknown'.
+
+    Only 'credential' values enter the vault at observe time. The field test
+    (2026-09-05) is the calibration: `dotcom_user=nometalalchemist` is
+    sixteen characters and not httpOnly, and vaulting it redacted the
+    username out of every GitHub URL for the rest of the session. It is
+    identity, not a credential, and it lands here as 'unknown'.
+    """
+    text = ("" if name is None else str(name)).strip().lower()
+    if not text:
+        return "unknown"
+    if any(token in text for token in SECURITY_NAME_TOKENS):
+        return "credential"
+    if any(token in text for token in PREFERENCE_NAME_TOKENS):
+        return "preference"
+    return "unknown"
+
+
+def cookie_is_credential(cookie: dict) -> bool:
+    """An httpOnly cookie is credential-shaped by construction: the site
+    deliberately put it out of scripting's reach. Everything else is judged
+    by name."""
+    if cookie.get("httpOnly"):
+        return True
+    return classify_name(cookie.get("name")) == "credential"
+
+
+def storage_is_credential(key: Any) -> bool:
+    """Web storage carries no httpOnly signal, so the name is the whole
+    evidence. localStorage is where sites keep UI preferences as often as
+    tokens, which is exactly why this is not vault-everything."""
+    return classify_name(key) == "credential"
+
+
 def mask_value(value: Any) -> str:
     """Full mask plus length. Reading a masked value and reading no value are
     different guarantees, and this is the weaker one: it exists for cookie
@@ -130,6 +204,31 @@ def check_unmask(purpose: str) -> None:
 # ------------------------------------------------------------------ vault
 
 
+def _bounded_replace(text: str, secret: str) -> str:
+    """Replace `secret` only where it stands as its own token.
+
+    Hand-rolled rather than regex-driven so no vaulted value is ever
+    compiled as a pattern, and so the boundary rule is one readable
+    definition instead of an escaping puzzle.
+    """
+    out = []
+    i = 0
+    n = len(secret)
+    while True:
+        hit = text.find(secret, i)
+        if hit < 0:
+            out.append(text[i:])
+            break
+        before = text[hit - 1] if hit > 0 else ""
+        after = text[hit + n] if hit + n < len(text) else ""
+        standalone = (before not in _TOKEN_CHARS
+                      and after not in _TOKEN_CHARS)
+        out.append(text[i:hit])
+        out.append(MASK if standalone else secret)
+        i = hit + n
+    return "".join(out)
+
+
 class SecretVault:
     """Process-wide registry of observed secret values.
 
@@ -143,10 +242,32 @@ class SecretVault:
         self._lock = threading.Lock()
 
     def observe(self, value: Any) -> None:
+        """Vault a value the caller already knows is credential-bearing.
+
+        This is the raw entry point and it stays unconditional (past the
+        length floor): a caller that reaches it has classified already. The
+        name-aware doors are `observe_cookie` and `observe_storage_item`.
+        """
         text = "" if value is None else str(value)
         if len(text) >= MIN_SECRET_LENGTH:
             with self._lock:
                 self._values.add(text)
+
+    def observe_cookie(self, cookie: dict) -> bool:
+        """Vault a cookie value only if the cookie is credential-shaped.
+        Returns whether it was vaulted."""
+        if not cookie_is_credential(cookie):
+            return False
+        self.observe(cookie.get("value", ""))
+        return True
+
+    def observe_storage_item(self, key: Any, value: Any) -> bool:
+        """Vault a web-storage value only if its key is credential-shaped.
+        Returns whether it was vaulted."""
+        if not storage_is_credential(key):
+            return False
+        self.observe(value)
+        return True
 
     def clear(self) -> None:
         with self._lock:
@@ -157,15 +278,27 @@ class SecretVault:
 
     def scrub(self, payload: Any, _depth: int = 0) -> Any:
         """Deep-walk a payload, replacing every occurrence of every observed
-        value. Strings are searched as substrings, because a leaked cookie
-        rides inside a sentence at least as often as it rides alone."""
+        value.
+
+        Long values (>= SUBSTRING_MIN_LENGTH) are searched as raw
+        substrings, because a leaked cookie rides inside a sentence at least
+        as often as it rides alone. Short ones are matched on token
+        boundaries only: the field test watched a vaulted "light" turn
+        "highlights" into "high[REDACTED:secret]s" across a whole session,
+        which is the redactor eating the reading feature it exists to
+        protect.
+        """
         if _depth > 32 or not self._values:
             return payload
         if isinstance(payload, str):
             out = payload
             for secret in self._values:
-                if secret in out:
+                if secret not in out:
+                    continue
+                if len(secret) >= SUBSTRING_MIN_LENGTH:
                     out = out.replace(secret, MASK)
+                else:
+                    out = _bounded_replace(out, secret)
             return out
         if isinstance(payload, dict):
             return {k: self.scrub(v, _depth + 1) for k, v in payload.items()}

@@ -27,6 +27,10 @@ Every adversarial class must be refused, gated, or logged as designed:
  10. secret_fields          secret values never reach a read payload; a
                             secret write refuses at the choke point
  11. audit                  the run is recorded, redacted, bounded, paginated
+ 12. redaction_false_positives  the vault's other half: ordinary reading
+                            survives it (a preference value never shreds
+                            "highlights", an identity cookie never shreds a
+                            URL) while a real credential still cannot ride
 
 Writes gates/phase3.json. Exit 0 only when every part is green.
 """
@@ -478,6 +482,47 @@ async def gate_secrets(site: str):
         await MANAGER.close(session.session_id)
 
 
+def gate_redaction_false_positives():
+    """Part 12: the redactor's other half. Part 1 proves a real credential
+    cannot ride out; this proves ordinary reading survives the vault.
+
+    The 2026-09-05 field test is the calibration data. A preference cookie
+    holding "light" turned every later "highlights" into
+    "high[REDACTED:secret]s", and `dotcom_user=nometalalchemist` redacted
+    the username out of every GitHub URL for the rest of the session. Both
+    are now classified out at observe time, and the positive control below
+    keeps this part from passing by simply turning the vault off."""
+    credentials.VAULT.clear()
+    try:
+        pref_vaulted = credentials.VAULT.observe_cookie(
+            {"name": "preferred_color_mode", "value": "light",
+             "httpOnly": False})
+        user_vaulted = credentials.VAULT.observe_cookie(
+            {"name": "dotcom_user", "value": "nometalalchemist",
+             "httpOnly": False})
+        real_vaulted = credentials.VAULT.observe_cookie(
+            {"name": "_gh_sess", "httpOnly": True,
+             "value": "KS4WEB-GATE-SESSION-a41c9d770b"})
+        prose = ("the highlights section links to "
+                 "https://github.com/nometalalchemist/web-mcp and the "
+                 "session cookie is KS4WEB-GATE-SESSION-a41c9d770b")
+        scrubbed = credentials.VAULT.scrub(prose)
+        checks = {
+            "preference_not_vaulted": not pref_vaulted,
+            "identity_not_vaulted": not user_vaulted,
+            "credential_vaulted": real_vaulted,
+            "highlights_survives": "highlights" in scrubbed,
+            "github_url_survives":
+                "github.com/nometalalchemist/web-mcp" in scrubbed,
+            "credential_still_redacted":
+                "KS4WEB-GATE-SESSION" not in scrubbed
+                and credentials.MASK in scrubbed,
+        }
+        part("redaction_false_positives", all(checks.values()), **checks)
+    finally:
+        credentials.VAULT.clear()
+
+
 async def gate_audit(site: str):
     """Part 11: the run is recorded through the server wrapper, redacted,
     and paginated. Driven over the wire so the wrapper is what is tested."""
@@ -549,6 +594,7 @@ async def main() -> int:
         await gate_walls(site)
         await gate_secrets(site)
         await gate_audit(site)
+        gate_redaction_false_positives()
     finally:
         httpd.shutdown()
         credentials.VAULT.clear()
