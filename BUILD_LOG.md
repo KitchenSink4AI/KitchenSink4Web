@@ -2449,3 +2449,58 @@ CERTIFIED values per the recert ruling. `test_m1_renderer_crash` flaked once
 in isolation and passed three times after: the deep page does not always crash
 the renderer, which is the same flake the shadow wave recorded. Report:
 `internal notes/20260906_web_phase9.md`.
+
+## 2026-09-06 07:55 KST - Phase 9B (the rulings, and the comparison table)
+
+Master `7eb1331` -> `bad04e2`, six commits, suite **595 -> 598 green in both
+orders**. Still nothing pushed.
+
+**The one wrong sentence is gone.** "Two independent field logs" was not true
+(the 141KB log is a superset of the 34KB one), and Phase 9 flagged it rather
+than editing it. The main thread's replacement landed verbatim in the README
+and in llms.txt section 8. `credential exfiltration attempts` became
+`credential-theft attempts` on both surfaces; the attack-recipe guard was not
+touched, which was the point of not resolving that conflict inside a test file.
+
+**The license landed whole, and the guard inverted with it.** DESIGN 10.3 rule
+5 does not mandate any wording, and it names `LICENSE` a Phase 9 artifact, so
+there was no substantive conflict to escalate: the rule was waiting for the
+decision, and the decision arrived. `LICENSE` is the stock AGPL-3.0 text,
+**byte-identical** to word-mcp's and pptx-mcp's (sha256 verified, and those two
+are identical to each other). The retargeting lives where the family puts it,
+in a new `NOTICE.md`. `pyproject.toml` declares `license = "AGPL-3.0-only"` and
+`license-files = ["LICENSE", "NOTICE.md"]`, matching both siblings.
+`test_no_license_claim_exists_yet` became `test_the_license_landed_whole`,
+which fails if any one of the four pieces is missing or if NOTICE.md still
+names a sibling product. DESIGN records the discharge under rule 5 and the
+ruling under Q1.
+
+**DEPT. 02 is answered.** Twelve cells and the small-print line, main-thread
+copy, verbatim, grounded in a survey of eight browser MCP servers that is now
+in the repository at `research/20260906_browser_mcp_survey.md`, because the
+small print says the sources are there. The twelve red TODO markers and the
+`.todo` style are gone. Translated into the six languages, 122 keys per
+dictionary. The column heads were left as the family pattern already had them
+(the product name against "The rest of the aisle") rather than replaced.
+
+**Numbers.** The test figure is stamped from the measuring script rather than
+by hand, everywhere it appears: README, llms.txt, and the page's specs strip,
+now 598. Row 1 of the comparison table quotes the same two figures DEPT. 00
+demonstrates, and a new guard checks that in all seven languages against the
+committed snapshot, matching digits rather than locale separators so 33,073,
+33.073 and 33 073 all count. Two more guards: no unfilled copy marker can
+reach a reader, and the survey the small print points at has to exist and
+carry its source list. The test-count guard is deliberately one-sided: the
+published figure may never EXCEED what the suite collects, and may not fall
+more than 5 percent behind it, so adding a test does not turn the suite red
+while a stale claim still does.
+
+Gate: full suite **598 green in both orders**. Phase 3 **12/12 GREEN**, Phase 5
+**8/8 GREEN**, Phase 4 acting arm **7/7 GREEN**, all re-run after the wave.
+The latency arm was again NOT re-run and `gates/phase4.json` and
+`gates/phase1_latency.json` remain byte-unchanged at their last CERTIFIED
+values. One intermittent seen and cleared:
+`test_every_printed_price_is_within_tolerance_on_the_statistical_page` failed
+once inside a full run and passed in isolation and in all three subsequent
+full runs, with an adversarial gauntlet driving browsers on the same machine
+throughout. Report: `internal notes/20260906_web_phase9.md`.
