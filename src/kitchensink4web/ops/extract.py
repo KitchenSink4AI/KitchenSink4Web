@@ -39,6 +39,24 @@ from . import common
 CELL_CLIP = 200
 VALUE_CLIP = 300
 
+#: The zero-candidate refusals. A page with nothing to extract is a normal
+#: page, not a malformed call, so it gets an honest NOT_FOUND that says what
+#: the tool looked for and where to look instead. Both messages name
+#: get_page_view, because "what IS here" is the only useful next move.
+_NO_TABLES = (
+    "this page has no data tables the tool recognizes. It looks for real "
+    "TABLE elements and ARIA div-tables (role=\"table\" or role=\"grid\"), "
+    "and it skips layout tables, which older sites use for page structure "
+    "rather than data. get_page_view shows what IS on the page, and "
+    "get_list or get_text reach content that is not tabular.")
+_NO_LISTS = (
+    "this page has no lists the tool recognizes. It looks for UL, OL, DL, "
+    "and role=\"list\" elements holding two or more items, and it skips "
+    "navigation lists. Repeated content laid out in TABLE rows or bare "
+    "divs is not a semantic list, which is what Hacker News-style layouts "
+    "do. get_page_view shows what IS on the page, and get_table reads "
+    "tabular layouts.")
+
 
 # ------------------------------------------------------------------ tables
 
@@ -179,9 +197,17 @@ async def _table_data(sess, record, location, index, start_row, max_rows):
             "selector for one, or call get_table with no location to see the "
             "page's table inventory.")
     if got.get("error") == "index-out-of-range":
+        if not got["tables"]:
+            raise TargetNotFound(_NO_TABLES)
         raise BadParams(
             f"index is out of range: this page has {got['tables']} data "
             f"table(s), so the valid indexes are 0 to {got['tables'] - 1}.")
+    # Zero candidates arrives here as an EMPTY choose list, which is falsy:
+    # the field test (2026-09-05) watched it skip the refusal below and
+    # fall through to got["next_start_row"], where the KeyError became a
+    # bogus "internal lookup failed" BAD_PARAMS. Membership, not truth.
+    if "choose" in got and not got["choose"]:
+        raise TargetNotFound(_NO_TABLES)
     if got.get("choose"):
         listing = "; ".join(
             f'index={t["index"]} {t["kind"]} "{t["caption"] or "(uncaptioned)"}"'
@@ -339,9 +365,14 @@ async def get_list(
             "from a read, a CSS selector, or no location to see the page's "
             "list inventory.")
     if got.get("error") == "index-out-of-range":
+        if not got["lists"]:
+            raise TargetNotFound(_NO_LISTS)
         raise BadParams(
             f"index is out of range: this page has {got['lists']} list(s), "
             f"so the valid indexes are 0 to {got['lists'] - 1}.")
+    # Same empty-choose fallthrough as get_table; see the note there.
+    if "choose" in got and not got["choose"]:
+        raise TargetNotFound(_NO_LISTS)
     if got.get("choose"):
         listing = "; ".join(
             f'index={c["index"]} <{c["tag"]}> {c["items"]} items, first: '
