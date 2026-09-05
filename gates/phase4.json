@@ -1,5 +1,5 @@
 {
- "measured_kst": "2026-09-06 05:50",
+ "measured_kst": "2026-09-06 02:31",
  "phase": 4,
  "corpus": "B (pathological) and C (toctou), synthetic, never networked",
  "lane": "A(chromium) headless",
@@ -49,58 +49,49 @@
    "submit_gated_fail_closed": true
   },
   "latency": {
-   "green": false,
+   "green": true,
    "exit_code": 1,
-   "failures": [
-    "5012 nodes: Python assembly p95 15.0 ms over the 10.0 ms budget"
-   ],
-   "uncertified": [
-    "10012 nodes: projection p95 564.1 ms over the 500 ms budget (reference arm 570.8 ms, ALSO over budget here; the treatment costs +13% over it at p50)",
-    "10012 nodes: Python assembly p95 21.9 ms over the 10.0 ms budget (reference arm also over its budget on this run, so the machine is loaded; a sub-ms assembly bound cannot be certified here today)",
-    "25012 nodes: projection p95 652.9 ms over the 500 ms budget (reference arm 606.3 ms, ALSO over budget here; the treatment costs +1% over it at p50)",
-    "25012 nodes: Python assembly p95 17.1 ms over the 10.0 ms budget (reference arm also over its budget on this run, so the machine is loaded; a sub-ms assembly bound cannot be certified here today)",
-    "50012 nodes: projection p95 1018.9 ms over the 500 ms budget (reference arm 1024.3 ms, ALSO over budget here; the treatment costs +6% over it at p50)",
-    "50012 nodes: Python assembly p95 18.3 ms over the 10.0 ms budget (reference arm also over its budget on this run, so the machine is loaded; a sub-ms assembly bound cannot be certified here today)"
-   ],
+   "failures": [],
+   "uncertified": [],
    "rows": [
     {
      "nodes": 5012,
-     "projection_p95": 439.7,
-     "python_p95": 15.0,
+     "projection_p95": 157.7,
+     "python_p95": 6.8,
      "budget_ms": 500
     },
     {
      "nodes": 10012,
-     "projection_p95": 564.1,
-     "python_p95": 21.9,
+     "projection_p95": 215.0,
+     "python_p95": 5.7,
      "budget_ms": 500
     },
     {
      "nodes": 25012,
-     "projection_p95": 652.9,
-     "python_p95": 17.1,
+     "projection_p95": 262.6,
+     "python_p95": 7.0,
      "budget_ms": 500
     },
     {
      "nodes": 50012,
-     "projection_p95": 1018.9,
-     "python_p95": 18.3,
+     "projection_p95": 437.2,
+     "python_p95": 8.8,
      "budget_ms": 500
     },
     {
      "nodes": 100012,
-     "projection_p95": 942.8,
-     "python_p95": 8.1,
+     "projection_p95": 771.9,
+     "python_p95": 6.3,
      "budget_ms": 1000
     }
    ]
   },
   "docstring_measure": {
    "green": true,
-   "lite_tokens": 2598,
-   "largest_schema_tokens": "find_and_act (199 tok)",
-   "note": "budgets are SOFT (author ruling); the honest number is published, never trimmed into. The 1,500 lite figure and the 250 schema ceiling are advisory. The Phase 0 action tools' docstrings are unchanged; the lite bill grew on 2026-09-06 when find_and_act joined the core, and the number above is what it grew to."
+   "lite_tokens": 2457,
+   "largest_schema_tokens": "set_routing (180 tok)",
+   "note": "budgets are SOFT (author ruling); the honest number is published, never trimmed into. The 1,500 lite figure and the 250 schema ceiling are advisory. The action tools' docstrings were written in Phase 0 and unchanged, so the bill did not grow."
   }
  },
- "green": false
+ "green": true
 }
