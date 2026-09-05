@@ -288,6 +288,14 @@ def test_manage_session_status_reports_the_hygiene_state(session_factory):
                    for s in status["sessions"])
         assert status["hygiene"]["job_object"]
         assert status["read_only"]["read_only"] is False
+        # Item 44: what this machine has, and which lane suits what. Whether
+        # anything is installed depends on the machine, so the shape and the
+        # steering discipline are what get asserted, not a browser list.
+        browsers = status["browsers"]
+        assert browsers["default"]["lane"] == "A(chromium)"
+        assert browsers["research"]["lane"].endswith("firefox)")
+        assert "steering only" in browsers["note"]
+        assert isinstance(browsers["installed"], list)
 
     run(go())
 

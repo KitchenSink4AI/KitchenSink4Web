@@ -58,6 +58,24 @@ CHANNELS: dict[str, str] = {
 FIREFOX_CHANNELS = frozenset(
     c for c, engine in CHANNELS.items() if engine == "firefox")
 
+#: Spellings a caller reasonably guesses, mapped to the channel Playwright
+#: actually takes. Field log 2 item U18: `moz-firefox` is genuinely
+#: undocumented upstream, `docs/src/browsers.md` never mentions it, and the
+#: tester's first guess was `firefox`, which cost a round trip to a refusal
+#: that listed the real names. The refusal was right and the round trip was
+#: avoidable. An alias is NOT a silent degrade: it lands on the same lane the
+#: caller obviously meant, and every wrong name still refuses loudly.
+CHANNEL_ALIASES: dict[str, str] = {
+    "firefox": "moz-firefox",
+    "firefox-beta": "moz-firefox-beta",
+    "firefox-nightly": "moz-firefox-nightly",
+    "mozilla-firefox": "moz-firefox",
+    "edge": "msedge",
+    "edge-beta": "msedge-beta",
+    "edge-dev": "msedge-dev",
+    "google-chrome": "chrome",
+}
+
 
 @dataclass(frozen=True)
 class LaneSpec:
@@ -280,11 +298,13 @@ def resolve(lane: str | None = None, engine: str | None = None,
 
     if lane == "B":
         channel = channel or "chrome"
+        channel = CHANNEL_ALIASES.get(channel.lower(), channel)
         if channel not in CHANNELS:
             raise BadParams(
                 f"unknown channel {channel!r} for lane B: the channels are "
-                f"{sorted(CHANNELS)}. Lane B drives your INSTALLED browser, "
-                f"so the channel names which one.")
+                f"{sorted(CHANNELS)}, and these spellings are accepted as "
+                f"well: {sorted(CHANNEL_ALIASES)}. Lane B drives your "
+                f"INSTALLED browser, so the channel names which one.")
         engine = CHANNELS[channel]
     else:
         engine = engine or "chromium"
@@ -350,6 +370,135 @@ def _known_chromium_channel(spec: LaneSpec) -> str | None:
 def is_installed(spec: LaneSpec, pw: object | None = None) -> bool:
     path = executable_path(spec, pw)
     return bool(path) and os.path.exists(path)
+
+
+# -------------------------------------------- what is installed, and steering
+
+#: One row per browser worth detecting: the lane B channel that drives it, the
+#: display name, and where to look. Windows first because that is where the
+#: author works; the macOS and Linux entries are the same lookup with
+#: different paths rather than a second mechanism.
+_DETECTABLE: tuple[tuple[str, str, str, tuple[str, ...]], ...] = (
+    ("moz-firefox", "Firefox", "firefox.exe", (
+        r"%PROGRAMFILES%\Mozilla Firefox\firefox.exe",
+        r"%PROGRAMFILES(X86)%\Mozilla Firefox\firefox.exe",
+        "/Applications/Firefox.app/Contents/MacOS/firefox",
+        "/usr/bin/firefox", "/snap/bin/firefox",
+    )),
+    ("chrome", "Chrome", "chrome.exe", (
+        r"%PROGRAMFILES%\Google\Chrome\Application\chrome.exe",
+        r"%PROGRAMFILES(X86)%\Google\Chrome\Application\chrome.exe",
+        r"%LOCALAPPDATA%\Google\Chrome\Application\chrome.exe",
+        "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+        "/usr/bin/google-chrome",
+    )),
+    ("msedge", "Edge", "msedge.exe", (
+        r"%PROGRAMFILES%\Microsoft\Edge\Application\msedge.exe",
+        r"%PROGRAMFILES(X86)%\Microsoft\Edge\Application\msedge.exe",
+        "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+        "/usr/bin/microsoft-edge",
+    )),
+)
+
+#: Detection result for this process. Browsers are not installed and
+#: uninstalled inside one session, and a status call that shells out or reads
+#: the registry every time would be a cost paid on every status.
+_DETECTED: list[dict] | None = None
+
+
+def _app_paths_lookup(exe: str) -> str | None:
+    """Windows App Paths, which is where an installer registers its binary.
+    Consulted after the known paths, so a standard install never pays for a
+    registry read at all."""
+    if not sys.platform.startswith("win"):
+        return None
+    try:
+        import winreg
+    except ImportError:
+        return None
+    key = r"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths" + "\\" + exe
+    for hive in (winreg.HKEY_LOCAL_MACHINE, winreg.HKEY_CURRENT_USER):
+        try:
+            with winreg.OpenKey(hive, key) as handle:
+                value = winreg.QueryValueEx(handle, "")[0]
+        except OSError:
+            continue
+        value = os.path.expandvars(str(value).strip('"'))
+        if os.path.exists(value):
+            return value
+    return None
+
+
+def detect_installed(refresh: bool = False) -> list[dict]:
+    """The browsers installed on this machine that lane B could drive.
+
+    Known paths first, then the Windows App Paths registry, then PATH. Every
+    step is a stat or a registry read; nothing is launched and nothing is
+    asked for its version, because a detection that starts browsers to find
+    out what is there is worse than no detection.
+    """
+    global _DETECTED
+    if _DETECTED is not None and not refresh:
+        return _DETECTED
+    found = []
+    for channel, name, exe, paths in _DETECTABLE:
+        path = None
+        for candidate in paths:
+            expanded = os.path.expandvars(candidate)
+            if "%" not in expanded and os.path.exists(expanded):
+                path = expanded
+                break
+        path = path or _app_paths_lookup(exe) or shutil.which(
+            exe[:-4] if exe.endswith(".exe") else exe)
+        if path and os.path.exists(path):
+            found.append({"name": name, "channel": channel, "path": path,
+                          "lane": f"B({channel})"})
+    _DETECTED = found
+    return found
+
+
+def recommended_lane(refresh: bool = False) -> dict:
+    """Which lane to open, given what is installed. STEERING ONLY.
+
+    Nothing here switches a lane, and `manage_session(action='open')` reads
+    none of it: a tool that quietly relaunched on a different browser than
+    the caller asked for would be the silent downgrade this subsystem exists
+    to prevent. The caller decides; this says what the machine offers.
+
+    The doctrine, in two lines. A bundled Chromium is the default because it
+    is reproducible, parallel-safe, and installs itself. An INSTALLED stock
+    Firefox is the research default, because the field campaign measured the
+    difference: Reddit served Chromium headless a 17-node blank page and
+    served both Firefox lanes the real one, and the block is the stock
+    HeadlessChrome user agent rather than anything KS4Web does.
+    """
+    installed = detect_installed(refresh=refresh)
+    firefox = next((b for b in installed if b["channel"] == "moz-firefox"),
+                   None)
+    research = {
+        "lane": firefox["lane"] if firefox else "A(firefox)",
+        "why": ("your installed Firefox, on a KS4Web-owned profile: sites "
+                "that block automated Chromium served the Firefox lanes the "
+                "real page in the field campaign"
+                if firefox else
+                "the bundled Firefox, since no installed Firefox was found: "
+                "sites that block automated Chromium served the Firefox "
+                "lanes the real page in the field campaign. An installed "
+                "Firefox would be the better one"),
+    }
+    return {
+        "installed": [{"name": b["name"], "lane": b["lane"], "path": b["path"]}
+                      for b in installed],
+        "default": {
+            "lane": "A(chromium)",
+            "why": ("the bundled Chromium: reproducible, parallel-safe, and "
+                    "it installs itself on first use"),
+        },
+        "research": research,
+        "note": ("steering only. Nothing switches lanes on its own; pass "
+                 "lane= and channel= to manage_session(action='open') when "
+                 "you want one of these."),
+    }
 
 
 def ensure_installed(spec: LaneSpec, pw: object | None = None,

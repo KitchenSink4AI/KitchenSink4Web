@@ -2068,8 +2068,10 @@ async def manage_session(
     open loads a saved login file in the same call (gated, storage pack); on
     close, 'save' or a path writes the session's login state before closing,
     and nothing is ever auto-saved. The capabilities action states what this
-    lane supports, degrades, and cannot do. Tool availability reflects the
-    extension's current settings; when settings change, the tool list
+    lane supports, degrades, and cannot do. The status action also names the
+    browsers installed on this machine and which lane suits which job, as
+    steering: nothing switches a lane on its own. Tool availability reflects
+    the extension's current settings; when settings change, the tool list
     refreshes in this conversation.
     """
     action = (action or "status").strip().lower()
@@ -2273,6 +2275,11 @@ async def manage_session(
                  "counters": dict(s.counters)}
                 for s in MANAGER.sessions.values()],
             "read_only": readonly.describe(),
+            # What this machine has and which lane suits what (field log 2
+            # item 44, the user's own ask). Detected once per process from
+            # stats and a registry read, never by launching anything, and it
+            # steers rather than switches: no code path reads this back.
+            "browsers": lanes.recommended_lane(),
             **({"update": update} if update else {}),
             "hygiene": {"job_object": _session.hygiene.JOB.status,
                         "startup_reap": MANAGER.startup_reap,

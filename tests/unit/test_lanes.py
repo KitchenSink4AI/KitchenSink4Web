@@ -75,7 +75,7 @@ def test_a_typo_is_an_error_rather_than_a_shrug():
     with pytest.raises(BadParams):
         lanes.resolve(lane="D")
     with pytest.raises(BadParams):
-        lanes.resolve(lane="B", channel="firefox")     # not a channel
+        lanes.resolve(lane="B", channel="netscape")    # not a channel
     with pytest.raises(BadParams):
         lanes.resolve(lane="A", engine="safari")
 
@@ -179,3 +179,78 @@ def test_about_pages_are_unavailable_on_firefox_bidi():
 def test_an_unknown_capability_is_a_bad_param_not_a_default():
     with pytest.raises(BadParams):
         lanes.capability(lanes.resolve(), "teleportation")
+
+
+# ------------------------------------------------- aliases and detection
+
+
+def test_firefox_is_accepted_as_a_spelling_of_moz_firefox():
+    """Field log 2 item U18. `moz-firefox` is genuinely undocumented
+    upstream, the tester's first guess was `firefox`, and the round trip to
+    a refusal that listed the real names was avoidable. The alias lands on
+    the same lane; it does not invent one."""
+    spec = lanes.resolve(lane="B", channel="firefox")
+    assert spec.channel == "moz-firefox"
+    assert spec.is_bidi_firefox is True
+    # And it is a real Firefox launch, so it carries the safety flag.
+    assert spec.args == FIREFOX_SAFETY_ARGS
+
+
+def test_the_sibling_spellings_land_too():
+    assert lanes.resolve(lane="B", channel="edge").channel == "msedge"
+    assert lanes.resolve(lane="B",
+                         channel="firefox-nightly").channel         == "moz-firefox-nightly"
+    assert lanes.resolve(lane="B",
+                         channel="google-chrome").channel == "chrome"
+
+
+def test_an_alias_does_not_soften_a_real_typo():
+    """The alias table is a spelling map, not a fuzzy matcher: a name nobody
+    would call a browser still refuses, and the refusal now lists both the
+    real channels and the accepted spellings."""
+    with pytest.raises(BadParams) as caught:
+        lanes.resolve(lane="B", channel="firefx")
+    message = str(caught.value)
+    assert "moz-firefox" in message
+    assert "firefox" in message
+
+
+def test_detection_reports_a_lane_for_every_browser_it_finds():
+    """Whatever this machine has, each row has to be addressable: the lane
+    string in the report is the lane a caller would pass."""
+    for browser in lanes.detect_installed(refresh=True):
+        assert browser["lane"] == f'B({browser["channel"]})'
+        spec = lanes.resolve(lane="B", channel=browser["channel"])
+        assert spec.label == browser["lane"]
+
+
+def test_detection_is_cached_after_the_first_look():
+    first = lanes.detect_installed(refresh=True)
+    assert lanes.detect_installed() is first
+
+
+def test_the_recommendation_steers_and_never_switches(monkeypatch):
+    """Item 44, the user's own ask, and the standing doctrine: bundled
+    Chromium is the vanilla default, an installed stock Firefox is the
+    research default. The report says so and no code path reads it back."""
+    monkeypatch.setattr(lanes, "_DETECTED", [
+        {"name": "Firefox", "channel": "moz-firefox",
+         "path": "/x/firefox", "lane": "B(moz-firefox)"}])
+    report = lanes.recommended_lane()
+    assert report["default"]["lane"] == "A(chromium)"
+    assert report["research"]["lane"] == "B(moz-firefox)"
+    assert "steering only" in report["note"]
+    assert [b["lane"] for b in report["installed"]] == ["B(moz-firefox)"]
+
+
+def test_with_no_installed_firefox_the_research_lane_falls_back_to_bundled(
+        monkeypatch):
+    """The fallback still names a Firefox, because the field campaign's
+    finding is about the engine rather than about who installed it, and it
+    says which one would be better."""
+    monkeypatch.setattr(lanes, "_DETECTED", [
+        {"name": "Edge", "channel": "msedge", "path": "/x/edge",
+         "lane": "B(msedge)"}])
+    report = lanes.recommended_lane()
+    assert report["research"]["lane"] == "A(firefox)"
+    assert "no installed Firefox was found" in report["research"]["why"]
