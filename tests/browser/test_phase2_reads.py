@@ -129,12 +129,15 @@ def test_a_miss_comes_back_with_the_nearest_names(corpus_site):
 
 def test_find_states_what_it_did_not_search(corpus_site):
     """The two-layer phrasing, in the follow-up as well as in the read: "I did
-    not look" and "no one can look" are different answers."""
+    not look" and "no one can look" are different answers. Traversal moved the
+    open roots from the first layer to neither, and the line still has to say
+    which is which."""
     async def go():
         _, page = await _open(corpus_site, "b/shadow.html")
         found = await lite.find_elements(page=page, query="button", kind="any")
-        assert "open shadow root(s) (traversed=no)" in found["results"]
-        assert "closed (unreachable by any tool)" in found["results"]
+        assert "searched 2 of 2 open shadow root(s)" in found["results"]
+        assert "closed shadow root(s) (unreachable by any tool)" \
+            in found["results"]
 
     run(go())
 
@@ -372,7 +375,7 @@ def test_the_completeness_block_is_accurate_by_construction(corpus_site):
 
         _, page = await _open(corpus_site, "b/shadow.html")
         text = (await lite.get_page_view(page=page))["projection"]
-        assert re.search(r"shadow roots: \d+ open \(traversed=no\), "
+        assert re.search(r"shadow roots: \d+ open \(traversed=yes, \d+ read\), "
                          r"[1-9]\d* closed \(unreachable by any tool\)", text), (
             "the closed shadow roots were not counted, which means the init "
             "script that counts them as they are created did not run")

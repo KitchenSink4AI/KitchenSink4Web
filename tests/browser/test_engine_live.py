@@ -490,7 +490,9 @@ def test_closed_shadow_roots_are_counted_as_they_are_created(session_factory):
             "<script>document.getElementById('a').attachShadow({mode:'closed'});"
             "document.getElementById('b').attachShadow({mode:'open'});</script>")
         result = await lite.get_page_view(page=record.handle)
-        assert "1 open (traversed=no), 1 closed (unreachable by any tool)" \
-            in result["projection"]
+        # The open root is read now (2026-09-06); the closed one is counted
+        # and stays unreachable, which is the half this test is about.
+        assert "1 open (traversed=yes, 1 read), 1 closed (unreachable by any " \
+               "tool)" in result["projection"]
 
     run(go())
