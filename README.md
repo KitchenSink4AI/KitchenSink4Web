@@ -38,7 +38,7 @@ be reached by any tool; they are counted and reported rather than silently skipp
 
 ## The packs
 
-The server starts lite: reading, navigation, and session management, 15 tools. Capability packs
+The server starts lite: reading, navigation, and session management, 16 tools. Capability packs
 are chosen at launch and are fixed for the whole session, which means an absent pack is provably
 absent, not merely switched off:
 
@@ -103,8 +103,8 @@ recommend for the page you are on. It never switches lanes for you.
 
 | Surface | Tokens |
 |---|---|
-| Lite tool surface | 4.1k |
-| Full surface (all packs) | 10.2k |
+| Lite tool surface | 4.8k |
+| Full surface (all packs) | 11.9k |
 | First read of the Treaty of Versailles article on Wikipedia | 4,495 |
 | Delta read after one click | 82 |
 
@@ -121,7 +121,7 @@ it off entirely.
 
 ## Testing
 
-678 tests, of which 265 drive a real browser. Beyond the suite, every release passes gate
+905 tests, of which 399 drive a real browser. Beyond the suite, every release passes gate
 batteries that re-run the adversarial findings of four attack rounds: prompt injection through
 page content, hidden-text smuggling, credential-theft attempts, gate bypasses, workflow
 replay tampering, and resource abuse. The gates are not aspirational; each one exists because an

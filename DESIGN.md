@@ -1093,7 +1093,7 @@ first, in this order, and none of them enters the fuzzy tier:
 
 | Input case | Outcome |
 |---|---|
-| A pending modal or dialog blocks interaction | `MODAL_BLOCKED` before any resolution is attempted, naming the dialog and the call that dismisses it |
+| A pending modal or dialog blocks interaction | `MODAL_BLOCKED` before any resolution is attempted, naming the dialog and the call that answers it: `handle_dialog` for a native dialog, the modal's own close control for a page-drawn one |
 | Ref was never minted in this session (model typo, or a ref quoted from another session or a saved workflow) | `NOT_FOUND`, stating the mint rule (refs are minted only by a read in this session) and naming the read that mints one |
 | Ref exists but belongs to a different page handle than the one passed | `BAD_PARAMS`, naming both handles, never silently retargeting |
 | Page URL changed since the ref was minted and `allow_cross_page_rebind=false` | `STALE_ANCHOR` directly, with no fuzzy tier, because a fuzzy match on a different URL IS a cross-page rebind under another name |
@@ -3016,7 +3016,7 @@ Browser additions, each with a named recovery in every message:
 | `CONFIRMATION_REQUIRED` | a gated action class was requested | carries the MRTR / elicitation payload |
 | `READ_ONLY_MODE` | a borderline operation (navigation under `strict`) was attempted | the grade in force and what it permits |
 | `LANE_UNSUPPORTED` | the operation is unavailable on the current engine lane | the lane, the specific gap, and which lane supports it |
-| `MODAL_BLOCKED` | a dialog or file chooser is pending | the pending modal and the tool that clears it |
+| `MODAL_BLOCKED` | a native dialog is open or held, or a page-drawn `[role=dialog][aria-modal=true]` blocks the target | which of the two it is: `handle_dialog` for the native one (arm the answer before the click that raises it, or hold it and answer it), the modal's own close control for the page-drawn one. A wrong-element `upload_file` no longer lands here; it refuses `VALIDATION_FAILED` |
 | `TIMEOUT` | a wait expired | what was being waited for and what was observed instead |
 
 Three failure-message designs stolen outright because they are the best in the

@@ -24,34 +24,34 @@
   },
   "surface": {
    "full_acting": {
-    "tokens": 10198,
-    "tools": 41
+    "tokens": 11907,
+    "tools": 45
    },
    "lite_acting": {
-    "tokens": 4118,
-    "tools": 15
+    "tokens": 4782,
+    "tools": 16
    },
    "lite_shipped_default": {
-    "tokens": 2598,
+    "tokens": 2932,
     "tools": 10
    }
   },
   "tests": {
-   "browser": 265,
-   "total": 678,
-   "unit": 413
+   "browser": 399,
+   "total": 905,
+   "unit": 506
   }
  },
  "fill": {
-  "BROWSER_TEST_COUNT": 265,
+  "BROWSER_TEST_COUNT": 399,
   "DELTA_TOKENS": "82",
   "DEMO_PAGE_NAME": "the Treaty of Versailles article on Wikipedia",
-  "FULL_SURFACE_TOKENS": "10.2k",
-  "LITE_SURFACE_TOKENS": "4.1k",
-  "LITE_TOOL_COUNT": 15,
+  "FULL_SURFACE_TOKENS": "11.9k",
+  "LITE_SURFACE_TOKENS": "4.8k",
+  "LITE_TOOL_COUNT": 16,
   "PROJECTION_TOKENS": "4,495",
   "RAW_DUMP_TOKENS": "33,073",
   "RUNG_COUNT": 16,
-  "TEST_COUNT": 678
+  "TEST_COUNT": 905
  }
 }

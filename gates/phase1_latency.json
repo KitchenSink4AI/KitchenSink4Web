@@ -14,8 +14,8 @@
   "python_assembly_p95_ms": 10.0
  },
  "reference_arm": "the LAST CERTIFIED COMMIT, not HEAD: worktree at a58c575f. Both control arms come from it, the extractor run in the live page and the assembler run in this process, each interleaved with the working tree's on the same page and the same extraction.",
- "control_commit": "a58c575fcaff963dc5b96784f2661bdd1c640744",
- "certified_commit": "a58c575fcaff963dc5b96784f2661bdd1c640744",
+ "control_commit": "1aa0073f80777597f035e1d38f52aa45bc29569b",
+ "certified_commit": "1aa0073f80777597f035e1d38f52aa45bc29569b",
  "rows": [
   {
    "url": "http://127.0.0.1:59263/big?n=5000",
