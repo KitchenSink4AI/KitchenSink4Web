@@ -34,7 +34,9 @@ by text and role survive re-renders that break refs.
 
 Open shadow roots are read and their contents are actable like anything else, which is what makes
 component-built sites (Reddit, MDN, most of the modern web) readable at all. Closed roots cannot
-be reached by any tool; they are counted and reported rather than silently skipped.
+be reached by any tool; they are counted and reported rather than silently skipped. Same-origin
+iframes are read and searched like the page they sit in, each labeled with its own origin; a
+cross-origin frame is counted and named, never entered.
 
 ## The packs
 
@@ -44,11 +46,11 @@ absent, not merely switched off:
 
 | Pack | What you get |
 |---|---|
-| extract | Pulls structured data off pages: tables, lists, links, and page details, with CSV and JSON export. |
+| extract | Pulls structured data off pages: tables, lists, links, and page details, with CSV and JSON export, and reads long documents page by page so one read never floods the conversation. |
 | capture | Takes screenshots (passwords masked) and saves pages as PDF or archive files. |
 | network | Shows the page's network requests and responses, and lets Claude block or mock them for testing. |
 | storage | Works with cookies and site storage, and saves a signed-in session to a file so it can be reused next time. It saves the session, never the password. |
-| files | Downloads files from pages into one dedicated folder and uploads files into page forms. |
+| files | Downloads files from pages into one dedicated folder, fetches a file by URL through the same checks, uploads files into page forms, and reads or writes the clipboard, with every write stopping to ask first. |
 | diagnostics | Reads the page's own error messages and console output, and can run a page script only after you confirm it. |
 | workflows | Records a multi-step flow once and replays it later, checking every step still matches the page before anything runs. |
 
@@ -142,8 +144,8 @@ and it tells you what it could not see. Bring it your strangest pages and file w
 
 ## Known limits
 
-- Iframes are not searched or traversed; the completeness block lists every iframe it found and
-  says which are same-origin.
+- Cross-origin iframes are never entered; the completeness block names each frame and says why.
+  Same-origin iframes are read, searched, and acted in, each labeled with its own origin.
 - Closed shadow roots cannot be reached by any tool. They are counted so you can tell a
   component-heavy page from an empty one.
 - Confirmation-gated actions (auth loading, page scripts, submits) refuse on the claude.ai web

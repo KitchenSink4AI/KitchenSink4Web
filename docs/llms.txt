@@ -56,8 +56,10 @@ of which ship with the source.
   search, and elements found inside them are actable like any other. Closed
   shadow roots cannot be reached by any tool; they are counted at creation and
   reported, so a component-heavy page is distinguishable from an empty one.
-- Iframes are never searched or traversed. The completeness block lists every
-  iframe found and says which are same-origin.
+- Same-origin iframes are searched and traversed like the page they sit in,
+  and their content is labeled with the frame's own origin. Cross-origin
+  iframes are never entered; the completeness block lists every frame and says
+  which were entered.
 - Hidden content never enters the page view. It is counted, the hiding
   technique is named, and the labeled route to it is
   `get_text(include_hidden=True)`, which returns it in its own labeled
@@ -153,7 +155,8 @@ human flips, which is a launch-time instruction and not an in-session route.
 
 ## 7. Known limits
 
-- Iframes are not searched or traversed.
+- Cross-origin iframes are not entered. Same-origin iframes are read,
+  searched, and acted in.
 - Closed shadow roots cannot be reached by any tool.
 - Confirmation-gated actions refuse on the claude.ai web client until it
   renders MCP confirmation prompts.
