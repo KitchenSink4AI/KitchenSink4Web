@@ -45,7 +45,7 @@ from urllib.parse import urlparse
 from .. import anchors
 from .. import pagedata as _pagedata
 from . import act as _act
-from ..engine import lanes, session as _session
+from ..engine import frames, lanes, session as _session
 from ..errors import (AmbiguousLocation, AuthRequired, BadParams,
                       BlockedBySite, LaneUnsupported, ModalBlocked,
                       NotImplementedYet, PageUnreachable, ReadOnlyMode,
@@ -277,7 +277,11 @@ async def get_page_view(
     between and nothing survives to diff. Open shadow roots are read and
     their contents get refs you can act on; closed roots cannot be reached
     by any tool and are counted at creation, so the completeness block
-    reports both numbers rather than one confident zero.
+    reports both numbers rather than one confident zero. Same-origin
+    iframes are entered and read, and their contents get refs naming the
+    frame they came from; a cross-origin frame is never entered, because
+    its document belongs to an origin the page itself cannot read either,
+    and the completeness block counts every frame it did not open.
     """
     if cursor:
         _stub("get_page_view(cursor=...)",
@@ -327,12 +331,15 @@ async def get_page_view(
 
     state: dict = {}
 
-    def absorb(data: dict) -> None:
+    def absorb(data: dict, frame: str = "") -> None:
         # Sticky refs are minted HERE, before a single line is rendered, so
         # the payload the caller reads carries session refs rather than the
-        # extractor's per-read numbering (DESIGN 3.5).
+        # extractor's per-read numbering (DESIGN 3.5). Once per frame, and
+        # each frame's units land in the SAME read state, because a framed
+        # page is one read and a delta against it has to cover all of it.
         state["read"] = sess.element_map.absorb(
-            data, record.handle, token, ts=ts, scope=root)
+            data, record.handle, token, ts=ts, scope=root, frame=frame,
+            into=state.get("read"))
 
     baseline = sess.reads.get(record.handle, since) if since else None
     if baseline is not None and baseline.scope != root:
@@ -345,8 +352,33 @@ async def get_page_view(
             f"narrower one as removed, which is a lie about the page rather "
             f"than a delta. Ask for the delta at the same scope, or read "
             f"without `since` to re-baseline.")
-    result = await read_page(record.page, meta, budget=budget, view=view,
-                             root=root, absorb=absorb, mode=mode)
+    # THE FRAME LADDER. A scoped read stays inside the realm its scoping ref
+    # came from: `location={'region': 'if2r3'}` asked about one region of one
+    # frame, and descending that frame's own children from a scoped read would
+    # answer a question nobody asked. A whole-page read descends every
+    # same-origin frame and reports the rest.
+    scope_frame = _scope_frame(sess, location)
+    target = record.page
+    ladder_all: list = []
+    enterable: list = []
+    if scope_frame:
+        found = frames.find(await frames.ladder(record), scope_frame)
+        if found is None or not found.entered:
+            raise TargetNotFound(
+                f'{_located_ref(location)!r} was minted in frame '
+                f'{scope_frame}, and that frame is not on {record.handle} any '
+                f'more (or is no longer readable). Re-read the page and use '
+                f'the refs it returns.')
+        target = found.frame
+    elif root is None:
+        ladder_all = await frames.ladder(record)
+        enterable = [(f.fid, f.frame, f.to_dict())
+                     for f in frames.entered(ladder_all) if not f.is_main]
+    result = await read_page(target, meta, budget=budget, view=view,
+                             root=root, absorb=absorb, mode=mode,
+                             frames=enterable,
+                             frame_ladder=[f.to_dict() for f in ladder_all
+                                           if not f.is_main])
     if isinstance(result, dict) and result.get("error"):
         raise TargetNotFound(
             f'location named {result["asked_for"]!r} and that ref is not on '
@@ -354,13 +386,25 @@ async def get_page_view(
             f'and by a page close. Re-read the page and use the ref it '
             f'returns.')
     sess.reads.put(state["read"])
+    if root is None and not scope_frame:
+        # A frame the page REMOVED between two reads is never absorbed again,
+        # so nothing else would ever mark its refs gone and an action on one
+        # would refuse with a bare miss instead of naming what happened.
+        sess.element_map.mark_frames_gone(
+            record.handle, {f.fid for f in ladder_all},
+            "the frame is no longer on the page")
 
     # The DESIGN 5.1 labeled envelope (H1, gauntlet 2026-09-06): the
     # projection is page-derived text, including every accessible name and
     # region label it quotes, so it rides inside the nonce-delimited data
     # envelope rather than as bare text. The label frames; the content is
-    # the page's, uncensored.
-    projection, page_note = _pagedata.wrap(result.text, url=record.page.url)
+    # the page's, uncensored. Where frame content is in the payload, the
+    # label names each frame's own origin and provenance: one envelope can
+    # now carry text from several documents and a single origin in the label
+    # would be a claim about only one of them.
+    projection, page_note = _pagedata.wrap(
+        result.text, url=record.page.url,
+        frames=[f for _, _, f in enterable])
     payload = {
         "page": record.handle, "session": sess.session_id,
         "url": record.page.url, "lane": sess.spec.lane,
@@ -404,7 +448,8 @@ async def get_page_view(
             return payload
         rendered = anchors.render(delta, record.handle)
         payload["projection"], payload["page_data"] = _pagedata.wrap(
-            rendered, url=record.page.url)
+            rendered, url=record.page.url,
+            frames=[f for _, _, f in enterable])
         payload["delta"] = {k: delta[k] for k in
                             ("since", "read", "navigated", "stable")}
         payload["budget"]["used"] = _ntok(rendered)
@@ -431,6 +476,19 @@ def _located_ref(location: dict | None) -> str | None:
         return None
     return (location.get("ref") or location.get("region")
             or location.get("form") or location.get("table"))
+
+
+def _scope_frame(sess, location: dict | None) -> str:
+    """Which frame's realm a scoping ref belongs to, or the main document.
+
+    A ref carries its frame as a prefix (`if2r7`), and the map carries it as
+    a field. This reads the field rather than parsing the string, because the
+    string is the caller's address and the field is the server's record."""
+    ref = _located_ref(location)
+    if not ref:
+        return ""
+    entry = sess.element_map.entries.get(ref)
+    return entry.frame if entry is not None else ""
 
 
 def _scope_root(sess, record, location: dict | None) -> str | None:
@@ -497,10 +555,11 @@ async def find_elements(
     come back with the nearest misses so a miss is a one-turn recovery.
     The search covers the main document and every open shadow root in it,
     and the matches it returns from a shadow root are actable like any
-    other. Two things stay out and the result counts both: iframes, which
-    are never searched, and closed shadow roots, which no tool can reach.
-    XPath is the one kind that does not enter a shadow root. There is no
-    `frame` modifier. `location={'region': 'r7'}` (or a ref, form, or table
+    Same-origin iframes are searched too and the result says which ones
+    it entered. Two things stay out and the result counts both:
+    cross-origin iframes, which no tool here opens, and closed shadow
+    roots, which no tool can reach. XPath is the one kind that does not
+    enter a shadow root. `location={'region': 'r7'}` (or a ref, form, or table
     from a read) narrows the search to that subtree, components inside it
     included, and the first result line names the scope that was searched.
     """
@@ -525,7 +584,20 @@ async def find_elements(
     # root is expensive or noisy. It is the only job the modifier has left now
     # that traversal is the default.
     pierce = (location or {}).get("shadow", True) is not False
-    found = await _find(record.page, query, kind=kind, limit=limit, root=root,
+    scope_frame = _scope_frame(sess, location)
+    ladder_all: list = []
+    target = record.page
+    if scope_frame:
+        home = frames.find(await frames.ladder(record), scope_frame)
+        if home is None or not home.entered:
+            raise TargetNotFound(
+                f'{_located_ref(location)!r} was minted in frame '
+                f'{scope_frame}, which is not on {record.handle} any more '
+                f'(or is no longer readable). Re-read the page.')
+        target = home.frame
+    elif root is None:
+        ladder_all = await frames.ladder(record)
+    found = await _find(target, query, kind=kind, limit=limit, root=root,
                         role=(role or "").strip().lower() or None,
                         shadow=pierce)
     if found.get("error"):
@@ -546,16 +618,57 @@ async def find_elements(
     # page view already gave you where the element was in that read too.
     # DESIGN 3.5: there is no operation whose only purpose is to unlock other
     # operations.
-    shim = {"identity": {"url": found["url"], "page_key": found["page_key"]},
-            "affordances": found["matches"], "regions": [], "headings": [],
-            "forms": [], "tables": []}
-    # scope="find" because this is a targeted lookup, not a whole-page read:
-    # a whole-page absorb would mark every unmatched element on the page
-    # GONE, turning the next use of any untouched ref into a spurious rebind.
-    sess.element_map.absorb(shim, record.handle,
-                            sess.reads.mint_token(record.handle),
-                            ts=time.strftime("%Y-%m-%dT%H:%M:%S"),
-                            scope="find")
+    def _absorb_matches(payload: dict, frame: str) -> None:
+        shim = {"identity": {"url": payload["url"],
+                             "page_key": payload["page_key"]},
+                "affordances": payload["matches"], "regions": [],
+                "headings": [], "forms": [], "tables": []}
+        # scope="find" because this is a targeted lookup, not a whole-page
+        # read: a whole-page absorb would mark every unmatched element on the
+        # page GONE, turning the next use of any untouched ref into a
+        # spurious rebind.
+        sess.element_map.absorb(shim, record.handle,
+                                sess.reads.mint_token(record.handle),
+                                ts=time.strftime("%Y-%m-%dT%H:%M:%S"),
+                                scope="find", frame=frame)
+
+    _absorb_matches(found, scope_frame)
+    # THE SEARCH DESCENDS. Every same-origin frame is searched with the same
+    # query, and the counts come back merged, because a caller who searched a
+    # page and was told a string is absent should not have to know the page
+    # embedded the checkout in a frame. Cross-origin frames are counted and
+    # named in the not-searched line, never opened.
+    frame_results: list = []
+    for fr in frames.entered(ladder_all):
+        if fr.is_main:
+            continue
+        try:
+            got = await _find(fr.frame, query, kind=kind, limit=limit,
+                              root=None,
+                              role=(role or "").strip().lower() or None,
+                              shadow=pierce)
+        except Exception:
+            continue                # a frame that navigated mid-search
+        if got.get("error") or got.get("selector_error"):
+            continue
+        _absorb_matches(got, fr.fid)
+        frame_results.append((fr, got))
+    for fr, got in frame_results:
+        found["matches"].extend(got["matches"])
+        found["total_matches"] += got["total_matches"]
+        found["candidates_scanned"] += got["candidates_scanned"]
+        found["hidden_matches"] += got["hidden_matches"]
+        found["nearest_misses"] = (found["nearest_misses"]
+                                   + got["nearest_misses"])[:5]
+        for key in ("open_shadow_roots", "closed_shadow_roots",
+                    "shadow_roots_searched", "iframes"):
+            found["not_searched"][key] = ((found["not_searched"].get(key) or 0)
+                                          + (got["not_searched"].get(key) or 0))
+    if frame_results:
+        # The limit is the caller's and it is not multiplied by the frame
+        # count. What the merge changes is which matches fill it.
+        found["matches"] = found["matches"][:limit]
+        found["returned"] = len(found["matches"])
 
     # WHAT WAS SEARCHED, said in the first line whenever it was not the whole
     # page. A scoped search that reads like an unscoped one is how a caller
@@ -590,19 +703,31 @@ async def find_elements(
                           'not rendered yet')
     ns = found["not_searched"]
     searched_roots = ns.get("shadow_roots_searched") or 0
+    fc = frames.counts(ladder_all) if ladder_all else None
+    skipped = [f for f in ladder_all if not f.is_main and not f.entered]
     lines.append(
         'not searched: '
         + (f'everything outside {_located_ref(location)}, ' if scope else '')
-        + f'{ns["iframes"]} iframe(s), '
-        f'{ns["closed_shadow_roots"]} closed shadow root(s) (unreachable by '
+        + (f'{len(skipped)} of {fc["total"]} iframe(s) '
+           if fc else f'{ns["iframes"]} iframe(s), ')
+        + (f'({", ".join(sorted({f.why_not for f in skipped}))}), '
+           if skipped else ('' if fc else ''))
+        + f'{ns["closed_shadow_roots"]} closed shadow root(s) (unreachable by '
         f'any tool)'
         + (f'; searched {searched_roots} of {ns["open_shadow_roots"]} open '
            f'shadow root(s)' if ns["open_shadow_roots"] else ''))
+    if fc and fc["entered"]:
+        lines.append(
+            f'searched {fc["entered"]} same-origin frame(s): '
+            + ", ".join(f'{fr.fid} ({fr.origin})'
+                        for fr in frames.entered(ladder_all) if not fr.is_main))
     text = "\n".join(lines)
     # The result lines quote accessible names verbatim, which are
     # page-authored, so they ride the same labeled envelope as the
     # projection (DESIGN 5.1, H1).
-    wrapped, page_note = _pagedata.wrap(text, url=found["url"])
+    wrapped, page_note = _pagedata.wrap(
+        text, url=found["url"],
+        frames=[fr.to_dict() for fr, _ in frame_results])
     return {
         "page": record.handle, "session": sess.session_id,
         "query": query, "kind": kind,
@@ -631,6 +756,10 @@ async def get_text(
     because display:none is a real injection channel; the labeled route is
     the whole design. Prose inside open shadow roots is read, the same as
     get_page_view reads it; closed roots are counted and stay unreadable.
+    Prose inside same-origin iframes is read after the main document, each
+    frame under a header naming it and its origin, because one page can
+    now deliver text from several documents and a single origin in the
+    label would be a claim about only one of them.
     """
     if include_hidden and not _policy.hidden_content_allowed():
         raise BadParams(
@@ -643,13 +772,85 @@ async def get_text(
                     url=record.page.url, lane=sess.spec.label)
     record.touch(record.page.url)
     root = _scope_root(sess, record, location)
-    got = await read_text(record.page, root=root, start_index=start_index,
+    scope_frame = _scope_frame(sess, location)
+    ladder_all: list = []
+    target = record.page
+    if scope_frame:
+        home = frames.find(await frames.ladder(record), scope_frame)
+        if home is None or not home.entered:
+            raise TargetNotFound(
+                f'{_located_ref(location)!r} was minted in frame '
+                f'{scope_frame}, which is not on {record.handle} any more '
+                f'(or is no longer readable). Re-read the page.')
+        target = home.frame
+    elif root is None:
+        ladder_all = await frames.ladder(record)
+    got = await read_text(target, root=root, start_index=start_index,
                           max_chars=max_chars, include_hidden=include_hidden)
     if got.get("error"):
         raise TargetNotFound(
             f'location named {got["asked_for"]!r} and that ref is not on '
             f'{record.handle} any more. Re-read the page and use the ref it '
             f'returns.')
+    # FRAME PROSE, appended after the main document's text and only once the
+    # main document's own paging is finished. A page's readable text is not
+    # one string across several documents and pretending otherwise would make
+    # `start_index` mean two different things at once, so the frames are read
+    # at the END of the page rather than interleaved, each under a header
+    # naming its id and origin. A read that is still paging the main document
+    # says the frames are pending rather than reading them early and losing
+    # them on the next page.
+    frame_reads: list = []
+    frame_note = ""
+    pending = [f for f in frames.entered(ladder_all) if not f.is_main]
+    if pending and got["next_start_index"] is None:
+        room = max_chars
+        for fr in pending:
+            if room <= 0:
+                frame_note = (
+                    f'; {len([f for f in pending if f.fid >= fr.fid])} '
+                    f'frame(s) were not read because max_chars was reached; '
+                    f'raise max_chars or read the frame directly with '
+                    f'location={{"ref": "<a ref from that frame>"}}')
+                break
+            try:
+                sub = await read_text(fr.frame, root=None, start_index=0,
+                                      max_chars=room,
+                                      include_hidden=include_hidden)
+            except Exception:
+                continue
+            if sub.get("error") or not sub.get("text"):
+                continue
+            room -= len(sub["text"])
+            frame_reads.append((fr, sub))
+        parts = [got["text"]]
+        for fr, sub in frame_reads:
+            parts.append(
+                f'\n\n--- {fr.fid} | frame content from {fr.origin} | '
+                f'{frames.provenance(fr)} ---\n{sub["text"]}')
+        got["text"] = "".join(parts)
+        for fr, sub in frame_reads:
+            got["returned_chars"] += sub["returned_chars"]
+            got["total_chars"] += sub["total_chars"]
+            got["hidden"]["blocks"] += sub["hidden"]["blocks"]
+            got["hidden"]["chars"] += sub["hidden"]["chars"]
+            got["hidden"]["injection_suspects"] += \
+                sub["hidden"]["injection_suspects"]
+            got["hidden"]["zero_width_blocks"] += \
+                sub["hidden"]["zero_width_blocks"]
+            for reason, n in (sub["hidden"]["reasons"] or {}).items():
+                got["hidden"]["reasons"][reason] = (
+                    got["hidden"]["reasons"].get(reason, 0) + n)
+            if include_hidden and sub.get("hidden_sections"):
+                got.setdefault("hidden_sections", [])
+                got["hidden_sections"] = (got.get("hidden_sections") or []) + [
+                    {**s, "frame": fr.fid} for s in sub["hidden_sections"]]
+    elif pending:
+        frame_note = (f'; {len(pending)} same-origin frame(s) hold text that '
+                      f'this read has not reached yet, because the main '
+                      f'document is still paging; they are read once '
+                      f'start_index passes the end of it')
+
     hidden = got["hidden"]
     reasons = ", ".join(f"{k}={v}" for k, v in sorted(
         hidden["reasons"].items(), key=lambda kv: -kv[1])[:6])
@@ -677,7 +878,9 @@ async def get_text(
     # so it arrives inside the labeled data envelope (DESIGN 5.1, H1). The
     # text between the delimiters stays byte-identical to what the extractor
     # returned; only the framing is added.
-    wrapped_text, page_note = _pagedata.wrap(got["text"], url=got["url"])
+    wrapped_text, page_note = _pagedata.wrap(
+        got["text"], url=got["url"],
+        frames=[fr.to_dict() for fr, _ in frame_reads])
     return {
         "page": record.handle, "session": sess.session_id,
         "scope": location if location else "whole page",
@@ -705,7 +908,19 @@ async def get_text(
                if got.get("shadow_roots_read") else '')
             + (f'; {got["closed_shadow_roots"]} closed shadow root(s) are '
                f'unreadable by any tool'
-               if got.get("closed_shadow_roots") else '')),
+               if got.get("closed_shadow_roots") else '')
+            + (f'; prose was read from {len(frame_reads)} same-origin '
+               f'frame(s) ('
+               + ", ".join(f'{fr.fid} {fr.origin}' for fr, _ in frame_reads)
+               + '), each labelled where it appears' if frame_reads else '')
+            + frame_note
+            + (f'; {len([f for f in ladder_all if not f.is_main and not f.entered])}'
+               f' iframe(s) were not read ('
+               + ", ".join(sorted({f.why_not for f in ladder_all
+                                   if not f.is_main and not f.entered}))
+               + ')'
+               if any(not f.is_main and not f.entered for f in ladder_all)
+               else '')),
         "budget": {"used": _ntok(got["text"]), "estimator": _ENCODING},
     }
 
@@ -1098,20 +1313,28 @@ async def click(
         resolution=resolved["resolution"],
         summary=f'click {desc.get("role")} "{desc.get("name")}" on '
                 f'{record.handle}'))
-    before = await _act.observe(record.page, resolved["node_ref"])
+    # THE REALM (2026-09-06, frames). An element inside a same-origin frame
+    # is observed, armed, and verified in ITS OWN document: the observation
+    # probe looks up the node ref in that frame's registry, the arming focus
+    # has to reach that frame's activeElement, and the cloak verdict has to
+    # see that frame's overlays. `context_of` is the page itself for every
+    # main-document element, which is every element on a page with no frames.
+    ctx = _act.context_of(resolved, record)
+    before = await _act.observe(ctx, resolved["node_ref"])
     # THE LAST THING BEFORE THE INPUT (A7). Focus and re-take the cloak
     # verdict in one JS turn, so a page that raises an opaque lid when the
     # control takes focus is caught by the check its own handler triggered.
     # The resolution-time verdict describes the page as it was several round
     # trips ago, and the trusted click focuses this element anyway.
-    await _act.arm_for_dispatch(record.page, resolved["handle"], tool="click")
+    await _act.arm_for_dispatch(record.page, resolved["handle"], tool="click",
+                                resolved=resolved)
     try:
         await resolved["handle"].click(
             button=button, click_count=click_count,
             modifiers=modifiers or [], timeout=timeout_ms)
     except Exception as exc:
         _reraise_driver(exc, what="click", timeout_ms=timeout_ms)
-    outcome = await _act.verify(record.page, resolved["node_ref"], before)
+    outcome = await _act.verify(ctx, resolved["node_ref"], before)
     result = _action_result(record, "click", desc, resolved, outcome)
     result["session"] = sess.session_id
     return result
@@ -1184,7 +1407,8 @@ async def type_text(
     # earliest moment a `type=text` field that turns into `type=password` on
     # focus has actually turned, and the classification is re-taken against
     # what it IS rather than what it was when the descriptor was built.
-    desc = await _act.recheck_at_write(record.page, handle, desc,
+    ctx = _act.context_of(resolved, record)
+    desc = await _act.recheck_at_write(ctx, handle, desc,
                                        tool="type_text")
     late = _act.action_class_for(desc, submitting=submitting)
     if late and late != _act.action_class_for(resolved["descriptor"],
@@ -1195,7 +1419,7 @@ async def type_text(
             summary=f'type into {desc.get("role")} "{desc.get("name")}" on '
                     f'{record.handle}, which the page turned into a '
                     f'{late.replace("_", " ")} target when it took focus?')
-    before = await _act.observe(record.page, resolved["node_ref"])
+    before = await _act.observe(ctx, resolved["node_ref"])
     try:
         if clear_first:
             await handle.fill(text, timeout=timeout_for(delay_ms, len(text)))
@@ -1213,8 +1437,8 @@ async def type_text(
             # sent and the typing itself is element-bound, so the text lands
             # in the resolved target or the call refuses.
             await handle.focus()
-            await _assert_focus_held(record.page, handle)
-            await _type_bound(record.page, handle, text, delay_ms)
+            await _assert_focus_held(ctx, handle)
+            await _type_bound(ctx, handle, text, delay_ms)
         if press_enter or submit:
             await handle.press("Enter")
         if submit:
@@ -1229,7 +1453,7 @@ async def type_text(
                 pass
     except Exception as exc:
         _reraise_driver(exc, what="type_text", timeout_ms=15000)
-    outcome = await _act.verify(record.page, resolved["node_ref"], before)
+    outcome = await _act.verify(ctx, resolved["node_ref"], before)
     try:
         value_state = await handle.input_value()
     except Exception:
@@ -1430,7 +1654,8 @@ async def fill_form(
         # against the descriptor resolved before the action, the act then
         # focused the element, and the keystrokes landed in a password field.
         # A secret field refuses the whole call, batch or not (DESIGN 5.3).
-        desc = await _act.recheck_at_write(record.page, rr["handle"],
+        desc = await _act.recheck_at_write(_act.context_of(rr, record),
+                                           rr["handle"],
                                            rr["descriptor"], tool="fill_form")
         late = _act.action_class_for(desc)
         if late and late != batch_class:
@@ -1444,7 +1669,8 @@ async def fill_form(
                         f'page turned into a {late.replace("_", " ")} target '
                         f'when it took focus?')
         try:
-            set_result = await _set_field(record.page, rr, f.get("value"))
+            set_result = await _set_field(_act.context_of(rr, record), rr,
+                                          f.get("value"))
         except Exception as exc:
             per_item.append({
                 "ref": rr.get("node_ref"),
@@ -1486,10 +1712,11 @@ async def fill_form(
         _gates.ENGINE.verify_execute(
             granted, fresh["descriptor"] if fresh else None,
             resolution_outcome=fresh["resolution"] if fresh else "ok")
-        before = await _act.observe(record.page,
+        fctx = _act.context_of(fresh or {}, record)
+        before = await _act.observe(fctx,
                                     fresh["node_ref"] if fresh else None)
         submitted = await _submit_form(record, fresh)
-        outcome = await _act.verify(record.page,
+        outcome = await _act.verify(fctx,
                                     fresh["node_ref"] if fresh else None,
                                     before)
         _audit.annotate(gate={"action_class": "form_submit",
@@ -1519,19 +1746,24 @@ async def _submit_form(record, fresh: dict | None) -> str:
     if fresh is None:
         raise BadParams("nothing was filled, so there is no form to submit.")
     handle = fresh["handle"]
+    # The form's own realm. A form inside a same-origin frame is submitted
+    # through THAT document: `el.form` is a property of the element's own
+    # document and the load state that follows is the frame's, not the
+    # page's, so asking the page would ask the wrong document twice.
+    ctx = fresh.get("context") or record.page
     # The submit control comes back as a HANDLE rather than as a key into an
     # in-page map. There is no key to poison, no map to replace, and one round
     # trip less: the driver already speaks element handles, and routing this
     # through a page-visible registry was the habit gauntlet 2's H5 exploited
     # everywhere else in the build.
-    in_form = await record.page.evaluate(
+    in_form = await ctx.evaluate(
         "(el) => !!(el.form || (el.closest ? el.closest('form') : null))",
         handle)
     if not in_form:
         raise BadParams(
             "the confirmed field is not inside a <form>; there is nothing "
             "to submit.")
-    btn = await record.page.evaluate_handle(
+    btn = await ctx.evaluate_handle(
         r"""(el) => {
           const f = el.form || (el.closest ? el.closest('form') : null);
           if (!f) return null;
@@ -1710,14 +1942,15 @@ async def press_keys(
         summary=f"press {keys!r} x{repeat} on {record.handle}"
                 + (" (submits the form the focused control is in)"
                    if submitting else "")))
-    before = await _act.observe(record.page, node_ref)
+    kctx = _act.context_of(resolved or {}, record)
+    before = await _act.observe(kctx, node_ref)
     if resolved is not None:
         # Focus and the cloak re-check in one turn (A7), which replaces the
         # bare focus this used to be: the focus is the event a lid-raising
         # page listens for. It sits OUTSIDE the driver try-block, because its
         # refusal is a target verdict and not a driver failure.
         await _act.arm_for_dispatch(record.page, resolved["handle"],
-                                    tool="press_keys")
+                                    tool="press_keys", resolved=resolved)
     try:
         for _ in range(repeat):
             if resolved is not None:
@@ -1726,7 +1959,7 @@ async def press_keys(
                 await record.page.keyboard.press(keys)
     except Exception as exc:
         _reraise_driver(exc, what="press_keys", timeout_ms=15000)
-    outcome = await _act.verify(record.page, node_ref, before)
+    outcome = await _act.verify(kctx, node_ref, before)
     return {
         "session": sess.session_id, "page": record.handle, "tool": "press_keys",
         "keys": keys, "repeat": repeat, "url": record.page.url,
@@ -2021,8 +2254,10 @@ async def find_and_act(
     point, the same submit classification, the same rebind refusal, the same
     budget. It returns the verified outcome of the action it performed, the
     same one the separate tool returns, plus a line naming the element the
-    search settled on. To act on a ref you already hold, call click or
-    type_text.
+    search settled on. The search covers open shadow roots and every
+    same-origin iframe, and a match in the page and a match in a frame are
+    two matches: a frame boundary is not a tie-break. To act on a ref you
+    already hold, call click or type_text.
     """
     action = (action or "click").strip().lower()
     action = {"type_text": "type", "fill": "type", "press_keys": "press",
@@ -2059,7 +2294,20 @@ async def find_and_act(
     # 12 is the ambiguity listing width, not a cap on what was counted:
     # `total_matches` sees every visible match, so a two-match page refuses
     # even when only one match was returned.
-    found = await _find(record.page, query, kind=kind, limit=12, root=root,
+    scope_frame = _scope_frame(sess, within)
+    ladder_all: list = []
+    search_in = record.page
+    if scope_frame:
+        home = frames.find(await frames.ladder(record), scope_frame)
+        if home is None or not home.entered:
+            raise TargetNotFound(
+                f'{_located_ref(within)!r} was minted in frame '
+                f'{scope_frame}, which is not on {record.handle} any more '
+                f'(or is no longer readable). Re-read the page.')
+        search_in = home.frame
+    elif root is None:
+        ladder_all = await frames.ladder(record)
+    found = await _find(search_in, query, kind=kind, limit=12, root=root,
                         role=(role or "").strip().lower() or None,
                         shadow=pierce)
     if found.get("error"):
@@ -2076,13 +2324,42 @@ async def find_and_act(
     # refs in an ambiguity refusal are refs the caller's next call can act
     # on. A refusal that lists candidates you cannot address is a dead end
     # wearing a recovery's clothes.
-    shim = {"identity": {"url": found["url"], "page_key": found["page_key"]},
-            "affordances": found["matches"], "regions": [], "headings": [],
-            "forms": [], "tables": []}
-    sess.element_map.absorb(shim, record.handle,
-                            sess.reads.mint_token(record.handle),
-                            ts=time.strftime("%Y-%m-%dT%H:%M:%S"),
-                            scope="find")
+    def _absorb_here(payload: dict, frame: str) -> None:
+        shim = {"identity": {"url": payload["url"],
+                             "page_key": payload["page_key"]},
+                "affordances": payload["matches"], "regions": [],
+                "headings": [], "forms": [], "tables": []}
+        sess.element_map.absorb(shim, record.handle,
+                                sess.reads.mint_token(record.handle),
+                                ts=time.strftime("%Y-%m-%dT%H:%M:%S"),
+                                scope="find", frame=frame)
+
+    _absorb_here(found, scope_frame)
+    # The fused path searches frames for the same reason the split path does:
+    # a caller who asked for the "Pay" button on a page whose checkout is in
+    # a frame asked about the page, not about the top document. And it merges
+    # the counts BEFORE the ambiguity decision, so a match in the page and a
+    # match in a frame refuse each other rather than the first one winning.
+    for fr in frames.entered(ladder_all):
+        if fr.is_main:
+            continue
+        try:
+            got = await _find(fr.frame, query, kind=kind, limit=12, root=None,
+                              role=(role or "").strip().lower() or None,
+                              shadow=pierce)
+        except Exception:
+            continue
+        if got.get("error") or got.get("selector_error"):
+            continue
+        _absorb_here(got, fr.fid)
+        found["matches"].extend(got["matches"])
+        found["total_matches"] += got["total_matches"]
+        found["candidates_scanned"] += got["candidates_scanned"]
+        found["hidden_matches"] += got["hidden_matches"]
+        found["nearest_misses"] = (found["nearest_misses"]
+                                   + got["nearest_misses"])[:5]
+    found["matches"] = found["matches"][:12]
+    found["returned"] = len(found["matches"])
     scope_bit = ""
     if found.get("scope"):
         scope_bit = f' within {_located_ref(within)}'
@@ -2114,9 +2391,10 @@ async def find_and_act(
         misses = "; ".join(f'{n["role"]} "{n["name"]}"'
                            for n in found["nearest_misses"])
         hint = (f' Nearest by name: {misses}.' if misses else
-                ' No near misses either; the target may be inside an iframe, '
-                'a closed shadow root, or content that has not rendered yet. '
-                'Open shadow roots were searched.')
+                ' No near misses either; the target may be inside a '
+                'cross-origin iframe, a closed shadow root, or content that '
+                'has not rendered yet. Open shadow roots were searched, and '
+                'so was every same-origin frame.')
         raise TargetNotFound(
             f'nothing visible matches {query!r}'
             + (f' with role={role!r}' if role else '') + scope_bit
@@ -2723,7 +3001,11 @@ async def get_workflows(topic: str | None = None) -> dict:
             "shadow-root count: open roots are read, but a site that puts "
             "its interface inside CLOSED roots is one no tool can see "
             "into, and the count is how you tell that apart from an empty "
-            "page. Then check whether the site is turning "
+            "page. The iframe line beside it does the same job one "
+            "boundary along: a same-origin frame is entered and read, and "
+            "a page whose interface arrives in a CROSS-ORIGIN frame is a "
+            "page this server reports rather than reads. Then check "
+            "whether the site is turning "
             "away headless Chromium: the Firefox lanes get through checks "
             "that block it, so manage_session(action='open', "
             "lane='B:moz-firefox') is the move. get_page_errors (the "
@@ -2736,7 +3018,10 @@ async def get_workflows(topic: str | None = None) -> dict:
             "is not in the DOM until it is on screen. If the count of "
             "hidden elements or CLOSED shadow roots is high, the element "
             "may be somewhere no read reaches, and the read says so rather "
-            "than pretending the page is smaller than it is.",
+            "than pretending the page is smaller than it is. A control in "
+            "a cross-origin frame is the same story: the completeness "
+            "block names the frame, and nothing in this build can act on "
+            "what is inside it.",
             "Auth not working: check the cookie count before anything "
             "else, since zero cookies means the login never happened and "
             "there is nothing to save. A login that worked yesterday and "

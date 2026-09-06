@@ -67,17 +67,23 @@ from ..projection import extract, instrument
 #: hatch on a page where piercing is expensive or ambiguous. Closed roots stay
 #: unreachable whatever the modifier says.
 #:
-#: `frame` is GONE. Reaching into an iframe is not the same machinery: the
-#: resolver runs in ONE execution context, and a frame has its own, so
-#: supporting it means routing every branch through the driver's frame layer
-#: rather than reusing the shadow sweep. It was not free, so it is not
-#: pretended: `{'frame': ...}` now REFUSES with the selector list instead of
-#: being stripped, because dead grammar that silently strips is worse than an
-#: honest absence.
+#: `frame` came BACK, as a modifier and with the machinery under it (the
+#: same-origin frame build, 2026-09-06). The shadow build removed it rather
+#: than fake it, and its reasoning was right: a frame has its own execution
+#: context and the shadow sweep cannot reach one. What changed is that the
+#: resolver now runs PER FRAME, in the frame's own realm, through the
+#: driver's frame layer, so `{'css': '#pay', 'frame': 'if2'}` narrows the
+#: search to one frame's document.
+#:
+#: It narrows and never widens. A live selector already searches every
+#: SAME-ORIGIN frame on the page and refuses ambiguity across the union of
+#: them, because a page that embeds its checkout in a frame should not need
+#: the caller to know that; `frame` is how a caller says which of two
+#: identical widgets they meant. A cross-origin frame is refused by name.
 _LADDER_KEYS = ("ref", "region", "form", "table")
 _LIVE_KEYS = ("css", "xpath", "testid", "coordinate", "nth", "describe",
               "text", "anchor")
-_MODIFIERS = ("shadow", "exact")
+_MODIFIERS = ("shadow", "exact", "frame")
 
 
 def selector_of(location: dict | None) -> tuple[str, object]:
@@ -103,18 +109,12 @@ def selector_of(location: dict | None) -> tuple[str, object]:
             groups.append("ref")
         elif key in _LIVE_KEYS:
             groups.append(key)
-        elif key == "frame":
-            raise BadParams(
-                "there is no 'frame' modifier. It was accepted and silently "
-                "ignored until 2026-09-06; nothing in this build reaches "
-                "into an iframe, so the key refuses now rather than looking "
-                "like it worked. Read the page: the completeness block lists "
-                "every iframe it found and says which are same-origin.")
         else:
             raise BadParams(
                 f"location key {key!r} is not a selector. The selectors are "
                 f"ref/region/form/table, css, xpath, text, role+name, testid, "
-                f"nth, describe, coordinate; shadow/exact are modifiers.")
+                f"nth, describe, coordinate; shadow/exact/frame are "
+                f"modifiers.")
     groups = list(dict.fromkeys(groups))
     if len(groups) != 1:
         raise BadParams(
@@ -855,6 +855,52 @@ async def recheck_at_write(page, handle, desc: dict, *, tool: str) -> dict:
 
 # ------------------------------------------------------------- resolution
 
+
+def _frames_path(ref):
+    from ..engine import frames as _frames
+
+    return _frames.path(ref)
+
+
+async def _frame_context(record, fid: str, *, tool: str, ref: str | None):
+    """The execution context one frame's refs resolve in, or a refusal.
+
+    Every refusal here is a TARGET-level fact rather than a bad call: the
+    frame the ref was minted in has gone, or has navigated somewhere this
+    build will not follow, or sits past the depth cap. None of them is
+    recoverable by retrying, and none of them is ever resolved by falling
+    back to the main document, which is the silent retargeting the whole
+    ladder exists to prevent."""
+    from ..engine import frames as _frames
+
+    tree = await _frames.ladder(record)
+    found = _frames.find(tree, fid)
+    if found is None:
+        raise StaleAnchor(
+            f'{ref or "this location"} lives in frame {fid}, and that frame '
+            f'is no longer on {record.handle}. A frame that the page removed '
+            f'takes every ref minted inside it with it. Re-read the page '
+            f'(get_page_view) and use the refs it returns.')
+    if not found.entered:
+        raise TargetChanged(
+            f'frame {fid} is on the page and this build will not enter it: '
+            f'{found.why_not}. It is now {found.label()}. Nothing was done, '
+            f'because acting through the main document instead would be '
+            f'acting on a different element than the one you addressed.')
+    return found
+
+
+def context_of(resolved: dict, record) -> object:
+    """The page-like object an action must dispatch through.
+
+    An element inside a frame is focused, probed, and armed in ITS OWN
+    realm: the cloak check has to see the frame's own overlays, and the
+    focus check has to read the frame's own activeElement. Falling back to
+    the page for a frame element would ask the wrong document both
+    questions."""
+    return resolved.get("context") or record.page
+
+
 async def resolve(sess, record, location: dict, *, tool: str,
                   acting: bool = True) -> dict:
     """Resolve one location to a live element handle, refusing rather than
@@ -914,13 +960,25 @@ async def _resolve_ref(sess, record, ref: str, *, tool: str,
     # on exactly the large pages it exists for. The ladder's matching is
     # unchanged; only the candidate list is complete now.
     pin = (sess.element_map.node_refs.get(record.handle) or {}).get(ref)
-    data = await extract(record.page, pin=pin)
+    # THE REALM. A ref carries its frame (`if2e5`), and the fresh extraction
+    # the ladder resolves against has to come from the SAME document the ref
+    # was minted in. Re-extracting the main page for a frame ref would hand
+    # the ladder a document that does not contain the element and produce a
+    # confident STALE on a control that is sitting right there. A main-frame
+    # ref takes the same path it always did, with no frame work at all.
+    context = record.page
+    occlusion_chain: list = []
+    if entry.frame:
+        home = await _frame_context(record, entry.frame, tool=tool, ref=ref)
+        context = home.frame
+        occlusion_chain = _frames_path(home)
+    data = await extract(context, pin=pin)
     outcome = ladder.resolve(sess.element_map, ref, data, record.handle)
     verdict = outcome["outcome"]
     if verdict in (Outcome.OK, Outcome.REBOUND):
         unit = outcome["unit"]
         node_ref = unit.get("ref")
-        handle = await _handle(record.page, node_ref)
+        handle = await _handle(context, node_ref)
         if handle is None:
             raise StaleAnchor(
                 f"{ref!r} resolved to an element that is no longer in the DOM. "
@@ -930,7 +988,9 @@ async def _resolve_ref(sess, record, ref: str, *, tool: str,
         # visible when the ref was minted and is invisible now gets the same
         # answer here (gauntlet 2 H2).
         if acting:
-            await refuse_if_cloaked(record.page, handle, tool=tool)
+            await refuse_if_cloaked(context, handle, tool=tool,
+                                    chain=occlusion_chain,
+                                    shooter=record.page)
         rebound = None
         if verdict == Outcome.REBOUND:
             # H2 (gauntlet 2026-09-06): a stable attribute key (testid, id,
@@ -961,7 +1021,8 @@ async def _resolve_ref(sess, record, ref: str, *, tool: str,
             rebound = (f'{ref} was rebound: {outcome.get("was")} -> '
                        f'{outcome.get("now")} (tier {outcome.get("tier")})')
         return {"handle": handle, "node_ref": node_ref, "session_ref": ref,
-                "unit": unit,
+                "unit": unit, "context": context, "frame": entry.frame,
+                "chain": occlusion_chain,
                 "descriptor": target_descriptor(unit),
                 "resolution": "rebound" if verdict == Outcome.REBOUND else "ok",
                 "rebound": rebound}
@@ -997,14 +1058,71 @@ async def _resolve_live(sess, record, location: dict, *, tool: str,
             "Address a live element by ref, css, text, role+name, or testid; "
             "anchor-driven replay runs through run_workflow, which re-resolves "
             "stored anchors itself.")
-    found = await record.page.evaluate(_RESOLVE_JS, {"location": location})
+    # THE SWEEP. The main document plus every same-origin frame, unless the
+    # location names one frame, in which case that frame and nothing else.
+    # Ambiguity is judged across the UNION: two matches in two frames are two
+    # matches, and acting on whichever document answered first is exactly the
+    # first-match behaviour this resolver refuses everywhere else.
+    from ..engine import frames as _frames
+
+    named = (location or {}).get("frame")
+    targets: list = []
+    chains: dict = {}
+    if named:
+        home = await _frame_context(record, str(named), tool=tool, ref=None)
+        targets = [(home.fid, home.frame)]
+        chains[home.fid] = _frames_path(home)
+    else:
+        targets = [("", record.page)]
+        tree = await _frames.ladder(record)
+        for fr in _frames.entered(tree):
+            if not fr.is_main:
+                targets.append((fr.fid, fr.frame))
+                chains[fr.fid] = _frames.path(fr)
+    found = None
+    per_frame: list = []
+    for fid, target in targets:
+        try:
+            got = await target.evaluate(_RESOLVE_JS, {"location": location})
+        except Exception:
+            continue                 # a frame that navigated mid-resolution
+        if got.get("error"):
+            if found is None:
+                found = got
+            continue
+        per_frame.append((fid, target, got))
+        if found is None or found.get("error"):
+            found = got
+    if found is None:
+        raise TargetNotFound(
+            "no document on this page could be searched for that selector: "
+            "every frame this build may enter went away while resolving it. "
+            "Re-read the page and try again.")
     if found.get("error"):
         raise BadParams(
             f'the selector did not resolve: {found["error"]}. Check the css or '
             f'xpath syntax, or address the element by ref from a read.')
-    count = found.get("count", 0)
+    count = sum(g.get("count", 0) for _, _, g in per_frame)
+    hits = [(fid, target, g) for fid, target, g in per_frame
+            if g.get("count", 0)]
+    if count > 1 and len(hits) > 1:
+        # Candidates from several realms. The refusal names the frame each one
+        # is in, because "two buttons called Pay" reads very differently once
+        # you know one of them is in an embedded widget.
+        candidates = []
+        for fid, _, g in hits:
+            for cand in (g.get("candidates") or []):
+                candidates.append({**cand,
+                                   "where": fid or "the main document"})
+        raise AmbiguousLocation(
+            f'{count} visible elements match ({found.get("how")}) across '
+            f'{len(hits)} document(s) on this page; no tool acts on first '
+            f'match, and a frame boundary is not a tie-break. Candidates: '
+            f'{_candidate_text(candidates)}. Narrow with '
+            f'{{"frame": "ifN"}}, or read the page and use a ref.')
     if count == 1:
-        handle = await _handle(record.page, found["ref"])
+        fid, target, found = hits[0]
+        handle = await _handle(target, found["ref"])
         if handle is None:
             raise StaleAnchor(
                 "the element left the DOM between resolving it and acting on "
@@ -1016,7 +1134,9 @@ async def _resolve_live(sess, record, location: dict, *, tool: str,
         # selector path was the way around it: `click(location={'css': ...})`
         # on a button buried under an opaque panel.
         if acting:
-            await refuse_if_cloaked(record.page, handle, tool=tool)
+            await refuse_if_cloaked(target, handle, tool=tool,
+                                    chain=chains.get(fid) or [],
+                                    shooter=record.page)
         unit = dict(found)
         # Absorb the resolved element into the SESSION map, so the ref this
         # action reports (`target.ref`) is one the ladder can re-resolve.
@@ -1031,16 +1151,19 @@ async def _resolve_live(sess, record, location: dict, *, tool: str,
             shim_unit = {"ref": found["ref"], "anchor": unit["anchor"],
                          "role": unit.get("role"), "name": unit.get("name"),
                          "state": ""}
-            shim = {"identity": {"url": record.page.url,
+            shim = {"identity": {"url": found.get("url") or record.page.url,
                                  "page_key": found.get("page_key", "")},
                     "affordances": [shim_unit], "regions": [],
                     "headings": [], "forms": [], "tables": []}
             sess.element_map.absorb(
                 shim, record.handle, sess.reads.mint_token(record.handle),
-                ts=_time.strftime("%Y-%m-%dT%H:%M:%S"), scope="resolve")
+                ts=_time.strftime("%Y-%m-%dT%H:%M:%S"), scope="resolve",
+                frame=fid)
             session_ref = shim_unit["ref"]
         return {"handle": handle, "node_ref": found["ref"],
                 "session_ref": session_ref, "unit": unit,
+                "context": target, "frame": fid,
+                "chain": chains.get(fid) or [],
                 "descriptor": target_descriptor(unit), "resolution": "ok",
                 "rebound": None}
     if count and count > 1:
@@ -1050,10 +1173,13 @@ async def _resolve_live(sess, record, location: dict, *, tool: str,
             f'{_candidate_text(found.get("candidates"))}. Narrow the selector, '
             f'or read the page and use a ref.')
     misses = found.get("nearest") or []
+    swept = len(targets)
     hint = (" Nearest by name: " + _candidate_text(misses)) if misses else \
-        " No near misses either; the target may be inside an iframe, a " \
-        "closed shadow root, or content that has not rendered yet. Open " \
-        "shadow roots were searched."
+        (" No near misses either; the target may be inside a cross-origin "
+         "iframe, a closed shadow root, or content that has not rendered "
+         "yet. Open shadow roots were searched"
+         + (f", and so were {swept - 1} same-origin frame(s)"
+            if swept > 1 else "") + ".")
     raise TargetNotFound(
         f'nothing visible matches this selector ({found.get("how")}).{hint}')
 
@@ -1190,7 +1316,8 @@ _PIXEL_RELEASE_JS = instrument(r"""
 PIXEL_ARBITER_MS: list[float] = []
 
 
-async def _pixel_confirms_occlusion(page, handle) -> bool:
+async def _pixel_confirms_occlusion(page, handle, *, shooter=None,
+                                    offset=None) -> bool:
     """Ask the compositor whether the flagged lids actually conceal anything.
 
     Returns True when the control's own area renders DIFFERENTLY with the
@@ -1226,11 +1353,19 @@ async def _pixel_confirms_occlusion(page, handle) -> bool:
                prep["height"], prep["lids"])
         if key in cache:
             return cache[key]
-        clip = {"x": prep["x"], "y": prep["y"],
+        # A frame reports its rectangles in its OWN viewport and the camera is
+        # the page's, so the clip is shifted down the frame chain before the
+        # shutter opens. Without the shift the arbiter photographs a
+        # rectangle in the page chrome, finds it identical in both renders,
+        # and clears an occlusion that is really there.
+        dx = (offset or {}).get("x", 0.0)
+        dy = (offset or {}).get("y", 0.0)
+        camera = shooter if shooter is not None else page
+        clip = {"x": prep["x"] + dx, "y": prep["y"] + dy,
                 "width": prep["width"], "height": prep["height"]}
-        as_is = await page.screenshot(clip=clip, animations="disabled")
+        as_is = await camera.screenshot(clip=clip, animations="disabled")
         await page.evaluate(_PIXEL_HIDE_JS)
-        without = await page.screenshot(clip=clip, animations="disabled")
+        without = await camera.screenshot(clip=clip, animations="disabled")
         verdict = as_is != without
         cache[key] = verdict
         return verdict
@@ -1246,7 +1381,7 @@ async def _pixel_confirms_occlusion(page, handle) -> bool:
         del PIXEL_ARBITER_MS[32:]
 
 
-async def _arbitrate(page, handle, verdict):
+async def _arbitrate(page, handle, verdict, *, shooter=None, offset=None):
     """Let the compositor rule on an `occluded` verdict before it refuses.
 
     Every OTHER cloak technique is a property of the element itself -- its own
@@ -1262,7 +1397,8 @@ async def _arbitrate(page, handle, verdict):
     reason = verdict if isinstance(verdict, str) else verdict.get("reason")
     if reason != "occluded":
         return verdict
-    if await _pixel_confirms_occlusion(page, handle):
+    if await _pixel_confirms_occlusion(page, handle, shooter=shooter,
+                                       offset=offset):
         return verdict
     return None
 
@@ -1301,20 +1437,91 @@ _CLOAK_WHY = {
 }
 
 
-async def refuse_if_cloaked(page, handle, *, tool: str) -> None:
+#: A hidden iframe hides everything in it, and nothing inside the frame can
+#: know that. The frame-local scan asks the frame's own document about the
+#: element's own styling and the frame's own overlays; this asks the PARENT
+#: about the box the whole frame is painted into. Both halves are required:
+#: an element can be perfectly visible in its frame's coordinate space while
+#: the frame element itself sits under a full-page consent wall.
+def _refuse_frame_chain(chain, tool: str) -> None:
+    for fr in chain or ():
+        if fr.hidden:
+            raise TargetNotFound(
+                f'{tool} will not act on this element: it is inside frame '
+                f'{fr.fid}, and the frame itself is not visible to a human '
+                f'({fr.hidden}). The element is laid out and clickable in '
+                f'its own document, which is exactly how a page steers an '
+                f'agent into a frame nobody can see, so nothing was done. '
+                f'The content is still readable through the labeled route, '
+                f'get_text(include_hidden=true).')
+
+
+async def _refuse_if_frame_occluded(chain, *, tool: str, shooter) -> None:
+    """Run the cloak verdict on every `<iframe>` element on the way down.
+
+    OCCLUSION IS THE ONE VERDICT THE FRAME CANNOT COMPUTE FOR ITSELF. Every
+    other technique is a property of the element and its own document, and the
+    frame's own scan already answers those. A full-page consent wall dropped
+    over an embedded checkout is a fact about the PARENT's boxes: inside the
+    frame the button is laid out, hit-testable, and perfectly visible in its
+    own coordinate space, and a click on it lands on the wall.
+
+    Each hop is arbitrated by the compositor the same way a top-level
+    occlusion is, with the clip shifted by the offset of the frame ABOVE the
+    one being checked, because that is the viewport the box was measured in.
+    """
+    for fr in chain or ():
+        parent = getattr(fr, "parent", None)
+        if parent is None or not fr.node_ref:
+            continue
+        el = await _handle(parent.frame, fr.node_ref)
+        if el is None:
+            continue
+        try:
+            verdict = await parent.frame.evaluate(_CLOAK_JS, el)
+        except Exception:
+            continue                # a probe that cannot run never refuses
+        verdict = await _arbitrate(parent.frame, el, verdict, shooter=shooter,
+                                   offset=parent.offset)
+        if verdict:
+            why = verdict["why"] if isinstance(verdict, dict) else verdict
+            raise TargetNotFound(
+                f'{tool} will not act on this element: it is inside frame '
+                f'{fr.fid}, and the frame itself is not visible to a human '
+                f'({why}). Inside its own document the element is laid out '
+                f'and clickable, which is the whole trick: the frame cannot '
+                f'see what the page painted over it, so nothing was done. '
+                f'The content is still readable through the labeled route, '
+                f'get_text(include_hidden=true).')
+
+
+async def refuse_if_cloaked(page, handle, *, tool: str, chain=(),
+                            shooter=None) -> None:
     """Refuse to act on an element a human cannot see, naming the technique.
 
     The hidden route stays open: `get_text(include_hidden=True)` reports the
     content, and the completeness block counts the control. What closes is
-    ACTING on it, which is the half a hostile page wants."""
+    ACTING on it, which is the half a hostile page wants.
+
+    `chain` is the frame chain from the main document down to this element's
+    own frame. The visibility question crosses frame boundaries in one
+    direction only: a parent can hide a child frame entirely and the child
+    cannot tell, so the chain is checked as well as the frame-local styling.
+    """
+    _refuse_frame_chain(chain, tool)
+    await _refuse_if_frame_occluded(chain, tool=tool,
+                                    shooter=shooter or page)
     try:
         verdict = await page.evaluate(_CLOAK_JS, handle)
     except Exception:
         return                      # a probe that cannot run never refuses
-    _refuse_cloak_verdict(await _arbitrate(page, handle, verdict), tool)
+    offset = chain[-1].offset if chain else None
+    _refuse_cloak_verdict(
+        await _arbitrate(page, handle, verdict, shooter=shooter,
+                         offset=offset), tool)
 
 
-async def arm_for_dispatch(page, handle, *, tool: str) -> None:
+async def arm_for_dispatch(page, handle, *, tool: str, resolved=None) -> None:
     """Focus the target and re-take the cloak verdict, in that order, in one
     JS turn, immediately before the input is dispatched.
 
@@ -1325,12 +1532,28 @@ async def arm_for_dispatch(page, handle, *, tool: str) -> None:
     is read, and a call that would have clicked an invisible button refuses
     instead. The focus is not extra exposure either: a trusted click focuses
     the control anyway, so this only moves the moment earlier than the check.
+
+    `resolved` is the resolution this action came from. It carries the frame
+    the element lives in, and an element inside a frame is armed in the
+    FRAME's realm: focusing it through the page's document focuses nothing,
+    and reading the cloak verdict from the wrong document reads the wrong
+    page's overlays.
     """
+    target = (resolved or {}).get("context") or page
+    chain = (resolved or {}).get("chain") or ()
+    _refuse_frame_chain(chain, tool)
+    # The lid can go up between the resolution and the dispatch, and a lid
+    # over the FRAME is the one a page raises when it wants the click to land
+    # somewhere else, so this hop is re-taken here too rather than trusted
+    # from several round trips ago.
+    await _refuse_if_frame_occluded(chain, tool=tool, shooter=page)
     try:
-        verdict = await page.evaluate(_ARM_JS, handle)
+        verdict = await target.evaluate(_ARM_JS, handle)
     except Exception:
         return                      # a probe that cannot run never refuses
-    _refuse_cloak_verdict(await _arbitrate(page, handle, verdict), tool)
+    _refuse_cloak_verdict(
+        await _arbitrate(target, handle, verdict, shooter=page,
+                         offset=(chain[-1].offset if chain else None)), tool)
 
 
 def _candidate_text(candidates) -> str:
