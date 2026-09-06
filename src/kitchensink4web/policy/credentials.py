@@ -146,6 +146,31 @@ def refuse_secret_write(field: dict, tool: str) -> None:
         f'transcript.')
 
 
+#: How much of a cookie NAME a sentence in the server's own voice will quote.
+#: Chromium accepted a 3,000-character name in gauntlet 2's probe, so the only
+#: bound on the old interpolation was the ~4 KB cookie limit.
+NAME_QUOTE_CAP = 48
+
+
+def quoted_name(name: Any) -> str:
+    """A cookie or storage NAME, safe to put in a sentence the server writes.
+
+    Cookie names are attacker-controlled on any page the agent visits, and
+    gauntlet 2 (M2) put a full prompt injection in one: the auth-expiry line
+    interpolated it raw, unbounded and unlabelled, into prose sitting next to
+    a note promising that values never entered the transcript. The value did
+    not; the name did. Three changes and each closes a different half:
+    control characters go (a newline in a name forges a line break in the
+    server's own output), the string is CAPPED, and what survives is QUOTED
+    and marked as the page's rather than the server's."""
+    text = "" if name is None else str(name)
+    text = "".join(ch if ch.isprintable() else " " for ch in text)
+    text = " ".join(text.split())
+    if len(text) > NAME_QUOTE_CAP:
+        text = text[:NAME_QUOTE_CAP] + "..."
+    return f'"{text}"'
+
+
 def classify_name(name: Any) -> str:
     """Classify a cookie or storage NAME as 'credential', 'preference', or
     'unknown'.
@@ -159,10 +184,19 @@ def classify_name(name: Any) -> str:
     text = ("" if name is None else str(name)).strip().lower()
     if not text:
         return "unknown"
-    if any(token in text for token in SECURITY_NAME_TOKENS):
-        return "credential"
+    # PREFERENCES FIRST, which is what `PREFERENCE_NAME_TOKENS`'s own comment
+    # has always said and what the code did in the other order until
+    # 2026-09-06 (gauntlet 2 L1). `theme_session`, `lang_token`, and
+    # `sidebar_auth` all classify as credentials on the security-first order
+    # and get vaulted, which is the over-redaction the 2026-09-05 field fix
+    # was written to stop: a five-character preference value in the vault
+    # garbles every read that quotes it. An httpOnly cookie is still a
+    # credential by construction whatever its name says, and that check runs
+    # in `cookie_is_credential` above this one.
     if any(token in text for token in PREFERENCE_NAME_TOKENS):
         return "preference"
+    if any(token in text for token in SECURITY_NAME_TOKENS):
+        return "credential"
     return "unknown"
 
 

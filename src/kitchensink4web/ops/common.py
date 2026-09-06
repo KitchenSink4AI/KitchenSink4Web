@@ -144,15 +144,19 @@ def expiry_note(info: dict | None, now: float | None = None) -> str | None:
         return None
     now = time.time() if now is None else now
     left = info["expires"] - now
-    where = f' for {info["domain"]}' if info.get("domain") else ""
+    # The name is the PAGE's, quoted and capped, never interpolated raw into
+    # a sentence the server writes (gauntlet 2 M2).
+    name = _credentials.quoted_name(info.get("name"))
+    where = (f' for {_credentials.quoted_name(info["domain"])}'
+             if info.get("domain") else "")
     if left <= 0:
-        return (f'the earliest auth cookie in this file ({info["name"]}'
-                f'{where}) expired {human_span(left)} ago; a fresh login is '
-                f'likely needed')
+        return (f'the earliest auth cookie in this file (name as set by the '
+                f'site: {name}{where}) expired {human_span(left)} ago; a '
+                f'fresh login is likely needed')
     if left <= NEAR_EXPIRY_S:
-        return (f'the earliest auth cookie in this file ({info["name"]}'
-                f'{where}) expires in {human_span(left)}; a fresh login is '
-                f'likely needed soon')
+        return (f'the earliest auth cookie in this file (name as set by the '
+                f'site: {name}{where}) expires in {human_span(left)}; a '
+                f'fresh login is likely needed soon')
     return None
 
 

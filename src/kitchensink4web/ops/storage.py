@@ -252,8 +252,13 @@ def _expiry_report(expiry: dict | None) -> str:
                 f'session cookies with no expiry date of their own')
     when = time.strftime("%Y-%m-%dT%H:%M:%S",
                          time.localtime(expiry["expires"]))
-    return (f'the earliest authentication cookie ({expiry["name"]}) expires '
-            f'{when}'
+    # Quoted, capped, and attributed to the site (gauntlet 2 M2). This line
+    # sits beside a note stating that credential VALUES never entered the
+    # transcript, and until 2026-09-06 the NAME rode into it raw, unbounded,
+    # in the server's own voice. Cookie names are attacker-controlled on any
+    # page the agent visits.
+    return (f'the earliest authentication cookie (name as set by the site: '
+            f'{_credentials.quoted_name(expiry["name"])}) expires {when}'
             + (f'; {expiry["session_cookies"]} more are session cookies with '
                f'no expiry date' if expiry.get("session_cookies") else ''))
 
