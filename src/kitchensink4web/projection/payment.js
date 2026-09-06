@@ -162,8 +162,14 @@ var KS_TRANSPARENT_WORDS = [
 // qualifier is at least three characters, it is not `card` itself repeating
 // from a second identifier, and it is not already a card term.
 function ksIsForeignQualifier(prev) {
-  if (!prev || prev.length < 3 || prev === 'card') return false;
+  if (!prev || prev === 'card') return false;
   if (KS_PAYMENT_QUALIFIERS.indexOf(prev) >= 0) return false;
+  // The SHORT qualifiers stay on the named list, because two characters is
+  // also the length of an identifier fragment: `id_card_number` squashes to
+  // `id card number` and so does `cc_card_number`, and only one of them names
+  // a foreign instrument. `id` is on the list and `cc` is not, which is
+  // exactly the distinction a length threshold cannot draw.
+  if (prev.length < 3) return KS_NOT_PAYMENT_CARDS.indexOf(prev) >= 0;
   if (KS_TRANSPARENT_WORDS.indexOf(prev) >= 0) return false;
   return !ksHasTerm(prev, KS_PAN_TERMS)
       && !ksHasTerm(prev, KS_CARD_SIDE_TERMS);
@@ -276,17 +282,38 @@ function ksNameHaystack(el) {
 // the word rule reads the qualifier off the spaced string and reaches any
 // qualifier at all, and the glued list catches the spellings that carry no
 // space to read.
-function ksPaymentCompactInfo(hay) {
-  var struck = ksForeignCardStrike(hay);
-  var compact = struck.text, foreign = struck.foreign;
+// Break a glued `<foreign>card` spelling inside ONE word. The match has to
+// start the word, or the qualifier has to be four characters or more:
+// searching the whole de-spaced haystack for `idcard` found it inside
+// `prepaidcardnumber` and struck a real payment instrument out of its own
+// name, which is what a two-letter token does to a boundary-free search.
+function ksStrikeGlued(word) {
   for (var i = 0; i < KS_NOT_PAYMENT_CARDS.length; i++) {
-    var q = KS_NOT_PAYMENT_CARDS[i] + 'card';
-    if (compact.indexOf(q) >= 0) {
-      compact = compact.split(q).join(' ');
-      foreign = true;
+    var q = KS_NOT_PAYMENT_CARDS[i], token = q + 'card';
+    if (word.indexOf(token) === 0) {
+      return { text: ' ' + word.slice(token.length), hit: true };
+    }
+    if (q.length >= 4 && word.indexOf(token) > 0) {
+      return { text: word.split(token).join(' '), hit: true };
     }
   }
-  return { compact: compact, foreign: foreign };
+  return { text: word, hit: false };
+}
+
+function ksPaymentCompactInfo(hay) {
+  var words = String(hay || '').trim().split(' ');
+  var out = [], foreign = false;
+  for (var i = 0; i < words.length; i++) {
+    if (words[i] === 'card' && i > 0 && ksIsForeignQualifier(words[i - 1])) {
+      foreign = true;
+      out.push(' ');
+      continue;
+    }
+    var g = ksStrikeGlued(words[i]);
+    if (g.hit) foreign = true;
+    out.push(g.text);
+  }
+  return { compact: out.join(''), foreign: foreign };
 }
 
 function ksPaymentCompact(hay) {
@@ -423,7 +450,20 @@ function ksNumericBoxLen(el) {
 // `<legend>Library card number</legend>` over four 4-digit boxes gated as a
 // payment form while B6 had already struck `librarycard` out of the NAME tier.
 // One rule, two places it has to be asked.
+//: Memoized per region, because the extractor asks it once per short numeric
+//: box and a split card number is four of them sharing one fieldset. Reading
+//: a form's whole `textContent` four times to get the same answer is the kind
+//: of per-element cost the latency gate exists to catch.
+var ksRegionNameCache = new Map();
 function ksRegionCardName(scope) {
+  var seen = ksRegionNameCache.get(scope);
+  if (seen !== undefined) return seen;
+  var answer = ksRegionCardNameUncached(scope);
+  ksRegionNameCache.set(scope, answer);
+  return answer;
+}
+
+function ksRegionCardNameUncached(scope) {
   var text = '';
   try { text = (scope.textContent || '').slice(0, 400); } catch (e) { return 0; }
   var info = ksPaymentCompactInfo(ksSquashNames(text));

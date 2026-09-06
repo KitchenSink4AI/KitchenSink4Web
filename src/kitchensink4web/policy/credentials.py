@@ -275,9 +275,16 @@ def _is_foreign_qualifier(prev: str) -> bool:
     token would read `c` as an instrument. Three guards: at least three
     characters, not `card` repeating from a second identifier, and not already
     a card term."""
-    if len(prev) < 3 or prev == "card":
+    if prev == "card" or prev in PAYMENT_CARD_QUALIFIERS:
         return False
-    if prev in PAYMENT_CARD_QUALIFIERS or prev in TRANSPARENT_QUALIFIERS:
+    # The SHORT qualifiers stay on the named list, because two characters is
+    # also the length of an identifier fragment: `id_card_number` squashes to
+    # `id card number` and so does `cc_card_number`, and only one of them
+    # names a foreign instrument. `id` is on the list and `cc` is not, which
+    # is exactly the distinction a length threshold cannot draw.
+    if len(prev) < 3:
+        return prev in NOT_PAYMENT_CARDS
+    if prev in TRANSPARENT_QUALIFIERS:
         return False
     return not any(token in prev for token in PAYMENT_NAME_SUBSTRINGS)
 
@@ -303,18 +310,41 @@ def foreign_card_strike(hay: str) -> tuple[str, bool]:
     return "".join(out), foreign
 
 
-def payment_compact_info(hay: str) -> tuple[str, bool]:
-    """The de-spaced haystack with every foreign-instrument card compound
-    struck out, plus whether one was struck. Both routes run: the word rule
-    reads the qualifier off the spaced string and reaches ANY qualifier, and
-    the glued list catches the spellings that carry no space to read."""
-    compact, foreign = foreign_card_strike(hay)
+def _strike_glued(word: str) -> tuple[str, bool]:
+    """Break a glued `<foreign>card` spelling inside ONE word.
+
+    The match has to start the word, or the qualifier has to be four
+    characters or more. Searching the whole de-spaced haystack for `idcard`
+    found it inside `prepaidcardnumber` and struck a real payment instrument
+    out of its own name, which is what a two-letter token does to a substring
+    search with no boundary."""
     for qualifier in NOT_PAYMENT_CARDS:
         token = qualifier + "card"
-        if token in compact:
-            compact = compact.replace(token, " ")
+        if word.startswith(token):
+            return " " + word[len(token):], True
+        if len(qualifier) >= 4 and token in word:
+            return word.replace(token, " "), True
+    return word, False
+
+
+def payment_compact_info(hay: str) -> tuple[str, bool]:
+    """The de-spaced haystack with every foreign-instrument card compound
+    broken, plus whether one was found. Both routes run WORD BY WORD: the word
+    rule reads the qualifier off the preceding token and reaches ANY
+    qualifier, and the glued list catches the spellings that carry no space to
+    read one from."""
+    words = hay.strip().split(" ")
+    out: list[str] = []
+    foreign = False
+    for i, word in enumerate(words):
+        if word == "card" and i and _is_foreign_qualifier(words[i - 1]):
             foreign = True
-    return compact, foreign
+            out.append(" ")
+            continue
+        text, hit = _strike_glued(word)
+        foreign = foreign or hit
+        out.append(text)
+    return "".join(out), foreign
 
 
 def payment_compact(hay: str) -> str:
