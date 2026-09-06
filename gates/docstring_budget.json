@@ -173,9 +173,9 @@
       "over_reference_caps": true
     },
     "manage_clipboard": {
-      "description_tokens": 168,
+      "description_tokens": 199,
       "schema_tokens": 60,
-      "total_tokens": 228,
+      "total_tokens": 259,
       "over_reference_caps": true
     },
     "manage_cookies": {
@@ -215,9 +215,9 @@
       "over_reference_caps": false
     },
     "read_pages": {
-      "description_tokens": 182,
+      "description_tokens": 210,
       "schema_tokens": 67,
-      "total_tokens": 249,
+      "total_tokens": 277,
       "over_reference_caps": true
     },
     "run_workflow": {

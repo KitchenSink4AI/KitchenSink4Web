@@ -3008,3 +3008,80 @@ landed. What did not: cross-origin anything, `frame`-scoped `get_text` paging
 interleaved with the main document (frames are read after the main document
 finishes paging, under their own headers), and OOPIF-specific handling beyond
 what the same-origin rule already excludes.
+
+## 2026-09-06 22:45 KST - fix wave 7 (the gauntlet-3 seven, closed)
+
+Gauntlet 3 ran the integrated full-suite beta at `df315ba` and returned
+seven findings, all confirmed live twice (report:
+`20260906_web_gauntlet3.md`). This wave closes all seven at `c8da8b0`'s
+tree, with one pinning test per reproduction
+(`tests/browser/test_gauntlet3_fixes.py`) run red-first: 19 of the 23 pins
+fail on the unfixed tree, and the four that pass there are the
+guard-on-the-guard rows that must pass on both trees.
+
+**F1 (HIGH), status-blind wall needles.** The four `BLOCK_TEXT` needles and
+the generic `_WALL_MARKERS` now fire only alongside a refusing status, the
+exact gate `BLOCK_SOURCE` always had. Two of the needles are ordinary
+English, so an ungated match refused real 200 pages whole, and innerText
+includes offscreen text, so one absolutely-positioned div of wall phrases
+cloaked any 200 page from every agent. Header signals and the status
+branches stay ungated; they are the server's own voice. Two stale pins
+updated to the truthful contract: `test_wall_headers`'s marker fixture
+serves at 403 now (live challenges answer refusing statuses) with a new
+200-is-not-a-wall pin beside it, and `test_phase3_policy`'s corpus server
+serves the simulated interstitials at 403 (the corpus files are untouched).
+
+**F2 (MED-HIGH), document-wide resource probe.** `PROBE_JS` is scoped to
+the document ROOT, which is what its evidence string always claimed: an
+embed/object counts only as body's sole element child (the wrapper shape
+browsers synthesize around a bare PDF) or covering at least half the
+viewport. The pdf.js-shell heuristic takes the same dominance test. A
+council-minutes page with an inline PDF preview reads; a 1x1 offscreen
+embed buys nothing; a root-level embed still refuses.
+
+**F3 (HIGH), sandbox-attribute label injection.** `safe_sandbox()` at the
+frame-classification boundary: known HTML-standard tokens pass lowercased,
+everything else becomes the fixed `<invalid>` marker, value capped at 100
+chars (400 raw in the JS as a belt). No downstream consumer ever holds the
+raw page string, so nothing page-authored reaches the envelope label's
+trust sentence through this channel. Scope swept: sandbox was the only
+uncapped unescaped page attribute reaching the label.
+
+**F4 (HIGH), three doors one lock.** The wall verdict is now a property of
+arriving at a page. A per-page response listener (attached with the dialog
+desk) records the last navigation response per realm; act-navigation
+(click, type_text, fill_form's submit, press_keys) REPORTS the verdict in
+the result envelope as a `wall` key; `read_pages` classifies every hop and
+stops `reason: "wall"` with the verdict, never reading the interstitial as
+content; a child frame landing on a challenge carries a `wall` note in its
+completeness entry (built from status and block-only headers only, the F1
+rule holding in frames too); `manage_tabs(open, url=...)` reports; direct
+`navigate` keeps raising, per the settled contract.
+
+**F5 (MED), header prose into refusals.** `reference_ids` values are
+clamped to `[A-Za-z0-9 ._:-]{1,64}`; failures are dropped whole, never
+truncated, because a truncated ID quoted to a site owner is a wrong ID.
+
+**F6 (MED, author-ruled), clipboard read gate.** New gated class
+`clipboard_read` ("reading whatever was last copied to the clipboard", the
+ruled label verbatim), asked through the same approve() ladder as every
+gated class. Write stays ungated: it overwrites, it does not exfiltrate.
+
+**F7 (HIGH), file:// local-file read.** Three layers. `read_pages` checks
+harvested next-link schemes SERVER-side (the page-realm startsWith filter
+is prototype-tamperable and now merely a convenience); `origins.evaluate`
+grew a `denied-scheme` verdict refusing every hostname-less or non-web
+scheme unconditionally, before and regardless of both lists, with `data:`
+removed from the exempt tuple, which also covers direct
+`navigate(file://...)` and `download(action='goto')`; and the
+scope-not-instance audit found `manage_tabs(open, url=...)` running NO
+policy approve at all, the one unpoliced navigation door, now on the full
+ladder with the landed check behind it.
+
+Gate: full suite **932 green in both orders** (`-p no:randomly` 509.4s,
+`--randomly-seed=20260906` 498.1s, zero flakes either order), up 27 from
+905: the 23 gauntlet-3 pins, the wall-wording-at-200 pin, and three
+origins scheme-denial unit pins. Gauntlet 3's own 28-row standing-law
+regression sweep re-run on the fixed tree: **zero flips, both passes** -
+every wave-6 / re-attack-3 line still holds. Zero orphaned browser
+processes at exit.
