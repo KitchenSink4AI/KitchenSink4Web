@@ -156,8 +156,8 @@ async def upload_file(
     timeout_ms: int = 15000,
 ) -> dict:
     """Set files on a file input, addressed by any selector. Every path is
-    read-checked against KS4WEB_ALLOWED_ROOTS (an upload exfiltrates file
-    content to the site as surely as a read does), the file input is
+    read-checked against KS4WEB_ALLOWED_ROOTS (an upload hands file content
+    to the site as surely as a read does), the file input is
     driven the way a real chooser would fill it, and uploading is a gated
     action that fails closed until a human confirms. For a page that uses a
     synthetic-DataTransfer dropzone rather than a real input, the refusal

@@ -138,18 +138,13 @@ def test_safety_copy_grammar():
 #: gets to paper over. So the list is explicit, it is named per tool and per
 #: matched string, and `test_the_pending_copy_list_only_shrinks` fails the
 #: moment one of these is fixed, which is what stops it becoming permanent.
-PENDING_MAIN_THREAD_COPY = {
-    # "an upload exfiltrates file content to the site as surely as a read
-    # does" - states the behavior by naming the technique.
-    ("tool:upload_file", "exfiltrat"),
-    # "can read anything the page can, exfiltrate it, or act as the
-    # logged-in user"
-    ("tool:evaluate_script", "exfiltrat"),
-    # "The dry run is the safe first move" - `safe` as an unqualified verb,
-    # the same class as find_and_act's, which the main thread has already
-    # ruled on once.
-    ("tool:list_workflows", "safe"),
-}
+#:
+#: EMPTY as of fix wave 6. All three entries were rewritten by the main thread
+#: and removed with their fixes: `upload_file` hands file content to the site,
+#: `evaluate_script` can send what it reads anywhere, and the dry run is the
+#: RIGHT first move rather than the safe one. The set stays because the two
+#: guards above read it, and an empty one is the state they are meant to hold.
+PENDING_MAIN_THREAD_COPY: set[tuple[str, str]] = set()
 
 
 def test_safety_copy_grammar_covers_every_tool_description():

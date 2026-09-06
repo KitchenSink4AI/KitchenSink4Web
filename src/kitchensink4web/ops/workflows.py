@@ -2,9 +2,9 @@
 
 The pack closes the #1645 fork: playwright-mcp answered the macro request by
 pointing users at an arbitrary-code-execution tool, so a deployment that
-disables eval for safety loses workflow reuse. Named replayable workflows
-over durable anchors, with a mandatory dry run, are the safe first-class
-primitive that closes it, and nothing in this module can evaluate script:
+disables eval by policy loses workflow reuse. Named replayable workflows
+over durable anchors, with a mandatory dry run, are the first-class
+primitive that closes that gap, and nothing in this module can evaluate script:
 a step is one of the seven recorded lite actions, nothing else.
 
 Three design facts carry the whole module:
@@ -189,7 +189,7 @@ def _step_line(i: int, step: dict) -> str:
 async def list_workflows(session: str | None = None) -> dict:
     """List the saved workflows. Returns each one's name, step count, when
     it was recorded, and the origins it touches, so a caller can pick one
-    to dry-run before replaying. The dry run is the safe first move, since
+    to dry-run before replaying. The dry run is the right first move, since
     a workflow recorded against an earlier version of a page may no longer
     resolve. An empty list means nothing has been saved on this machine.
     """

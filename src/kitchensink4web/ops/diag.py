@@ -187,7 +187,7 @@ async def evaluate_script(
 ) -> dict:
     """Evaluate JavaScript in the page context. This is RCE-EQUIVALENT: the
     script runs with the page's full privileges and can read anything the
-    page can, exfiltrate it, or act as the logged-in user. It is off by
+    page can, send it anywhere, or act as the logged-in user. It is off by
     default (this pack is opt-in), absent under read-only mode, gated so a
     human confirms before it runs, and every call is audited. Returns the
     script's JSON-serializable return value. Prefer the structured read and
