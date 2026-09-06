@@ -26,16 +26,18 @@ one may look" are different facts and the read states which one applies.
 
 Three classification rules, in the order they bind:
 
-1. **The parent document's own script access is the authority.** Not the URL.
-   `<iframe src="/same/path" sandbox>` without `allow-same-origin` runs in an
-   opaque origin and `contentDocument` throws, so it is cross-origin whatever
-   its src says. `srcdoc` and `about:blank` inherit the parent's origin and
-   are enterable. The test is the one the browser enforces.
-2. **A disagreement between the two fails closed.** When the URL says one
-   origin and script access says another, the frame is treated as unreachable
-   and the disagreement is reported. Only `document.domain` relaxation
-   produces that legitimately, and it is deprecated; the other way to produce
-   it is a bug in this classifier, which should be loud.
+1. **The URL settles it when it can, and it can only ever say NO.** A frame
+   whose URL carries a real origin different from the page's cannot be
+   same-origin under any rule the browser has, so it is refused without
+   asking anything. That is also where the cost goes on a real page: an
+   ad-heavy site carries dozens of them and the answer was never in doubt.
+2. **Where the URL cannot settle it, the parent's own script access does,
+   and that is the authority.** `<iframe src="/same/path" sandbox>` without
+   `allow-same-origin` has a same-origin URL and an opaque origin, and
+   `contentDocument` throws; `srcdoc` and `about:blank` have no origin in
+   their URLs at all and inherit the embedder's. Both directions fail closed:
+   the test is the one the browser itself enforces, and anything it cannot
+   answer is a no.
 3. **Same-origin is not the same as first-party.** A frame can be same-origin
    and still carry markup from somewhere else: `srcdoc` written from a fetched
    string, a sandboxed frame with `allow-same-origin`, a document served from
@@ -80,7 +82,6 @@ DEPTH_EXCEEDED = "past the frame depth cap"
 COUNT_EXCEEDED = "past the frame count cap"
 DETACHED = "detached before it could be read"
 HIDDEN = "the frame element is hidden"
-ORIGIN_DISAGREEMENT = "origin disagreement, treated as cross-origin"
 UNREADABLE = "the frame could not be reached by the driver"
 
 
@@ -322,6 +323,19 @@ async def _classify(record, parent: FrameRef, ref: FrameRef,
         ref.why_not = parent.why_not
         ref.same_origin = False
         return
+    # THE CHEAP NO. A frame whose URL carries a real origin different from the
+    # page's cannot be same-origin under any rule the browser has, so it is
+    # settled without asking the parent anything. This is not an optimization
+    # looking for a problem: an ad-heavy page carries dozens of these, each one
+    # would otherwise cost a `frame_element()` and an evaluate, and the answer
+    # was never in doubt. The frames that DO need asking are the ones whose URL
+    # cannot settle it -- same-origin URLs that may be sandboxed into an opaque
+    # origin, and `about:` URLs that carry no origin at all.
+    if (ref.origin not in ("", "inherited") and top_origin not in ("", "inherited")
+            and ref.origin != top_origin):
+        ref.same_origin = False
+        ref.why_not = CROSS_ORIGIN
+        return
     element = None
     try:
         element = await ref.frame.frame_element()
@@ -365,6 +379,10 @@ async def _classify(record, parent: FrameRef, ref: FrameRef,
     if ref.how in ("srcdoc", "about:blank") and ref.origin == "inherited":
         ref.origin = parent.origin
     if not ref.same_origin:
+        # The URL said same-origin (or said nothing) and the browser says no,
+        # which is the sandboxed-into-an-opaque-origin case and the one the
+        # URL cannot catch. The access test wins, in this direction and the
+        # other: it is the boundary the browser actually enforces.
         ref.why_not = CROSS_ORIGIN
         return
     # A HIDDEN FRAME IS NOT ENTERED, and this is the shadow build's rule one
@@ -376,13 +394,11 @@ async def _classify(record, parent: FrameRef, ref: FrameRef,
     if ref.hidden:
         ref.why_not = f"{HIDDEN} ({ref.hidden})"
         return
-    # Rule 2: script access and the URL must agree. They do on every ordinary
-    # page; `document.domain` relaxation is the one legitimate way to make
-    # them differ and it is deprecated in every engine this build runs on.
-    if (ref.origin not in ("", "inherited") and top_origin not in ("", "inherited")
-            and ref.origin != parent.origin and ref.origin != top_origin):
-        ref.same_origin = False
-        ref.why_not = ORIGIN_DISAGREEMENT
+    # Nothing follows, deliberately. The URL already said no where it could,
+    # and where it could not the browser's own access test has just said yes,
+    # so there is no third opinion left to take. `document.domain` relaxation
+    # is the one construction that could make the two disagree in the other
+    # direction, and the URL check refuses it before this line is reached.
 
 
 def provenance(ref: FrameRef) -> str:
@@ -448,8 +464,7 @@ def counts(refs: list[FrameRef]) -> dict:
         "total": len(children),
         "entered": len([r for r in children if r.entered]),
         "cross_origin": len([r for r in children
-                             if r.why_not in (CROSS_ORIGIN,
-                                              ORIGIN_DISAGREEMENT)]),
+                             if r.why_not == CROSS_ORIGIN]),
         "depth_capped": len([r for r in children
                              if r.why_not == DEPTH_EXCEEDED]),
         "count_capped": len([r for r in children

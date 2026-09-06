@@ -183,14 +183,12 @@ def test_counts_split_every_reason_a_frame_was_not_entered():
         frames.FrameRef(fid="if3", frame=None, why_not=frames.DEPTH_EXCEEDED),
         frames.FrameRef(fid="if4", frame=None,
                         why_not=f"{frames.HIDDEN} (display-none)"),
-        frames.FrameRef(fid="if5", frame=None,
-                        why_not=frames.ORIGIN_DISAGREEMENT),
+        frames.FrameRef(fid="if5", frame=None, why_not=frames.DETACHED),
     ]
     counts = frames.counts(tree)
     assert counts["total"] == 5
     assert counts["entered"] == 1
-    # An origin disagreement is counted WITH cross-origin, because that is
-    # what the build does with it: fail closed and say so.
-    assert counts["cross_origin"] == 2
+    assert counts["cross_origin"] == 1
     assert counts["depth_capped"] == 1
     assert counts["hidden"] == 1
+    assert counts["unreachable"] == 1
