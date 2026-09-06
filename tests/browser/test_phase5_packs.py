@@ -26,7 +26,7 @@ import pytest
 from kitchensink4web import packs
 from kitchensink4web.engine.session import MANAGER
 from kitchensink4web.errors import (ConfirmationRequired, CredentialRefused,
-                                    ModalBlocked, UnsupportedContent)
+                                    UnsupportedContent, ValidationFailed)
 from kitchensink4web.ops import capture, diag, extract, files, net, storage
 from kitchensink4web.policy import credentials, gates, readonly
 
@@ -355,7 +355,10 @@ def test_upload_to_a_dropzone_names_the_input_route(site, tmp_path):
         upload_me = tmp_path / "u.txt"
         upload_me.write_text("hello", encoding="utf-8")
         # The visible dropzone is a div: refuse and name the hidden input.
-        with pytest.raises(ModalBlocked):
+        # VALIDATION_FAILED since 2026-09-06: this refusal used to wear
+        # MODAL_BLOCKED, whose hint now names handle_dialog, and a wrong
+        # element is not a dialog to answer.
+        with pytest.raises(ValidationFailed):
             await files.upload_file(page=page,
                                     location={"css": "#dropzone"},
                                     files=[str(upload_me)])

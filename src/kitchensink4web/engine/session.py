@@ -35,7 +35,8 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from .. import anchors
-from ..errors import BadParams, Conflict, TargetNotFound, Timeout
+from .. import dialogs as _dialogs
+from ..errors import BadParams, Conflict, ModalBlocked, TargetNotFound, Timeout
 from ..projection import CLOSED_SHADOW_HOOK
 from ..projection.meter import warm as _warm_estimator
 from . import hygiene, lanes
@@ -272,11 +273,111 @@ class SessionManager:
                 f"{time.strftime('%Y-%m-%dT%H:%M:%S')}"))
         except Exception:
             pass  # a lane without the event still gets the message-sniff path
+        self._attach_dialog_desk(session, record)
         session.pages[handle] = record
         session.counters["pages_opened"] += 1
         if session.focused is None:
             session.focused = handle
         return record
+
+    @staticmethod
+    def _attach_dialog_desk(session: Session, record: PageHandle) -> None:
+        """Attach the native-dialog and file-chooser listeners to one page.
+
+        This runs for EVERY page, at attach time, with no pack guard: a
+        dialog stops the page whatever launch shape the server is running, so
+        the recording has to be there under all of them. It is also the moment
+        the driver's own behavior changes: with
+        no listener Playwright dismisses dialogs itself, and with one it
+        dismisses nothing. The handler below therefore reproduces the old
+        dismissal exactly as its default branch, and the difference is that
+        the dismissal is now recorded and can be overridden per page.
+        """
+        desk = _dialogs.desk(session)
+        page = record.page
+
+        async def on_dialog(dialog):
+            kind = (getattr(dialog, "type", "") or "").strip().lower()
+            pending = _dialogs.Pending(
+                dialog_id=desk.next_id("d"), kind=kind,
+                message=getattr(dialog, "message", "") or "",
+                default_value=getattr(dialog, "default_value", "") or "",
+                page=record.handle, url=record.page.url, driver=dialog)
+            arm = desk.arm_for(record.handle)
+            if arm is not None and arm.covers(kind):
+                if arm.once:
+                    desk.disarm(record.handle)
+                if arm.disposition == "hold":
+                    desk.note_pending(pending)
+                    SessionManager._schedule_hold_expiry(desk, pending)
+                    return
+                if arm.disposition == "accept":
+                    text = arm.prompt_text or ""
+                    try:
+                        await dialog.accept(text)
+                    except Exception:
+                        pass        # already answered, or the page went away
+                    desk.record(pending, "accepted", prompt_text=text or None,
+                                why="an armed accept answered it")
+                    return
+                try:
+                    await dialog.dismiss()
+                except Exception:
+                    pass
+                desk.record(pending, "dismissed",
+                            why="an armed dismiss answered it")
+                return
+            try:
+                await dialog.dismiss()
+            except Exception:
+                pass
+            desk.record(pending, "dismissed", why=_dialogs.DEFAULT_WHY)
+
+        def on_chooser(chooser):
+            try:
+                multiple = bool(chooser.is_multiple())
+            except Exception:
+                multiple = False
+            desk.note_chooser(_dialogs.Chooser(
+                chooser_id=desk.next_id("fc"), page=record.handle,
+                url=record.page.url, multiple=multiple))
+
+        try:
+            page.on("dialog", on_dialog)
+            # Attaching this listener is also what keeps a click on a file
+            # input from reaching the operating system's own picker: the
+            # driver intercepts the chooser only while something is listening.
+            page.on("filechooser", on_chooser)
+        except Exception:
+            pass  # a lane without these events keeps the driver's own posture
+
+    @staticmethod
+    def _schedule_hold_expiry(desk, pending) -> None:
+        """A held dialog is bounded. The hold exists so a caller can read the
+        dialog and answer it, and a page frozen because nobody came back is a
+        worse outcome than the Cancel the default posture would have sent."""
+        async def expire():
+            try:
+                await asyncio.sleep(_dialogs.hold_ttl_s())
+                if desk.pending_for(pending.page) is not pending:
+                    return
+                desk.resolve_pending(pending.page)
+                try:
+                    await pending.driver.dismiss()
+                except Exception:
+                    pass
+                desk.record(pending, "dismissed", why=_dialogs.EXPIRED_WHY)
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                pass
+
+        try:
+            task = asyncio.get_running_loop().create_task(expire())
+        except RuntimeError:
+            return  # no loop: the hold simply lives until the page closes
+        desk.tasks.add(task)
+        task.add_done_callback(desk.tasks.discard)
 
     async def close(self, session_id: str) -> dict:
         """Close one session and verify the teardown by owned PID.
@@ -291,6 +392,13 @@ class SessionManager:
                 raise TargetNotFound(
                     f"no session {session_id!r}. Open sessions are "
                     f"{sorted(self.sessions) or 'none'}.")
+            # The hold-expiry timers die with the session they belong to.
+            # A task still sleeping when its loop closes is a "destroyed but
+            # pending" warning at best and a dismissal against a closed page
+            # at worst, and neither is a thing to leave lying around.
+            desk = getattr(session, "_dialogs", None)
+            for task in list(desk.tasks) if desk is not None else ():
+                task.cancel()
             try:
                 await asyncio.wait_for(session.context.close(), timeout=30)
             except Exception:
@@ -354,12 +462,22 @@ class SessionManager:
                 f"reused after a close.")
         return self.sessions[session_id]
 
-    def locate(self, page_handle: str) -> tuple[Session, PageHandle]:
+    def locate(self, page_handle: str, *, allow_pending_dialog: bool = False
+               ) -> tuple[Session, PageHandle]:
         """Find a page by its handle across every session.
 
         Refs and page handles are unique across the process, so a bare `p3` is
         never ambiguous and the envelope can always say which session it
-        belongs to."""
+        belongs to.
+
+        This is also where a HELD native dialog stops everything. A dialog
+        stops the page's script, so a read or an action attempted underneath
+        one does not fail, it hangs until its timeout and then reports
+        whatever the timeout was about instead of the dialog. Refusing here
+        means every tool that addresses a page reports the real condition,
+        and no tool has to remember to check. `allow_pending_dialog=True` is
+        for the two callers that legitimately work on a held dialog:
+        `handle_dialog` itself, which answers it, and the desk reporting."""
         for session in self.sessions.values():
             if page_handle in session.pages:
                 record = session.pages[page_handle]
@@ -380,6 +498,10 @@ class SessionManager:
                         f"minted on it are gone. Extremely deep or "
                         f"pathological nesting is a known crash cause, in "
                         f"the DOM or in shadow roots.")
+                if not allow_pending_dialog:
+                    held = _dialogs.desk(session).pending_for(page_handle)
+                    if held is not None:
+                        raise ModalBlocked(_dialogs.held_refusal(held))
                 return session, record
         known = sorted(h for s in self.sessions.values() for h in s.pages)
         raise TargetNotFound(

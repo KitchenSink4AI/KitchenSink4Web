@@ -68,6 +68,13 @@ GATED_CLASSES: dict[str, str] = {
     # storage" for an operation that clears nothing. Someone reading
     # carefully declines a load because it looks like a wipe.
     "storage_load": "loading a saved signed-in session into this browser",
+    # Answering a native dialog with OK. Dismissal is not here on purpose: it
+    # is the posture the server already has with nothing armed, so asking a
+    # human to allow the status quo is a prompt that teaches people to click
+    # through prompts. Accepting is the branch that commits whatever the page
+    # does next, and `dialogs.gate_reason_for_accept` decides per dialog,
+    # gating on doubt and supplying the sentence the human reads.
+    "dialog_accept": "answering a native browser dialog with OK",
     "evaluate_script": "evaluating script in the page",
     "navigation_offlist": "navigating to an origin outside the allowlist",
     "action_offlist": "acting inside an origin outside the allowlist",

@@ -16,6 +16,16 @@ The download lifecycle is explicit, which is the fix for the incumbent's
 "callback never fired": trigger the download by acting, WAIT for it with a
 real timeout, and report the saved path with the extension preserved from
 the suggested filename, never a bare UUID.
+
+Uploads have TWO routes and ONE policy path. `via='input'` sets the files on
+a file input addressed by `location`. `via='chooser'` clicks a control and
+fills the file chooser that click opens, which is the only route into a page
+that opens its picker from script with no input to address; the chooser is
+caught by the listener `engine/session.py` attaches at page attach, before it
+reaches the operating system's own picker. Both routes run the same
+KS4WEB_ALLOWED_ROOTS read-check FIRST, before anything is resolved or clicked,
+and both ask the same `file_upload` confirmation at the same choke point. A
+file leaving this machine is one thing whichever control let it out.
 """
 
 from __future__ import annotations
@@ -23,7 +33,8 @@ from __future__ import annotations
 import asyncio
 import os
 
-from ..errors import BadParams, ModalBlocked, TargetNotFound, Timeout
+from .. import dialogs as _dialogs
+from ..errors import BadParams, TargetNotFound, Timeout, ValidationFailed
 from ..policy import engine as _policy
 from ..policy import sandbox
 from . import act as _act
@@ -154,43 +165,68 @@ async def upload_file(
     location: dict,
     files: list,
     timeout_ms: int = 15000,
+    via: str = "input",
 ) -> dict:
     """Set files on a file input, addressed by any selector. Every path is
     read-checked against KS4WEB_ALLOWED_ROOTS (an upload hands file content
     to the site as surely as a read does), the file input is
     driven the way a real chooser would fill it, and uploading is a gated
-    action that fails closed until a human confirms. For a page that uses a
-    synthetic-DataTransfer dropzone rather than a real input, the refusal
-    says so and names the input route. Returns which files were set and the
-    input's own report of what it now holds, so a silently rejected upload
-    is visible rather than assumed.
+    action that fails closed until a human confirms. via='chooser' is the
+    route for a page that opens its picker from script rather than from a
+    reachable input: `location` names the control to click, the chooser the
+    click raises is caught before it reaches the operating system, and it is
+    filled through the same path check and the same confirmation. For a page
+    that uses a synthetic-DataTransfer dropzone rather than a real input, the
+    refusal says so and names the input route. Returns which files were set
+    and the input's own report of what it now holds, so a silently rejected
+    upload is visible rather than assumed.
     """
+    routes = ("input", "chooser")
+    if via not in routes:
+        raise BadParams(
+            f"unknown upload route {via!r}: the routes are {list(routes)}. "
+            f"'input' sets the files on a file input addressed by `location`; "
+            f"'chooser' clicks the control `location` names and fills the "
+            f"file chooser that click opens.")
     if not files or not isinstance(files, list):
         raise BadParams(
             "upload_file needs a non-empty list of file paths to set on "
             "the input.")
+    # The read-check runs FIRST on both routes, before anything is resolved
+    # or clicked: a path outside the allowed roots is refused before the page
+    # learns a file was ever named.
     checked = [sandbox.check_path(f, "upload file") for f in files]
     for f in checked:
         if not os.path.exists(f):
             raise TargetNotFound(
                 f"the file to upload does not exist: {f}.")
     sess, record = common.locate(page)
+    if via == "chooser":
+        return await _upload_via_chooser(sess, record, location, checked,
+                                         timeout_ms)
     resolved = await _act.resolve(sess, record, location, tool="upload_file")
     unit = resolved["unit"]
     tag = (unit.get("tag") or "").upper()
     ftype = (unit.get("type") or "").lower()
     if not (tag == "INPUT" and ftype == "file"):
-        raise ModalBlocked(
-            "the located element is not a file input. A page using a "
-            "synthetic-DataTransfer dropzone (a div that listens for drop "
-            "events) has a hidden <input type=file> behind it in almost "
-            "every case; address that input by css ('input[type=file]') "
-            "instead of the dropzone, and KS4Web sets it directly.")
+        # VALIDATION_FAILED rather than MODAL_BLOCKED (2026-09-06). Nothing
+        # modal is involved, and once the MODAL_BLOCKED hint began naming
+        # handle_dialog, wearing that code here sent the caller to answer a
+        # dialog that does not exist.
+        raise ValidationFailed(
+            "the located element is not a file input, so nothing was "
+            "uploaded. A page using a synthetic-DataTransfer dropzone (a div "
+            "that listens for drop events) has a hidden <input type=file> "
+            "behind it in almost every case; address that input by css "
+            "('input[type=file]') instead of the dropzone, and KS4Web sets it "
+            "directly. Where the picker is opened from script with no input "
+            "to address, upload_file(via='chooser', location=<the control to "
+            "click>) catches the chooser the click opens.")
     _policy.approve(_policy.ActionRequest(
         tool="upload_file", kind="act", session=sess.session_id,
         page=record.handle, url=record.page.url,
         target=resolved["descriptor"], action_class="file_upload",
-        args={"files": len(checked)},
+        args={"files": len(checked), "via": "input"},
         summary=f"upload {len(checked)} file(s) to the input on "
                 f"{record.handle}"))
     await resolved["handle"].set_input_files(checked, timeout=timeout_ms)
@@ -198,9 +234,65 @@ async def upload_file(
         "(el) => Array.from(el.files || []).map(f => "
         "({name: f.name, bytes: f.size}))", resolved["handle"])
     return {
-        "page": record.handle, "session": sess.session_id,
+        "page": record.handle, "session": sess.session_id, "via": "input",
         "set": [os.path.basename(f) for f in checked],
         "input_reports": now,
+    }
+
+
+async def _upload_via_chooser(sess, record, location, checked, timeout_ms
+                              ) -> dict:
+    """Click a control and fill the file chooser it opens.
+
+    The ORDER is the whole point. The paths were read-checked before this
+    function was reached, and the confirmation is asked BEFORE the click, so a
+    refused upload never clicks the control either: a click that opens a
+    picker is already a step the page can watch, and asking afterward would
+    mean the gate arrived after the action it governs had begun. Same action
+    class as the input route, at the same choke point, because a file leaving
+    this machine is one thing whichever control let it out."""
+    if not location:
+        raise BadParams(
+            "upload_file(via='chooser') needs a location naming the control "
+            "to click, which is the button or link whose click opens the "
+            "page's file picker.")
+    resolved = await _act.resolve(sess, record, location, tool="upload_file")
+    _policy.approve(_policy.ActionRequest(
+        tool="upload_file", kind="act", session=sess.session_id,
+        page=record.handle, url=record.page.url,
+        target=resolved["descriptor"], action_class="file_upload",
+        args={"files": len(checked), "via": "chooser"},
+        summary=f"upload {len(checked)} file(s) through the file chooser "
+                f"opened by {resolved['descriptor'].get('name')!r} on "
+                f"{record.handle}"))
+    try:
+        async with record.page.expect_file_chooser(
+                timeout=timeout_ms) as info:
+            await resolved["handle"].click(timeout=timeout_ms)
+        chooser = await info.value
+    except Exception as exc:
+        raise Timeout(
+            f"clicking {resolved['descriptor'].get('name')!r} on "
+            f"{record.handle} opened no file chooser within {timeout_ms} ms, "
+            f"so nothing was uploaded (driver detail: "
+            f"{str(exc).splitlines()[0][:160]}). A control that opens a "
+            f"picker does it in the click handler; if this one does not, the "
+            f"page has a real <input type=file> somewhere and "
+            f"upload_file(via='input', location={{'css': 'input[type=file]'}}) "
+            f"is the route.") from exc
+    await chooser.set_files(checked, timeout=timeout_ms)
+    desk = _dialogs.desk(sess)
+    seen = desk.chooser_for(record.handle)
+    if seen is not None:
+        seen.filled = [os.path.basename(f) for f in checked]
+    return {
+        "page": record.handle, "session": sess.session_id, "via": "chooser",
+        "set": [os.path.basename(f) for f in checked],
+        "accepts_multiple": bool(getattr(chooser, "is_multiple", bool)()),
+        "note": ("the chooser was caught before it reached the operating "
+                 "system's own picker and filled from the checked paths. The "
+                 "page decides what it does with the selection next, so read "
+                 "the page to see whether the upload started."),
     }
 
 

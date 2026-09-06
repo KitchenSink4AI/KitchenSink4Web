@@ -116,6 +116,12 @@ MUTATING: frozenset[str] = frozenset({
     # a tool that clicks must be absent under a mode whose whole claim is
     # that nothing in it can click.
     "click", "type_text", "fill_form", "find_and_act", "press_keys",
+    # handle_dialog answers a native dialog, and answering one is acting: an
+    # OK on a confirm() is the click the page was waiting for. Under read-only
+    # the tool is absent and the driver's dismissal stands, so a dialog raised
+    # under read-only is still answered Cancel and still reported; what is
+    # missing is any way to answer it differently.
+    "handle_dialog",
     # packs (planned; listed now so Phase 5 inherits the classification
     # instead of rediscovering it one tool at a time)
     "set_routing", "evaluate_script",

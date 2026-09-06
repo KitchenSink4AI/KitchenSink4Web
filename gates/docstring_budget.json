@@ -136,6 +136,12 @@
       "total_tokens": 184,
       "over_reference_caps": true
     },
+    "handle_dialog": {
+      "description_tokens": 213,
+      "schema_tokens": 76,
+      "total_tokens": 289,
+      "over_reference_caps": true
+    },
     "list_console": {
       "description_tokens": 138,
       "schema_tokens": 60,
@@ -245,9 +251,9 @@
       "over_reference_caps": true
     },
     "upload_file": {
-      "description_tokens": 146,
-      "schema_tokens": 73,
-      "total_tokens": 219,
+      "description_tokens": 220,
+      "schema_tokens": 85,
+      "total_tokens": 305,
       "over_reference_caps": true
     },
     "wait_for": {

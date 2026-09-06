@@ -213,8 +213,13 @@ def test_no_acting_tool_approves_without_a_computed_class():
     # Tools whose approve() legitimately carries no submission class. Named
     # in the TEST, so adding one is a deliberate edit to this list rather
     # than a silent absence in the tool.
+    # `handle_dialog` joined 2026-09-06. It cannot submit a form or write a
+    # field, which is what this guard is about, and its own class IS computed
+    # by a classifier rather than hardcoded: `dialogs.gate_reason_for_accept`.
+    # That property is asserted in tests/unit/test_dialogs.py rather than
+    # left absent, so the exemption is narrow rather than a hole.
     exempt = {"navigate", "scroll", "wait_for", "manage_tabs",
-              "manage_session", "upload_file", "get_audit"}
+              "manage_session", "upload_file", "get_audit", "handle_dialog"}
     calls = re.findall(r"_policy\.approve\(\s*_policy\.ActionRequest\("
                        r"(.{0,600}?)\)\)", source, re.S)
     assert calls, "the approve() call sites moved; this test must follow them"

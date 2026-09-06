@@ -44,6 +44,7 @@ from __future__ import annotations
 
 import time
 
+from .. import pagedata as _pagedata
 from ..anchors import Outcome, ladder
 from ..errors import (AmbiguousLocation, BadParams, ModalBlocked, StaleAnchor,
                       TargetChanged, TargetNotFound, Timeout)
@@ -967,9 +968,14 @@ async def _resolve_ref(sess, record, ref: str, *, tool: str,
                 "rebound": rebound}
     # Every non-proceeding outcome is a typed, recovery-naming refusal.
     if verdict == Outcome.MODAL:
+        # The modal's name is whatever the page called it, so it rides the
+        # labeled envelope rather than sitting bare in a sentence the server
+        # appears to be making.
         raise ModalBlocked(
-            f'a dialog ({outcome.get("dialog")}) is open and blocks '
-            f'interaction. {outcome.get("recovery")}')
+            f'a page-drawn modal is open and blocks interaction, so nothing '
+            f'was done. {outcome.get("recovery")}. '
+            + _pagedata.wrap_line(f'modal: {outcome.get("dialog")}',
+                                  url=record.page.url))
     if verdict == Outcome.AMBIGUOUS:
         raise AmbiguousLocation(
             f'{ref!r} no longer resolves to one element ({outcome.get("tier")}): '

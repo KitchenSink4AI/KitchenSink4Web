@@ -181,16 +181,23 @@ HINTS: dict[str, str] = {
         "and which lane supports it. manage_session(action='capabilities') "
         "lists the full truth table"
     ),
-    # The old hint promised "the tool that clears it". There is no dialog
-    # tool, and the driver dismisses native dialogs on its own, so the hint
-    # named a route that does not exist inside a product whose whole claim is
-    # that it returns verified outcomes. A dialog tool is next-cycle scope.
+    # One code, two conditions, and the hint has to serve both honestly. A
+    # NATIVE dialog stops the page's script and handle_dialog answers it; a
+    # PAGE-DRAWN modal is ordinary DOM and its own control closes it. The
+    # previous hint described only the first and told the caller the build
+    # could not answer it, which stopped being true when handle_dialog landed.
     "MODAL_BLOCKED": (
-        "a native dialog (alert, confirm, or prompt) is blocking the page, "
-        "and this build cannot answer it: the browser driver dismisses such "
-        "dialogs automatically, and a confirm() dismissed this way reads as "
-        "Cancel. If this step depends on answering the dialog, it needs a "
-        "human session for now."
+        "something modal is in the way and the message says which. For a "
+        "NATIVE dialog (alert, confirm, prompt, beforeunload): with nothing "
+        "armed the driver dismisses it as it opens, which a confirm() reads "
+        "as Cancel, so arm the answer BEFORE the click that raises it with "
+        "handle_dialog(page=..., action='arm_accept' or 'arm_dismiss'), or "
+        "action='hold' to keep the next one open and then answer it with "
+        "action='accept' or 'dismiss'. Answering OK requires a human "
+        "confirmation wherever OK would commit something. For a PAGE-DRAWN "
+        "modal there is no dialog to answer: read the page and act on the "
+        "modal's own close or cancel control, since a click behind it is not "
+        "the click you asked for"
     ),
     "TIMEOUT": (
         "the wait expired; the message names what was awaited and what was "
