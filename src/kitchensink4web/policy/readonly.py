@@ -142,7 +142,8 @@ NON_MUTATING: frozenset[str] = frozenset({
     "get_workflows",
     # packs (planned)
     "get_table", "get_list", "get_links", "get_metadata", "extract_fields",
-    "export_data", "take_screenshot", "export_pdf", "save_page",
+    "get_article", "export_data", "take_screenshot", "export_pdf",
+    "save_page",
     "list_requests", "get_request", "export_har",
     "list_console", "get_page_errors", "list_workflows",
 })
@@ -162,6 +163,7 @@ GENUINELY_READ_ONLY: frozenset[str] = frozenset({
     "get_workflows", "wait_for",
     # packs
     "get_table", "get_list", "get_links", "get_metadata", "extract_fields",
+    "get_article",
     "list_requests", "get_request", "list_console", "get_page_errors",
     "list_workflows",
 })

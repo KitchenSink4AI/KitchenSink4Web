@@ -83,3 +83,17 @@ later.
 
 Any future vendored snippet gets a provenance note here before it is
 committed, not after.
+
+**Article extraction takes no dependency (2026-09-06).** `get_article` is the
+obvious place for one: Readability is the reference implementation and every
+port of it is a package away. It is not taken. The JS port is Apache-2.0 and
+would be legally fine, but it is a 100 KB script this server would have to
+inject and keep in step with its own visibility, shadow, and instrument
+rules, and the Python ports each drag an HTML parser behind them for a
+document the browser has already parsed. `projection/article.js` is written
+in-house against the machinery that is here: it splices the SAME
+`visibility.js` every other read uses, so a `display:none` injection inside
+an article body is counted and withheld by the one rule rather than by a
+second opinion. What IS borrowed is the class-weight vocabulary, the word
+lists two decades of pages have been tuned against, and that is inspiration
+rather than code.

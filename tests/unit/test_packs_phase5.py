@@ -44,12 +44,13 @@ def test_every_module_roster_matches_the_design_table():
             f"{sorted(designed)}")
 
 
-def test_full_surface_is_forty_two_tools(launch):
-    """Forty until 2026-09-06, when find_and_act joined the lite core, and
-    forty-two later the same day, when handle_dialog did."""
+def test_full_surface_is_forty_three_tools(launch):
+    """Forty until 2026-09-06, when find_and_act joined the lite core;
+    forty-two later the same day, when handle_dialog did; forty-three when
+    get_article joined the extract pack."""
     state = launch(cli_packs=packs.pack_names(), read_only=False)
-    assert len(state["registered"]) == 42
-    assert len(set(state["registered"])) == 42
+    assert len(state["registered"]) == 43
+    assert len(set(state["registered"])) == 43
 
 
 def test_full_surface_under_read_only_hides_every_mutating_pack_tool(launch):

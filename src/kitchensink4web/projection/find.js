@@ -38,6 +38,7 @@
 (opts) => {
 // @@KS4WEB_INSTRUMENT@@
 // @@KS4WEB_VISIBILITY@@
+// @@KS4WEB_ARIA@@
   const query = opts.query || '';
   const kind = opts.kind || 'auto';
   const wantRole = (opts.role || '').toLowerCase() || null;
@@ -363,8 +364,12 @@
     matches.push({
       ref: ref, anchor: anchorOf(el, role, clip(name, 80)),
       role: role, name: clip(name, 80), path: path,
-      state: [el.disabled ? 'disabled' : '', el.checked ? 'checked' : '',
-              el.required ? 'required' : ''].filter(Boolean).join(','),
+      // THE SHARED STATE SOURCE (`aria.js`, spliced above). Three DOM
+      // properties and nothing declared is what used to be here, so a tab
+      // the page view described as selected came back from a search with an
+      // empty state, and the answer to "which tab is active" depended on
+      // which tool happened to find the tab.
+      state: ksAriaState(el).join(','),
       // BOTH axes. The vertical-only test printed "in-view" for a control
       // parked 99,999 pixels to the left, which is the one word in a result
       // line a caller uses to decide whether an element needs scrolling to.

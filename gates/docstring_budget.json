@@ -76,6 +76,12 @@
       "total_tokens": 402,
       "over_reference_caps": true
     },
+    "get_article": {
+      "description_tokens": 225,
+      "schema_tokens": 94,
+      "total_tokens": 319,
+      "over_reference_caps": true
+    },
     "get_audit": {
       "description_tokens": 104,
       "schema_tokens": 79,

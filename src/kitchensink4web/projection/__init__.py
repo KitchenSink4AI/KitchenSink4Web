@@ -8,7 +8,7 @@ and `find_elements` retrieves it for tens of tokens. "One read and you can act
 on anything" is banned copy, because an arbitrary in-prose link on a page
 holding 2,858 of them is not one-readable at any budget.
 
-Six modules, and the split is the design's:
+The modules, and the split is the design's:
 
 - `extract.js` runs one depth-first walk in the page and produces every fact,
   including the anchor descriptor for every unit it will print.
@@ -17,6 +17,11 @@ Six modules, and the split is the design's:
   orientation and fatal for a search, since the link the flagship example
   names sits past the two thousandth in-prose link on that page.
 - `text.js` is bounded prose extraction with hidden content counted.
+- `article.js` is the article-shaped read: a Readability-class scorer, the
+  body in reading order, the chrome excluded AND counted by reason, and a
+  refusal on a page that is an application rather than a document.
+- `aria.js` is the one state source both reads splice, so an affordance
+  describes itself identically whichever tool found it.
 - `ranker.py` selects affordances by per-class quota with guaranteed floors.
 - `meter.py` prices and accounts, and owns the ledger the completeness block
   renders.
@@ -35,11 +40,11 @@ from pathlib import Path
 from .meter import ENCODING_NAME, ntok
 from .render import RUNGS, Projection, project
 
-__all__ = ["EXTRACT_JS", "FIND_JS", "TEXT_JS", "VISIBILITY_JS", "PAYMENT_JS",
-           "ACTIVATION_JS",
+__all__ = ["EXTRACT_JS", "FIND_JS", "TEXT_JS", "ARTICLE_JS", "VISIBILITY_JS",
+           "PAYMENT_JS", "ACTIVATION_JS", "ARIA_JS",
            "CLOSED_SHADOW_HOOK", "INSTRUMENT_KEY", "instrument",
            "Projection", "project", "extract", "find", "read_text",
-           "read_page", "ntok", "ENCODING_NAME", "RUNGS"]
+           "read_article", "read_page", "ntok", "ENCODING_NAME", "RUNGS"]
 
 _HERE = Path(__file__).parent
 
@@ -49,6 +54,7 @@ _VIS_MARK = "// @@KS4WEB_VISIBILITY@@"
 _INSTR_MARK = "// @@KS4WEB_INSTRUMENT@@"
 _PAY_MARK = "// @@KS4WEB_PAYMENT@@"
 _ACT_MARK = "// @@KS4WEB_ACTIVATION@@"
+_ARIA_MARK = "// @@KS4WEB_ARIA@@"
 
 #: THE ONE HIDDEN-DETECTION SOURCE (gauntlet 2 H2/H3/M4/L2, 2026-09-06).
 #: `hiddenReason` used to exist three times, in `extract.js`, `find.js`, and
@@ -74,6 +80,14 @@ PAYMENT_JS = (_HERE / "payment.js").read_text(encoding="utf-8")
 #: card-carrying form with no class computed. "Which element does this
 #: activate" now has one implementation and every consumer splices it.
 ACTIVATION_JS = (_HERE / "activation.js").read_text(encoding="utf-8")
+
+#: THE ONE ARIA-STATE SOURCE. Same story again, one question along: "what
+#: state is this affordance in" had two implementations, a fuller one in
+#: `extract.js` and a three-property one in `find.js`, so the same tab came
+#: back `[selected]` from a page read and bare from a search. The rule now
+#: lives in `aria.js` and is spliced into both, which is what makes "which
+#: tab is active" answerable from whichever read found the tab.
+ARIA_JS = (_HERE / "aria.js").read_text(encoding="utf-8")
 
 #: The per-process instrument secret. It is baked into the injected script
 #: SOURCES, never passed as an evaluate argument and never written into the
@@ -124,6 +138,8 @@ def instrument(source: str, *, visibility: str | None = None) -> str:
         source = source.replace(_PAY_MARK, PAYMENT_JS)
     if _ACT_MARK in source:
         source = source.replace(_ACT_MARK, ACTIVATION_JS)
+    if _ARIA_MARK in source:
+        source = source.replace(_ARIA_MARK, ARIA_JS)
     if _INSTR_MARK in source:
         source = source.replace(_INSTR_MARK, INSTRUMENT_PRELUDE)
     return source
@@ -132,6 +148,7 @@ def instrument(source: str, *, visibility: str | None = None) -> str:
 EXTRACT_JS = instrument((_HERE / "extract.js").read_text(encoding="utf-8"))
 FIND_JS = instrument((_HERE / "find.js").read_text(encoding="utf-8"))
 TEXT_JS = instrument((_HERE / "text.js").read_text(encoding="utf-8"))
+ARTICLE_JS = instrument((_HERE / "article.js").read_text(encoding="utf-8"))
 
 
 def _checked(data: dict) -> dict:
@@ -183,6 +200,18 @@ async def read_text(page, root: str | None = None, start_index: int = 0,
     return _checked(await page.evaluate(TEXT_JS, {
         "root": root, "start_index": start_index, "max_chars": max_chars,
         "include_hidden": include_hidden}))
+
+
+async def read_article(page, root: str | None = None, start_index: int = 0,
+                       max_chars: int = 20000, links: str = "inline") -> dict:
+    """The article-shaped read: one walk, the body kept, the chrome counted.
+
+    Returns the shape verdict alongside the content, so a page that is not an
+    article says so with its evidence rather than coming back as mangled
+    prose. See `article.js` for the scoring and the refusal rule."""
+    return _checked(await page.evaluate(ARTICLE_JS, {
+        "root": root, "start_index": start_index, "max_chars": max_chars,
+        "links": links}))
 
 
 async def read_page(page, meta: dict, budget: int = 5000,

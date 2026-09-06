@@ -29,8 +29,10 @@ import csv
 import io
 import json
 
+from .. import pagedata as _pagedata
 from ..errors import AmbiguousLocation, BadParams, TargetNotFound
 from ..projection import ntok as _ntok
+from ..projection import read_article as _read_article
 from ..projection.meter import ENCODING_NAME as _ENCODING
 from . import act as _act
 from . import common
@@ -761,7 +763,208 @@ async def export_data(
     }
 
 
+# ----------------------------------------------------------------- article
+
+
+def _field(label: str, got: dict) -> str:
+    """One metadata line, with WHERE it came from. A byline whose provenance
+    is unstated is worth less than no byline: the caller cannot tell the
+    page's author from the site's owner, and both live in the same markup."""
+    if not got["value"]:
+        return f"{label}: not marked up on this page"
+    return f'{label}: {got["value"]} (from {got["source"]})'
+
+
+def _tally(by_reason: dict) -> str:
+    return ", ".join(f'{name}={rec["blocks"]}' for name, rec in
+                     sorted(by_reason.items(), key=lambda kv: -kv[1]["blocks"]))
+
+
+def _render_thread(thread: dict) -> str:
+    """The thread shape, rendered into the one block the envelope wraps.
+
+    Authors and timestamps are page-authored strings, so they travel INSIDE
+    the delimiters with the post bodies rather than beside them."""
+    lines = []
+    for post in thread["posts"]:
+        head = f'[post {post["index"]}]'
+        if post["author"]:
+            head += f' by {post["author"]}'
+        if post["timestamp"] or post["timestamp_text"]:
+            head += f' at {post["timestamp"] or post["timestamp_text"]}'
+        if post["ref"]:
+            head += f' ({post["ref"]})'
+        lines.append(head)
+        lines.append(post["text"])
+    return "\n".join(lines)
+
+
+async def get_article(
+    page: str,
+    location: dict | None = None,
+    start_index: int = 0,
+    max_chars: int = 20000,
+    links: str = "inline",
+) -> dict:
+    """Read a page as an article: the title, the byline and published date
+    where the page marks them up, and the body prose in reading order, with
+    navigation, headers, footers, sidebars, related-story rails, comment
+    streams, and share widgets excluded. What was excluded is COUNTED and
+    returned by reason, so the trimming is never silent. In-prose links come
+    back resolved as [text](path), tables are named and left to get_table
+    rather than flattened, and hidden blocks are stripped and counted the way
+    every read here counts them. A forum topic, issue thread, or comment
+    stream comes back as posts with their authors and timestamps instead. A
+    page that is an application rather than a document is REFUSED, with the
+    evidence that decided it, and get_page_view is named as the read that
+    shows what the page actually is. The body is paginated by start_index,
+    and every field states which markup it came from.
+    """
+    if links not in ("inline", "none"):
+        raise BadParams(
+            f"unknown links mode {links!r}: 'inline' resolves in-prose links "
+            f"into the body text as [text](path), and 'none' returns the "
+            f"prose bare.")
+    sess, record = common.locate(page)
+    sess.counters["reads"] += 1
+    # The SAME ref-to-node-ref resolver `get_page_view` and `get_text` scope
+    # with, imported rather than reimplemented: the extractor keys its in-page
+    # registry by the id IT assigned in the last read, and a pack tool that
+    # worked that out for itself is a fourth copy waiting to drift.
+    from .lite import _scope_root
+    root = _scope_root(sess, record, location)
+    got = await _read_article(record.page, root=root, start_index=start_index,
+                              max_chars=max_chars, links=links)
+    if got.get("error") == "ROOT_GONE":
+        raise TargetNotFound(
+            f'location named {got["asked_for"]!r} and that ref is not on '
+            f'{record.handle} any more. Re-read the page and use the ref it '
+            f'returns.')
+
+    ev = got["evidence"]
+    if got["shape"] == "none":
+        # THE HONEST FALLBACK. An extractor that cannot refuse will hand back
+        # a dashboard's button labels as an essay, which is the failure mode
+        # that makes article extraction untrustworthy everywhere it ships
+        # without one. The evidence is printed so the verdict is checkable.
+        raise TargetNotFound(
+            f"this page is not article-shaped; get_page_view shows what it "
+            f"is. The scorer found {ev['prose_blocks']} paragraph-shaped "
+            f"block(s) carrying {ev['article_chars']:,} characters, "
+            f"{ev['link_density']:.0%} of the best candidate's text is link "
+            f"text, and that candidate holds {ev['share_of_page']:.0%} of "
+            f"the page's block prose. Failing: "
+            f"{'; '.join(got['failed_tests'])}. get_text reads whatever prose "
+            f"is here without pretending it is an article, and get_list or "
+            f"get_table reach repeated records.")
+
+    thread = got["thread"]
+    body = _render_thread(thread) if got["shape"] == "thread" else got["text"]
+    # The body is page prose, which is the single most common injection
+    # channel, so it arrives inside the labeled data envelope (DESIGN 5.1,
+    # H1) byte-identical to what the extractor returned. The note is extended
+    # by one sentence because THIS payload also carries page-authored strings
+    # in structured fields beside the text, and an envelope that covers only
+    # the body would leave the byline unlabeled.
+    wrapped, page_note = _pagedata.wrap(body, url=got["url"])
+    page_note["label"] += (
+        " The title, byline, date, and site fields beside this text are "
+        "page-authored too and carry exactly the same status.")
+
+    excluded = got["excluded"]
+    hidden = got["hidden"]
+    link_rec = got["links"]
+    more = (f'get_article(page="{record.handle}", '
+            f'start_index={got["next_start_index"]}) returns the next '
+            f'{max_chars:,} characters'
+            if got["next_start_index"] is not None
+            else "this is the end of the article body")
+    if got["shape"] == "thread":
+        more = "the thread is returned whole; posts are not paginated"
+
+    completeness = {
+        "excluded": (
+            f'{excluded["blocks"]} block(s) carrying {excluded["chars"]:,} '
+            f'characters were page chrome and were excluded from the body, '
+            f'counted rather than silently dropped '
+            f'[{_tally(excluded["by_reason"]) or "none"}]'),
+        "hidden": (
+            f'{hidden["blocks"]} hidden block(s) carrying {hidden["chars"]:,} '
+            f'characters were stripped from the body and counted '
+            f'[{", ".join(f"{k}={v}" for k, v in sorted(hidden["reasons"].items(), key=lambda kv: -kv[1])[:6]) or "none"}]'
+            + (f'; {hidden["injection_suspects"]} of them carried more than '
+               f'20 characters, which is the shape of an injected instruction'
+               if hidden["injection_suspects"] else '')
+            + (f'; zero-width characters were removed from '
+               f'{hidden["zero_width_blocks"]} block(s)'
+               if hidden["zero_width_blocks"] else '')),
+        "links": (
+            f'{link_rec["resolved"]} in-prose link(s) were resolved'
+            + (f' and then dropped from the body: the link markup came to '
+               f'{link_rec["markup_chars"]:,} characters, over a quarter of '
+               f'the prose, and a body that is mostly bracket syntax is not '
+               f'readable. get_links lists them as data'
+               if link_rec["dropped"]
+               else (' into the body text as [text](path)'
+                     if link_rec["mode"] == "inline" and link_rec["resolved"]
+                     else '; links=inline resolves them into the body text'))),
+        "tables": (
+            f'{got["tables"]} table(s) in the body are named and left intact '
+            f'rather than flattened into prose; get_table reads them as JSON'
+            if got["tables"] else "no tables in the article body"),
+    }
+    if got.get("shadow_roots_read"):
+        completeness["shadow"] = (
+            f'prose was read from {got["shadow_roots_read"]} open shadow '
+            f'root(s)'
+            + (f'; {got["closed_shadow_roots"]} closed shadow root(s) are '
+               f'unreadable by any tool' if got["closed_shadow_roots"] else ''))
+
+    payload = {
+        "page": record.handle, "session": sess.session_id,
+        "url": got["url"], "shape": got["shape"],
+        "scope": location if location else "the page's article body",
+        "article": {
+            "title": got["title"]["value"],
+            "title_source": got["title"]["source"],
+            "byline": got["byline"]["value"],
+            "byline_source": got["byline"]["source"],
+            "published": got["published"]["value"],
+            "published_source": got["published"]["source"],
+            "modified": got["modified"]["value"],
+            "site_name": got["site_name"], "lang": got["lang"],
+            "summary": " | ".join([
+                _field("title", got["title"]),
+                _field("byline", got["byline"]),
+                _field("published", got["published"])]),
+        },
+        "text": wrapped,
+        "page_data": page_note,
+        "chars": {"returned": got["returned_chars"],
+                  "total_in_article": got["total_chars"],
+                  "start_index": got["start_index"],
+                  "next_start_index": got["next_start_index"],
+                  "blocks": got["blocks"]},
+        "continue": more,
+        "completeness": completeness,
+        "budget": {"used": _ntok(body), "estimator": _ENCODING},
+    }
+    if got["shape"] == "thread":
+        payload["thread"] = {
+            "total_posts": thread["total_posts"],
+            "with_author": thread["with_author"],
+            "with_timestamp": thread["with_timestamp"],
+            "refs": [p["ref"] for p in thread["posts"]],
+            "note": ("this page did not pass the article tests and IS a "
+                     "thread: repeated posts each carrying a machine-readable "
+                     "timestamp. Post text, authors, and timestamps are "
+                     "rendered inside the labeled text block above, headed "
+                     "[post N] by AUTHOR at TIMESTAMP."),
+        }
+    return payload
+
+
 #: The pack roster, in DESIGN 2.2 order. `server.register_all` registers
 #: exactly this when the extract pack is selected.
 TOOLS = (get_table, get_list, get_links, get_metadata, extract_fields,
-         export_data)
+         export_data, get_article)

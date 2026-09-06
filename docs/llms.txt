@@ -2,7 +2,7 @@
 
 > Browser MCP server for agents. A budgeted first read of any page, durable
 > refs you can act on, and a safety layer that ships on. 15 tools at session
-> start, 41 with every capability pack loaded. stdio. Out of the box the
+> start, 42 with every capability pack loaded. stdio. Out of the box the
 > tools that click, type and submit are NOT REGISTERED: read-only is the
 > shipped default and it is a property of the tool list, not a runtime check.
 
@@ -22,7 +22,7 @@ of which ship with the source.
 - Session start loads the lite pack: 15 tools, about 4,100 tokens. Under the
   shipped read-only default 5 of those 15 are absent, so the wire cost is
   about 2,600 tokens for 10 tools.
-- Everything loaded: 41 tools, about 10,200 tokens.
+- Everything loaded: 42 tools, about 10,500 tokens.
 - Packs are chosen at LAUNCH (`--packs`, `KS4WEB_MODE`, `KS4WEB_PACK_<NAME>`,
   `KS4WEB_ALL_PACKS`) and are fixed for the whole process. There is no
   mid-session `enable_tools` here, by design: an absent pack is provably
@@ -121,8 +121,8 @@ Chosen at launch. `lite` is always present.
 - `lite` (15): get_page_view, find_elements, get_text, navigate, scroll,
   wait_for, manage_session, manage_tabs, get_audit, get_workflows, and the
   five acting tools click, type_text, fill_form, press_keys, find_and_act.
-- `extract` (6): get_table, get_list, get_links, get_metadata,
-  extract_fields, export_data.
+- `extract` (7): get_table, get_list, get_links, get_metadata,
+  extract_fields, export_data, get_article.
 - `capture` (4): take_screenshot, save_page, export_pdf, emulate.
 - `network` (4): list_requests, get_request, set_routing, export_har.
 - `storage` (4): manage_cookies, manage_storage, save_auth_state,

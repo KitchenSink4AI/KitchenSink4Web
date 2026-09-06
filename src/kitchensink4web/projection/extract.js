@@ -29,6 +29,7 @@
 // @@KS4WEB_VISIBILITY@@
 // @@KS4WEB_PAYMENT@@
 // @@KS4WEB_ACTIVATION@@
+// @@KS4WEB_ARIA@@
   opts = opts || {};
   // `location=` scoping. The read is the same read, run over a subtree: the
   // same blocks, the same ladder, the same completeness discipline, over a
@@ -1026,16 +1027,13 @@
             // every one of six thousand links, to produce a path string that
             // three hundred of them will print, is the expensive half of that
             // distinction.
-            const state = [];
-            if (collect) {
-              if (el.disabled) state.push('disabled');
-              if (el.checked) state.push('checked');
-              if (el.required) state.push('required');
-              const ae = el.getAttribute('aria-expanded');
-              if (ae) state.push('expanded=' + ae);
-              if (el.getAttribute('aria-selected') === 'true') state.push('selected');
-              if (el.getAttribute('aria-current')) state.push('current');
-            }
+            // THE SHARED STATE SOURCE (`aria.js`, spliced above). What lived
+            // here read three DOM properties and three attributes, kept only
+            // the true half of `aria-selected`, and threw away the VALUE of
+            // `aria-current`, so "which tab is active" and "which nav item am
+            // I on" were both unanswerable from a page read. `find.js` had a
+            // thinner copy again. One implementation now answers both.
+            const state = collect ? ksAriaState(el) : [];
 
             let href = null, path = null, external = false;
             if (tag === 'A') {
