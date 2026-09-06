@@ -3,8 +3,8 @@
   "name": "kitchensink4web-dev",
   "display_name": "KitchenSink4Web (field test)",
   "version": "1.0.0",
-  "description": "Field-test build of the KitchenSink4Web browser MCP server: same code as the shipped bundle, different install-screen defaults",
-  "long_description": "This is the field-test build. It runs exactly the same server as the shipped bundle and differs only in what the install screen starts with: the cookies-and-logins pack is already on, because saving and reloading a login is what field tests spend their time on, and there are two boxes for choosing which browser the server drives. Everything the shipped bundle refuses to do by default, this build still refuses: acting stays off until you turn it on, and the safety layer is the same one. Launching this bundle requires uv (the uvx command) on your machine; the server itself is fetched from PyPI on first launch. Use the shipped bundle for anything that is not a test.",
+  "description": "Field-test build of the KitchenSink4Web browser MCP server: same code as the shipped bundle, different install-screen defaults. Beta field-test build: every capability is switched on. The shipped product installs read-only.",
+  "long_description": "This is the field-test build. It runs exactly the same server as the shipped bundle and differs only in what the install screen starts with: the cookies-and-logins pack is already on, because saving and reloading a login is what field tests spend their time on. Everything the shipped bundle refuses to do by default, this build still refuses: acting stays off until you turn it on, and the safety layer is the same one. Launching this bundle requires uv (the uvx command) on your machine; the server itself is fetched from PyPI on first launch. Use the shipped bundle for anything that is not a test.",
   "author": {
     "name": "nometalalchemist"
   },
@@ -47,9 +47,7 @@
         "KS4WEB_PACK_STORAGE": "${user_config.pack_storage}",
         "KS4WEB_PACK_FILES": "${user_config.pack_files}",
         "KS4WEB_PACK_DIAGNOSTICS": "${user_config.pack_diagnostics}",
-        "KS4WEB_PACK_WORKFLOWS": "${user_config.pack_workflows}",
-        "KS4WEB_LANE": "${user_config.browser_lane}",
-        "KS4WEB_CHANNEL": "${user_config.browser_channel}"
+        "KS4WEB_PACK_WORKFLOWS": "${user_config.pack_workflows}"
       }
     }
   },
@@ -115,20 +113,6 @@
       "title": "Recorded workflows",
       "description": "Records a multi-step flow once and replays it later, checking every step still matches the page before anything runs.",
       "default": false,
-      "required": false
-    },
-    "browser_lane": {
-      "type": "string",
-      "title": "Which browser to drive",
-      "description": "A for the browser that comes with the server, B for one you already have installed. Either way the server opens its own separate profile and never touches yours. Leave it as A unless you are testing lane B.",
-      "default": "A",
-      "required": false
-    },
-    "browser_channel": {
-      "type": "string",
-      "title": "Installed browser to use with lane B",
-      "description": "Which installed browser lane B should launch: chrome, msedge, or moz-firefox for Firefox. Ignored when the lane above is A. Firefox gets through bot checks that turn away headless Chromium, so it is the one to reach for when a site returns an empty page.",
-      "default": "",
       "required": false
     }
   },
