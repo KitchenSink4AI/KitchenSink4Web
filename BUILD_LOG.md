@@ -2582,3 +2582,109 @@ lines), and `bigform.html`'s submit classifies `payment_form` rather than
 `form_submit` because that form carries a card field. DESIGN Q1's license ruling is
 attributed as an orchestrator ruling under standing delegation. Report:
 `internal notes/20260906_web_fixwave3.md`.
+
+---
+
+## The re-attack, and the round that fixed it (2026-09-06, fix wave 4)
+
+The re-attack was a different question from the gauntlets: not "what does this
+tool miss" but "what did the last round's FIX miss." It found five, and four of
+them were one defect wearing different clothes.
+
+**The defect has a name now: a rule written against the INSTANCE the previous
+finding presented rather than against the CLASS that instance belongs to.**
+Gauntlet 2 presented `<button type=submit>`, so the classifier learned
+`type == "submit"`; the re-attack brought `<input type=image>`, a submit button
+since HTML 2.0 that also POSTs its click coordinates, and it submitted a live
+checkout form with no gate computed at all (R1). Gauntlet 2 presented Enter, so
+the focused-descriptor read fired for the Enter family; the re-attack pressed
+Space on a focused submit button and deleted an account, while the identical
+call with Enter refused correctly two lines away (R2). Gauntlet 2 presented
+`autocomplete="cc-number"`, so payment detection asked about autocomplete; the
+re-attack wrote a card number into `<input name="cardnumber">` and the write
+went through (R3). Each previous fix was correct. Each was also a list of one.
+
+The three rules are stated as classes now. `act.SUBMIT_TYPES` is the whole of
+HTML's submit-button definition (`submit`, `image`, plus the typeless in-form
+`<button>` already folded upstream). Keyboard submission is TWO mechanisms,
+implicit (Enter in a field) and activation (Space or Enter pressing whatever
+holds focus), and `key_submits` asks which applies to this descriptor, so the
+two keys agree about one element. Payment detection reads declared tokens, then
+the field's own identifiers, then a PAN-shaped `pattern`; `inputmode` was
+evaluated and rejected, because `inputmode="numeric"` is on every quantity box
+on the web and a gate that fires on all of them is a gate people route around.
+
+**The one-source treatment, one classification along.** The payment rule had
+FOUR in-page copies -- the extractor's `formPayment`, its per-affordance and
+per-field `payment`, the acting resolver's, and the focused-descriptor
+reader's -- and R3 did not walk through a gap BETWEEN them, it walked through
+the gap all four shared. `projection/payment.js` is now the one payment-shape
+source, spliced the way `visibility.js` is, and the Python re-derivation is
+pinned to its token lists by a test. It also fixed a structural bug none of the
+four copies could see: they all used `querySelector`, and a field carrying
+`form="pay"` is form-ASSOCIATED from anywhere in the document. Moving the card
+field one sibling out of the `<form>` tag was a one-attribute bypass of the
+payment gate. Membership follows `form.elements` now.
+
+**R4 is the one that needed a new model.** An opaque white panel painted over a
+real "Transfer balance to 9912" button, showing "Loading, please wait...", and
+the agent's trusted click transferred the balance. The panel was
+`pointer-events: none`, and that single property defeats every hit-test-shaped
+answer at once: `checkVisibility()` is true, Playwright's actionability net
+sees a clean target, and `elementFromPoint` at the button's own centre returns
+the BUTTON, because hit testing skips a `pointer-events: none` box by
+definition. The orchestrator's fix direction proposed exactly that
+`elementFromPoint` test; it was measured against the fixture and does not fire.
+Occlusion is therefore measured by PAINT: the page's positioned, effectively
+opaque boxes, which of them are painted above, and which of them cover the
+centre.
+
+Two things this round got wrong on the first try, both caught by control arms
+written for the purpose rather than by the fixtures. The first draft read
+`elementFromPoint` as well and swallowed corpus B's interception case into a
+cloak verdict; `#shield` is `rgba(255,0,0,.06)`, a human sees the button
+straight through it, and the driver's "intercepted by another element" is the
+truer answer, so the boundary with the driver is now asserted in both
+directions. The second draft used `ksHiddenChain` to decide whether a candidate
+lid paints, which asks whether a human can READ the element, and by that
+measure a modal backdrop is black-on-black low-contrast while being the most
+opaque thing on the page -- so every backdrop was skipped by the scan written
+to catch it. `ksPaintsAtAll` answers the question actually being asked.
+
+**Thresholds, with the numbers defended.** Opacity is inclusive, because
+`opacity: 0.05` was the exact value the old `<` let through and a page picking
+the floor and sitting on it is the oldest bug shape there is. Blur came down
+from 6px to 4px against a rendered small-text fixture. Contrast is a WCAG ratio
+rather than a luminance subtraction, which was never a perceptual measure: the
+same 0.02 gap is invisible near white and an easy read near black, so the old
+rule missed `#fbfbfb` on white AND would have cloaked legitimate dark-on-dark
+design. The floor is 1.15:1, chosen to sit far below any accessibility
+threshold, since AA failures are ordinary on real sites and cloaking at an AA
+boundary would strip real interfaces. On white, `#fbfbfb` (1.03:1) and
+`#f0f0f0` (1.14:1) cloak; `#e0e0e0` (1.32:1), `#cccccc` (1.61:1), and
+`#949494` (3.03:1) are left alone. Where nothing paints a background the answer
+is the browser's white canvas rather than "unmeasurable", because declining to
+look is how white-on-nothing passed.
+
+**THE META-FIX.** Gauntlet 2's gate battery pins four write PATHS to one
+verdict on one fixture, and it was green the whole time R1 and R2 shipped: a
+mechanism none of the four paths recognises is invisible to a parity test
+across those paths. `test_the_mechanism_battery` fixes the tool and the
+expected verdict and varies the MECHANISM instead -- input submit, input image,
+typeless button, explicit submit button, implicit Enter, activation Space, and
+a card field associated to its form rather than contained in it -- with a
+`type=button` control arm that must stay ungated in the same test, because a
+gate that fires on everything is the same failure from the other side.
+
+Gate: full suite **641 green in both orders** minus one pre-existing flake
+(`test_m1_renderer_crash`, which needs Chromium to actually crash a renderer on
+a deep DOM; it passes in isolation and failed identically on stashed baseline
+HEAD, so it is charged to the environment). Up 20 from 621. Phase 3 **12/12
+GREEN**, Phase 5 **8/8 GREEN**, Phase 4 acting arm **7/7 GREEN**. New re-attack
+battery 20 green. **No pinned measurement moved:** the Versailles read is still
+4,500 at rung 6, `bigform.html`'s submit still classifies `payment_form`,
+corpus A's digests are unchanged, and the projection output on
+`wikipedia_gdp_table.html` is byte-identical before and after. The re-attack's
+fixtures live in `corpus/ra/` ported unchanged, joined by three pages this wave
+added for the mechanism battery, the threshold control arms, and the occlusion
+false-positive arms. Report: `internal notes/20260906_web_fixwave4.md`.

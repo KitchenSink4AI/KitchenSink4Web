@@ -2061,6 +2061,65 @@ safe.
   every technique rule, and the gate's nine-technique page is the standing
   regression.
 
+  **OCCLUSION, and the thresholds (re-attack R4/R5, 2026-09-06).** The
+  technique set knew every way an element can hide ITSELF and no way for
+  something else to hide it. The re-attack buried a real "Transfer balance to
+  9912" button under an opaque white panel showing "Loading, please wait..."
+  and the agent's trusted click landed on the transfer.
+
+  **Occlusion is measured by PAINT, never by hit testing, and the fixture is
+  why.** The panel was `pointer-events: none`, so it takes no pointer at all:
+  `checkVisibility()` returns true, Playwright's actionability net sees a
+  clean target, and `document.elementFromPoint` at the button's own centre
+  returns the BUTTON, because hit testing skips a `pointer-events: none` box
+  by definition. Every hit-test-shaped answer is the wrong answer here, which
+  is also why this cannot be left to the driver. What a human sees is what is
+  painted, so the check scans the page's positioned, effectively opaque boxes
+  and asks which of them are painted above the element and cover it.
+
+  **The boundary with the driver is deliberate.** When the thing on top DOES
+  take the pointer, the click genuinely cannot land, the driver catches it,
+  and "intercepted by another element" is both true and more useful than a
+  cloak verdict. Corpus B's `#shield` is `rgba(255,0,0,.06)`: a human sees the
+  button straight through it, so calling it invisible would be wrong. An
+  earlier draft of this check read `elementFromPoint` too and swallowed that
+  case; the held line is now asserted in both directions.
+
+  **False positives are the failure direction that matters**, because sticky
+  headers, toasts, and cookie bars overlap real controls all day and a cloak
+  verdict on one strips a working interface. Two rules: the sample point is
+  the element's CENTRE, so a bar clipping a button's top edge is not
+  occlusion; and when the centre is covered, a majority of a nine-point grid
+  must be covered too, so a control whose centre is under a toast while most
+  of it is clear is reported VISIBLE. A missed cloak is the accepted cost.
+
+  **Occlusion is computed on the ACTING path only**, which is the one place
+  `ksCloakReason` and `ksHiddenAnywhere` deliberately differ. It needs a
+  page-wide scan and up to nine coverage tests per element, and
+  `ksHiddenChain` runs once per element on every extraction of a ten-thousand
+  node page. Reading an occluded control is also not the harm; clicking one
+  is. The read route reports what it always reported.
+
+  **The three thresholds, and each number is a decision.** OPACITY is
+  INCLUSIVE: `opacity: 0.05` was the exact value the old `<` let through,
+  which is the oldest bug shape there is, a page picking the floor and sitting
+  on it. BLUR came down from 6px to 4px against a rendered small-text fixture.
+  CONTRAST is a WCAG ratio now rather than a luminance subtraction, which was
+  never a perceptual measure: the same 0.02 gap is invisible near white and an
+  easy read near black, so the old rule simultaneously missed `#fbfbfb` on
+  white and would have cloaked legitimate dark-on-dark design. The floor is
+  **1.15:1**, chosen to sit far below any accessibility threshold. WCAG AA is
+  4.5:1, AA failures are ordinary on real sites (helper text, disabled
+  controls, watermarks), and cloaking at an AA boundary would strip real
+  interfaces; 1.15:1 is not a design choice anyone makes. Measured neighbours
+  on white: `#fbfbfb` 1.03:1 and `#f0f0f0` 1.14:1 cloak, `#e0e0e0` 1.32:1 and
+  `#cccccc` 1.61:1 and `#949494` 3.03:1 are left alone. Where no ancestor
+  paints a background the answer is the browser's default canvas, white, and
+  not "unmeasurable" -- declining to look is how white text on a page that
+  sets no background anywhere passed. `corpus/ra/floors.html` holds control
+  arms on BOTH sides of all three floors, because a threshold tested in one
+  direction is a threshold nobody calibrated.
+
   **Decided against (Phase 7, from the field report):** an
   `include_hidden="safe"` middle tier that would silently include
   display:none / visibility:hidden content while stripping the rest.
@@ -2200,10 +2259,56 @@ it at EXECUTE time**. Any mismatch aborts with `TARGET_CHANGED`, printing what
 changed. This applies to coordinate actions too, where the check is the element
 currently under the point.
 
-Gated classes: form submit, payment-shaped forms (detected by `cc-number` /
-`cc-exp` autocomplete tokens), file upload, download to disk, storage clear,
-script evaluation, navigation to an origin outside the allowlist, and any action
-inside an origin not on the allowlist.
+Gated classes: form submit, payment-shaped forms, file upload, download to
+disk, storage clear, script evaluation, navigation to an origin outside the
+allowlist, and any action inside an origin not on the allowlist.
+
+**Submission and payment are CLASSES, not lists of instances (re-attack,
+2026-09-06).** The re-attack round went back at fix wave 3's own fixes rather
+than at the build, and four of its five findings were one defect: a rule
+written against the instance the previous finding presented. The gate had been
+taught that `type == "submit"` submits and that Enter submits and that
+`autocomplete="cc-number"` is a card field, each of which is true and none of
+which is the class. So `<input type=image>` (a submit button since HTML 2.0,
+which also POSTs its click coordinates) submitted a live checkout form ungated,
+Space on a focused submit button pressed it ungated, and a field named
+`cardnumber` with no autocomplete token anywhere took a card number ungated.
+Three rules now, each stated as the class:
+
+- **Native submitters** are `<input type=submit>`, `<input type=image>`, and a
+  `<button>` whose type is missing or invalid. That is the whole of HTML's
+  submit-button definition; the third is folded into an effective `type` by
+  the extractor and both resolvers, so `act.SUBMIT_TYPES` is the complete set
+  the classifier tests.
+- **Keyboard submission has two mechanisms**, and knowing only one was R2.
+  IMPLICIT submission is Enter in a single-line control inside a form.
+  ACTIVATION is Space or Enter pressing whatever holds focus, which submits
+  when the focused control is a native submitter. A location-less `press_keys`
+  reads the focused descriptor for either, so the two keys reach the same
+  verdict about one element. Shift+Enter stays a newline.
+- **Payment detection is multi-signal.** Declared autocomplete tokens first,
+  because a page that labels its fields is telling the truth; then the field's
+  own identifiers (name, id, label, aria-label, placeholder), because the
+  pages this defends against are exactly the ones that declare nothing while
+  still calling the field something a human reads; then a `pattern` spelling a
+  13-to-19 digit run. `inputmode` was evaluated and REJECTED as a signal:
+  `inputmode="numeric"` sits on every quantity box, postcode, and OTP field on
+  the web, and a payment gate that fires on all of them is a gate people learn
+  to route around. Form membership follows `form.elements` and not
+  `querySelectorAll`, because a field carrying `form="pay"` submits with that
+  form from anywhere in the document, and reading only descendants made moving
+  the card field one sibling out of the `<form>` tag a one-attribute bypass.
+
+**The gate battery varies MECHANISM, not just path.** Gauntlet 2's battery
+pinned four write PATHS to one verdict on one fixture and was green while R1
+and R2 shipped, because a mechanism none of the four paths recognised is
+invisible to a parity test across those paths.
+`test_the_mechanism_battery` fixes the tool and the expected verdict and
+varies the submission mechanism instead: input submit, input image, typeless
+button, explicit submit button, implicit Enter, activation Space, and a card
+field associated to its form rather than contained in it. A `type=button`
+control arm must stay ungated in the same test, because a gate that fires on
+everything is the same failure from the other side.
 
 **Mechanism, constrained by the platform.** Sampling is deprecated in the
 2026-07-28 spec (SEP-2577, "New implementations SHOULD NOT adopt it") and Claude
