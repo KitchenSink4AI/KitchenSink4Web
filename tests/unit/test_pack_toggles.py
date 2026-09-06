@@ -113,16 +113,15 @@ def test_manifest_source_carries_every_toggle():
             f"defaults")
 
 
-def test_dev_manifest_differs_only_in_defaults_and_lane_boxes():
+def test_dev_manifest_differs_only_in_defaults():
     """The FIELD-TEST manifest (bundle/dev/manifest.json). It runs the same
     server; it exists so a field test does not spend its first hour signing
-    in and can reach lane B, which is where the 2026-09-05 log found that
-    Firefox passes bot checks headless Chromium fails.
+    in.
 
     What this holds: same pack checkboxes and same env mapping as the
     shipped manifest, storage ON, acting still OFF (the safety default is
-    not a test convenience), and the two lane boxes wired to the lane and
-    channel the engine already reads."""
+    not a test convenience), and no field that differs from the shipped
+    manifest beyond a default."""
     shipped = json.loads((ROOT / "bundle" / "manifest.json")
                          .read_text(encoding="utf-8"))
     dev = json.loads((ROOT / "bundle" / "dev" / "manifest.json")
@@ -137,19 +136,40 @@ def test_dev_manifest_differs_only_in_defaults_and_lane_boxes():
             f"${{user_config.pack_{pack}}}"
     assert config["pack_storage"]["default"] is True
     assert config["allow_acting"]["default"] is False
-    assert env["KS4WEB_LANE"] == "${user_config.browser_lane}"
-    assert env["KS4WEB_CHANNEL"] == "${user_config.browser_channel}"
-    assert config["browser_lane"]["default"] == "A"
-    assert config["browser_channel"]["default"] == ""
+    # Same field set as the shipped manifest: the two builds differ in what a
+    # box starts at, never in which boxes exist.
+    assert set(config) == set(shipped["user_config"])
+    assert set(env) == set(shipped["server"]["mcp_config"]["env"])
     # Every pack except storage stays off here too.
     for pack in ALL:
         if pack != "storage":
             assert config[f"pack_{pack}"]["default"] is False
 
 
-def test_empty_lane_boxes_resolve_to_the_bundled_default(monkeypatch):
-    """Desktop writes an empty string for a string box the user left alone,
-    so empty must mean "the default lane", not a typo refusal."""
+def test_every_install_screen_box_is_a_toggle():
+    """No free-text or numeric field on any install screen. A typed value is
+    a typo waiting to break an install, and the mcpb manifest schema has no
+    enum type to make one safe (user_config.type is string, number, boolean,
+    directory, or file, with additionalProperties false), so booleans are the
+    only control this surface gets."""
+    for rel in ("manifest.json", "dev/manifest.json"):
+        manifest = json.loads((ROOT / "bundle" / rel)
+                              .read_text(encoding="utf-8"))
+        for key, entry in manifest["user_config"].items():
+            assert entry["type"] == "boolean", (
+                f"{rel}: {key} is a {entry['type']} field; install-screen "
+                f"settings are toggles only")
+        env = manifest["server"]["mcp_config"]["env"]
+        for var, ref in env.items():
+            referenced = ref.removeprefix("${user_config.").removesuffix("}")
+            assert referenced in manifest["user_config"], (
+                f"{rel}: {var} points at {referenced}, which no box defines")
+
+
+def test_empty_lane_env_resolves_to_the_bundled_default(monkeypatch):
+    """Lane selection lives in environment variables, not on the install
+    screen, and an unset variable arrives as an empty string often enough
+    that empty must mean "the default lane", not a typo refusal."""
     from kitchensink4web.engine import lanes
     monkeypatch.setenv("KS4WEB_LANE", "")
     monkeypatch.setenv("KS4WEB_CHANNEL", "")

@@ -55,8 +55,11 @@ PLAIN = {
     "all_packs": "KS4WEB_ALL_PACKS",
 }
 
-#: The two extra boxes the field-test bundle adds.
-LANE = {
+#: Retired boxes. Browser selection is not an install-screen setting on
+#: either bundle: the manifest schema has no enum type, a text box for a
+#: lane or a channel name is a typo that breaks the install, and the engine
+#: reads these variables directly for developers who need them.
+RETIRED = {
     "browser_lane": "KS4WEB_LANE",
     "browser_channel": "KS4WEB_CHANNEL",
 }
@@ -136,7 +139,7 @@ def check_bundle(mcpb_path: Path, dev: bool) -> str | None:
         # or every checkbox on the install screen is decoration.
         uc = m.get("user_config", {})
         env = cfg.get("env", {})
-        expected_keys = len(PACKS) + len(PLAIN) + (len(LANE) if dev else 0)
+        expected_keys = len(PACKS) + len(PLAIN)
         check(f"{tag}: install screen offers {expected_keys} settings",
               len(uc) == expected_keys, f"{len(uc)} present")
 
@@ -163,21 +166,12 @@ def check_bundle(mcpb_path: Path, dev: bool) -> str | None:
               all(uc[f"pack_{p}"]["default"] is (dev and p == "storage")
                   for p in PACKS))
 
-        if dev:
-            for key, var in LANE.items():
-                check(f"{tag}: {key} is a text box",
-                      uc.get(key, {}).get("type") == "string",
-                      str(uc.get(key, {}).get("type")))
-                check(f"{tag}: {key} is wired to {var}",
-                      env.get(var) == f"${{user_config.{key}}}",
-                      str(env.get(var)))
-            check("dev: lane defaults to A (the bundled browser)",
-                  uc.get("browser_lane", {}).get("default") == "A",
-                  str(uc.get("browser_lane", {}).get("default")))
-        else:
-            for key in LANE:
-                check(f"{tag}: no {key} box on the shipped bundle",
-                      key not in uc)
+        for key, var in RETIRED.items():
+            check(f"{tag}: no {key} box", key not in uc)
+            check(f"{tag}: nothing wires {var}", var not in env)
+        check(f"{tag}: every setting is a checkbox",
+              all(e.get("type") == "boolean" for e in uc.values()),
+              str(sorted({e.get("type") for e in uc.values()})))
 
         # 4. mcpb validate, if available
         mcpb_cli = shutil.which("mcpb")
