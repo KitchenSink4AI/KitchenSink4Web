@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Corpus B: a real cross-origin frame</title>
+<style>iframe{width:520px;height:120px;border:1px solid #a44}</style></head>
+<body>
+<h1>Cross-origin, for real</h1>
+<p>The frame below is served from a SECOND local origin (a different port is a
+different origin), so it loads and is still unreachable. An offline
+example.com frame proves nothing: it fails to load and a read cannot tell a
+refusal from a blank page.</p>
+<button id="host-btn">Host button</button>
+<iframe id="xo" title="A cross-origin frame that really loads"></iframe>
+<script>
+// The test rewrites this from its own second server, because the port is not
+// knowable when the fixture is written.
+window.pointCrossOrigin = function (base) {
+  document.getElementById('xo').src = base + '/b/frames_child.html';
+};
+</script>
+</body></html>

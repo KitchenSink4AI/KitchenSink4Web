@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Frame depth chain</title></head>
+<body>
+<h1>Depth chain, level 0</h1>
+<button id="deep-0">Level zero button</button>
+<script>
+// A chain as deep as the query string asks for. Each level embeds the next by
+// srcdoc, so the whole chain is same-origin and the depth cap is the only
+// thing that stops the traversal.
+(function () {
+  var want = parseInt((location.search.match(/n=(\d+)/) || [])[1] || '9', 10);
+  function doc(level) {
+    var body = '<!doctype html><html><body><h2>Level ' + level + '</h2>' +
+      '<button id="deep-' + level + '">Level ' + level + ' button</button>';
+    if (level < want) {
+      body += '<iframe title="deeper" srcdoc="' +
+        doc(level + 1).replace(/&/g, '&amp;').replace(/"/g, '&quot;') +
+        '"></iframe>';
+    }
+    return body + '</body></html>';
+  }
+  var f = document.createElement('iframe');
+  f.title = 'deeper';
+  f.srcdoc = doc(1);
+  document.body.appendChild(f);
+})();
+</script>
+</body></html>

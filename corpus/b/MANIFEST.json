@@ -27,8 +27,26 @@
   "React re-render": [
    "app.html"
   ],
-  "a stable key (volatile id + testid) reassigned to a same-role element on demand": [
-   "rename_on_demand.html"
+  "a cross-origin frame that actually loads": [
+   "frames_crossorigin.html"
+  ],
+  "a frame chain deeper than the traversal depth cap": [
+   "frames_deep.html"
+  ],
+  "a full-page overlay above an embedded frame": [
+   "frames_suite.html"
+  ],
+  "a same-origin frame carrying third-party markup (srcdoc)": [
+   "frames_suite.html",
+   "frames_child.html"
+  ],
+  "a same-origin frame hidden by the parent": [
+   "frames_suite.html",
+   "frames_hidden.html"
+  ],
+  "a sandboxed frame in an opaque origin whose URL says same-origin": [
+   "frames_suite.html",
+   "frames_sandboxed.html"
   ],
   "canvas-rendered UI over 80x80 with no text projection": [
    "canvas.html"
@@ -91,24 +109,24 @@
   "react-window virtualized list, 20 of 5,000 rows": [
    "virtual.html"
   ],
-  "region scoping with an open shadow root inside one region": [
-   "regions_shadow.html"
-  ],
   "table with rowspan and colspan": [
    "tables.html"
   ],
   "three levels of nested iframes": [
    "iframes.html",
    "iframe_l2.html",
-   "iframe_l3.html"
+   "iframe_l3.html",
+   "frames_suite.html",
+   "frames_nested_l2.html",
+   "frames_nested_l3.html"
   ]
  },
  "lane": "A(chromium) headless, served from 127.0.0.1",
- "measured_kst": "2026-09-05 03:02",
+ "measured_kst": "2026-09-06 16:29",
  "network": "none required. The two https://example.com iframes are expected to fail offline; the iframe ELEMENT is the fixture, not its content.",
  "pages": {
   "app.html": {
-   "bytes": 5168,
+   "bytes": 5298,
    "console_error_count": 0,
    "console_errors_sample": [],
    "controls": 19,
@@ -124,14 +142,14 @@
    "nodes": 54,
    "page_errors": [],
    "role_tables": 0,
-   "sha256": "6954799d08983d2800bca7c9dfb6adef20530b2e34dd681d17e807ccf077513f",
+   "sha256": "674546d9576db6a5dfdd02555aed8b38002488767757c81e551d407ea72afe2d",
    "tables": 0,
    "text_chars": 255,
    "title": "S2 fixture: a React SPA that re-renders, reorders, and routes",
    "what": "a React SPA: node-replacing remount, label change, list reorder, hash routing, duplicate control names, modal (copied from spikes/s2)"
   },
   "bigform.html": {
-   "bytes": 31539,
+   "bytes": 31915,
    "console_error_count": 0,
    "console_errors_sample": [],
    "controls": 321,
@@ -145,14 +163,14 @@
    "nodes": 758,
    "page_errors": [],
    "role_tables": 0,
-   "sha256": "5e3c4e179e8e6e97125bd05ff0fc70bc4a9cd43312f1441505facbf9dbb93c4d",
+   "sha256": "9257314a43a5b9b654654145052384c37acd87d41621b91b868e0dc796eb1789",
    "tables": 0,
    "text_chars": 6504,
    "title": "Corpus B: a form with 320 fields",
    "what": "320 fields in one form, submit button last, secrets past field 240"
   },
   "canvas.html": {
-   "bytes": 2113,
+   "bytes": 2170,
    "console_error_count": 0,
    "console_errors_sample": [],
    "controls": 0,
@@ -166,14 +184,14 @@
    "nodes": 11,
    "page_errors": [],
    "role_tables": 0,
-   "sha256": "c0f40176ce655eb73cbf46c1d030f8338225c8f93b3316353ca95216737ca5d7",
+   "sha256": "324a1a1e3afc4253caa254dd7f44d06ac709892b48261370cc48f325a63e69a9",
    "tables": 0,
    "text_chars": 64,
    "title": "Corpus B: a canvas-rendered UI",
    "what": "a 900x520 canvas painting a whole toolbar and chart, no text in the DOM"
   },
   "console_flood.html": {
-   "bytes": 2039,
+   "bytes": 2094,
    "console_error_count": 2,
    "console_errors_sample": [
     "TypeError: Cannot read properties of undefined (reading \"id\")",
@@ -190,14 +208,14 @@
    "nodes": 12,
    "page_errors": [],
    "role_tables": 0,
-   "sha256": "f1cd42242d7b471f7226f532fb64e43d4a82c66d4cae46fc3a6badcfb3a35f9c",
+   "sha256": "6a558a4f10e7efb7fee788369467ed214f41d13d2ffa35a1fbe4d1b07ca38c08",
    "tables": 0,
    "text_chars": 574,
    "title": "Corpus B: a page emitting thousands of console lines",
    "what": "4,000 console lines before load, 40 more per second, two real errors buried in them"
   },
   "cookiewall.html": {
-   "bytes": 3265,
+   "bytes": 3339,
    "console_error_count": 0,
    "console_errors_sample": [],
    "controls": 7,
@@ -212,14 +230,14 @@
    "nodes": 28,
    "page_errors": [],
    "role_tables": 0,
-   "sha256": "d9c87a69576d9df93b6e392130bbc84898a40db8f418afe2e7045566ff191f01",
+   "sha256": "1ed50031fcd053a5c873baf87eff1743bb7660d3a16f81fd0e1e51bb0675faa7",
    "tables": 0,
    "text_chars": 1331,
    "title": "Corpus B: a cookie banner and a modal that own the first read",
    "what": "a consent notice and a subscribe modal stacked over an ordinary article"
   },
   "dom50k.html": {
-   "bytes": 843839,
+   "bytes": 844458,
    "console_error_count": 0,
    "console_errors_sample": [],
    "controls": 0,
@@ -233,14 +251,188 @@
    "nodes": 50000,
    "page_errors": [],
    "role_tables": 0,
-   "sha256": "a4797af6c74a68fe0da5859c1871cd4aeda1a216d57a70fadafbb44ea73d734e",
+   "sha256": "7afcd15265360bfd53fab846bcc460b6ad1160a5a0d0a19aa31e3ff19c03e0c7",
    "tables": 595,
    "text_chars": 220413,
    "title": "Corpus B: a 50,000-node DOM",
    "what": "50,000 elements of ordinary document, generated by _generate.py and committed"
   },
+  "frames_child.html": {
+   "bytes": 725,
+   "console_error_count": 0,
+   "console_errors_sample": [],
+   "controls": 2,
+   "iframes": 0,
+   "images": 0,
+   "landmines": [
+    "a same-origin frame carrying third-party markup (srcdoc)"
+   ],
+   "links": 0,
+   "loaded": true,
+   "nodes": 13,
+   "page_errors": [],
+   "role_tables": 0,
+   "sha256": "445e49ea15951089e4db2fc64eeed898140a1cdf13cc66cb223eeda540b6b373",
+   "tables": 0,
+   "text_chars": 137,
+   "title": "Frame child",
+   "what": "the plain same-origin child of the frame battery, carrying a card field, a button that records its own click, and a hidden payload"
+  },
+  "frames_crossorigin.html": {
+   "bytes": 867,
+   "console_error_count": 0,
+   "console_errors_sample": [],
+   "controls": 1,
+   "iframes": 1,
+   "images": 0,
+   "landmines": [
+    "a cross-origin frame that actually loads"
+   ],
+   "links": 0,
+   "loaded": true,
+   "nodes": 11,
+   "page_errors": [],
+   "role_tables": 0,
+   "sha256": "5265b47b117c3e3bd8626597675262d6f713e4bc4f2dd3f663c12a1811e6e46c",
+   "tables": 0,
+   "text_chars": 284,
+   "title": "Corpus B: a real cross-origin frame",
+   "what": "a frame whose src the test points at a SECOND local origin, so it really loads and is still unreachable"
+  },
+  "frames_deep.html": {
+   "bytes": 1018,
+   "console_error_count": 0,
+   "console_errors_sample": [],
+   "controls": 1,
+   "iframes": 1,
+   "images": 0,
+   "landmines": [
+    "a frame chain deeper than the traversal depth cap"
+   ],
+   "links": 0,
+   "loaded": true,
+   "nodes": 9,
+   "page_errors": [],
+   "role_tables": 0,
+   "sha256": "355b55b787e071dcb104df349a5c2f48d9f476c843bf168f701dcfeab8457943",
+   "tables": 0,
+   "text_chars": 39,
+   "title": "Frame depth chain",
+   "what": "a same-origin chain as deep as ?n= asks for, built out of srcdoc so the depth cap is the only thing that stops the traversal"
+  },
+  "frames_hidden.html": {
+   "bytes": 257,
+   "console_error_count": 0,
+   "console_errors_sample": [],
+   "controls": 1,
+   "iframes": 0,
+   "images": 0,
+   "landmines": [
+    "a same-origin frame hidden by the parent"
+   ],
+   "links": 0,
+   "loaded": true,
+   "nodes": 8,
+   "page_errors": [],
+   "role_tables": 0,
+   "sha256": "3be1e16ab56640e82b6d18f62c4ebed8f711da3f8ef864d74d1d1d8bc27d3acb",
+   "tables": 0,
+   "text_chars": 91,
+   "title": "Hidden child",
+   "what": "the child of the hidden frame; its payload must never reach a read"
+  },
+  "frames_nested_l2.html": {
+   "bytes": 409,
+   "console_error_count": 0,
+   "console_errors_sample": [],
+   "controls": 1,
+   "iframes": 1,
+   "images": 0,
+   "landmines": [
+    "three levels of nested iframes"
+   ],
+   "links": 0,
+   "loaded": true,
+   "nodes": 9,
+   "page_errors": [],
+   "role_tables": 0,
+   "sha256": "208978785c200e574ee22b5f451cb67a394759dd312f642a563b802c2a7a9ddb",
+   "tables": 0,
+   "text_chars": 36,
+   "title": "Nested level two",
+   "what": "level two of the frame battery's nested pair"
+  },
+  "frames_nested_l3.html": {
+   "bytes": 202,
+   "console_error_count": 0,
+   "console_errors_sample": [],
+   "controls": 1,
+   "iframes": 0,
+   "images": 0,
+   "landmines": [
+    "three levels of nested iframes"
+   ],
+   "links": 0,
+   "loaded": true,
+   "nodes": 7,
+   "page_errors": [],
+   "role_tables": 0,
+   "sha256": "d6b50afec0313c624a0594b1966ff7129a594567f7fb24df2c764f8b4c8a3cc6",
+   "tables": 0,
+   "text_chars": 39,
+   "title": "Nested level three",
+   "what": "level three of the frame battery's nested pair"
+  },
+  "frames_sandboxed.html": {
+   "bytes": 282,
+   "console_error_count": 0,
+   "console_errors_sample": [],
+   "controls": 1,
+   "iframes": 0,
+   "images": 0,
+   "landmines": [
+    "a sandboxed frame in an opaque origin whose URL says same-origin"
+   ],
+   "links": 0,
+   "loaded": true,
+   "nodes": 8,
+   "page_errors": [],
+   "role_tables": 0,
+   "sha256": "b5eec0ef8259d7f77275d153e60caf23953a8834370ffb7c0009c910c1d03518",
+   "tables": 0,
+   "text_chars": 112,
+   "title": "Sandboxed child",
+   "what": "the child of the sandboxed-with-allow-same-origin frame"
+  },
+  "frames_suite.html": {
+   "bytes": 2365,
+   "console_error_count": 1,
+   "console_errors_sample": [
+    "Blocked script execution in 'http://127.0.0.1:62268/frames_child.html' because the document's frame is sandboxed and the 'allow-scripts' permission is not set."
+   ],
+   "controls": 1,
+   "iframes": 6,
+   "images": 0,
+   "landmines": [
+    "a same-origin frame carrying third-party markup (srcdoc)",
+    "a sandboxed frame in an opaque origin whose URL says same-origin",
+    "a same-origin frame hidden by the parent",
+    "a full-page overlay above an embedded frame",
+    "three levels of nested iframes"
+   ],
+   "links": 0,
+   "loaded": true,
+   "nodes": 24,
+   "page_errors": [],
+   "role_tables": 0,
+   "sha256": "282e302daf31d60d7c44fb2f904d9ce1bfb30a49d68fe9c8d71f98fb865b607b",
+   "tables": 0,
+   "text_chars": 421,
+   "title": "Corpus B: the frame battery",
+   "what": "the frame battery: six frames, one per classification, plus a full-page lid that raises on demand"
+  },
   "iframe_l2.html": {
-   "bytes": 778,
+   "bytes": 801,
    "console_error_count": 1,
    "console_errors_sample": [
     "Failed to load resource: the server responded with a status of 404 ()"
@@ -256,14 +448,14 @@
    "nodes": 12,
    "page_errors": [],
    "role_tables": 0,
-   "sha256": "719db24a497b35640a368c3a5b383f41621affbda8617c70ac4e2147a86f0e5b",
+   "sha256": "3677b0dbb180ae107f9511484639a7bc4e212543d3ebd436263c26aabfda8000",
    "tables": 0,
    "text_chars": 217,
    "title": "Corpus B: nested iframe, level 2",
    "what": "level 2 of the frame chain, same origin, carries its own controls"
   },
   "iframe_l3.html": {
-   "bytes": 781,
+   "bytes": 805,
    "console_error_count": 1,
    "console_errors_sample": [
     "Failed to load resource: the server responded with a status of 404 ()"
@@ -280,14 +472,14 @@
    "nodes": 10,
    "page_errors": [],
    "role_tables": 0,
-   "sha256": "763f4e4de7e5aaeff1f6ac1dd19529c9e4e43314a63773a237a8d3eff1ed6cbd",
+   "sha256": "a9174d0bbfa0b9a73bdc9b31f87e6c4501dc92a901d07ea4cad7e6fd70d39a11",
    "tables": 0,
    "text_chars": 123,
    "title": "Corpus B: nested iframe, level 3",
    "what": "level 3 of the frame chain, and the cross-origin frame at the bottom of it"
   },
   "iframes.html": {
-   "bytes": 1204,
+   "bytes": 1237,
    "console_error_count": 2,
    "console_errors_sample": [
     "Failed to load resource: the server responded with a status of 404 ()",
@@ -305,14 +497,14 @@
    "nodes": 16,
    "page_errors": [],
    "role_tables": 0,
-   "sha256": "60972abae6acd5b9ad3aeb85a2d41bb0b71c987426b0a2d651c7471f36e606c7",
+   "sha256": "25658380a7ae6e4dbe924f9ebb5c055da5a9e0b3a28c0c8e3c0e3b4f0c9e996b",
    "tables": 0,
    "text_chars": 336,
    "title": "Corpus B: three levels of nested iframes",
    "what": "top document of the frame chain, plus a cross-origin frame at the top level"
   },
   "infinite.html": {
-   "bytes": 1988,
+   "bytes": 2051,
    "console_error_count": 0,
    "console_errors_sample": [],
    "controls": 0,
@@ -326,14 +518,14 @@
    "nodes": 112,
    "page_errors": [],
    "role_tables": 0,
-   "sha256": "6b588aca5ea5ed6c48a2e0c80d0a2729ce81e0b476fa03d4fb8b817fc7265e01",
+   "sha256": "4a0dea5f336b4d7b74e94ff6ade9b9aa0014cc6c804dd1f2d867be6b986349b6",
    "tables": 0,
    "text_chars": 5199,
    "title": "Corpus B: an infinite-scroll feed",
    "what": "a feed that appends 25 more items every time the sentinel is seen"
   },
   "lazy.html": {
-   "bytes": 4343,
+   "bytes": 4460,
    "console_error_count": 6,
    "console_errors_sample": [
     "Failed to load resource: the server responded with a status of 404 (File not found)",
@@ -353,14 +545,14 @@
    "nodes": 39,
    "page_errors": [],
    "role_tables": 0,
-   "sha256": "5efab2816ed988f7663fc5ce7c3a318c2407352ccaa2cc86224967701dda444d",
+   "sha256": "ce000aead07b98e0561b22de59325e55a732e742ad753d981cf9d8f923be190e",
    "tables": 0,
    "text_chars": 493,
    "title": "Corpus B: lazy images with placeholder sources",
    "what": "five lazy images across three placeholder techniques, plus two below a tall spacer"
   },
   "loose_controls.html": {
-   "bytes": 6510,
+   "bytes": 6672,
    "console_error_count": 0,
    "console_errors_sample": [],
    "controls": 25,
@@ -382,14 +574,14 @@
    "nodes": 163,
    "page_errors": [],
    "role_tables": 0,
-   "sha256": "828e7c50aadfb8ebf4bcf3e95c2605ed1f43115952677b2b6250ea96ac6f8e8c",
+   "sha256": "a1bb4078b0c667747eb54178ffc25ef8a022946ce2ce97043e7b1fe23fb0e8ed",
    "tables": 0,
    "text_chars": 3273,
    "title": "Corpus B: an app shell whose controls live outside any form",
    "what": "an app shell with 19 controls outside any form and a 6-control form for contrast"
   },
   "mutating.html": {
-   "bytes": 2716,
+   "bytes": 2795,
    "console_error_count": 0,
    "console_errors_sample": [],
    "controls": 2,
@@ -403,14 +595,14 @@
    "nodes": 37,
    "page_errors": [],
    "role_tables": 0,
-   "sha256": "c57c07098bc120b449d8574c94bc5f1e31b9613864c4fb5ee526a4a4394342b5",
+   "sha256": "5dc6b6f88dfb94c8afeb39ceab2041b7e50fe3f7dbb3380a39ce627a45a31dec",
    "tables": 0,
    "text_chars": 359,
    "title": "Corpus B: a page that mutates every 100ms",
    "what": "text, labels, list order, and one whole button node replaced every 100ms"
   },
   "other.html": {
-   "bytes": 1256,
+   "bytes": 1287,
    "console_error_count": 0,
    "console_errors_sample": [],
    "controls": 5,
@@ -424,14 +616,14 @@
    "nodes": 20,
    "page_errors": [],
    "role_tables": 0,
-   "sha256": "f493358f763ad176385e32c2c621819f8487fec763005a07ab17d4c582484c80",
+   "sha256": "45d37b3293fbb42f23419931b2328ade22ba9065c9b2863845d022ec55305420",
    "tables": 0,
    "text_chars": 62,
    "title": "S2 fixture: a different page that looks the same",
    "what": "the cross-navigation look-alike for app.html (copied from spikes/s2)"
   },
   "pathological.html": {
-   "bytes": 7174,
+   "bytes": 7345,
    "console_error_count": 0,
    "console_errors_sample": [],
    "controls": 5,
@@ -449,14 +641,14 @@
    "nodes": 42,
    "page_errors": [],
    "role_tables": 0,
-   "sha256": "bb5716d0b29ba62f308227e23c5fec3fdbd839b5ca6fa4ba4b868b575868a932",
+   "sha256": "991689d82afa17c74d8d1dd9eb414412878783db24153679c77847d410c0535b",
    "tables": 0,
    "text_chars": 685,
    "title": "Corpus B: controls that refuse, hide, move, and escape",
    "what": "five ways a click reports success and does nothing"
   },
   "secrets.html": {
-   "bytes": 3751,
+   "bytes": 3851,
    "console_error_count": 0,
    "console_errors_sample": [],
    "controls": 16,
@@ -470,14 +662,14 @@
    "nodes": 49,
    "page_errors": [],
    "role_tables": 0,
-   "sha256": "73d32cb57c02a2bae6f4ab426f906e39435c2879c145bee8a01cc1fc44615881",
+   "sha256": "9710bbe21fdda969acff1a2ecf950fc77f3b9ff46d4e6692e01730429f92be4c",
    "tables": 0,
    "text_chars": 321,
    "title": "Corpus B: a checkout form full of secrets",
    "what": "a checkout form with populated password, one-time-code, and cc-number fields, plus a token field outside the form"
   },
   "shadow.html": {
-   "bytes": 2743,
+   "bytes": 2811,
    "console_error_count": 0,
    "console_errors_sample": [],
    "controls": 1,
@@ -497,14 +689,14 @@
    "nodes": 15,
    "page_errors": [],
    "role_tables": 0,
-   "sha256": "351f3e948a5060492bd49412aa348edc53f6511077410b1c7ccbe306a5701bfa",
+   "sha256": "bc23ad844594a6ab82562d43a77a8a109979b98ad2289ce9cd77afa26b79588c",
    "tables": 0,
    "text_chars": 237,
    "title": "Corpus B: open and closed shadow roots",
    "what": "two open shadow roots, three closed ones, one of them nested inside an open root"
   },
   "tables.html": {
-   "bytes": 4188,
+   "bytes": 4311,
    "console_error_count": 0,
    "console_errors_sample": [],
    "controls": 3,
@@ -519,14 +711,14 @@
    "nodes": 97,
    "page_errors": [],
    "role_tables": 2,
-   "sha256": "585561d841c31e7f2e16898861710edef11cff1a4a6e721f118f8130279ec676",
+   "sha256": "ec7a4895a62d73f08bb5d0b2127b6fa7d950b05a0d223605735c0bbefb3cb94e",
    "tables": 2,
    "text_chars": 669,
    "title": "Corpus B: a spanned table and a table that is not a table",
    "what": "a rowspan/colspan table, a role=table of divs, a role=grid of divs, and a layout table"
   },
   "virtual.html": {
-   "bytes": 1635,
+   "bytes": 1682,
    "console_error_count": 0,
    "console_errors_sample": [],
    "controls": 22,
@@ -540,7 +732,7 @@
    "nodes": 59,
    "page_errors": [],
    "role_tables": 0,
-   "sha256": "455e6aae3e49e10283f153b7632f5ce301e4c7d0e52a7f79c7cb932415b55f93",
+   "sha256": "e5b3291072222c16846ce75b31890b929bce5ba467976ef5cf5ccd8fc40c1a06",
    "tables": 0,
    "text_chars": 336,
    "title": "S2 fixture: a react-window virtualized list, 20 of 5,000",

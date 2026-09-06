@@ -79,6 +79,38 @@ PAGES: dict[str, tuple[str, list[str]]] = {
         "level 3 of the frame chain, and the cross-origin frame at the "
         "bottom of it",
         ["three levels of nested iframes", "cross-origin iframe"]),
+    "frames_suite.html": (
+        "the frame battery: six frames, one per classification, plus a "
+        "full-page lid that raises on demand",
+        ["a same-origin frame carrying third-party markup (srcdoc)",
+         "a sandboxed frame in an opaque origin whose URL says same-origin",
+         "a same-origin frame hidden by the parent",
+         "a full-page overlay above an embedded frame",
+         "three levels of nested iframes"]),
+    "frames_child.html": (
+        "the plain same-origin child of the frame battery, carrying a card "
+        "field, a button that records its own click, and a hidden payload",
+        ["a same-origin frame carrying third-party markup (srcdoc)"]),
+    "frames_sandboxed.html": (
+        "the child of the sandboxed-with-allow-same-origin frame",
+        ["a sandboxed frame in an opaque origin whose URL says same-origin"]),
+    "frames_hidden.html": (
+        "the child of the hidden frame; its payload must never reach a read",
+        ["a same-origin frame hidden by the parent"]),
+    "frames_nested_l2.html": (
+        "level two of the frame battery's nested pair",
+        ["three levels of nested iframes"]),
+    "frames_nested_l3.html": (
+        "level three of the frame battery's nested pair",
+        ["three levels of nested iframes"]),
+    "frames_deep.html": (
+        "a same-origin chain as deep as ?n= asks for, built out of srcdoc so "
+        "the depth cap is the only thing that stops the traversal",
+        ["a frame chain deeper than the traversal depth cap"]),
+    "frames_crossorigin.html": (
+        "a frame whose src the test points at a SECOND local origin, so it "
+        "really loads and is still unreachable",
+        ["a cross-origin frame that actually loads"]),
     "shadow.html": (
         "two open shadow roots, three closed ones, one of them nested "
         "inside an open root",
