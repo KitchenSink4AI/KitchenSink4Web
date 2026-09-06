@@ -27,6 +27,7 @@
 (opts) => {
 // @@KS4WEB_INSTRUMENT@@
 // @@KS4WEB_VISIBILITY@@
+// @@KS4WEB_PAYMENT@@
   opts = opts || {};
   // `location=` scoping. The read is the same read, run over a subtree: the
   // same blocks, the same ladder, the same completeness discipline, over a
@@ -118,20 +119,10 @@
 
   // A form is payment-shaped when ANY field in it is, so every control in
   // that form -- its submit button included -- classifies as one action
-  // class. Memoized per form: `payment_form` is asked once per affordance
-  // and a checkout page has one form with thirty controls in it.
-  const formPaymentCache = new Map();
-  const PAYMENT_SEL = '[autocomplete*="cc-number"],[autocomplete*="cc-exp"],'
-    + '[autocomplete*="cc-csc"],[autocomplete*="cc-name"]';
-  function formPayment(formEl) {
-    if (!formEl) return false;
-    let v = formPaymentCache.get(formEl);
-    if (v === undefined) {
-      v = !!formEl.querySelector(PAYMENT_SEL);
-      formPaymentCache.set(formEl, v);
-    }
-    return v;
-  }
+  // class. The rule and its memo live in the ONE payment source spliced in
+  // above; this used to be a fourth private copy of the same autocomplete
+  // regex, and all four missed a page that simply declares no token (R3).
+  const formPayment = ksFormPayment;
 
   const hiddenReason = ksHiddenReason;
   const geometryHidden = ksGeometryHidden;
@@ -1033,7 +1024,7 @@
             const ac = ((el.getAttribute && el.getAttribute('autocomplete')) || '').toLowerCase();
             const secret = type === 'password' ||
               /current-password|new-password|one-time-code/.test(ac);
-            const payment = /cc-number|cc-exp|cc-csc|cc-name/.test(ac);
+            const payment = ksPaymentField(el);
             // The same rule as the headings above: DISPLAY detail is computed
             // only for the elements that will be returned, while everything
             // CLASSIFICATION needs is computed for all of them so the
@@ -1369,7 +1360,7 @@
         ref: refOf.get(field) || null,
         label: named.name, name_quality: named.quality, type: type,
         required: !!field.required, secret: secret,
-        payment: /cc-number|cc-exp|cc-csc|cc-name/.test(ac),
+        payment: ksPaymentField(field),
         options: options, option_count: optionCount,
         // Secret values are NEVER read, not even redacted in place. Reading a
         // redacted value and reading no value are different guarantees.

@@ -35,7 +35,7 @@ from pathlib import Path
 from .meter import ENCODING_NAME, ntok
 from .render import RUNGS, Projection, project
 
-__all__ = ["EXTRACT_JS", "FIND_JS", "TEXT_JS", "VISIBILITY_JS",
+__all__ = ["EXTRACT_JS", "FIND_JS", "TEXT_JS", "VISIBILITY_JS", "PAYMENT_JS",
            "CLOSED_SHADOW_HOOK", "INSTRUMENT_KEY", "instrument",
            "Projection", "project", "extract", "find", "read_text",
            "read_page", "ntok", "ENCODING_NAME", "RUNGS"]
@@ -46,6 +46,7 @@ _HERE = Path(__file__).parent
 #: block itself exists once on disk.
 _VIS_MARK = "// @@KS4WEB_VISIBILITY@@"
 _INSTR_MARK = "// @@KS4WEB_INSTRUMENT@@"
+_PAY_MARK = "// @@KS4WEB_PAYMENT@@"
 
 #: THE ONE HIDDEN-DETECTION SOURCE (gauntlet 2 H2/H3/M4/L2, 2026-09-06).
 #: `hiddenReason` used to exist three times, in `extract.js`, `find.js`, and
@@ -56,6 +57,13 @@ _INSTR_MARK = "// @@KS4WEB_INSTRUMENT@@"
 #: `visibility.js` and is spliced into every consumer at load, so a technique
 #: added there is added everywhere at once.
 VISIBILITY_JS = (_HERE / "visibility.js").read_text(encoding="utf-8")
+
+#: THE ONE PAYMENT-SHAPE SOURCE (re-attack R3, 2026-09-06). Same story one
+#: classification along: the "is this a card field" rule had four in-page
+#: copies and all four asked only about `autocomplete`, so a page that
+#: declares no token at all was unclassified everywhere at once. The rule now
+#: lives in `payment.js` and is spliced into every consumer at load.
+PAYMENT_JS = (_HERE / "payment.js").read_text(encoding="utf-8")
 
 #: The per-process instrument secret. It is baked into the injected script
 #: SOURCES, never passed as an evaluate argument and never written into the
@@ -102,6 +110,8 @@ def instrument(source: str, *, visibility: str | None = None) -> str:
     if _VIS_MARK in source:
         source = source.replace(
             _VIS_MARK, VISIBILITY_JS if visibility is None else visibility)
+    if _PAY_MARK in source:
+        source = source.replace(_PAY_MARK, PAYMENT_JS)
     if _INSTR_MARK in source:
         source = source.replace(_INSTR_MARK, INSTRUMENT_PRELUDE)
     return source
