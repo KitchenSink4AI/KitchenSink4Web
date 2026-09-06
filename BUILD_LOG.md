@@ -2863,6 +2863,84 @@ Re-certification belongs in a quiet window, the way 2026-09-06 06:08 did it.
 
 Report: `internal notes/20260906_web_fixwave5.md`.
 
+## 2026-09-06 - The small-parts wave (features research §3.4.4)
+
+Six items from the features audit's fourth recommendation, built on a
+worktree branch off `f2f7993`. Every one is a completeness row rather than
+a new capability class, which is what the brand bar actually spends.
+
+**1. PDF and blob escape, built as a downloads feature.** The demand data
+inverts the obvious shape: across 2,657 issues the one ask to READ a PDF
+inside the browser's viewer sits at zero reactions, and the cluster that
+does exist (playwright-mcp #1006 and #430, browser-use #499 / #729 / #1982,
+skyvern #1346, agent-browser #192) asks to escape it. New `ops/resource.py`
+classifies what a tab is holding from one cheap probe (the document's own
+content type, a root-level plugin embed, the pdf.js shell, the URL scheme).
+`navigate` reports it as an advisory and does not refuse, since going to a
+file in order to save it is normal. `get_page_view` and `get_text` DO
+refuse, with UNSUPPORTED_CONTENT and the route named, because prose scraped
+out of a viewer is reordered and partial and would arrive looking like a
+successful read. The route is `download(action='fetch')`, which re-requests
+the resource through the context's own request API so a signed-in document
+saves like a public one, and which exists because a PDF Chromium paints
+inline never fires a download event at all. A `blob:` URL gets the truth
+instead of a route: it names memory inside the page, so no re-request can
+reach it, and the refusal says so and points at the page's own save control.
+
+**2. Device, locale, and timezone at session open.** `manage_session(open)`
+takes `device`, `viewport`, `locale`, and `timezone`, all Playwright
+natives passed to `launch_persistent_context`, resolved in
+`lanes.emulation_kwargs`. They live at open because a context takes them at
+construction and a locale changed afterward is a lie the page's own scripts
+see through. A mistyped device preset is an error rather than the desktop
+default, and a mobile preset on Firefox refuses by naming Chromium and
+WebKit rather than launching a phone-shaped window that is not a phone.
+Defaults are unchanged when nothing is asked for, and `status` prints the
+emulation only when one was set.
+
+**3. Per-site workflow lookup.** `list_workflows(for_origin=...)` takes a
+host or any URL on it. The recorder already stored origins; only the lookup
+was missing. Subdomain matching widens one way only, so `example.com`
+returns a flow recorded on `www.example.com` and never the reverse.
+
+**4. Clipboard, classed as ACTING.** `manage_clipboard` (files pack) reads
+and writes the page's clipboard through the same policy choke point every
+acting tool uses, and it is in MUTATING, so read-only hides it. That is
+deliberate: a clipboard read needs a permission, reaches past the page into
+a buffer the human also uses, and can surface text they never meant a site
+to see. Reads come back inside the labeled data envelope with the
+provenance stated in full, because a copy button decides what is on the
+clipboard as often as a human does.
+
+**5. Paginate-until.** `read_pages` (extract pack) follows `rel="next"`,
+then a link whose accessible name is a next-page word, up to a page cap and
+inside one character budget. Nothing is clicked and no URL is guessed, so a
+site with no such link stops rather than inventing one. Each page's prose
+comes back in its own envelope labeled with the URL it came from, and every
+hop goes through the policy ladder exactly as a manual navigate would: a
+walk is not a way around a budget. Four honest stop reasons: the page cap,
+the character budget, no next link, and a link that leads back to a page
+already read.
+
+**6. The P2 tail, checked rather than assumed.** Cookie-expiry recording
+(U10), `recommended_lane` in status, the `moz-firefox` channel aliases, and
+the engine tag in auth filenames (U17) are all already shipped. Session
+reattach is an M and stays on the leave-it list. What remained was the
+features audit's §3.6 item 2, a docstring that promised a route that did
+not exist: `emulate` told callers to reopen the session for locale and
+timezone when `manage_session(open)` took neither. Item 2 built the route,
+so the docstring now names arguments that exist.
+
+Surface: **43 tools** with every pack loaded, up from 41. Suite: 61 new
+tests (45 unit, 16 browser), **739 green in both orders**. Three costs
+recorded rather than absorbed. Every read and every navigation now pays one
+extra small `evaluate` for the resource probe, which fails soft so a probe
+that cannot run never turns a working read into an error. The lite surface
+goes **2,598 to 2,785 tokens**, all of it `manage_session` paying for the
+four emulation arguments; the two new tools are pack tools and cost lite
+nothing. And `grant_permissions` is context-wide in Playwright, so a
+clipboard read revokes a clipboard-write granted earlier on the same
+origin, which a browser test documents by ordering the calls around it.
 ---
 
 ## Same-origin frame traversal (2026-09-06)

@@ -116,11 +116,23 @@ MUTATING: frozenset[str] = frozenset({
     # a tool that clicks must be absent under a mode whose whole claim is
     # that nothing in it can click.
     "click", "type_text", "fill_form", "find_and_act", "press_keys",
+    # handle_dialog answers a native dialog, and answering one is acting: an
+    # OK on a confirm() is the click the page was waiting for. Under read-only
+    # the tool is absent and the driver's dismissal stands, so a dialog raised
+    # under read-only is still answered Cancel and still reported; what is
+    # missing is any way to answer it differently.
+    "handle_dialog",
     # packs (planned; listed now so Phase 5 inherits the classification
     # instead of rediscovering it one tool at a time)
     "set_routing", "evaluate_script",
     "manage_cookies", "manage_storage", "load_auth_state", "save_auth_state",
     "download", "upload_file",
+    # Reading the clipboard is classed as ACTING, deliberately. It needs a
+    # browser permission, it reaches past the page into a buffer the human
+    # also uses, and what comes back can be text they never meant a page to
+    # see. A read-only mode that let a tool drain the clipboard would not be
+    # one.
+    "manage_clipboard",
     "save_workflow", "run_workflow",
     "emulate",
 })
@@ -136,9 +148,15 @@ NON_MUTATING: frozenset[str] = frozenset({
     "get_workflows",
     # packs (planned)
     "get_table", "get_list", "get_links", "get_metadata", "extract_fields",
-    "export_data", "take_screenshot", "export_pdf", "save_page",
+    "get_article", "export_data", "take_screenshot", "export_pdf",
+    "save_page",
     "list_requests", "get_request", "export_har",
     "list_console", "get_page_errors", "list_workflows",
+    # read_pages NAVIGATES, following the page's own next-page links, and it
+    # sits here for exactly the reason `navigate` does: going to a URL is
+    # ambiguous rather than mutating, so it is permitted under `browse` and
+    # held to the origin allowlist under `strict`, hop by hop.
+    "read_pages",
 })
 
 #: Tools that are GENUINELY read-only for the MCP readOnlyHint annotation:
@@ -156,6 +174,7 @@ GENUINELY_READ_ONLY: frozenset[str] = frozenset({
     "get_workflows", "wait_for",
     # packs
     "get_table", "get_list", "get_links", "get_metadata", "extract_fields",
+    "get_article",
     "list_requests", "get_request", "list_console", "get_page_errors",
     "list_workflows",
 })

@@ -29,11 +29,15 @@ import csv
 import io
 import json
 
+from .. import pagedata as _pagedata
 from ..errors import AmbiguousLocation, BadParams, TargetNotFound
-from ..projection import ntok as _ntok
+from ..policy import engine as _policy
+from ..projection import ntok as _ntok, read_text
+from ..projection import read_article as _read_article
 from ..projection.meter import ENCODING_NAME as _ENCODING
 from . import act as _act
 from . import common
+from . import resource as _resource
 
 #: Per-cell and per-value clip lengths. Clipping is counted, never silent.
 CELL_CLIP = 200
@@ -761,7 +765,378 @@ async def export_data(
     }
 
 
+# ----------------------------------------------------------------- article
+
+
+def _field(label: str, got: dict) -> str:
+    """One metadata line, with WHERE it came from. A byline whose provenance
+    is unstated is worth less than no byline: the caller cannot tell the
+    page's author from the site's owner, and both live in the same markup."""
+    if not got["value"]:
+        return f"{label}: not marked up on this page"
+    return f'{label}: {got["value"]} (from {got["source"]})'
+
+
+def _tally(by_reason: dict) -> str:
+    return ", ".join(f'{name}={rec["blocks"]}' for name, rec in
+                     sorted(by_reason.items(), key=lambda kv: -kv[1]["blocks"]))
+
+
+def _render_thread(thread: dict) -> str:
+    """The thread shape, rendered into the one block the envelope wraps.
+
+    Authors and timestamps are page-authored strings, so they travel INSIDE
+    the delimiters with the post bodies rather than beside them."""
+    lines = []
+    for post in thread["posts"]:
+        head = f'[post {post["index"]}]'
+        if post["author"]:
+            head += f' by {post["author"]}'
+        if post["timestamp"] or post["timestamp_text"]:
+            head += f' at {post["timestamp"] or post["timestamp_text"]}'
+        if post["ref"]:
+            head += f' ({post["ref"]})'
+        lines.append(head)
+        lines.append(post["text"])
+    return "\n".join(lines)
+
+
+async def get_article(
+    page: str,
+    location: dict | None = None,
+    start_index: int = 0,
+    max_chars: int = 20000,
+    links: str = "inline",
+) -> dict:
+    """Read a page as an article: the title, the byline and published date
+    where the page marks them up, and the body prose in reading order, with
+    navigation, headers, footers, sidebars, related-story rails, comment
+    streams, and share widgets excluded. What was excluded is COUNTED and
+    returned by reason, so the trimming is never silent. In-prose links come
+    back resolved as [text](path), tables are named and left to get_table
+    rather than flattened, and hidden blocks are stripped and counted the way
+    every read here counts them. A forum topic, issue thread, or comment
+    stream comes back as posts with their authors and timestamps instead. A
+    page that is an application rather than a document is REFUSED, with the
+    evidence that decided it, and get_page_view is named as the read that
+    shows what the page actually is. The body is paginated by start_index,
+    and every field states which markup it came from.
+    """
+    if links not in ("inline", "none"):
+        raise BadParams(
+            f"unknown links mode {links!r}: 'inline' resolves in-prose links "
+            f"into the body text as [text](path), and 'none' returns the "
+            f"prose bare.")
+    sess, record = common.locate(page)
+    sess.counters["reads"] += 1
+    # The SAME ref-to-node-ref resolver `get_page_view` and `get_text` scope
+    # with, imported rather than reimplemented: the extractor keys its in-page
+    # registry by the id IT assigned in the last read, and a pack tool that
+    # worked that out for itself is a fourth copy waiting to drift.
+    from .lite import _scope_root
+    root = _scope_root(sess, record, location)
+    got = await _read_article(record.page, root=root, start_index=start_index,
+                              max_chars=max_chars, links=links)
+    if got.get("error") == "ROOT_GONE":
+        raise TargetNotFound(
+            f'location named {got["asked_for"]!r} and that ref is not on '
+            f'{record.handle} any more. Re-read the page and use the ref it '
+            f'returns.')
+
+    ev = got["evidence"]
+    if got["shape"] == "none":
+        # THE HONEST FALLBACK. An extractor that cannot refuse will hand back
+        # a dashboard's button labels as an essay, which is the failure mode
+        # that makes article extraction untrustworthy everywhere it ships
+        # without one. The evidence is printed so the verdict is checkable.
+        raise TargetNotFound(
+            f"this page is not article-shaped; get_page_view shows what it "
+            f"is. The scorer found {ev['prose_blocks']} paragraph-shaped "
+            f"block(s) carrying {ev['article_chars']:,} characters, "
+            f"{ev['link_density']:.0%} of the best candidate's text is link "
+            f"text, and that candidate holds {ev['share_of_page']:.0%} of "
+            f"the page's block prose. Failing: "
+            f"{'; '.join(got['failed_tests'])}. get_text reads whatever prose "
+            f"is here without pretending it is an article, and get_list or "
+            f"get_table reach repeated records.")
+
+    thread = got["thread"]
+    body = _render_thread(thread) if got["shape"] == "thread" else got["text"]
+    # The body is page prose, which is the single most common injection
+    # channel, so it arrives inside the labeled data envelope (DESIGN 5.1,
+    # H1) byte-identical to what the extractor returned. The note is extended
+    # by one sentence because THIS payload also carries page-authored strings
+    # in structured fields beside the text, and an envelope that covers only
+    # the body would leave the byline unlabeled.
+    wrapped, page_note = _pagedata.wrap(body, url=got["url"])
+    page_note["label"] += (
+        " The title, byline, date, and site fields beside this text are "
+        "page-authored too and carry exactly the same status.")
+
+    excluded = got["excluded"]
+    hidden = got["hidden"]
+    link_rec = got["links"]
+    more = (f'get_article(page="{record.handle}", '
+            f'start_index={got["next_start_index"]}) returns the next '
+            f'{max_chars:,} characters'
+            if got["next_start_index"] is not None
+            else "this is the end of the article body")
+    if got["shape"] == "thread":
+        more = "the thread is returned whole; posts are not paginated"
+
+    completeness = {
+        "excluded": (
+            f'{excluded["blocks"]} block(s) carrying {excluded["chars"]:,} '
+            f'characters were page chrome and were excluded from the body, '
+            f'counted rather than silently dropped '
+            f'[{_tally(excluded["by_reason"]) or "none"}]'),
+        "hidden": (
+            f'{hidden["blocks"]} hidden block(s) carrying {hidden["chars"]:,} '
+            f'characters were stripped from the body and counted '
+            f'[{", ".join(f"{k}={v}" for k, v in sorted(hidden["reasons"].items(), key=lambda kv: -kv[1])[:6]) or "none"}]'
+            + (f'; {hidden["injection_suspects"]} of them carried more than '
+               f'20 characters, which is the shape of an injected instruction'
+               if hidden["injection_suspects"] else '')
+            + (f'; zero-width characters were removed from '
+               f'{hidden["zero_width_blocks"]} block(s)'
+               if hidden["zero_width_blocks"] else '')),
+        "links": (
+            f'{link_rec["resolved"]} in-prose link(s) were resolved'
+            + (f' and then dropped from the body: the link markup came to '
+               f'{link_rec["markup_chars"]:,} characters, over a quarter of '
+               f'the prose, and a body that is mostly bracket syntax is not '
+               f'readable. get_links lists them as data'
+               if link_rec["dropped"]
+               else (' into the body text as [text](path)'
+                     if link_rec["mode"] == "inline" and link_rec["resolved"]
+                     else '; links=inline resolves them into the body text'))),
+        "tables": (
+            f'{got["tables"]} table(s) in the body are named and left intact '
+            f'rather than flattened into prose; get_table reads them as JSON'
+            if got["tables"] else "no tables in the article body"),
+    }
+    if got.get("shadow_roots_read"):
+        completeness["shadow"] = (
+            f'prose was read from {got["shadow_roots_read"]} open shadow '
+            f'root(s)'
+            + (f'; {got["closed_shadow_roots"]} closed shadow root(s) are '
+               f'unreadable by any tool' if got["closed_shadow_roots"] else ''))
+
+    payload = {
+        "page": record.handle, "session": sess.session_id,
+        "url": got["url"], "shape": got["shape"],
+        "scope": location if location else "the page's article body",
+        "article": {
+            "title": got["title"]["value"],
+            "title_source": got["title"]["source"],
+            "byline": got["byline"]["value"],
+            "byline_source": got["byline"]["source"],
+            "published": got["published"]["value"],
+            "published_source": got["published"]["source"],
+            "modified": got["modified"]["value"],
+            "site_name": got["site_name"], "lang": got["lang"],
+            "summary": " | ".join([
+                _field("title", got["title"]),
+                _field("byline", got["byline"]),
+                _field("published", got["published"])]),
+        },
+        "text": wrapped,
+        "page_data": page_note,
+        "chars": {"returned": got["returned_chars"],
+                  "total_in_article": got["total_chars"],
+                  "start_index": got["start_index"],
+                  "next_start_index": got["next_start_index"],
+                  "blocks": got["blocks"]},
+        "continue": more,
+        "completeness": completeness,
+        "budget": {"used": _ntok(body), "estimator": _ENCODING},
+    }
+    if got["shape"] == "thread":
+        payload["thread"] = {
+            "total_posts": thread["total_posts"],
+            "with_author": thread["with_author"],
+            "with_timestamp": thread["with_timestamp"],
+            "refs": [p["ref"] for p in thread["posts"]],
+            "note": ("this page did not pass the article tests and IS a "
+                     "thread: repeated posts each carrying a machine-readable "
+                     "timestamp. Post text, authors, and timestamps are "
+                     "rendered inside the labeled text block above, headed "
+                     "[post N] by AUTHOR at TIMESTAMP."),
+        }
+    return payload
+
+
 #: The pack roster, in DESIGN 2.2 order. `server.register_all` registers
 #: exactly this when the extract pack is selected.
+#: Where a "next page" lives, in the order the page's own markup ranks it.
+#: `rel=next` first because it is the declaration rather than a guess, then
+#: an anchor whose accessible name IS a next-page word. Nothing here clicks:
+#: every hop is a navigation to an href the page published, which is what
+#: keeps this tool on the read side of the read-only line.
+_NEXT_JS = r"""
+() => {
+  const out = [];
+  const abs = (u) => { try { return new URL(u, location.href).href; }
+                       catch (e) { return null; } };
+  const bad = (u) => !u || /^(javascript:|mailto:|tel:|#)/i.test(u)
+                     || abs(u) === location.href;
+  const push = (href, how, label) => {
+    if (bad(href)) return;
+    const u = abs(href);
+    if (u && !u.startsWith('http')) return;
+    if (u) out.push({ url: u, how: how,
+                      label: (label || '').replace(/\s+/g, ' ').trim().slice(0, 80) });
+  };
+  const head = document.querySelector('link[rel~="next" i][href]');
+  if (head) push(head.getAttribute('href'), 'link rel=next', 'rel=next');
+  const relA = document.querySelector('a[rel~="next" i][href]');
+  if (relA) push(relA.getAttribute('href'), 'a rel=next', relA.textContent);
+  const word = /^(next|next page|next ›|older|older posts|older entries|more|show more|load more|›|»|→|next\s*[›»→])$/i;
+  for (const a of document.querySelectorAll('a[href]')) {
+    const label = (a.getAttribute('aria-label') || a.textContent || '')
+      .replace(/\s+/g, ' ').trim();
+    if (word.test(label)) { push(a.getAttribute('href'), 'link text', label); break; }
+  }
+  return out;
+}
+"""
+
+
+async def read_pages(
+    page: str,
+    max_pages: int = 5,
+    max_chars: int = 8000,
+    budget_chars: int = 40000,
+) -> dict:
+    """Read a paginated series in one call, following the page's own
+    next-page link up to max_pages and stopping inside one character
+    budget. Each page's prose comes back separately, labeled with the URL it
+    came from, so a five-part article or a three-page result list arrives as
+    one result instead of five navigate-and-read round trips. The next page
+    is found from rel="next" first and from a link whose accessible name is
+    a next-page word second; nothing is clicked and no URL is guessed, so a
+    site with no such link stops rather than inventing one. Returns every
+    page read, the reason the walk stopped (the page cap, the character
+    budget, no next link, or a link that leads back to a page already read),
+    and the URL to resume from.
+    """
+    # Two independent ceilings and neither quietly widens the other: a
+    # budget_chars under max_chars means the first page is read in full and
+    # the walk stops there, which is what the caller asked for.
+    max_pages = max(1, min(int(max_pages), 25))
+    max_chars = max(500, int(max_chars))
+    budget_chars = max(1, int(budget_chars))
+    sess, record = common.locate(page)
+    pages: list[dict] = []
+    visited: list[str] = []
+    total = 0
+    stop = {"reason": "page-cap",
+            "detail": f"the max_pages cap of {max_pages} was reached"}
+    resume = None
+    while True:
+        held = await _resource.probe_page(record.page)
+        if held is not None:
+            stop = {"reason": "unreadable-resource",
+                    "detail": _resource.navigate_note(held)["why"],
+                    "route": _resource.escape_route(held)}
+            break
+        url = record.page.url
+        visited.append(url)
+        sess.counters["reads"] += 1
+        got = await read_text(record.page, root=None, start_index=0,
+                              max_chars=max_chars, include_hidden=False)
+        wrapped, note = _pagedata.wrap(got["text"], url=got["url"])
+        pages.append({
+            "url": got["url"],
+            "text": wrapped,
+            "page_data": note,
+            "chars": {"returned": got["returned_chars"],
+                      "total_on_page": got["total_chars"],
+                      "next_start_index": got["next_start_index"]},
+            "clipped": got["next_start_index"] is not None,
+        })
+        total += got["returned_chars"]
+        if len(pages) >= max_pages:
+            stop = {"reason": "page-cap",
+                    "detail": f"read {len(pages)} page(s), which is the "
+                              f"max_pages cap"}
+            break
+        if total >= budget_chars:
+            stop = {"reason": "char-budget",
+                    "detail": f"{total:,} characters read, at or past the "
+                              f"budget_chars ceiling of {budget_chars:,}"}
+            break
+        try:
+            found = await record.page.evaluate(_NEXT_JS)
+        except Exception:
+            found = []
+        candidate = next((c for c in (found or []) if c.get("url")), None)
+        if candidate is None:
+            stop = {"reason": "end",
+                    "detail": "this page publishes no next-page link (no "
+                              "rel=\"next\" and no link whose name is a "
+                              "next-page word), so the series ends here as "
+                              "far as the markup says"}
+            break
+        if candidate["url"] in visited:
+            stop = {"reason": "loop",
+                    "detail": f'the next-page link points back to '
+                              f'{candidate["url"]}, which was already read '
+                              f'in this walk, so the walk stopped rather '
+                              f'than circling'}
+            resume = None
+            break
+        # Every hop is a real navigation and goes through the real ladder:
+        # origin policy, the 429 book, loop detection, and the navigation
+        # budget, charged per page exactly as if the caller had made the
+        # calls one at a time. A walk is not a way around a budget.
+        _policy.approve(_policy.ActionRequest(
+            tool="read_pages", kind="navigate", session=sess.session_id,
+            page=record.handle, url=candidate["url"],
+            args={"action": "goto", "url": candidate["url"]},
+            summary=f'read_pages follows {candidate["how"]} to '
+                    f'{candidate["url"]}'))
+        before = record.page.url
+        try:
+            await record.page.goto(candidate["url"], wait_until="load",
+                                   timeout=30000)
+        except Exception as exc:
+            stop = {"reason": "navigation-failed",
+                    "detail": f'following {candidate["how"]} to '
+                              f'{candidate["url"]} failed '
+                              f'({type(exc).__name__}: {str(exc)[:160]}); '
+                              f'the pages read before it are complete'}
+            resume = candidate["url"]
+            break
+        record.touch(record.page.url)
+        sess.counters["navigations"] += 1
+        if record.page.url != before:
+            sess.invalidate_page(
+                record.handle,
+                f"read_pages navigated from {before}")
+        resume = record.page.url
+    if stop["reason"] in ("page-cap", "char-budget"):
+        resume = resume or record.page.url
+    return {
+        "page": record.handle, "session": sess.session_id,
+        "pages_read": len(pages),
+        "pages": pages,
+        "urls": visited,
+        "stopped": stop,
+        "chars_total": total,
+        "resume": (f'read_pages(page="{record.handle}") continues from '
+                   f'{record.page.url}' if stop["reason"] in
+                   ("page-cap", "char-budget")
+                   else "there is nothing to resume from; the walk ended "
+                        "for the reason above rather than at a cap"),
+        "refs": ("this walk navigated, so refs and read tokens minted "
+                 "before it are gone; read the page you are on to mint "
+                 "fresh ones" if len(visited) > 1 else
+                 "nothing navigated, so refs minted earlier still hold"),
+        "budget": {"used": _ntok(json.dumps([p["text"] for p in pages])),
+                   "estimator": _ENCODING},
+    }
+
+
 TOOLS = (get_table, get_list, get_links, get_metadata, extract_fields,
-         export_data)
+         export_data, get_article, read_pages)

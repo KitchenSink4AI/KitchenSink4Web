@@ -44,6 +44,7 @@ from __future__ import annotations
 
 import time
 
+from .. import pagedata as _pagedata
 from ..anchors import Outcome, ladder
 from ..errors import (AmbiguousLocation, BadParams, ModalBlocked, StaleAnchor,
                       TargetChanged, TargetNotFound, Timeout)
@@ -1028,9 +1029,14 @@ async def _resolve_ref(sess, record, ref: str, *, tool: str,
                 "rebound": rebound}
     # Every non-proceeding outcome is a typed, recovery-naming refusal.
     if verdict == Outcome.MODAL:
+        # The modal's name is whatever the page called it, so it rides the
+        # labeled envelope rather than sitting bare in a sentence the server
+        # appears to be making.
         raise ModalBlocked(
-            f'a dialog ({outcome.get("dialog")}) is open and blocks '
-            f'interaction. {outcome.get("recovery")}')
+            f'a page-drawn modal is open and blocks interaction, so nothing '
+            f'was done. {outcome.get("recovery")}. '
+            + _pagedata.wrap_line(f'modal: {outcome.get("dialog")}',
+                                  url=record.page.url))
     if verdict == Outcome.AMBIGUOUS:
         raise AmbiguousLocation(
             f'{ref!r} no longer resolves to one element ({outcome.get("tier")}): '
@@ -1268,27 +1274,40 @@ _CLOAK_JS = instrument(r"""
 #: lid raised on `setTimeout(…, 40)`, or by the trusted click's own mousedown,
 #: lands after any pre-dispatch check a driver can make.
 #:
-#: The frame wait is RACED against a short timeout because a page the browser
-#: has stopped animating (a background tab, a throttled renderer) never runs
-#: the callback, and a probe that hangs is worse than a probe that falls back
-#: to the task queue alone.
+#: The frame wait carries a CEILING rather than a race, and the difference is
+#: the whole reliability of the second verdict. A ceiling short enough to be a
+#: normal outcome abandons the frame on any page whose renderer is cold: a
+#: freshly loaded document takes 50-60ms to produce its first frame against a
+#: 5-15ms steady state, so a 50ms cap lost the race on the first two loads out
+#: of twelve and read its verdict before the lid was up. The ceiling exists
+#: only for a page the browser has stopped animating -- a background tab, a
+#: throttled renderer -- where the callback never comes at all and a probe
+#: that hangs is worse than one that gives up. Whichever arrives first, the
+#: probe still goes through one task turn afterward, so a `queueMicrotask` lid
+#: is caught even where no frame is ever produced.
+_ARM_FRAME_CEILING_MS = 250
+
 _ARM_JS = instrument(r"""
 async (el) => {
 // @@KS4WEB_VISIBILITY@@
   try { el.focus({ preventScroll: true }); } catch (e) {}
   let r = ksCloakReason(el);
   if (r) return { reason: r, why: KS_CLOAK_TECHNIQUES[r] };
-  await Promise.race([
-    new Promise(function (done) {
-      requestAnimationFrame(function () { setTimeout(done, 0); });
-    }),
-    new Promise(function (done) { setTimeout(done, 50); })
-  ]);
+  await new Promise(function (done) {
+    let settled = false;
+    const finish = function () {
+      if (settled) return;
+      settled = true;
+      setTimeout(done, 0);
+    };
+    requestAnimationFrame(finish);
+    setTimeout(finish, __KS_FRAME_CEILING__);
+  });
   ksResetPaintCaches();
   r = ksCloakReason(el);
   return r ? { reason: r, why: KS_CLOAK_TECHNIQUES[r] } : null;
 }
-""")
+""".replace("__KS_FRAME_CEILING__", str(_ARM_FRAME_CEILING_MS)))
 
 
 #: THE PIXEL ARBITER's three page-side steps (re-attack 3, R4). `prep` re-runs

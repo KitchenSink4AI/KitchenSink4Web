@@ -294,16 +294,22 @@ async def emulate(
     or 'no-preference'), reduced motion ('reduce' or 'no-preference'), and
     media type ('screen' or 'print'). Returns what was applied and the
     page's own report of the resulting media state, read back rather than
-    assumed. Locale and timezone are launch-time properties of a session
-    and cannot be changed here; reopen the session for those. Emulation
-    mutates page state, so this tool is absent under read-only mode.
+    assumed. Locale, timezone, and device presets are context properties
+    that a browser takes at construction, so they are set by
+    manage_session(action='open', locale=..., timezone=..., device=...)
+    rather than here. Emulation mutates page state, so this tool is absent
+    under read-only mode.
     """
     sess, record = common.locate(page)
     if not any((viewport, color_scheme, reduced_motion, media)):
         raise BadParams(
             "emulate needs at least one of viewport, color_scheme, "
-            "reduced_motion, or media. Locale and timezone are set when a "
-            "session opens, not here.")
+            "reduced_motion, or media. Locale, timezone, and device presets "
+            "belong to manage_session(action='open', locale=..., "
+            "timezone=..., device=...), which is where a browser context "
+            "takes them; changing them on a live context is not something "
+            "the driver supports, and pretending otherwise would leave the "
+            "page's own scripts reading the old values.")
     _policy.approve(_policy.ActionRequest(
         tool="emulate", kind="act", session=sess.session_id,
         page=record.handle, url=record.page.url,

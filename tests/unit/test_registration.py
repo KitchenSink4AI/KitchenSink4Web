@@ -27,6 +27,12 @@ LITE_ROSTER = {
     "get_page_view", "find_elements", "get_text", "navigate", "click",
     "type_text", "fill_form", "find_and_act", "press_keys", "scroll",
     "wait_for", "manage_tabs", "manage_session", "get_audit", "get_workflows",
+    #: handle_dialog joined on 2026-09-06, and it goes in LITE for the same
+    #: reason find_and_act does: a native dialog stops every lite read and
+    #: every lite action, so the tool that answers one has to be present
+    #: wherever the condition is. It is MUTATING, so a read-only launch still
+    #: does not have it and the driver's dismissal stands there.
+    "handle_dialog",
 }
 
 
@@ -35,7 +41,7 @@ def test_lite_roster_is_exactly_the_design(launch):
     (DEFAULT_GRADE is 'browse' since the 2026-09-05 field-test ruling)."""
     state = launch(read_only=False)
     assert set(state["registered"]) == LITE_ROSTER
-    assert len(LITE_ROSTER) == 15
+    assert len(LITE_ROSTER) == 16
 
 
 def test_bare_launch_defaults_to_browse_read_only(launch, monkeypatch):

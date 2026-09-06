@@ -143,17 +143,22 @@ class LaneUnsupported(WebMcpError):
 
 
 class ModalBlocked(WebMcpError):
-    """A native dialog is blocking the page. Names the dialog rather than
-    timing out with an unrelated error.
+    """Something modal is in the way. Names it rather than timing out with an
+    unrelated error.
 
-    It does NOT name a tool that clears it, because there is no such tool:
-    the driver dismisses native dialogs on its own, and a confirm() dismissed
-    that way reads as Cancel. A dialog tool is next-cycle scope. Until then
-    the honest report is that the step needs a human session.
+    TWO conditions share this code and the hint serves both. A NATIVE dialog
+    (alert, confirm, prompt, beforeunload) stops the page's script, and
+    `handle_dialog` answers it; with nothing armed the driver dismisses it as
+    it opens, which a confirm() reads as Cancel. A PAGE-DRAWN modal is
+    ordinary DOM and no dialog call reaches it: its own close or cancel
+    control is the route, because a click behind a modal is not the click that
+    was asked for.
 
-    NOTE, carried as a flag rather than fixed here: upload_file also raises
-    this for an element that is not a file input, which is not a dialog at
-    all. Its own message is accurate; the shared hint is not written for it."""
+    The carried flag is DISCHARGED: `upload_file` used to raise this for an
+    element that is not a file input, which is not a modal of either kind, and
+    it now refuses with VALIDATION_FAILED. That mattered more once the hint
+    started naming handle_dialog, since a hint about answering dialogs is
+    actively misleading attached to a wrong-element refusal."""
 
 
 class Timeout(WebMcpError):

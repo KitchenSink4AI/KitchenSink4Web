@@ -83,7 +83,9 @@ def _load(name: str) -> dict:
         have = sorted(p.stem for p in _workflow_dir().glob("*.json"))
         raise TargetNotFound(
             f"no workflow named {_slug(name)!r}. "
-            + (f"Saved workflows: {have}." if have
+            + (f"Saved workflows: {have}. "
+               "list_workflows(for_origin='the site you are on') narrows "
+               "that list to the flows recorded there." if have
                else "Nothing has been saved yet; record a flow and call "
                     "save_workflow."))
     try:
@@ -167,7 +169,10 @@ async def save_workflow(
         "file": str(path),
         "next": f"run_workflow(name={doc['name']!r}, page=..., "
                 f"dry_run=True) re-resolves every anchor before anything "
-                f"executes.",
+                f"executes."
+                + (f" This flow is now findable by site: "
+                   f"list_workflows(for_origin={origins[0]!r}) returns it "
+                   f"the next time you are there." if origins else ""),
     }
 
 
@@ -186,14 +191,52 @@ def _step_line(i: int, step: dict) -> str:
 # ----------------------------------------------------------------- listing
 
 
-async def list_workflows(session: str | None = None) -> dict:
+def _host_of(text: str) -> str:
+    """The host in whatever a caller typed: a bare host, a host with a port,
+    or a whole URL. Lowercased, since host comparison is case-insensitive
+    and a workflow recorded on Example.com is the same site."""
+    value = (text or "").strip().lower()
+    if "://" in value:
+        value = value.split("://", 1)[1]
+    value = value.split("/", 1)[0].split("?", 1)[0]
+    if "@" in value:
+        value = value.rsplit("@", 1)[1]
+    return value
+
+
+def _origin_matches(recorded: str, wanted: str) -> bool:
+    """A recorded origin answers for a wanted one when the hosts are equal
+    or when the recorded host is a subdomain of it. `www.example.com` is
+    what the recorder stored and `example.com` is what a caller types, so a
+    strict equality filter would answer "no workflows" for the site the
+    user is standing on. It never widens the other way: asking for
+    `www.example.com` does not match a workflow recorded on `evil.com`."""
+    have = _host_of(recorded).split(":", 1)[0]
+    want = wanted.split(":", 1)[0]
+    return bool(have) and (have == want or have.endswith("." + want))
+
+
+async def list_workflows(session: str | None = None,
+                         for_origin: str | None = None) -> dict:
     """List the saved workflows. Returns each one's name, step count, when
     it was recorded, and the origins it touches, so a caller can pick one
-    to dry-run before replaying. The dry run is the right first move, since
-    a workflow recorded against an earlier version of a page may no longer
-    resolve. An empty list means nothing has been saved on this machine.
+    to dry-run before replaying. `for_origin` narrows the list to the flows
+    recorded on one site, given as a host or any URL on it, which is the
+    per-site lookup: standing on a page, ask what has already been recorded
+    here before working the flow out again. A subdomain of the host you ask
+    for counts as a match and nothing wider does. The dry run is the right
+    first move, since a workflow recorded against an earlier version of a
+    page may no longer resolve. An empty list means nothing has been saved
+    on this machine.
     """
+    wanted = _host_of(for_origin) if for_origin else None
+    if for_origin and not wanted:
+        raise BadParams(
+            f"for_origin {for_origin!r} carries no host; it takes a site "
+            f"('example.com') or any URL on it "
+            f"('https://example.com/reports').")
     out = []
+    skipped = 0
     for path in sorted(_workflow_dir().glob("*.json")):
         try:
             doc = json.loads(path.read_text(encoding="utf-8"))
@@ -202,12 +245,25 @@ async def list_workflows(session: str | None = None) -> dict:
             continue
         if session and doc.get("session") not in (None, session):
             continue
+        origins = doc.get("origins", [])
+        if wanted and not any(_origin_matches(o, wanted) for o in origins):
+            skipped += 1
+            continue
         out.append({"name": doc.get("name", path.stem),
                     "steps": len(doc.get("steps", [])),
                     "created": doc.get("created"),
-                    "origins": doc.get("origins", [])})
+                    "origins": origins})
     return {"workflows": out,
             "directory": str(_workflow_dir()),
+            **({"filter": {
+                "for_origin": wanted,
+                "matched": len(out),
+                "excluded": skipped,
+                "note": (f"{skipped} saved workflow(s) touch other sites and "
+                         f"are not listed; call without for_origin to see "
+                         f"all of them" if skipped else
+                         "every saved workflow touches this site")}}
+               if wanted else {}),
             "next": "run_workflow(name=..., page=..., dry_run=True) "
                     "re-resolves every anchor and reports which still hold "
                     "before anything executes."}

@@ -127,9 +127,13 @@ def test_no_gate_class_touches_policy_state():
     `action_offlist` gate GOING off the list, never changing it."""
     assert set(gates.GATED_CLASSES) == {
         "form_submit", "payment_form", "file_upload", "download_to_disk",
-        "storage_clear", "storage_load", "evaluate_script",
+        "storage_clear", "storage_load", "evaluate_script", "dialog_accept",
         "navigation_offlist", "action_offlist", "budget_reset",
     }
+    # dialog_accept joined 2026-09-06 with handle_dialog. It gates ANSWERING
+    # a native dialog with OK and never dismissal, because dismissal is the
+    # posture the server already has with nothing armed.
+    assert "OK" in gates.GATED_CLASSES["dialog_accept"]
     # storage_load split off from storage_clear on 2026-09-06: the live
     # ship-route test caught a LOAD asking the human to allow "clearing
     # cookies or site storage", and someone reading carefully declines a

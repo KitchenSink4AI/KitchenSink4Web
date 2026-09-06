@@ -37,6 +37,7 @@ from __future__ import annotations
 import asyncio
 import functools
 import http.server
+import inspect
 import socketserver
 import tempfile
 import threading
@@ -203,6 +204,162 @@ TARGET_CLASSES: dict[str, str] = {
 }
 
 
+# ------------------------------------------------------ BATTERY 3: THE SCOPE
+#
+# VARY WHERE THE LID LIVES, and hold the technique fixed. Re-attack 3 named
+# the shape every one of its six HIGH findings shared: the SCOPE of a correct
+# rule rather than the rule itself. Wave 5 asked "what paints" and answered it
+# over the same set of nodes as before; it asked "how opaque is this box" and
+# read the answer off a declaration; it asked "which is on top" and compared
+# two numbers from different scales. The measurement got better and the domain
+# it was measured over did not move.
+#
+# So this battery fixes the technique -- ONE `background:#ffffff` panel over
+# the same button, the same expected refusal -- and varies the only thing
+# left: where the panel is attached. On an element, on a pseudo-element, on an
+# ANCESTOR's pseudo-element, inside a foreign stacking context, inside an open
+# shadow root, behind an overflow clip, and one microtask later. A scope this
+# build cannot reach fails here by name.
+_SCOPE_LID = 'background:#ffffff;pointer-events:none'
+
+SCOPE_CLASSES: dict[str, str] = {
+    # The floor: the lid is an element, in the document, at the root.
+    "element": f'<div class=lid style="{_SCOPE_LID}">Loading…</div>',
+    # A pseudo-element paints and is not an element, so an element walk never
+    # sees it however many paint MEANS it knows (R1).
+    "pseudo-element": '<style>#scrim{position:fixed;left:0;top:0;width:1px;'
+                      'height:1px}#scrim::after{content:"Loading…";'
+                      'position:fixed;left:20px;top:100px;width:380px;'
+                      f'height:100px;z-index:10;pointer-events:none;{_SCOPE_LID}'
+                      '}</style><div id=scrim></div>',
+    # The same technique on an ANCESTOR of the target, which is where a
+    # full-bleed scrim actually lives and which the containment filter used to
+    # skip twice over.
+    "ancestor-pseudo-element": '<style>body::after{content:"";position:fixed;'
+                               f'inset:0;z-index:10;{_SCOPE_LID}}}</style>',
+    # A FOREIGN STACKING CONTEXT. The button declares z-index:9999 and sits
+    # inside a context painted at 0, entirely beneath a lid at 1 (R2).
+    "foreign-stacking-context":
+        '<style>#ctx{position:relative;z-index:0}'
+        '#real{position:relative!important;z-index:9999;left:0!important;'
+        'top:0!important}</style>'
+        '<script>var b=document.getElementById("real");'
+        'var c=document.createElement("div");c.id="ctx";'
+        'c.style.cssText="position:absolute;left:40px;top:120px";'
+        'b.parentNode.insertBefore(c,b);c.appendChild(b);</script>'
+        f'<div class=lid style="{_SCOPE_LID};z-index:1">Loading…</div>',
+    # An open shadow root, which a light-tree query stops dead at.
+    "shadow-root": '<div id=host></div><script>'
+                   'document.getElementById("host").attachShadow({mode:"open"})'
+                   '.innerHTML=\'<div style="position:fixed;left:20px;top:100px;'
+                   f'width:380px;height:100px;z-index:10;{_SCOPE_LID}">'
+                   'Loading…</div>\';</script>',
+    # A SCROLLED CONTAINER, on the lid side this time: the panel is inside an
+    # overflow box and really is painted over the control, so the pixel
+    # arbiter has to confirm rather than clear it.
+    "scrolled-container":
+        '<div style="position:fixed;left:20px;top:100px;width:380px;'
+        'height:100px;overflow:auto;z-index:10;pointer-events:none">'
+        '<div style="height:60px"></div>'
+        f'<div style="height:400px;{_SCOPE_LID}">Loading…</div></div>'
+        '<script>document.currentScript.previousElementSibling'
+        '.scrollTop=60;</script>',
+    # ONE MICROTASK LATER, raised by the focus the acting path itself causes
+    # (R3). Deterministic, not a timing race: it fires on every run.
+    "one-microtask-later":
+        '<script>document.getElementById("real").addEventListener("focus",'
+        'function(){queueMicrotask(function(){'
+        'var d=document.createElement("div");d.className="lid";'
+        f'd.style.cssText="{_SCOPE_LID}";d.textContent="Loading…";'
+        'document.body.appendChild(d);});});</script>',
+    # And one animation frame later, which is the same window one queue along.
+    "one-frame-later":
+        '<script>document.getElementById("real").addEventListener("focus",'
+        'function(){requestAnimationFrame(function(){'
+        'var d=document.createElement("div");d.className="lid";'
+        f'd.style.cssText="{_SCOPE_LID}";d.textContent="Loading…";'
+        'document.body.appendChild(d);});});</script>',
+}
+
+
+# ------------------------------------------------- BATTERY 4: THE CLEAR SIDE
+#
+# THE SEVEN ORDINARY CONSTRUCTIONS, as permanent must-stay-visible fixtures.
+# Wave 5's clear arm had five rows and all five varied the GEOMETRY of an
+# overlay that really does paint. Not one row varied whether the overlay
+# PAINTS AT ALL, which is why seven constructions that paint nothing over the
+# control refused every acting call on the page. DESIGN states the invariant
+# in its own words -- the choice trades a missed cloak for never stripping a
+# real control off a real page, which is the direction this whole check has to
+# fail in -- so the direction gets its own battery and its own row per
+# construction.
+#
+# Every one of these is furniture on real marketing and checkout pages, and
+# every one declares an opaque box over the control while painting nothing
+# there. The common thread is that a DECLARATION is not a pixel, which is what
+# the arbiter exists to settle.
+CLEAR_SIDE_CLASSES: dict[str, str] = {
+    # The rect is not the painted region: clip-path moves the paint away.
+    "clip-path": '<div class=lid style="background:#ffffff;'
+                 'clip-path:inset(0 0 0 100%)">x</div>',
+    # The same, by a mask that keeps nothing.
+    "transparent-mask": '<div class=lid style="background:#ffffff;'
+                        '-webkit-mask-image:linear-gradient(transparent,'
+                        'transparent);mask-image:linear-gradient(transparent,'
+                        'transparent)">x</div>',
+    # A tag is not its content: a decorative full-viewport <svg> whose one
+    # painted path is in a corner. The confetti and wave-divider layer.
+    "decorative-svg": '<svg style="position:fixed;inset:0;width:100%;'
+                      'height:100%;z-index:50;pointer-events:none" '
+                      'viewBox="0 0 100 100" preserveAspectRatio=none>'
+                      '<circle cx=95 cy=95 r=2 fill="#f0f"/></svg>',
+    # The same, as a canvas that has never been drawn to.
+    "undrawn-canvas": '<canvas width=800 height=900 style="position:fixed;'
+                      'inset:0;width:100%;height:100%;z-index:50;'
+                      'pointer-events:none"></canvas>',
+    # AN ANCESTOR'S OVERFLOW CLIP. A chat log, a sidebar, a long table: the
+    # children's bounding rects run far outside the clip and sweep over
+    # everything. Nothing about this page is hostile.
+    "scrolled-overflow": '<div id=sc style="position:absolute;left:0;top:400px;'
+                         'width:420px;height:200px;overflow:auto">'
+                         + "".join(
+                             f'<div style="height:120px;background:#ffffff;'
+                             f'border-bottom:1px solid #ccc">Message {i}</div>'
+                             for i in range(12))
+                         + '</div><script>document.getElementById("sc")'
+                           '.scrollTop=900;</script>',
+    # A loaded <img> whose every pixel is alpha 0: the oldest spacer trick on
+    # the web, still shipping in email-derived layouts.
+    "transparent-spacer-img": '<img class=lid style="width:380px;height:100px" '
+                              'src="data:image/gif;base64,R0lGODlhAQABAIAAAAAA'
+                              'AP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7">',
+    # Compositing is not multiplication: white multiplied is identity.
+    "mix-blend-mode": '<div class=lid style="background:#ffffff;'
+                      'mix-blend-mode:multiply"></div>',
+}
+
+
+#: THE PARITY ARM. Same technique, same page shape, a control you TYPE into
+#: rather than click. Re-attack 3 recorded that `type_text` caught the
+#: microtask lid while `click` did not, and named the parity gap itself as the
+#: tell: the one-turn design is what created the window, and the path that did
+#: less in one turn was the one that was safe. Both paths refuse now, and this
+#: is what stops them drifting apart again.
+_TYPE_TARGET = """
+<h1>Account</h1>
+<input id=real style="position:absolute;left:40px;top:120px;width:320px;
+   height:40px;font-size:17px" placeholder="Note">
+"""
+
+SCOPE_CLASSES_TYPING = (
+    '<script>document.getElementById("real").addEventListener("focus",'
+    'function(){queueMicrotask(function(){'
+    'var d=document.createElement("div");d.className="lid";'
+    'd.style.cssText="background:#ffffff;pointer-events:none";'
+    'd.textContent="Loading\\u2026";document.body.appendChild(d);});});</script>'
+)
+
+
 class _Quiet(http.server.SimpleHTTPRequestHandler):
     def log_message(self, *args):
         pass
@@ -214,9 +371,15 @@ def battery_site():
     that adding a class is adding a dict entry and nothing else."""
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
-        for name, lid in {**LID_CLASSES, **CLEAR_CLASSES}.items():
+        for name, lid in {**LID_CLASSES, **CLEAR_CLASSES,
+                          **{f"scope_{k}": v for k, v in SCOPE_CLASSES.items()},
+                          **{f"clear_{k}": v
+                             for k, v in CLEAR_SIDE_CLASSES.items()}}.items():
             (root / f"{name}.html").write_text(_HEAD + _TARGET + lid,
                                                encoding="utf-8")
+        (root / "type_scope.html").write_text(_HEAD + _TYPE_TARGET
+                                              + SCOPE_CLASSES_TYPING,
+                                              encoding="utf-8")
         (root / "targets.html").write_text(_FORM_PAGE, encoding="utf-8")
         handler = functools.partial(_Quiet, directory=str(root))
         httpd = socketserver.TCPServer(("127.0.0.1", 0), handler)
@@ -317,6 +480,123 @@ def test_every_lid_class_is_a_paint_class_and_not_a_tag_list():
                   "raised-on-focus", "shadow-root-box"}
     assert replaced | background | {"backdrop-filter", "stacked-alpha"} \
         == set(LID_CLASSES)
+
+
+# ------------------------------------------------------ BATTERY 3: THE SCOPE
+
+
+@pytest.mark.parametrize("scope_class", sorted(SCOPE_CLASSES))
+def test_the_scope_battery(battery_site, scope_class):
+    """ONE technique, ONE expected verdict, EVERY place the lid can live.
+
+    This is re-attack 3's own prescription, and it is aimed at the failure
+    mode three waves in a row have shared: a rule that is correct over the set
+    of things it happens to be measured across. Wave 5 could see a `<canvas>`
+    lid and could not see a `::after` one; it could measure a lid's alpha
+    exactly and could not tell which of two boxes the browser paints on top.
+    Nothing about the technique changed between those rows -- only where the
+    panel was attached."""
+    async def go():
+        session, page = await _open(battery_site, f"scope_{scope_class}.html")
+        live = session.page(page).page
+        verdict = await _verdict(lambda: lite.click(
+            page=page, location={"css": "#real"}))
+        clicked = await live.evaluate("() => window.__clicked")
+        assert verdict == "refused_cloak", f"{scope_class}: {verdict}"
+        assert clicked is None, f"{scope_class} clicked the buried control"
+    run(go())
+
+
+def test_click_and_type_refuse_the_same_lid(battery_site):
+    """THE PARITY ARM, and the parity is the point.
+
+    A microtask queued by the focus handler defeated `click` and was caught by
+    `type_text`, purely because the typing path took more round trips before
+    it read its verdict. A cloak check whose answer depends on how many round
+    trips a tool happens to make is not a check, so the arming probe now
+    yields the same distance on both paths and both refuse."""
+    async def go():
+        session, page = await _open(battery_site, "type_scope.html")
+        live = session.page(page).page
+        typing = await _verdict(lambda: lite.type_text(
+            page=page, text="4111 1111 1111 1111",
+            location={"css": "#real"}))
+        assert typing == "refused_cloak", typing
+        assert await live.evaluate(
+            "() => document.getElementById('real').value") == ""
+
+        session2, page2 = await _open(battery_site, "scope_one-microtask-later.html")
+        clicking = await _verdict(lambda: lite.click(
+            page=page2, location={"css": "#real"}))
+        assert clicking == typing, (clicking, typing)
+    run(go())
+
+
+# ------------------------------------------------- BATTERY 4: THE CLEAR SIDE
+
+
+@pytest.mark.parametrize("clear_class", sorted(CLEAR_SIDE_CLASSES))
+def test_the_clear_side_battery(battery_site, clear_class):
+    """SEVEN ORDINARY CONSTRUCTIONS THAT MUST STAY ACTABLE, permanently.
+
+    Each row declares an opaque box over the control and paints nothing there,
+    which is the case wave 5's clear arm had no row for: all five of its rows
+    varied the geometry of an overlay that really does paint. A cloak check
+    that strips working interfaces off ordinary pages fails in the direction
+    DESIGN says it may not fail in, and it fails TOTALLY -- one decorative
+    overlay and no acting tool works anywhere beneath it."""
+    async def go():
+        session, page = await _open(battery_site, f"clear_{clear_class}.html")
+        live = session.page(page).page
+        verdict = await _verdict(lambda: lite.click(
+            page=page, location={"css": "#real"}))
+        assert verdict == "ran", f"{clear_class}: {verdict}"
+        assert await live.evaluate("() => window.__clicked") \
+            == "REAL-transfer-9912"
+    run(go())
+
+
+def test_the_clear_side_is_settled_by_pixels_and_not_by_a_technique_list():
+    """The battery's completeness check, and it names the class rather than
+    the members. Every row above is one of three ways a DECLARATION diverges
+    from a PIXEL, and the answer to all three is the same: ask the compositor.
+    A new member that fits none of them is a new class and wants its own
+    reasoning; a new member that fits one of them needs no code at all, which
+    is the property this wave was buying."""
+    rect_is_not_paint = {"clip-path", "transparent-mask", "scrolled-overflow"}
+    tag_is_not_content = {"decorative-svg", "undrawn-canvas",
+                          "transparent-spacer-img"}
+    compositing = {"mix-blend-mode"}
+    assert rect_is_not_paint | tag_is_not_content | compositing \
+        == set(CLEAR_SIDE_CLASSES)
+
+    from kitchensink4web.ops import act
+    assert "screenshot" in inspect.getsource(act._pixel_confirms_occlusion), (
+        "the clear side is held by the pixel arbiter; if the arbiter stops "
+        "taking screenshots these rows are passing for another reason")
+
+
+def test_the_arbiter_only_second_guesses_occlusion():
+    """The boundary, pinned. Every other cloak technique is a property of the
+    element ITSELF -- its own opacity, its own filter, its own colour against
+    its own background -- and the style already is the answer. `occluded` is
+    the one verdict that is a claim about OTHER boxes, so it is the one that
+    gets a second opinion. Sending the rest through a screenshot would buy
+    nothing and cost every acting call a render."""
+    import asyncio as _asyncio
+
+    from kitchensink4web.ops import act
+
+    async def go():
+        for reason in sorted(act._CLOAK_WHY):
+            if reason == "occluded":
+                continue
+            kept = await act._arbitrate(None, None, {"reason": reason,
+                                                     "why": "x"})
+            assert kept is not None, reason
+        assert await act._arbitrate(None, None, None) is None
+
+    _asyncio.run(go())
 
 
 # --------------------------------------------------- BATTERY 2: THE TARGET

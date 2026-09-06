@@ -1,6 +1,6 @@
 {
   "ruling": "2026-09-05: token budgets are SOFT; these figures are published honestly rather than enforced as caps. Estimator: chars/4 (approximate; page-read numbers use tiktoken o200k_base and the two are never mixed).",
-  "lite_total_tokens": 2745,
+  "lite_total_tokens": 2785,
   "reference_targets": {
     "lite": 1500,
     "description": [
@@ -17,15 +17,15 @@
       "over_reference_caps": false
     },
     "download": {
-      "description_tokens": 147,
+      "description_tokens": 193,
       "schema_tokens": 140,
-      "total_tokens": 287,
+      "total_tokens": 333,
       "over_reference_caps": true
     },
     "emulate": {
-      "description_tokens": 137,
+      "description_tokens": 158,
       "schema_tokens": 118,
-      "total_tokens": 255,
+      "total_tokens": 276,
       "over_reference_caps": true
     },
     "evaluate_script": {
@@ -74,6 +74,12 @@
       "description_tokens": 308,
       "schema_tokens": 108,
       "total_tokens": 416,
+      "over_reference_caps": true
+    },
+    "get_article": {
+      "description_tokens": 225,
+      "schema_tokens": 94,
+      "total_tokens": 319,
       "over_reference_caps": true
     },
     "get_audit": {
@@ -136,6 +142,12 @@
       "total_tokens": 184,
       "over_reference_caps": true
     },
+    "handle_dialog": {
+      "description_tokens": 213,
+      "schema_tokens": 76,
+      "total_tokens": 289,
+      "over_reference_caps": true
+    },
     "list_console": {
       "description_tokens": 138,
       "schema_tokens": 60,
@@ -149,15 +161,21 @@
       "over_reference_caps": true
     },
     "list_workflows": {
-      "description_tokens": 87,
-      "schema_tokens": 36,
-      "total_tokens": 123,
-      "over_reference_caps": false
+      "description_tokens": 163,
+      "schema_tokens": 56,
+      "total_tokens": 219,
+      "over_reference_caps": true
     },
     "load_auth_state": {
       "description_tokens": 290,
       "schema_tokens": 47,
       "total_tokens": 337,
+      "over_reference_caps": true
+    },
+    "manage_clipboard": {
+      "description_tokens": 168,
+      "schema_tokens": 60,
+      "total_tokens": 228,
       "over_reference_caps": true
     },
     "manage_cookies": {
@@ -167,9 +185,9 @@
       "over_reference_caps": true
     },
     "manage_session": {
-      "description_tokens": 206,
-      "schema_tokens": 108,
-      "total_tokens": 314,
+      "description_tokens": 300,
+      "schema_tokens": 199,
+      "total_tokens": 499,
       "over_reference_caps": true
     },
     "manage_storage": {
@@ -195,6 +213,12 @@
       "schema_tokens": 88,
       "total_tokens": 198,
       "over_reference_caps": false
+    },
+    "read_pages": {
+      "description_tokens": 182,
+      "schema_tokens": 67,
+      "total_tokens": 249,
+      "over_reference_caps": true
     },
     "run_workflow": {
       "description_tokens": 181,
@@ -245,9 +269,9 @@
       "over_reference_caps": true
     },
     "upload_file": {
-      "description_tokens": 146,
-      "schema_tokens": 73,
-      "total_tokens": 219,
+      "description_tokens": 220,
+      "schema_tokens": 85,
+      "total_tokens": 305,
       "over_reference_caps": true
     },
     "wait_for": {
