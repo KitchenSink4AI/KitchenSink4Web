@@ -241,6 +241,9 @@ Frames and shadow DOM get **no pack and no tools**. They are location-object
 features (Section 6.3) plus a line in every completeness block. That is the
 right shape because payment fields, consent managers, and embedded editors live
 in iframes, so frame addressing is not an advanced capability, it is checkout.
+Both are BUILT as of 2026-09-06: open shadow roots are traversed by default,
+and same-origin frames are entered, searched, and actable with refs that name
+the frame they came from. Cross-origin frames are counted and never opened.
 
 Rough totals: **40 to 44 tools, roughly 110 to 130 operations.** Notably leaner
 than Skyvern's 116 verified tool registrations, so the completeness claim rests
@@ -627,8 +630,9 @@ the answer is pagination and a row count, not truncation.
 wrongness, and it is as important as the token number. Every projection reports
 what it did NOT see and why:
 
-- iframes not traversed, with counts split same-origin and cross-origin, each
-  carrying a ref
+- iframes, split into the ones this read ENTERED (same-origin, with what was
+  found in each) and the ones it did not, each carrying a ref and the reason:
+  cross-origin, hidden by the parent, past the depth cap, or gone
 - closed shadow roots present and unreachable, counted and named honestly
   rather than silently omitted
 - virtualized or infinite-scroll containers detected, with the DOM count and
@@ -3076,13 +3080,55 @@ because `document.evaluate` has no defined behaviour across the boundary. Slot
 assignment is not followed, so shadow content is reported in source order and
 the completeness block says so.
 
-`frame` is REMOVED from the grammar. Reaching into an iframe is different
-machinery: the resolver runs in one execution context and a frame has its own,
-so it means routing every branch through the driver's frame layer rather than
-reusing the shadow sweep. It did not ride along cheaply, so `{'frame': ...}`
-refuses with the selector list rather than being accepted and ignored. Iframes
-are still reported in the completeness block, same-origin and cross-origin
-counted separately.
+`frame` is REAL as of the same-origin frame build (2026-09-06), and the
+shadow build's reasoning for removing it three hours earlier was right at the
+time: reaching into an iframe is different machinery, because the resolver
+runs in one execution context and a frame has its own. What changed is that
+the machinery got built. Every in-page pass in this server takes "a page-like
+object with an `evaluate` method" and a driver `Frame` is exactly that, so
+`extract.js`, `find.js`, `text.js` and the acting resolver now run inside a
+frame unchanged and `engine/frames.py` decides which frames they run in.
+
+The modifier NARROWS and never widens. A live selector already searches every
+same-origin frame and refuses ambiguity across the union of them, because a
+page that puts its checkout in a frame should not need the caller to know
+that; `{'frame': 'if2'}` is how a caller says which of two identical widgets
+they meant, and a frame this build will not enter refuses by name.
+
+**SAME-ORIGIN ONLY, and that is the security posture rather than a budget.**
+The driver can evaluate in a cross-origin frame and Playwright does it
+routinely. This build will not, because a cross-origin document is content the
+embedding page's own origin cannot read, and a tool that reads it anyway hands
+the model data the page it is browsing could not obtain for itself. Refusing
+it is the same honest-absence shape closed shadow roots already have.
+
+Three classification rules, in the order they bind. **The parent document's
+own script access is the authority, not the URL**: `<iframe src="/same/path"
+sandbox>` without `allow-same-origin` runs in an opaque origin and
+`contentDocument` throws, so it is cross-origin whatever its src says, while
+`srcdoc` and `about:blank` inherit the embedder's origin and are enterable.
+**A disagreement between script access and the URL fails closed** and is
+reported, since only deprecated `document.domain` relaxation produces one
+legitimately and the other producer is a bug in the classifier. **Same-origin
+is not first-party**: a frame can be same-origin and still carry markup from
+somewhere else, so every frame's text arrives in the data envelope with the
+FRAME's own origin and provenance named beside it.
+
+Two more rules the frame build inherits rather than invents. A frame whose
+`<iframe>` element the parent hides is NOT entered, which is the shadow
+build's hidden-host rule one boundary along: its walk returns on a hidden host
+before descending, and an `<iframe>` under `display:none` is that same channel
+with a whole document behind it. And frame refs are STICKY per realm, keyed on
+the parent's own ref for the `<iframe>` element rather than on position in the
+tree, because removing the first of three frames renumbers the other two and a
+renumbered `if2e5` would address a different document while looking unchanged.
+
+Depth is capped (`KS4WEB_FRAME_DEPTH_CAP`, default 5) and so is the number of
+frames one read enters (`KS4WEB_FRAME_COUNT_CAP`, default 24). Deep nesting is
+a page a hostile site can serve deliberately and each level costs a real
+execution context, so the limit is a reported refusal rather than a discovered
+crash, which is the lesson of the 28-deep shadow chain that killed the
+renderer before any of this build's code ran.
 
 Zero matches refuse with nearest-miss candidates by name distance. That is
 directly aimed at the top reliability complaint in the field: *"even for static

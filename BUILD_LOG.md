@@ -2862,3 +2862,71 @@ element's behaviour, so a `<button>` is the answer without a `closest()` call.
 Re-certification belongs in a quiet window, the way 2026-09-06 06:08 did it.
 
 Report: `internal notes/20260906_web_fixwave5.md`.
+
+---
+
+## Same-origin frame traversal (2026-09-06)
+
+The second traversal, and the shadow build three hours earlier is the sibling
+that made it cheap. That one ended with a ruling: `frame` is REMOVED from the
+grammar, because reaching into an iframe is not the shadow sweep with a longer
+reach. Every open shadow root lives in its document's execution context, so one
+`page.evaluate` sees all of them; a frame has its own `window`, its own realm,
+its own ref registry, and supporting one means routing the resolver through the
+driver's frame layer. The ruling was right and it is now spent: the machinery
+got built.
+
+**The seam turned out to be small, and the shadow build's own docstring named
+it.** `projection/__init__` has said since Phase 1 that the package "takes a
+page-like object with an `evaluate` method," and a driver `Frame` is exactly
+that. So `extract.js`, `find.js`, `text.js` and the acting resolver all run
+inside a frame unchanged. `engine/frames.py` is the new part, and it owns only
+what is not in-page: enumerating the tree, deciding which frames may be
+entered, and minting each one a stable id.
+
+**Same-origin only, and it is the posture rather than the bill.** The driver
+can evaluate in a cross-origin frame and Playwright does it routinely. This
+build will not, because a cross-origin document is content the embedding page's
+own origin cannot read, and a tool that reads it anyway hands the model data
+the page it is browsing could not obtain for itself. Cross-origin frames are
+counted, named, and never opened, which is the closed-shadow-root shape one
+boundary along: "no one looked" and "no one may look" are different facts and
+the completeness block says which applies.
+
+**The classification authority is script access, not the URL.** `<iframe
+src="/same/path" sandbox>` has a same-origin URL and an opaque origin, and
+`contentDocument` throws; `srcdoc` and `about:blank` have no origin in their
+URLs at all and inherit the embedder's. The parent asks the question the
+browser itself answers, and a disagreement between access and URL fails closed.
+
+**Same-origin is not first-party**, so every frame's text arrives in the data
+envelope with the frame's own origin and provenance named beside it: a `srcdoc`
+frame runs at the page's origin carrying markup from wherever the string came
+from, and a sandboxed frame with `allow-same-origin` is that story with a
+security attribute on it.
+
+Two rules inherited rather than invented. A frame whose `<iframe>` element the
+parent hides is NOT entered, which is the shadow walk's hidden-host rule with a
+whole document behind it instead of a component. And occlusion crosses the
+boundary downward: inside its frame an embedded button under a full-page
+consent wall is laid out, hit-testable, and visible in its own coordinate
+space, and every check the frame can run says so, so each `<iframe>` element on
+the way up gets the cloak verdict and the pixel arbiter in its own parent's
+realm, with the screenshot clip shifted by the cumulative frame offset.
+
+Two bugs the test battery found and the build fixed:
+
+* **Discovery-order ids renumber.** Removing the first of three frames moved
+  the other two up, so `if2e5` addressed a different document while looking
+  unchanged. Frame ids are sticky per page now, keyed on the parent's own ref
+  for the `<iframe>` element.
+* **`refof` is shared and every pass overwrites it.** Keying frame identity on
+  it meant a later pass could clobber the entry, and the next ladder minted a
+  second id for the same frame, taking every ref inside it out of reach. Frame
+  identity lives in its own WeakMap in the instrument channel now.
+
+The cut line, stated precisely: projection, search, refs, and acting all
+landed. What did not: cross-origin anything, `frame`-scoped `get_text` paging
+interleaved with the main document (frames are read after the main document
+finishes paging, under their own headers), and OOPIF-specific handling beyond
+what the same-origin rule already excludes.
