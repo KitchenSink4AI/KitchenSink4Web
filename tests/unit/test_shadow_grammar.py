@@ -32,22 +32,30 @@ def test_shadow_is_a_modifier_and_rides_alongside_a_selector():
     assert "shadow" in act._MODIFIERS
 
 
-def test_frame_is_gone_from_the_grammar_and_refuses_by_name():
-    assert "frame" not in act._MODIFIERS
+def test_frame_came_back_as_a_real_modifier():
+    """REVERSED by the same-origin frame build, 2026-09-06, hours after this
+    file first asserted the opposite.
+
+    The shadow build removed `frame` and its reasoning was right at the time:
+    reaching into an iframe is different machinery, because the resolver runs
+    in one execution context and a frame has its own. What changed is that the
+    machinery got built, so the refusal this test used to pin would now be a
+    lie about a capability that exists. The assertion that MATTERS survives
+    the reversal unchanged: `frame` is a MODIFIER and never a selector, so it
+    rides alongside exactly one selector and cannot be a location by itself."""
+    assert "frame" in act._MODIFIERS
+    group, value = act.selector_of({"css": "#x", "frame": "if1"})
+    assert group == "css" and value == "#x"
     with pytest.raises(BadParams) as caught:
-        act.selector_of({"css": "#x", "frame": "f1"})
-    message = str(caught.value)
-    assert "no 'frame' modifier" in message
-    # The refusal names the route that does exist rather than dead-ending.
-    assert "completeness block" in message
+        act.selector_of({"frame": "if1"})
+    assert "exactly one selector" in str(caught.value)
 
 
-def test_the_selector_list_in_the_refusal_no_longer_advertises_frame():
+def test_the_selector_list_in_the_refusal_advertises_all_three_modifiers():
     with pytest.raises(BadParams) as caught:
         act.selector_of({"nonsense": "x"})
     message = str(caught.value)
-    assert "shadow/exact are modifiers" in message
-    assert "frame/shadow/exact" not in message
+    assert "shadow/exact/frame are modifiers" in message
 
 
 def test_both_driver_spellings_of_a_renderer_crash_classify_as_conflict():

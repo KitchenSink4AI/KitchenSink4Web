@@ -258,7 +258,6 @@ async def ladder(record, *, depth_cap: int | None = None,
     out = [FrameRef(fid="", frame=main, depth=0, url=page.url,
                     origin=top_origin, same_origin=True, entered=True,
                     how="document")]
-    by_frame = {main: out[0]}
     try:
         children = list(main.child_frames)
     except Exception:
@@ -291,7 +290,6 @@ async def ladder(record, *, depth_cap: int | None = None,
         ref.fid = record.frame_id(key)
         ref.parent = parent
         out.append(ref)
-        by_frame[frame] = ref
         if ref.same_origin and ref.why_not is None:
             if ref.depth > depth_cap:
                 ref.why_not = DEPTH_EXCEEDED

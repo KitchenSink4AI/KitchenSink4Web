@@ -705,13 +705,20 @@ async def find_elements(
     searched_roots = ns.get("shadow_roots_searched") or 0
     fc = frames.counts(ladder_all) if ladder_all else None
     skipped = [f for f in ladder_all if not f.is_main and not f.entered]
+    # A page with no frames keeps the line it had before frames were built.
+    # `0 of 0 iframe(s)` is a worse sentence than `0 iframe(s)` and it says
+    # nothing the shorter one does not, so the richer phrasing appears only
+    # where there is something to be rich about.
+    if fc and fc["total"]:
+        reasons = ", ".join(sorted({f.why_not for f in skipped}))
+        frame_bit = (f'{len(skipped)} of {fc["total"]} iframe(s)'
+                     + (f' ({reasons})' if skipped else '') + ', ')
+    else:
+        frame_bit = f'{ns["iframes"]} iframe(s), '
     lines.append(
         'not searched: '
         + (f'everything outside {_located_ref(location)}, ' if scope else '')
-        + (f'{len(skipped)} of {fc["total"]} iframe(s) '
-           if fc else f'{ns["iframes"]} iframe(s), ')
-        + (f'({", ".join(sorted({f.why_not for f in skipped}))}), '
-           if skipped else ('' if fc else ''))
+        + frame_bit
         + f'{ns["closed_shadow_roots"]} closed shadow root(s) (unreachable by '
         f'any tool)'
         + (f'; searched {searched_roots} of {ns["open_shadow_roots"]} open '
