@@ -57,6 +57,7 @@ from ..policy import engine as _policy
 from ..policy import gates as _gates
 from ..policy import origins as _origins
 from ..policy import readonly
+from ..policy import walls as _walls
 from ..projection import (ENCODING_NAME as _ENCODING, RUNGS as _RUNGS,
                           find as _find, instrument as _instrument,
                           ntok as _ntok, read_page, read_text)
@@ -163,7 +164,42 @@ _WALL_MARKERS = (
     "just a moment...", "checking your browser", "cf-challenge",
     "attention required! | cloudflare", "captcha-delivery",
     "please verify you are a human", "unusual traffic from your computer",
+    # Observed on a live Cloudflare interstitial during the 2026-09-06 spike,
+    # on a challenge that had painted its text but not its title.
+    "performing security verification",
 )
+
+
+#: The vendor tables live in `policy/walls.py`, which carries the tier
+#: contract (BLOCK-ONLY fires alone, CORROBORATING needs a refusing status,
+#: NEVER only identifies the vendor) and the evidence for every entry.
+_WALL_HEADERS = _walls.BLOCK_HEADERS
+
+
+def _edge_vendor(headers: dict | None) -> str | None:
+    """The bot-mitigation edge that served this response, if it is named.
+
+    Identification only, and the distinction is load-bearing: presence means
+    the response passed through that vendor and says nothing about whether it
+    was blocked. `server: cloudflare` rides on every response Cloudflare ever
+    proxies."""
+    return _walls.edge_vendor(headers)
+
+
+def _header_wall(headers: dict | None) -> tuple[str, str] | None:
+    """The verdict a response header names outright, or None.
+
+    Consulted BEFORE the title and body, because a header is present the
+    moment the response arrives whereas an interstitial's text is a race
+    against the renderer. That race was the bug: openai.com answered 403 with
+    `cf-mitigated: challenge`, an empty title, and an empty body, and the
+    title-and-body classifier scored it as no wall at all."""
+    hit = _walls.header_block(headers)
+    if hit is None:
+        return None
+    vendor, evidence = hit
+    return "bot-wall-or-captcha", f"{vendor} wall: {evidence}"
+
 
 #: Markers that mean an EXPIRED or required login rather than a bot wall.
 #: Deliberately narrow phrases: "sign in" alone appears on every page that
@@ -184,7 +220,8 @@ _LOGIN_PATH = re.compile(
 
 
 async def _wall_verdict(page, status: int | None,
-                        requested: str | None = None) -> dict:
+                        requested: str | None = None,
+                        headers: dict | None = None) -> dict:
     """Detect a bot wall, a CAPTCHA interstitial, or an auth wall and say so.
 
     Cloudflare interstitials, CAPTCHAs, rate limits, and expired sessions all
@@ -197,7 +234,14 @@ async def _wall_verdict(page, status: int | None,
     three answering `wall: null`: a 202 anomaly shell (a top-level document
     has no honest reason to answer 202, and the observed case was a search
     engine returning an empty results shell to a headless client), a 503
-    sorry page, and a redirect that lands on a login path."""
+    sorry page, and a redirect that lands on a login path.
+
+    Two more shapes added from the 2026-09-06 spike, both live Cloudflare
+    challenges that scored `wall: null`: a 403 carrying `cf-mitigated:
+    challenge` with an empty title and empty body, and a 403 from a
+    Cloudflare edge with an empty body and no challenge text at all. Response
+    HEADERS are now consulted first for exactly this reason: they do not
+    depend on the interstitial having painted."""
     verdict = {"wall": None, "status": status}
     try:
         title = (await page.title() or "").lower()
@@ -222,7 +266,38 @@ async def _wall_verdict(page, status: int | None,
         requested and landed and landed != requested
         and _LOGIN_PATH.search(urlparse(landed).path or "")
         and not _LOGIN_PATH.search(urlparse(requested).path or ""))
-    if marker:
+    header_hit = _header_wall(headers)
+    # Visible-text signatures that name a vendor, and the documented
+    # combinations (Akamai's "Access Denied" is too generic to fire alone, so
+    # it is paired with its body phrase and its status).
+    text_hit = _walls.text_block(title, body, status)
+    # The strongest DataDome and HUMAN signatures live inside <script> tags,
+    # which innerText does not expose, so they need the HTML source. Fetching
+    # source is only worth it once the status already says refused, which
+    # keeps an ordinary page from ever paying for it.
+    source_hit = None
+    if (header_hit is None and text_hit is None and not marker
+            and status in _walls.REFUSING_STATUSES):
+        try:
+            # A BOUNDED slice, not page.content(). Everything else in this
+            # file reads under a cap and an error page has no honest reason
+            # to be large, but "no honest reason" is not a size limit, and
+            # pulling an unbounded document into memory to look for a
+            # substring is how a hostile 50 MB error page becomes our
+            # problem. Every vendor signature sits in the head or the first
+            # scripts, so the cap costs nothing real.
+            source_hit = _walls.source_block(await page.evaluate(
+                "() => (document.documentElement "
+                "? document.documentElement.outerHTML : '').slice(0, 20000)"))
+        except Exception:
+            source_hit = None
+    if header_hit:
+        verdict["wall"], verdict["marker"] = header_hit
+    elif text_hit or source_hit:
+        vendor, evidence = text_hit or source_hit
+        verdict["wall"] = "bot-wall-or-captcha"
+        verdict["marker"] = f"{vendor} wall: {evidence}"
+    elif marker:
         verdict["wall"] = "bot-wall-or-captcha"
         verdict["marker"] = marker
     elif status == 202:
@@ -240,6 +315,18 @@ async def _wall_verdict(page, status: int | None,
                              else "HTTP 503")
     elif status == 403 and ("captcha" in body or "blocked" in title):
         verdict["wall"] = "forbidden-challenge"
+    elif status == 403 and _edge_vendor(headers) and not body.strip():
+        # A 403 from a bot-mitigation edge that rendered NOTHING. The empty
+        # body is what makes this safe to call: an application's own 403
+        # explains itself ("you do not have permission to view this
+        # project"), and a page that says nothing at all is the edge
+        # refusing before the application was ever consulted. The 2026-09-06
+        # spike measured g2.com answering exactly this to all five lanes.
+        verdict["wall"] = "forbidden-challenge"
+        verdict["marker"] = (
+            f"HTTP 403 from a {_edge_vendor(headers)} edge with an empty "
+            f"body, which is an edge-level refusal rather than the "
+            f"application's own answer")
     elif login_redirect:
         verdict["wall"] = "auth-wall"
         verdict["marker"] = (f"redirected to a login page ({landed}) instead "
@@ -247,6 +334,16 @@ async def _wall_verdict(page, status: int | None,
     elif auth_marker or status == 401:
         verdict["wall"] = "auth-wall"
         verdict["marker"] = auth_marker or "HTTP 401"
+    if verdict["wall"]:
+        # The practical half of an honest refusal. A user who wants to be
+        # unblocked gets asked for exactly these identifiers, and "the page
+        # was blank so I don't have one" ends that conversation.
+        references = _walls.reference_ids(headers, title, body)
+        if references:
+            verdict["reference_ids"] = references
+        vendor = _edge_vendor(headers)
+        if vendor:
+            verdict["vendor"] = vendor
     return verdict
 
 
@@ -869,8 +966,17 @@ async def navigate(
             urlparse(record.page.url).hostname or "",
             float(raw) if raw.replace(".", "", 1).isdigit() else None)
 
+    # The response headers are the wall signal that does not race the
+    # renderer, so they are handed to the classifier rather than left on the
+    # floor. A response object that has gone away is not an error: the
+    # title-and-body path still runs.
+    try:
+        response_headers = dict(response.headers) if response is not None else None
+    except Exception:
+        response_headers = None
     verdict = await _wall_verdict(
-        record.page, status, requested=url if action == "goto" else None)
+        record.page, status, requested=url if action == "goto" else None,
+        headers=response_headers)
     if verdict["wall"] == "auth-wall":
         raise _auth_refusal(record.page.url, verdict.get("marker"))
     if verdict["wall"]:
@@ -898,7 +1004,14 @@ async def navigate(
             f'clear it, or come back later. '
             + (f'Retry-After honored: {retry_after_s:.0f}s. '
                if retry_after_s else '')
-            + f'Evidence: {verdict.get("marker") or "HTTP status"}.')
+            + f'Evidence: {verdict.get("marker") or "HTTP status"}.'
+            # The identifiers a site owner asks for when a user requests
+            # access. Surfaced here because the refusal is the only place the
+            # user sees, and the page they would have read them off is gone.
+            + (' Quote this to the site owner if you ask to be allowed: '
+               + ', '.join(f'{k} {v}' for k, v in
+                           verdict["reference_ids"].items()) + '.'
+               if verdict.get("reference_ids") else ''))
     return {
         "session": sess.session_id, "page": record.handle,
         "lane": sess.spec.lane,
