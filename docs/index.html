@@ -53,7 +53,7 @@
 @font-face{font-family:"Fraunces Fallback";src:local("Georgia");size-adjust:104%;line-gap-override:0%}
 :root{
   --paper:#e6f0e4; --paper-deep:#d4e5d1; --ink:#1f3b2c; --ink-soft:#42604e;
-  --brass:#776017; --brass-bright:#a2841f; --live:#4d9a52; --stamp:#a6442a; --rule:#a5c0a2;
+  --brass:#776017; --brass-bright:#a2841f; --live:#4d9a52; --live-ink:#376d3a; --stamp:#a6442a; --rule:#a5c0a2;
   --tint:rgba(119,96,23,.06); --drop-op:.18;
   --shadow: 0 2px 0 var(--rule), 0 10px 30px rgba(31,59,44,.10);
 }
@@ -145,7 +145,7 @@ body.watered .bed .leaf{opacity:var(--drop-op)}
 .can-hint{display:block;font-size:9px;letter-spacing:.22em;text-transform:uppercase;
   color:var(--ink-soft);opacity:.55;margin-top:6px}
 /* tipped, the hint stops instructing and starts reporting */
-.can-hint.bloom{display:none;color:var(--live);opacity:.95;font-weight:600}
+.can-hint.bloom{display:none;color:var(--live-ink);opacity:.95;font-weight:600}
 body.watered .can-hint{display:none}
 body.watered .can-hint.bloom{display:block}
 
@@ -241,7 +241,7 @@ section:before{content:"";position:absolute;left:0;right:0;top:0;height:12px;
 .bedrow[aria-pressed="true"]{background-color:var(--paper-deep);
   border-left-color:var(--live);border-left-width:5px;
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='15'%3E%3Cpath d='M5.5 15 V5' stroke='%234d9a52' stroke-width='1.5' fill='none'/%3E%3Cpath d='M5.5 9 C1.5 8 .5 3.5 .5 3.5 C4.5 2.5 5.5 7 5.5 9 Z' fill='%234d9a52'/%3E%3Cpath d='M5.5 11.5 C9 10.8 10 7.5 10 7.5 C6.8 6.8 5.5 10 5.5 11.5 Z' fill='%234d9a52' opacity='.72'/%3E%3C/svg%3E");background-position:6px center}
-.bedrow[aria-pressed="true"] .px{color:var(--live);font-weight:600}
+.bedrow[aria-pressed="true"] .px{color:var(--live-ink);font-weight:600}
 .demo-controls{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px}
 .stampbtn{font-family:'IBM Plex Mono',"Plex Mono Fallback",monospace;font-size:10px;letter-spacing:.16em;
   text-transform:uppercase;border:2px solid var(--stamp);color:var(--stamp);background:none;
