@@ -71,17 +71,16 @@
   // Under a scope the sweep starts at the scope root, so the counts in
   // `not_searched` describe the region the caller asked about rather than the
   // page it happens to sit on.
+  //
+  // The recursion itself is `ksOpenRoots`, the ONE deep walk from
+  // `visibility.js`, rather than a fourth private copy of it. The copies
+  // drifted the way the hidden-detection copies drifted: the occlusion scan's
+  // was a flat `querySelectorAll('*')` that stopped at every shadow boundary,
+  // and re-attack 2 put an opaque lid inside an open root that this pass
+  // would have walked straight into (A3).
   const openRoots = [];
   let frames = 0;
-  function sweep(root) {
-    for (const el of root.querySelectorAll('*')) {
-      if (el.tagName === 'IFRAME') frames++;
-      if (el.shadowRoot) {
-        openRoots.push(el.shadowRoot);
-        sweep(el.shadowRoot);
-      }
-    }
-  }
+  const countFrames = (el) => { if (el.tagName === 'IFRAME') frames++; };
   // A scope root that is ITSELF a shadow host owns a root the light-DOM
   // sweep below cannot see: `host.querySelectorAll('*')` returns slotted
   // light children, never the component's own tree. Scoping to a component
@@ -89,9 +88,11 @@
   // block fixes, so the host's own root is taken first and swept.
   if (scopeRoot && scopeRoot.shadowRoot) {
     openRoots.push(scopeRoot.shadowRoot);
-    sweep(scopeRoot.shadowRoot);
+    for (const r of ksOpenRoots(scopeRoot.shadowRoot, countFrames)) {
+      openRoots.push(r);
+    }
   }
-  sweep(searchBase);
+  for (const r of ksOpenRoots(searchBase, countFrames)) openRoots.push(r);
   const openShadow = openRoots.length;
   const searchedRoots = SHADOW_ON ? openRoots : [];
 

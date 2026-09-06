@@ -1099,6 +1099,12 @@ async def click(
         summary=f'click {desc.get("role")} "{desc.get("name")}" on '
                 f'{record.handle}'))
     before = await _act.observe(record.page, resolved["node_ref"])
+    # THE LAST THING BEFORE THE INPUT (A7). Focus and re-take the cloak
+    # verdict in one JS turn, so a page that raises an opaque lid when the
+    # control takes focus is caught by the check its own handler triggered.
+    # The resolution-time verdict describes the page as it was several round
+    # trips ago, and the trusted click focuses this element anyway.
+    await _act.arm_for_dispatch(record.page, resolved["handle"], tool="click")
     try:
         await resolved["handle"].click(
             button=button, click_count=click_count,
@@ -1564,22 +1570,23 @@ def _field_location(f: dict) -> dict:
 _FOCUSED_JS = _instrument(r"""
 () => {
 // @@KS4WEB_PAYMENT@@
+// @@KS4WEB_ACTIVATION@@
   const el = document.activeElement;
   if (!el || el === document.body || el === document.documentElement) return null;
   const f = ksFormOf(el);
-  // The effective submission type, the SAME fold the extractor and the live
-  // resolver apply: a <button> with a missing or invalid type inside a form
-  // IS a submit button, and the focused-descriptor reader has to agree with
-  // them or the key gate and the click gate disagree about one element.
-  let type = (el.type || '').toLowerCase();
-  if (el.tagName === 'BUTTON') {
-    const raw = (el.getAttribute('type') || '').trim().toLowerCase();
-    if (raw === 'button' || raw === 'reset') type = raw;
-    else if (raw === 'submit') type = 'submit';
-    else type = f ? 'submit' : raw;
-  }
+  // The effective submission type comes from `ksSubmitTypeOf`, the one copy
+  // of that rule, because the focused-descriptor reader has to agree with the
+  // extractor and the resolver about one element or the key gate and the
+  // click gate disagree about it.
+  // `null` means 'not a form control with submission semantics', which
+  // is NOT the same as the IDL default: `HTMLButtonElement.type` reports
+  // 'submit' for a typeless button even outside a form.
+  const st = ksSubmitTypeOf(el, !!f);
+  const type = st === null ? '' : st;
+  const grp = ksPanGroup(el);
   return {
     role: (el.tagName || '').toLowerCase(),
+    tag: el.tagName,
     name: (el.getAttribute('aria-label') || el.getAttribute('name')
            || el.getAttribute('placeholder') || el.textContent
            || '').slice(0, 80),
@@ -1587,12 +1594,18 @@ _FOCUSED_JS = _instrument(r"""
     attr_name: (el.getAttribute('name') || ''),
     pattern: (el.getAttribute('pattern') || ''),
     inputmode: (el.getAttribute('inputmode') || ''),
+    placeholder: (el.getAttribute('placeholder') || ''),
+    editable: !!el.isContentEditable,
+    pan_shape: ksPanShape('value' in el ? el.value : ''),
+    pan_group_size: grp ? grp.size : null,
+    pan_group_digits: grp ? grp.digits : null,
     type: type,
     autocomplete: (el.getAttribute('autocomplete') || '').toLowerCase(),
     in_form: !!f,
     action: f ? (f.getAttribute('action') || '') : '',
     payment: ksPaymentField(el),
     form_payment: ksFormPayment(f),
+    activates: ksDelegatedActivation(el),
     page_key: location.origin + location.pathname + location.hash
   };
 }
@@ -1690,9 +1703,14 @@ async def press_keys(
                 + (" (submits the form the focused control is in)"
                    if submitting else "")))
     before = await _act.observe(record.page, node_ref)
+    if resolved is not None:
+        # Focus and the cloak re-check in one turn (A7), which replaces the
+        # bare focus this used to be: the focus is the event a lid-raising
+        # page listens for. It sits OUTSIDE the driver try-block, because its
+        # refusal is a target verdict and not a driver failure.
+        await _act.arm_for_dispatch(record.page, resolved["handle"],
+                                    tool="press_keys")
     try:
-        if resolved is not None:
-            await resolved["handle"].focus()
         for _ in range(repeat):
             if resolved is not None:
                 await resolved["handle"].press(keys, delay=delay_ms)

@@ -37,6 +37,7 @@ from __future__ import annotations
 import os
 import re
 import threading
+import unicodedata
 from typing import Any
 
 from ..errors import CredentialRefused
@@ -125,12 +126,63 @@ def is_secret_field(field: dict) -> bool:
 #: long token matches as a SUBSTRING of the de-spaced string, so `card_number`,
 #: `cardNumber`, `card-number` and `Card number` all reduce to `cardnumber`,
 #: while a short one must stand as its own WORD.
-PAYMENT_NAME_SUBSTRINGS = (
+#: TIER 1, a card number in any language. See `projection/payment.js` for the
+#: sourcing note: the non-English terms are the localized card labels browser
+#: autofill heuristics match on, because they are what real checkout pages in
+#: those markets write. The list was English-only until re-attack 2 (B1) put a
+#: live PAN into `Kartennummer`, 카드번호, and カード番号 ungated.
+PAYMENT_PAN_TERMS = (
     "cardnumber", "cardnum", "cardno", "ccnumber", "ccnum", "cardholder",
     "creditcard", "debitcard", "nameoncard", "cardname",
+    "kartennummer", "kartennr", "kreditkarte", "karteninhaber",
+    "numerodecarte", "numerodelacarte", "cartebancaire", "cartedecredit",
+    "titulairedelacarte",
+    "numerodetarjeta", "tarjetadecredito", "tarjetacredito",
+    "numerodocartao", "cartaodecredito", "titulardelatarjeta",
+    "numerodellacarta", "numerodicarta", "cartadicredito",
+    "카드번호", "신용카드", "체크카드", "카드소유자",
+    "カード番号", "クレジットカード", "カードナンバー", "カード名義",
+    "卡号", "卡號", "信用卡", "持卡人", "銀行卡", "银行卡",
+)
+
+#: Card-QUALIFIED expiry and security-code compounds. The qualifier is the
+#: disambiguation, so these classify a field on their own.
+PAYMENT_CARD_SIDE_TERMS = (
     "cardexpiry", "cardexpiration", "cardexp", "ccexpiry", "ccexp",
     "securitycode", "cardcode", "cardsecurity", "cvvnumber",
 )
+
+#: The card number's NEIGHBOURS: expiry and security code as they are written
+#: in each language, all of them generic phrases on their own. A passport
+#: expiry and a one-time-code box are not payment fields, so a match here
+#: classifies only where the same FORM carries a card number.
+PAYMENT_NEIGHBOUR_TERMS = (
+    "gultigbis", "ablaufdatum", "prufziffer", "prufnummer", "sicherheitscode",
+    "dateexpiration", "dexpiration", "cryptogramme", "codedesecurite",
+    "fechadecaducidad", "fechadevencimiento", "codigodeseguridad", "validade",
+    "scadenza", "codicedisicurezza",
+    "유효기간", "보안코드", "유효기한",
+    "有効期限", "セキュリティコード", "カード確認番号",
+    "有效期", "安全码", "安全碼",
+)
+
+#: The instrument qualifiers that make a "<something> card number" NOT a
+#: payment field. A library card, a boarding pass, and an ID card are not
+#: payment instruments and a confirmation prompt on a library form is the
+#: erosion DESIGN names; a GIFT card is one and stays.
+NOT_PAYMENT_CARDS = (
+    "library", "loyalty", "membership", "member", "boarding", "id", "identity",
+    "sim", "key", "room", "door", "access", "badge", "business", "report",
+    "score", "student", "staff", "employee", "health", "insurance", "medicare",
+    "social", "birthday", "greeting", "memory", "sd", "graphics", "video",
+    "sound", "rewards", "reward", "points", "club", "discount", "stamp",
+    "punch", "time", "swipe", "game", "gaming", "phone", "index", "tarot",
+    "wild",
+)
+
+#: Every tier-1 term, kept as one name because four call sites and one drift
+#: test read it.
+PAYMENT_NAME_SUBSTRINGS = PAYMENT_PAN_TERMS + PAYMENT_CARD_SIDE_TERMS
 PAYMENT_NAME_WORDS = ("cvv", "cvv2", "cvc", "cvc2", "csc", "ccv")
 
 #: A `pattern` spelling a 13-to-19 digit run is a card number whatever the
@@ -139,12 +191,51 @@ PAYMENT_NAME_WORDS = ("cvv", "cvv2", "cvc", "cvc2", "csc", "ccv")
 #: an account number is rarely constrained at all.
 _PAN_PATTERN = re.compile(r"\{\s*1[3-9]\s*(,\s*(1[3-9])?\s*)?\}")
 
+#: A PAN SHAPE shown to a HUMAN rather than declared to a validator: four
+#: groups of four, or a bare 13-to-19 digit run, in a placeholder or a mask.
+#: The mirror of `ksPanShape`.
+_PAN_SHAPE_CORE = re.compile(r"^(?:[0-9]{13,19}|[*x•·#]{13,19})$",
+                             re.IGNORECASE)
+
+
+def pan_shape(value) -> bool:
+    """Whether this string reads as a card number to the person filling the
+    form. An IBAN carries letters, a phone number carries punctuation, and a
+    date is too short, so none of them lands here."""
+    if not value:
+        return False
+    text = str(value).strip()
+    if not 13 <= len(text) <= 32:
+        return False
+    return bool(_PAN_SHAPE_CORE.match(text.replace(" ", "").replace("-", "")))
+
+
 #: Descriptor keys that can NAME a field.
 _NAME_KEYS = ("name", "label", "attr_name", "attr_id", "id", "placeholder",
               "aria_label", "title")
 
 _CAMEL = re.compile(r"([a-z0-9])([A-Z])")
-_NONWORD = re.compile(r"[^a-z0-9]+")
+#: SEPARATORS collapse; LETTERS AND DIGITS OF EVERY SCRIPT survive. The old
+#: `[^a-z0-9]+` reduced a Korean 카드번호 or a Japanese カード番号 to the empty
+#: string, so the classifier was not missing a Korean word, it could not see
+#: any Korean word (re-attack 2, B1).
+_NONWORD = re.compile(r"[^\w]+|_+", re.UNICODE)
+
+
+#: The LATIN combining diacritics, and only those. Stripping every combining
+#: mark instead (`unicodedata.combining(c)`) also strips U+3099, the Japanese
+#: voiced sound mark, which turns ド into ト and カード番号 into a word that
+#: matches nothing. The mirror in `payment.js` strips this same range.
+_COMBINING_LATIN = range(0x0300, 0x0370)
+
+
+def _fold(text: str) -> str:
+    """Fold diacritics so `numéro` and `gültig` reduce to the ASCII spellings
+    the vocabulary lists, leaving Hangul and kana recomposed and intact."""
+    decomposed = unicodedata.normalize("NFKD", text)
+    stripped = "".join(c for c in decomposed
+                       if ord(c) not in _COMBINING_LATIN)
+    return unicodedata.normalize("NFC", stripped)
 
 
 def payment_haystack(field: dict) -> str:
@@ -152,7 +243,18 @@ def payment_haystack(field: dict) -> str:
     words. camelCase splits first, so `cardNumber` reads as two words."""
     raw = " ".join(str(field.get(k)) for k in _NAME_KEYS if field.get(k))
     raw = _CAMEL.sub(r"\1 \2", raw)[:400]
-    return " " + _NONWORD.sub(" ", raw.lower()).strip() + " "
+    return " " + _NONWORD.sub(" ", _fold(raw.lower())).strip() + " "
+
+
+def payment_compact(hay: str) -> str:
+    """The de-spaced haystack with every non-payment card compound struck out,
+    so a substring match cannot land inside `librarycard`."""
+    compact = hay.replace(" ", "")
+    for qualifier in NOT_PAYMENT_CARDS:
+        token = qualifier + "card"
+        if token in compact:
+            compact = compact.replace(token, " ")
+    return compact
 
 
 def is_payment_field(field: dict) -> bool:
@@ -183,12 +285,37 @@ def is_payment_field(field: dict) -> bool:
     if len(hay) > 2:
         if any(f" {word} " in hay for word in PAYMENT_NAME_WORDS):
             return True
-        compact = hay.replace(" ", "")
+        compact = payment_compact(hay)
         if any(token in compact for token in PAYMENT_NAME_SUBSTRINGS):
             return True
+        # The neighbour tier: an expiry or a security code as it is written in
+        # some language, which is a card field only where the same form
+        # carries a card number. The form-level answer comes from the page,
+        # exactly as `secret` comes from the live type.
+        if (field.get("form_payment")
+                and any(token in compact for token in PAYMENT_NEIGHBOUR_TERMS)):
+            return True
     pattern = str(field.get("pattern") or "")
-    return bool(pattern and _PAN_PATTERN.search(pattern)
-                and ("0-9" in pattern or "\\d" in pattern))
+    if (pattern and _PAN_PATTERN.search(pattern)
+            and ("0-9" in pattern or "\\d" in pattern)):
+        return True
+    # A PAN shape the page shows the human. `pan_shape` rides the descriptor
+    # for the one string that must never travel with it, the field's current
+    # VALUE: a masked card number is evidence and putting it in the audit
+    # record would be leaking the thing this gate protects.
+    if field.get("pan_shape"):
+        return True
+    if pan_shape(field.get("placeholder")):
+        return True
+    # A SPLIT card number. The page supplies the measurements (how many short
+    # numeric boxes share this field's group, and how many digits they total)
+    # and the rule is applied here, the way `pattern` is supplied and read
+    # here, so a descriptor cannot classify itself harmless by asserting a
+    # verdict.
+    size = field.get("pan_group_size")
+    digits = field.get("pan_group_digits")
+    return bool(isinstance(size, int) and isinstance(digits, int)
+                and 2 <= size <= 6 and 13 <= digits <= 19)
 
 
 def refuse_secret_write(field: dict, tool: str) -> None:

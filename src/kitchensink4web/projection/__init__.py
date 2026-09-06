@@ -36,6 +36,7 @@ from .meter import ENCODING_NAME, ntok
 from .render import RUNGS, Projection, project
 
 __all__ = ["EXTRACT_JS", "FIND_JS", "TEXT_JS", "VISIBILITY_JS", "PAYMENT_JS",
+           "ACTIVATION_JS",
            "CLOSED_SHADOW_HOOK", "INSTRUMENT_KEY", "instrument",
            "Projection", "project", "extract", "find", "read_text",
            "read_page", "ntok", "ENCODING_NAME", "RUNGS"]
@@ -47,6 +48,7 @@ _HERE = Path(__file__).parent
 _VIS_MARK = "// @@KS4WEB_VISIBILITY@@"
 _INSTR_MARK = "// @@KS4WEB_INSTRUMENT@@"
 _PAY_MARK = "// @@KS4WEB_PAYMENT@@"
+_ACT_MARK = "// @@KS4WEB_ACTIVATION@@"
 
 #: THE ONE HIDDEN-DETECTION SOURCE (gauntlet 2 H2/H3/M4/L2, 2026-09-06).
 #: `hiddenReason` used to exist three times, in `extract.js`, `find.js`, and
@@ -64,6 +66,14 @@ VISIBILITY_JS = (_HERE / "visibility.js").read_text(encoding="utf-8")
 #: declares no token at all was unclassified everywhere at once. The rule now
 #: lives in `payment.js` and is spliced into every consumer at load.
 PAYMENT_JS = (_HERE / "payment.js").read_text(encoding="utf-8")
+
+#: THE ONE ACTIVATION-TARGET SOURCE (re-attack 2 C1, 2026-09-06). Same story
+#: one question earlier: every classifier in the build modelled the element
+#: the tool TOUCHES, and the browser routes a click on a `<label>` to the
+#: control it labels. Clicking `<label for=submitButton>` submitted a
+#: card-carrying form with no class computed. "Which element does this
+#: activate" now has one implementation and every consumer splices it.
+ACTIVATION_JS = (_HERE / "activation.js").read_text(encoding="utf-8")
 
 #: The per-process instrument secret. It is baked into the injected script
 #: SOURCES, never passed as an evaluate argument and never written into the
@@ -112,6 +122,8 @@ def instrument(source: str, *, visibility: str | None = None) -> str:
             _VIS_MARK, VISIBILITY_JS if visibility is None else visibility)
     if _PAY_MARK in source:
         source = source.replace(_PAY_MARK, PAYMENT_JS)
+    if _ACT_MARK in source:
+        source = source.replace(_ACT_MARK, ACTIVATION_JS)
     if _INSTR_MARK in source:
         source = source.replace(_INSTR_MARK, INSTRUMENT_PRELUDE)
     return source

@@ -1,5 +1,5 @@
 ## 1 IDENTITY
-url: http://127.0.0.1:62468/wikipedia_versailles.html
+url: http://127.0.0.1:56055/wikipedia_versailles.html
 title: Treaty of Versailles - Wikipedia
 status: 200 | load: load | lane: A | page: p1 | read: - | t=
 viewport: 1280x900 | page height: 51.1 screens | dom nodes: 10,737 | shape: article (110 paragraphs, 87290 prose chars, 66% of page text, longest paragraph 2301 chars)
@@ -159,7 +159,8 @@ iframes: none
 shadow roots: 0 open (traversed=no), 0 closed (unreachable by any tool)
 virtualized or infinite-scroll containers: none detected
 below the fold: 51.1 screens; this read covered the whole DOM rather than the viewport
-hidden content stripped: 3,835 nodes (969 interactive, 39,751 chars of text) [hidden-attr=2089, display-none=1536, visibility-hidden=134, offscreen=54, opacity-0=11, aria-hidden=11]; 73 hidden regions carried more than 20 characters of text
+hidden content stripped: 3,836 nodes (969 interactive, 39,751 chars of text) [hidden-attr=2089, display-none=1106, opacity-0=575, offscreen=54, aria-hidden=11, low-contrast=1]; hidden interactive by technique: hidden-attr=707, opacity-0=182, display-none=80; 73 hidden regions carried more than 20 characters of text
+reading order: 1 container(s) render their children in an order the source does not carry [grid-placement=1]; everything above is reported in SOURCE order, so on those containers it is not the order a person reads
 canvas-rendered regions: none
 auth state: signed-out (a sign-in control is present); heuristic
 unlisted affordances: 2120 in 4 class(es) [in-prose links=1449, other controls=664, primary actions=6, site and page navigation=1]. In-prose links carry a quota of zero by design; find_elements retrieves one by name for a fraction of a read.
@@ -169,7 +170,7 @@ headings not listed: 19 of 52; tables omitted: 0 of 8
 regions listed but not expanded: 24 (their expand costs are printed above); regions dropped by the degradation rung: 14; 2 region(s) own nothing at all and were not listed
 name quality: 11 accessible name(s) came from a fallback or were truncated on a word boundary; a name that could not be computed is printed as (unnamed) rather than guessed from a CSS class
 priced at page rate: 19 of 79 priced unit(s) used the page-wide characters-per-token rate because their own text sample was unavailable or this read's 40,000-character sample budget was already spent
-budget: 4,408 of 5,000 tokens used (88%), 500 held as tokenizer-drift margin, estimator tiktoken/o200k_base | degradation rung 6 of 16
+budget: 4,477 of 5,000 tokens used (90%), 500 held as tokenizer-drift margin, estimator tiktoken/o200k_base | degradation rung 6 of 16
 
 ## 8 NEXT CALLS (ranked by what each is likely to answer, not by size)
 expand r7 ("#content"): get_page_view(page="p1", location={"region":"r7"})  ~18,560 tok

@@ -119,6 +119,59 @@ function ksUpLight(n) {
   return (r && r.host) ? r.host : null;
 }
 
+// THE ONE DEEP WALK: the light tree plus every OPEN shadow root, in host
+// order, depth first. It lives here for the same reason `ksHiddenReason`
+// does. Three copies of this recursion existed (the search's root sweep, the
+// acting resolver's, and the extractor's) and the OCCLUSION scan had a fourth
+// shape that was not a recursion at all -- a flat `querySelectorAll('*')`
+// that stops dead at every shadow boundary. Re-attack 2 (A3) walked through
+// exactly that gap: a `position:fixed` opaque lid inside an open root was
+// unreachable by the scan while the same page's read counted the root two
+// lines away. A component library that renders a skeleton loader into its own
+// root defeats a light-tree-only scan by accident, so this is ordinary
+// furniture rather than an attack.
+//
+// `fn` returning `false` STOPS the walk, which is how a caller spends a
+// budget without the walk having to know what the budget is about. Closed
+// roots stay unreachable and are counted at creation instead, which is the
+// build's standing answer everywhere else.
+function ksDeepEach(root, fn) {
+  var stopped = false;
+  (function walk(r) {
+    var all;
+    try { all = r.querySelectorAll('*'); } catch (e) { return; }
+    for (var i = 0; i < all.length; i++) {
+      var el = all[i];
+      if (fn(el) === false) { stopped = true; return; }
+      if (el.shadowRoot) { walk(el.shadowRoot); if (stopped) return; }
+    }
+  })(root);
+  return !stopped;
+}
+
+// Every open shadow root under `root`, discovered by the walk above, with an
+// optional per-element callback so a caller that also has to count something
+// (iframes, for the search's `not_searched` block) gets it from the SAME
+// sweep rather than a second one.
+function ksOpenRoots(root, onEl) {
+  var out = [];
+  ksDeepEach(root, function (el) {
+    if (onEl) onEl(el);
+    if (el.shadowRoot) out.push(el.shadowRoot);
+  });
+  return out;
+}
+
+// Containment across shadow boundaries. `a.contains(b)` is light-tree only,
+// so a host does not contain its own shadow content by that measure, and the
+// occlusion scan's "skip my own ancestors and descendants" filter needs the
+// flattened answer or it compares a control against the component that
+// renders it.
+function ksContainsDeep(a, b) {
+  for (var n = b; n; n = ksUp(n)) if (n === a) return true;
+  return false;
+}
+
 function ksParseColor(v) {
   var m = /rgba?\(([^)]+)\)/.exec(v || '');
   if (!m) return null;
@@ -344,68 +397,251 @@ function ksPaintRank(n) {
   return 0;
 }
 
-// Does this box PAINT at all, which is deliberately NOT `ksHiddenChain`.
-// That one answers whether a human can READ the element, and by that measure
-// a modal backdrop is black-on-black low-contrast while being the most opaque
-// thing on the page -- which is how the first draft of this scan skipped
-// every backdrop it was written to catch.
-function ksPaintsAtAll(el, s) {
-  if (s.visibility === 'hidden' || s.visibility === 'collapse') return false;
-  if (s.contentVisibility === 'hidden') return false;
-  if (ksFilterOpacity(s) <= KS_OPACITY_FLOOR) return false;
+// THE LID DEFINITION IS "ANYTHING THAT PAINTS", and re-attack 2 is the reason
+// it is written that way rather than as a list. Fix wave 4 learned "opaque"
+// from the one lid R4 presented -- a `<div>` carrying `background:#ffffff` --
+// and the rule it wrote asked two questions: is the background colour at
+// least half opaque, or is there a background image. Seven constructions
+// walked through the gap in a single round, and none of them is exotic:
+//
+//   * A REPLACED element paints its CONTENT and declares no background at
+//     all. An `<img>`, `<canvas>`, `<video>`, an `<iframe>`, an `<svg>`: a
+//     full-bleed loading spinner is an image, a consent wall and a chat
+//     widget are iframes, and a drawing overlay is a canvas.
+//   * `backdrop-filter` paints nothing of its own and re-renders everything
+//     behind it. `blur(14px) brightness(2.4)` over a control leaves a blank
+//     white rectangle, which is the strongest cloak in the set.
+//   * STACKED translucent boxes each sit under a per-box threshold while the
+//     stack transmits nothing. Five layers at alpha 0.45 pass 3% of what is
+//     behind them, and a threshold a page can sit under one box at a time is
+//     R5's bug one property along.
+//   * A STATIC box overlaps by design in CSS. Same-cell grid items, table
+//     cells, negative margins and floats all do it, and the old
+//     `position:static && z-index:auto -> skip` early-out was a performance
+//     shortcut standing in for a correctness claim.
+//
+// So the measure is one number per box: HOW MUCH of what is behind this does
+// it replace, from 0 (nothing) to 1 (everything). Coverage at a point is the
+// stack composited, not any single box tested.
+//
+// A MORE TRUTHFUL PRIMITIVE WAS LOOKED FOR. Two exist and both are
+// disqualified, for reasons worth writing down so the next wave does not
+// re-derive them.
+//
+//  * `document.elementsFromPoint` is HIT TESTING, and R4's own fixture is the
+//    disqualification: the lid that started all of this is
+//    `pointer-events:none`, so every hit test walks straight through it and
+//    returns the button.
+//  * IntersectionObserver v2 (`trackVisibility: true`) is the real candidate.
+//    It asks the compositor whether the target is occluded or distorted, it
+//    was designed for exactly this threat, and it would handle every class
+//    above at once. It is not used, for four reasons that stack: it is
+//    ASYNCHRONOUS and the spec requires `delay >= 100`, so every acting call
+//    would wait on a timer; it is Chromium-only, and a visibility rule that
+//    differs by engine is the divergence this file exists to remove; the spec
+//    explicitly permits FALSE NEGATIVES ("the implementation may return
+//    false"), which is a licence a refusal cannot be built on; and it returns
+//    ONE BOOLEAN for the whole element with no technique named and no
+//    majority rule, so a sticky header clipping a button's top edge is
+//    reported the same way a full-bleed lid is. That last one is the
+//    shipability question, not a detail.
+//
+// There is no synchronous "what paints above this rect" API, so the scan
+// composites the boxes itself.
+
+// The tags whose CONTENT is the paint. The class is HTML's replaced elements
+// (HTML 4.7-4.8 embedded content), which the box model describes as a box
+// with something else drawn into it, plus `<input type=image>`, which is a
+// submit button wearing a picture.
+var KS_REPLACED_TAGS = {
+  IMG: 1, CANVAS: 1, VIDEO: 1, IFRAME: 1, FRAME: 1, EMBED: 1, OBJECT: 1,
+  SVG: 1, MODEL: 1
+};
+
+function ksPaintsOwnContent(el) {
+  var t = (el.tagName || '').toUpperCase();
+  if (t === 'IMG') {
+    // An image with nothing to draw paints nothing: a missing or failed src
+    // renders as alt text, and calling that a lid would cloak real controls
+    // sitting beside a broken image.
+    if (!(el.currentSrc || el.getAttribute('src'))) return false;
+    return !(el.complete && el.naturalWidth === 0);
+  }
+  if (KS_REPLACED_TAGS[t]) return true;
+  return t === 'INPUT' && (el.type || '').toLowerCase() === 'image';
+}
+
+// A `backdrop-filter` that CHANGES what is behind it past legibility. The
+// blur floor is the one already defended in R5 for the element's own filter,
+// used here on the property that filters everything underneath; any non-blur
+// function (brightness, contrast, invert, grayscale, opacity, saturate) is
+// taken at its word, because none of them is applied to a backdrop by
+// accident. A 1-2px glass blur on a nav bar is left alone.
+function ksBackdropObliterates(s) {
+  var f = s.backdropFilter || s.webkitBackdropFilter || '';
+  if (!f || f === 'none') return false;
+  if (/(brightness|contrast|invert|grayscale|sepia|saturate|opacity|hue-rotate|drop-shadow|url)\(/.test(f)) {
+    return true;
+  }
+  return ksFilterBlur({ filter: f }) >= KS_BLUR_FLOOR;
+}
+
+// The effective opacity of a box including every ancestor's, which is what
+// decides how much of ITS paint actually lands. Kept separate from
+// `ksHiddenChain` for the reason the old `ksPaintsAtAll` was: that one
+// answers whether a human can READ the element, and by that measure a modal
+// backdrop is black-on-black low-contrast while being the most opaque thing
+// on the page.
+function ksPaintOpacity(el, s) {
+  if (s.visibility === 'hidden' || s.visibility === 'collapse') return 0;
+  if (s.contentVisibility === 'hidden') return 0;
   var eff = 1;
   for (var n = el; n; n = ksUp(n)) {
     if (n === document.documentElement) break;
     var ns = (n === el) ? s : ksCS(n);
-    if (ns.display === 'none') return false;
+    if (ns.display === 'none') return 0;
+    eff *= ksFilterOpacity(ns);
     var op = parseFloat(ns.opacity);
     if (op === op) eff *= op;
-    if (eff < 0.5) return false;      // see-through enough to read through
+    if (eff <= 0.02) return 0;
   }
-  return true;
+  return eff;
 }
 
-// The page's opaque positioned boxes, scanned ONCE per injected call. The
-// geometry test comes before the style read on purpose: `getBoundingClientRect`
-// is cheap after the first forced layout and `getComputedStyle` is not, so the
+//: How much of what is behind this box it replaces, in [0, 1]. Anything at or
+//: below this is not paint anyone can see through a stack of.
+var KS_LID_ALPHA_FLOOR = 0.02;
+
+function ksLidAlpha(el, s) {
+  var base = 0;
+  if (ksPaintsOwnContent(el)) base = 1;
+  else if (s.backgroundImage && s.backgroundImage !== 'none') base = 1;
+  else {
+    var bgc = ksParseColor(s.backgroundColor);
+    if (bgc) base = bgc.a;
+  }
+  if (base < 1 && ksBackdropObliterates(s)) base = 1;
+  if (base <= KS_LID_ALPHA_FLOOR) return 0;
+  return base * ksPaintOpacity(el, s);
+}
+
+//: The scan's runaway guard, and it is a TIME budget rather than a count. The
+//: count caps it replaces (the first 60 qualifying boxes, the first 8,000
+//: nodes) were a bypass: 70 decorative 12x12 boxes earlier in document order
+//: filled the budget with chaff and the scan stopped before the box that
+//: mattered (re-attack 2, A6). A cap that silently converts to "not occluded"
+//: is the wrong default, so selection is now geometric -- every box that
+//: paints and is big enough to hide something, however far down the document
+//: it sits -- and the only limit left is the wall-clock one that stops a
+//: pathological page from hanging the tool.
+var KS_OCCLUDER_BUDGET_MS = 1000;
+
+//: Smaller than this in either dimension and a box cannot hide a control.
+var KS_LID_MIN_PX = 8;
+
+// The page's painting boxes, scanned ONCE per injected call. The geometry
+// test comes before the style read on purpose: `getBoundingClientRect` is
+// cheap after the first forced layout and `getComputedStyle` is not, so the
 // scan pays full price only for boxes big enough to hide something.
 var ksOccluderCache = null;
+var ksOccluderTruncated = false;
 function ksOccluders() {
   if (ksOccluderCache) return ksOccluderCache;
   var out = [];
+  ksOccluderTruncated = false;
   try {
-    var all = document.querySelectorAll('*');
-    var n = Math.min(all.length, 8000);
-    for (var i = 0; i < n && out.length < 60; i++) {
-      var el = all[i];
+    var t0 = Date.now(), seen = 0;
+    ksDeepEach(document, function (el) {
+      if (((++seen) & 511) === 0 && Date.now() - t0 > KS_OCCLUDER_BUDGET_MS) {
+        ksOccluderTruncated = true;
+        return false;
+      }
       var r = el.getBoundingClientRect();
-      if (r.width < 8 || r.height < 8) continue;
+      if (r.width < KS_LID_MIN_PX || r.height < KS_LID_MIN_PX) return;
       var s = ksCS(el);
-      if (s.position === 'static' && s.zIndex === 'auto') continue;
-      var bgc = ksParseColor(s.backgroundColor);
-      var opaque = (bgc && bgc.a >= 0.5)
-        || (s.backgroundImage && s.backgroundImage !== 'none');
-      if (!opaque) continue;
-      if (!ksPaintsAtAll(el, s)) continue;     // a cloaked lid hides nothing
-      out.push({ el: el, rect: r, z: ksPaintRank(el) });
-    }
+      var a = ksLidAlpha(el, s);
+      if (a <= KS_LID_ALPHA_FLOOR) return;
+      out.push({ el: el, rect: r, z: ksPaintRank(el), a: a });
+    });
   } catch (e) { out = []; }
   ksOccluderCache = out;
   return out;
 }
 
+// Document order across shadow boundaries. `compareDocumentPosition` between
+// two different trees reports DISCONNECTED and an implementation-specific
+// order, so each node is compared at the ancestor that lives in the document
+// tree -- a shadow child paints with its host. Two nodes that reduce to the
+// same host are ordered by depth: the component's own tree paints after the
+// host's background.
+function ksOrderRef(n) {
+  for (var p = n; p;) {
+    var r = p.getRootNode ? p.getRootNode() : document;
+    if (r === document || !r.host) return p;
+    p = r.host;
+  }
+  return n;
+}
+
 function ksPaintsAbove(cand, el, ze) {
   if (cand.z !== ze) return cand.z > ze;
   // Equal stacking level: later in document order paints later.
-  return !!(el.compareDocumentPosition(cand.el) & 4);
+  var a = ksOrderRef(el), b = ksOrderRef(cand.el);
+  if (a === b) return b !== cand.el;      // the shadow child, not the host
+  try { return !!(a.compareDocumentPosition(b) & 4); } catch (e) { return true; }
+}
+
+// COVERAGE AT A POINT: the stack composited, not one box tested. Each layer
+// passes `1 - alpha` of what is behind it, so five boxes at 0.45 leave
+// 0.55^5 = 3% showing and the point is covered, while corpus B's
+// `rgba(255,0,0,.06)` shield leaves 94% showing and is not.
+function ksCoverageAt(over, x, y) {
+  var through = 1;
+  for (var i = 0; i < over.length; i++) {
+    var b = over[i].rect;
+    if (x >= b.left && x <= b.right && y >= b.top && y <= b.bottom) {
+      through *= (1 - over[i].a);
+      if (through <= 0.5) return 1;
+    }
+  }
+  return 1 - through;
 }
 
 function ksPointCovered(over, x, y) {
-  for (var i = 0; i < over.length; i++) {
-    var b = over[i].rect;
-    if (x >= b.left && x <= b.right && y >= b.top && y <= b.bottom) return true;
-  }
-  return false;
+  return ksCoverageAt(over, x, y) >= 0.5;
+}
+
+// WHAT THE MAJORITY RULE IS APPLIED TO. The rule itself does not move: the
+// centre must be covered and a majority of a nine-point grid with it, which
+// is what keeps sticky headers, toasts, and cookie bars from cloaking the
+// controls they clip. What re-attack 2 (A8) showed is that the grid was
+// sampling the wrong rectangle. A 340x12 band sited exactly on a button's
+// LABEL covers three of nine points on the button's box and every point of
+// the text, and a human recognises a control by its label rather than by its
+// bounding box, so the sample set is the accessible name's own client rects
+// where the element renders text and the box grid where it does not (an icon
+// button, an input, an image). The header arms stay green because a bar
+// clipping a button's top edge covers neither its centre nor most of its
+// label, and the documented centre-badge trade (A9) stays exactly where wave
+// 4 put it: a 60x20 badge over a 195px label is one column of three.
+function ksTextRects(el) {
+  var out = [];
+  try {
+    if (!el.textContent || !el.textContent.trim()) return out;
+    var rng = document.createRange();
+    rng.selectNodeContents(el);
+    var rects = rng.getClientRects();
+    for (var i = 0; i < rects.length && out.length < 8; i++) {
+      var r = rects[i];
+      if (r.width >= 4 && r.height >= 4) out.push(r);
+    }
+  } catch (e) { return []; }
+  return out;
+}
+
+function ksSampleRects(el, box) {
+  var t = ksTextRects(el);
+  return t.length ? t : [box];
 }
 
 function ksOccludedReason(el) {
@@ -415,23 +651,28 @@ function ksOccludedReason(el) {
   var ze = ksPaintRank(el), over = [], all = ksOccluders();
   for (var k = 0; k < all.length; k++) {
     var c = all[k];
-    if (c.el === el || c.el.contains(el) || el.contains(c.el)) continue;
+    if (c.el === el || ksContainsDeep(c.el, el) || ksContainsDeep(el, c.el)) continue;
     if (c.rect.right <= r.left || c.rect.left >= r.right
         || c.rect.bottom <= r.top || c.rect.top >= r.bottom) continue;
     if (!ksPaintsAbove(c, el, ze)) continue;
     over.push(c);
   }
   if (!over.length) return null;
-  var cx = r.left + r.width / 2, cy = r.top + r.height / 2;
-  if (!ksPointCovered(over, cx, cy)) return null;
-  var covered = 0, total = 0;
-  for (var i = 1; i <= 3; i++) {
-    for (var j = 1; j <= 3; j++) {
-      total++;
-      if (ksPointCovered(over, r.left + r.width * (i / 4),
-                         r.top + r.height * (j / 4))) covered++;
+  var boxes = ksSampleRects(el, r), covered = 0, total = 0, centre = false;
+  for (var b = 0; b < boxes.length; b++) {
+    var q = boxes[b];
+    if (ksPointCovered(over, q.left + q.width / 2, q.top + q.height / 2)) {
+      centre = true;
+    }
+    for (var i = 1; i <= 3; i++) {
+      for (var j = 1; j <= 3; j++) {
+        total++;
+        if (ksPointCovered(over, q.left + q.width * (i / 4),
+                           q.top + q.height * (j / 4))) covered++;
+      }
     }
   }
+  if (!centre) return null;
   return (covered * 2 > total) ? 'occluded' : null;
 }
 

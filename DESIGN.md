@@ -2074,8 +2074,73 @@ safe.
   returns the BUTTON, because hit testing skips a `pointer-events: none` box
   by definition. Every hit-test-shaped answer is the wrong answer here, which
   is also why this cannot be left to the driver. What a human sees is what is
-  painted, so the check scans the page's positioned, effectively opaque boxes
-  and asks which of them are painted above the element and cover it.
+  painted, so the check scans the page's painting boxes and asks which of them
+  are painted above the element and cover it.
+
+  **The one real alternative was evaluated and rejected on the shipability
+  question.** IntersectionObserver v2 (`trackVisibility: true`) asks the
+  compositor whether a target is occluded or distorted and was designed for
+  exactly this threat, so it would handle every lid class at once. Four
+  reasons stack against it: it is asynchronous and the spec requires
+  `delay >= 100`, so every acting call would wait on a timer; it is
+  Chromium-only, and a visibility rule that differs by engine is the
+  divergence `visibility.js` exists to remove; the spec explicitly permits
+  false negatives, which is a licence a refusal cannot be built on; and it
+  returns ONE BOOLEAN for the whole element, with no technique named and no
+  majority rule, so a sticky header clipping a button's top edge reads exactly
+  like a full-bleed lid. The last one is not a detail, it is the false-positive
+  direction that decides whether the check can ship.
+
+  **A LID IS ANYTHING THAT PAINTS (re-attack 2, 2026-09-06).** Wave 4 learned
+  "opaque" from the one lid R4 presented, a `<div>` with `background:#ffffff`,
+  and asked two questions of every box: is the background colour at least half
+  opaque, or is there a background image. Seven constructions walked through
+  that gap in a single round and none of them is exotic. A REPLACED element
+  paints its content and declares no background at all, so an `<img>`
+  (a full-bleed loading spinner), a `<canvas>` (a drawing overlay), an
+  `<iframe>` (a consent wall, a chat widget, an ad) and an `<svg>` were all
+  invisible to the scan. `backdrop-filter` paints nothing of its own and
+  re-renders everything behind it; `blur(14px) brightness(2.4)` over a control
+  screenshots as a blank white rectangle. STACKED translucent boxes each sit
+  under a per-box threshold while the stack transmits 3%. A `position:static`
+  box overlaps by design in CSS -- same-cell grid items are the standard way
+  to stack a loading state over content -- and the old
+  `static && z-index:auto -> skip` early-out was a performance shortcut
+  standing in for a correctness claim.
+
+  So the measure is ONE NUMBER per box: how much of what is behind it does it
+  replace, from 0 to 1. Coverage at a point is the stack COMPOSITED rather
+  than any single box tested, which is what closes the threshold-sitting shape
+  for good: five layers at 0.45 leave 3% showing and cover the point, while
+  corpus B's `rgba(255,0,0,.06)` shield leaves 94% and does not.
+
+  **The scan pierces open shadow roots, using the same walk everything else
+  does.** `document.querySelectorAll('*')` stops dead at every boundary, so an
+  opaque `position:fixed` lid inside an open root was unreachable while the
+  same page's read counted twenty closed roots two lines away. This was the
+  single place in the build where the shadow tree stopped existing, and an
+  open root is not an attack, it is how web components ship. `ksDeepEach` in
+  `visibility.js` is now the one deep walk and the search and the acting
+  resolver call it too.
+
+  **The scan's only limit is wall-clock.** The count caps (the first 60
+  qualifying boxes, the first 8,000 nodes) were a bypass: 70 decorative 12x12
+  boxes earlier in document order filled the budget with chaff and the scan
+  stopped before the box that mattered. A cap that silently converts to "not
+  occluded" is the wrong default, so selection is geometric -- every box that
+  paints and is at least 8x8, however far down the document it sits -- and the
+  budget that remains stops a pathological page from hanging the tool rather
+  than deciding a verdict.
+
+  **The verdict is re-taken after focus and immediately before dispatch.** The
+  check used to run once, at resolution, and the acting path's own
+  `handle.focus()` is an event the page observes: a `focus` handler that
+  appends a lid put one over the control between the only check and the click,
+  witnessed by the page's own listener. `arm_for_dispatch` focuses and reads
+  the cloak verdict in ONE JS turn, so the handler has run before the verdict
+  is taken. The residual is stated rather than papered over: a lid raised on a
+  timer, or by the trusted click's own mousedown, lands after any pre-dispatch
+  check a driver can make.
 
   **The boundary with the driver is deliberate.** When the thing on top DOES
   take the pointer, the click genuinely cannot land, the driver catches it,
@@ -2092,6 +2157,18 @@ safe.
   occlusion; and when the centre is covered, a majority of a nine-point grid
   must be covered too, so a control whose centre is under a toast while most
   of it is clear is reported VISIBLE. A missed cloak is the accepted cost.
+
+  **What the grid samples is the LABEL, where there is one (re-attack 2, A8).**
+  The rule does not move; the rectangle it is applied to does. A 340x12 band
+  sited exactly on a button's label covers three of nine points on the
+  button's BOX and every point of its TEXT, and a human recognises a control
+  by its label rather than by its bounding box. So the sample set is the
+  accessible name's own client rects where the element renders text, and the
+  box grid where it does not (an icon button, an input, an image). The header
+  arms stay green because a bar clipping a button's top edge covers neither
+  its centre nor most of its label, and the documented centre-badge trade
+  stays exactly where wave 4 put it: a 60x20 badge over a 195px label is one
+  sample column of three, and the control stays actable.
 
   **Occlusion is computed on the ACTING path only**, which is the one place
   `ksCloakReason` and `ksHiddenAnywhere` deliberately differ. It needs a
@@ -2285,13 +2362,69 @@ Three rules now, each stated as the class:
   ACTIVATION is Space or Enter pressing whatever holds focus, which submits
   when the focused control is a native submitter. A location-less `press_keys`
   reads the focused descriptor for either, so the two keys reach the same
-  verdict about one element. Shift+Enter stays a newline.
-- **Payment detection is multi-signal.** Declared autocomplete tokens first,
-  because a page that labels its fields is telling the truth; then the field's
-  own identifiers (name, id, label, aria-label, placeholder), because the
-  pages this defends against are exactly the ones that declare nothing while
-  still calling the field something a human reads; then a `pattern` spelling a
-  13-to-19 digit run. `inputmode` was evaluated and REJECTED as a signal:
+  verdict about one element. Shift+Enter stays a newline. SINGLE-LINE is the
+  operative word and went unimplemented until re-attack 2 (C2): Enter in a
+  `<textarea>` inserts a newline and submits nothing, so a confirmation prompt
+  there is a gate people learn to click through. An unknown tag counts as
+  single-line, because the call with the least information about where the
+  keystroke lands is the one that must not lose the gate.
+- **The element the tool touches is not always the element that acts**
+  (re-attack 2, C1). R1 widened the submit test to HTML's three submit states
+  and left the prior question untouched: between the click and the
+  submission, is there a step? HTML says yes and names it. A `<label>` runs
+  label activation behaviour and forwards the click to `label.control`, and a
+  node with no activation behaviour of its own delegates up to the nearest
+  ancestor that has one, so clicking a span inside a submit button presses the
+  button. `<label for=submitButton>` over an off-screen submit control is an
+  ordinary styling pattern, and clicking it submitted a card-carrying form
+  with no class computed at all. `activation.js` is the one in-page answer to
+  "which element does this activate", it returns the delegate's submission
+  FACTS rather than a verdict, and `action_class_for` reads them beside the
+  touched element's own -- so a delegated click reaches every gate a direct
+  click reaches and no others.
+- **Payment detection is multi-signal AND multi-lingual.** Declared
+  autocomplete tokens first, because a page that labels its fields is telling
+  the truth; then the field's own identifiers (name, id, label, aria-label,
+  placeholder), because the pages this defends against are exactly the ones
+  that declare nothing while still calling the field something a human reads;
+  then a `pattern` spelling a 13-to-19 digit run. The identifier tier was
+  ENGLISH until re-attack 2 (B1), and the principle it implements has no
+  language in it. `kartennummer` was simply absent, and the normalizer's
+  `[^a-z0-9]+` reduced a Korean 카드번호 or a Japanese カード番号 to the empty
+  string before a single token was compared -- the classifier was not missing
+  a Korean word, it could not see any Korean word. The squash now keeps
+  letters and digits of every script and folds diacritics, and the vocabulary
+  carries card-number, expiry, and security-code terms for German, French,
+  Spanish, Italian, Portuguese, Korean, Japanese, and Chinese, sourced from
+  the localized labels browser autofill heuristics match on because those are
+  what real checkout pages in those markets write. Expiry and security-code
+  terms that are GENERIC in their language (유효기간, 有効期限, "fecha de
+  caducidad") classify a field only where the same form also carries a card
+  number, so a passport expiry and a one-time-code box stay out.
+- **A card number does not have to arrive in one box, or be spelled in
+  digits.** A 2-to-6 box group of short numeric inputs whose maxlengths total
+  13 to 19 reads as a split PAN, which is a mainstream checkout layout that
+  classified nowhere at all: no field gated and the FORM was not payment-shaped
+  either, so the submit that sent the number got the weaker gate. A date is
+  2+2+4, a phone is 3+3+4, an OTP is six boxes of one, and a split IBAN runs
+  past 19, which is what the digit total separates it from. And a PAN SHAPE
+  shown to the human -- `placeholder="1234 5678 9012 3456"`, a masked
+  `value="**** **** **** ****"` -- is the same declaration as `pattern`,
+  aimed at the person instead of the validator. The page takes the
+  measurements, because only the page can see a field's siblings or its
+  current value; the RULE is applied server-side on those numbers, so a
+  descriptor cannot classify itself harmless by asserting a verdict, and the
+  masked value itself never travels in a descriptor because that string can be
+  a card number.
+- **Not every "<something> card number" is a payment field.** `cardnumber`
+  matching as a substring is what makes `card_number` and `Card number` both
+  work, and it also made `Library card number`, `Loyalty card number`, and
+  `Boarding card number` payment fields. A payment confirmation on a library
+  form is the erosion this document names by name, so the match is
+  boundary-aware: the token immediately preceding `card` names the INSTRUMENT,
+  and a non-payment instrument strikes the compound out of the haystack before
+  matching. A gift card is a payment instrument and stays. `inputmode` was
+  evaluated and REJECTED as a signal:
   `inputmode="numeric"` sits on every quantity box, postcode, and OTP field on
   the web, and a payment gate that fires on all of them is a gate people learn
   to route around. Form membership follows `form.elements` and not
@@ -2303,6 +2436,20 @@ Three rules now, each stated as the class:
 pinned four write PATHS to one verdict on one fixture and was green while R1
 and R2 shipped, because a mechanism none of the four paths recognised is
 invisible to a parity test across those paths.
+
+**Two more batteries, on the same principle (re-attack 2, 2026-09-06).** The
+mechanism battery varied the submission against a target that was always the
+submitter itself, which is why C1 walked past it. `test_occlusion_battery.py`
+now varies the LID against a fixed target and a fixed expected verdict --
+background div, image, canvas, iframe, svg, video, object, backdrop-filter,
+stacked alpha, static grid item, shadow-root child, past-the-budget,
+raised-on-focus -- and varies the TARGET against a fixed card-carrying form:
+submit button, `input type=submit`, `input type=image`, typeless button, a
+span inside a button, `<label for>`, and a wrapping label. Both carry their
+control side in the same run, because a check that cloaks everything and a
+gate that fires on everything are the same failure from the other direction.
+Adding a class is adding a dict entry, so a construction this build cannot
+classify fails a named test rather than shipping.
 `test_the_mechanism_battery` fixes the tool and the expected verdict and
 varies the submission mechanism instead: input submit, input image, typeless
 button, explicit submit button, implicit Enter, activation Space, and a card

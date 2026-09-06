@@ -49,6 +49,27 @@ def _playwright_ready() -> bool:
 pytestmark = pytest.mark.browser
 
 
+@pytest.fixture(autouse=True)
+def known_grade():
+    """Every browser test starts and ends on a KNOWN read-only grade.
+
+    The grade is process-global, and most files in this directory already
+    reset it in their own `clean` fixture, which is a list rather than a rule:
+    the two files that do not inherited whatever the last test to call
+    `server.configure()` left behind. Under a reversed file order that put
+    `test_copy_guards.py` last among the unit tests, two browser tests failed
+    with `ReadOnlyMode` on nothing but their position in the run.
+
+    The call site is fixed too, but a test's grade must not depend on which
+    other tests ran first, and this is the one place that can guarantee it for
+    all of them."""
+    from kitchensink4web.policy import readonly
+
+    readonly.apply(False)
+    yield
+    readonly.apply(False)
+
+
 @pytest.fixture(scope="session")
 def fixture_site():
     """The local deterministic site, started once for the whole session."""

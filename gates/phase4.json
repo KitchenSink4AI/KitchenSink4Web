@@ -1,5 +1,5 @@
 {
- "measured_kst": "2026-09-06 02:31",
+ "measured_kst": "2026-09-06 13:08",
  "phase": 4,
  "corpus": "B (pathological) and C (toctou), synthetic, never networked",
  "lane": "A(chromium) headless",
@@ -49,49 +49,54 @@
    "submit_gated_fail_closed": true
   },
   "latency": {
-   "green": true,
+   "green": false,
    "exit_code": 1,
-   "failures": [],
-   "uncertified": [],
+   "failures": [
+    "25012 nodes: projection p95 549.8 ms over the 500 ms budget (reference arm 345.3 ms, inside budget, so the cost is the code's)",
+    "100012 nodes: projection p95 1359.4 ms over the 1000 ms budget (reference arm 731.6 ms, inside budget, so the cost is the code's)"
+   ],
+   "uncertified": [
+    "50012 nodes: projection p95 733.7 ms over the 500 ms budget (reference arm 489.5 ms, ALSO over budget here; the treatment costs +68% over it at p50)"
+   ],
    "rows": [
     {
      "nodes": 5012,
-     "projection_p95": 157.7,
-     "python_p95": 6.8,
+     "projection_p95": 245.8,
+     "python_p95": 7.5,
      "budget_ms": 500
     },
     {
      "nodes": 10012,
-     "projection_p95": 215.0,
-     "python_p95": 5.7,
+     "projection_p95": 316.0,
+     "python_p95": 6.3,
      "budget_ms": 500
     },
     {
      "nodes": 25012,
-     "projection_p95": 262.6,
-     "python_p95": 7.0,
+     "projection_p95": 549.8,
+     "python_p95": 7.6,
      "budget_ms": 500
     },
     {
      "nodes": 50012,
-     "projection_p95": 437.2,
-     "python_p95": 8.8,
+     "projection_p95": 733.7,
+     "python_p95": 7.7,
      "budget_ms": 500
     },
     {
      "nodes": 100012,
-     "projection_p95": 771.9,
-     "python_p95": 6.3,
+     "projection_p95": 1359.4,
+     "python_p95": 7.8,
      "budget_ms": 1000
     }
    ]
   },
   "docstring_measure": {
    "green": true,
-   "lite_tokens": 2457,
-   "largest_schema_tokens": "set_routing (180 tok)",
-   "note": "budgets are SOFT (author ruling); the honest number is published, never trimmed into. The 1,500 lite figure and the 250 schema ceiling are advisory. The action tools' docstrings were written in Phase 0 and unchanged, so the bill did not grow."
+   "lite_tokens": 2598,
+   "largest_schema_tokens": "find_and_act (199 tok)",
+   "note": "budgets are SOFT (author ruling); the honest number is published, never trimmed into. The 1,500 lite figure and the 250 schema ceiling are advisory. The Phase 0 action tools' docstrings are unchanged; the lite bill grew on 2026-09-06 when find_and_act joined the core, and the number above is what it grew to."
   }
  },
- "green": true
+ "green": false
 }

@@ -141,6 +141,7 @@ _RESOLVE_JS = r"""
 // @@KS4WEB_INSTRUMENT@@
 // @@KS4WEB_VISIBILITY@@
 // @@KS4WEB_PAYMENT@@
+// @@KS4WEB_ACTIVATION@@
   const loc = opts.location || {};
   const squash = (s) => (typeof s === 'string' ? s : '').replace(/\s+/g, ' ').trim();
   const clip = (s, n) => { s = squash(s); return s.length <= n ? s : s.slice(0, n) + '...'; };
@@ -153,17 +154,14 @@ _RESOLVE_JS = r"""
   // commonest resolution by far is `loc.ref`, which reads the map and queries
   // nothing. The acting path pays for this only when it actually searches.
   const SHADOW_ON = !(loc && loc.shadow === false);
+  // The recursion is `ksOpenRoots`, the one deep walk spliced in from
+  // `visibility.js`, and not a private copy: the copies of this drifted, and
+  // the occlusion scan's copy (a flat `querySelectorAll`) is what re-attack 2
+  // put a lid behind.
   let rootList = null;
   function roots() {
     if (rootList) return rootList;
-    rootList = [];
-    if (SHADOW_ON) {
-      (function sweep(root) {
-        for (const el of root.querySelectorAll('*')) {
-          if (el.shadowRoot) { rootList.push(el.shadowRoot); sweep(el.shadowRoot); }
-        }
-      })(document);
-    }
+    rootList = SHADOW_ON ? ksOpenRoots(document, null) : [];
     return rootList;
   }
   function queryAll(sel) {
@@ -312,24 +310,14 @@ _RESOLVE_JS = r"""
     const r = d.role;
     const formEl = ksFormOf(el);
     const inForm = !!formEl;
-    // Effective submission type, the SAME rule the extractor applies (C1):
-    // a <button> with a missing or invalid type is a submit button per the
-    // HTML spec ('button'/'reset' opt out), with the default-submit case
-    // scoped to buttons inside a form. Reading only the raw attribute here
-    // left a typeless in-form button unclassified on the live path.
-    // `<input type=submit>` and `<input type=image>` need no folding: the
-    // IDL `type` getter already reports both, and the CLASSIFIER is where
-    // R1 went wrong, not the reading of the type.
-    let type = '';
-    if (el.tagName === 'INPUT') {
-      type = (el.type || 'text').toLowerCase();
-    } else if (el.tagName === 'BUTTON') {
-      const rawType = (el.getAttribute('type') || '').trim().toLowerCase();
-      if (rawType === 'button' || rawType === 'reset') type = rawType;
-      else if (rawType === 'submit') type = 'submit';
-      else type = inForm ? 'submit' : rawType;
-    }
+    // Effective submission type from `ksSubmitTypeOf`, which is the one
+    // copy of that rule (the extractor, this resolver, and the focused
+    // descriptor reader had three). A <button> with a missing or invalid
+    // type is a submit button per the HTML spec, with the default-submit
+    // case scoped to buttons inside a form.
+    const type = ksSubmitTypeOf(el, inForm) || '';
     const ac = (el.getAttribute && el.getAttribute('autocomplete') || '').toLowerCase();
+    const panGroup = ksPanGroup(el);
     // The landmark climb, a compact mirror of the extractor's, so a
     // live-resolved element's anchor registers under the SAME keys a read
     // would give it and the session map hands back the same ref for the
@@ -369,6 +357,17 @@ _RESOLVE_JS = r"""
       payment: ksPaymentField(el),
       pattern: (el.getAttribute && el.getAttribute('pattern')) || '',
       inputmode: (el.getAttribute && el.getAttribute('inputmode')) || '',
+      placeholder: (el.getAttribute && el.getAttribute('placeholder')) || '',
+      editable: !!el.isContentEditable,
+      pan_shape: ksPanShape('value' in el ? el.value : ''),
+      pan_group_size: panGroup ? panGroup.size : null,
+      pan_group_digits: panGroup ? panGroup.digits : null,
+      // WHICH ELEMENT DOES THIS CLICK ACTIVATE (re-attack 2, C1). A label
+      // forwards its activation to the control it labels, and a node with no
+      // activation behaviour delegates to the nearest ancestor that has one,
+      // so the classifier gets the delegate's submission facts alongside the
+      // touched element's own.
+      activates: ksDelegatedActivation(el),
       page_key: pageKey,
       anchor: { page_key: pageKey, role: r, name: d.name,
         landmark: lm.kind, landmark_label: lm.label,
@@ -518,6 +517,24 @@ def target_descriptor(unit: dict) -> dict:
         "attr_name": unit.get("attr_name") or a.get("attr_name"),
         "pattern": unit.get("pattern"),
         "inputmode": unit.get("inputmode"),
+        "placeholder": unit.get("placeholder"),
+        # The PAN-shape and split-group MEASUREMENTS, which only the page can
+        # take: whether the field shows a card-number shape, and how many
+        # short numeric boxes share its group. `pan_shape` travels as a
+        # boolean and never as the string it was derived from, because that
+        # string can BE a card number and the audit record must not carry one.
+        "pan_shape": unit.get("pan_shape"),
+        "pan_group_size": unit.get("pan_group_size"),
+        "pan_group_digits": unit.get("pan_group_digits"),
+        # The element the browser ACTIVATES when this one is clicked, when it
+        # is not this one. A label's control, or the button a clicked span
+        # sits inside (re-attack 2, C1).
+        "activates": unit.get("activates"),
+        # Multi-line-ness, which is what decides whether Enter is an implicit
+        # submission (C2). The descriptor carried `tag` on some paths and not
+        # others, so the classifier could not ask.
+        "tag": unit.get("tag"),
+        "editable": unit.get("editable"),
         # Form membership travels with the descriptor because the submission
         # classifier needs it: Enter is only a submission inside a form. The
         # extractor spells it `form`, the live resolver spells it `in_form`,
@@ -555,6 +572,31 @@ def is_native_submitter(desc: dict) -> bool:
     return (desc.get("type") or "").strip().lower() in SUBMIT_TYPES
 
 
+def activation_delegate(desc: dict) -> dict:
+    """The submission facts of the element the browser ACTUALLY activates.
+
+    THE PRIOR QUESTION (re-attack 2, C1). R1 widened the submit test from one
+    instance to HTML's three submit states, and left untouched the question
+    that comes before it: between the element the tool touches and the element
+    that acts, is there a step? There is, and HTML names it. A `<label>` runs
+    label activation behaviour and forwards the click to `label.control`; a
+    node with no activation behaviour of its own delegates up to the nearest
+    ancestor that has one. `<label for=go>Continue</label>` over an off-screen
+    submit button is an ordinary styling pattern, and clicking it submitted a
+    form holding a live card number with no class computed at all, because a
+    label is neither a payment field nor a submitter.
+
+    The page-side rule is `ksDelegatedActivation` in `activation.js`, one
+    implementation spliced into every consumer. It returns FACTS -- the
+    delegate's type, form membership, and whether that form carries a card
+    field -- and the classifier below reads them exactly as it reads the
+    touched element's own, so a delegated click cannot reach a gate a direct
+    click would miss and cannot skip one either. An empty dict where nothing
+    is delegated keeps every caller free of a null check."""
+    delegate = desc.get("activates")
+    return delegate if isinstance(delegate, dict) else {}
+
+
 def action_class_for(desc: dict, *, submitting: bool = False) -> str | None:
     """THE SUBMISSION AND PAYMENT CLASSIFIER. One function, and every path that
     can submit a form or write a payment-shaped field calls it.
@@ -577,7 +619,12 @@ def action_class_for(desc: dict, *, submitting: bool = False) -> str | None:
     # WRITING a payment-shaped field is `payment_form` wherever it happens.
     if credentials.is_payment_field(desc):
         return "payment_form"
-    if submitting or is_native_submitter(desc):
+    # And so is writing one THROUGH something else: a click on a label whose
+    # control is a card field lands in the card field.
+    delegate = activation_delegate(desc)
+    if delegate and credentials.is_payment_field(delegate):
+        return "payment_form"
+    if submitting or is_native_submitter(desc) or is_native_submitter(delegate):
         # And SUBMITTING is judged by the form, not by the control that
         # triggered it, because the submission is the moment the card number
         # leaves. Reading payment as a field-only property split the four
@@ -588,7 +635,12 @@ def action_class_for(desc: dict, *, submitting: bool = False) -> str | None:
         # checkout page has an email field and a postcode field too, and
         # gating every keystroke in the form because a card field shares it
         # would make the gate the thing people route around.
-        return "payment_form" if desc.get("form_payment") else "form_submit"
+        #
+        # The form is the DELEGATE'S form where the click is delegated: a
+        # label parked outside the <form> tag still submits the form its
+        # control belongs to.
+        payment_form = desc.get("form_payment") or delegate.get("form_payment")
+        return "payment_form" if payment_form else "form_submit"
     return None
 
 
@@ -636,6 +688,29 @@ def activates_by_key(keys: str | None) -> bool:
     return not (modifiers & {"shift", "alt"})
 
 
+#: Controls where Enter INSERTS A NEWLINE instead of submitting. HTML scopes
+#: implicit submission to a form's single-line text controls, which is what
+#: `submits_by_key`'s own docstring said and what nothing implemented: Enter
+#: in a `<textarea>` gated as a submission the browser never performs
+#: (re-attack 2, C2). A confirmation prompt for pressing Enter in a comment
+#: box is the erosion DESIGN names -- a gate that fires where nothing happens
+#: is a gate people learn to click through.
+_MULTILINE_TAGS = frozenset({"TEXTAREA"})
+
+
+def is_single_line(desc: dict) -> bool:
+    """Whether Enter in this control is an implicit form submission.
+
+    Unknown is SINGLE-LINE on purpose. A global `press_keys(keys='Enter')`
+    carries no location and the focused-descriptor reader may return nothing
+    at all, and defaulting a missing tag to multi-line would drop the gate on
+    exactly the call that has the least information about where the keystroke
+    lands."""
+    if (desc.get("tag") or "").strip().upper() in _MULTILINE_TAGS:
+        return False
+    return not desc.get("editable")
+
+
 def key_submits(keys: str | None, desc: dict) -> bool:
     """Whether pressing `keys` against THIS descriptor submits its form.
 
@@ -654,9 +729,14 @@ def key_submits(keys: str | None, desc: dict) -> bool:
     """
     if not desc or not desc.get("in_form"):
         return False
-    if submits_by_key(keys):
+    if submits_by_key(keys) and is_single_line(desc):
         return True
-    return activates_by_key(keys) and is_native_submitter(desc)
+    # The activation branch is deliberately still open to a textarea: Enter
+    # does not submit from one, but the branch is about what holds FOCUS being
+    # a submit button, and nothing about that changes with the tag.
+    return activates_by_key(keys) and (is_native_submitter(desc)
+                                       or is_native_submitter(
+                                           activation_delegate(desc)))
 
 
 #: What the live element says about itself RIGHT NOW: the field-type flip
@@ -666,8 +746,11 @@ def key_submits(keys: str | None, desc: dict) -> bool:
 #: not against the descriptor that was true a moment earlier.
 _LIVE_FIELD_JS = r"""
 (el) => {
+// @@KS4WEB_VISIBILITY@@
 // @@KS4WEB_PAYMENT@@
+// @@KS4WEB_ACTIVATION@@
   const f = ksFormOf(el);
+  const grp = ksPanGroup(el);
   return {
     tag: el.tagName,
     type: (el.type || '').toLowerCase(),
@@ -678,10 +761,20 @@ _LIVE_FIELD_JS = r"""
     attr_name: (el.getAttribute('name') || ''),
     pattern: (el.getAttribute('pattern') || ''),
     inputmode: (el.getAttribute('inputmode') || ''),
+    placeholder: (el.getAttribute('placeholder') || ''),
+    editable: !!el.isContentEditable,
+    pan_shape: ksPanShape('value' in el ? el.value : ''),
+    pan_group_size: grp ? grp.size : null,
+    pan_group_digits: grp ? grp.digits : null,
     in_form: !!f,
     action: (f && f.getAttribute('action')) || '',
     payment: ksPaymentField(el),
-    form_payment: ksFormPayment(f)
+    form_payment: ksFormPayment(f),
+    activates: ksDelegatedActivation(el),
+    // THE CLOAK, RE-CHECKED AFTER FOCUS AND IN THE SAME JS TURN (A7). See
+    // `recheck_at_write`: the caller focuses, the focus handler runs
+    // synchronously, and this reads the verdict the focus itself produced.
+    cloak: ksCloakReason(el)
   };
 }
 """
@@ -722,6 +815,15 @@ async def recheck_at_write(page, handle, desc: dict, *, tool: str) -> dict:
     live = await live_field(page, handle)
     if not live:
         return desc
+    # THE CLOAK, RE-CHECKED AFTER THE FOCUS THIS FUNCTION CAUSED (A7). The
+    # occlusion verdict used to be taken once, at resolution, and the focus
+    # above is an event the page observes -- the docstring below says so in
+    # its own words -- so a `focus` handler that drops an opaque lid over the
+    # control opened a window between the only check and the write. The lid
+    # was present at the keystroke, witnessed by the page's own listener. The
+    # re-check already re-derived everything else here; occlusion was simply
+    # not among the keys it merged.
+    _refuse_cloak_verdict(live.get("cloak"), tool)
     merged = dict(desc)
     for key in ("type", "autocomplete", "in_form", "action", "attr_id",
                 "attr_name", "pattern", "inputmode", "form_payment",
@@ -987,6 +1089,61 @@ _CLOAK_JS = instrument(r"""
 """)
 
 
+#: THE ARMING PROBE (re-attack 2, A7). Focus and the cloak verdict in ONE JS
+#: turn, so a page that raises a lid when the control takes focus is caught by
+#: the very check its own handler triggered. `focus()` dispatches
+#: synchronously, so the handler has already run and appended its panel by the
+#: time `ksCloakReason` reads the page, and no round trip separates the two.
+#: `preventScroll` keeps the viewport where the verdict was taken.
+#:
+#: The residual is stated rather than papered over: a lid raised on a TIMER
+#: after focus, or by the trusted click's own mousedown, lands after any
+#: pre-dispatch check a driver can make. What this closes is the window the
+#: acting path itself opens.
+_ARM_JS = instrument(r"""
+(el) => {
+// @@KS4WEB_VISIBILITY@@
+  try { el.focus({ preventScroll: true }); } catch (e) {}
+  const r = ksCloakReason(el);
+  return r ? { reason: r, why: KS_CLOAK_TECHNIQUES[r] } : null;
+}
+""")
+
+
+def _refuse_cloak_verdict(verdict, tool: str) -> None:
+    """One refusal text for every path that takes a cloak verdict."""
+    if not verdict:
+        return
+    if isinstance(verdict, str):
+        verdict = {"reason": verdict, "why": _CLOAK_WHY.get(verdict, verdict)}
+    raise TargetNotFound(
+        f'{tool} will not act on this element: it is in the page and a human '
+        f'cannot see it ({verdict["why"]}). A control that is invisible and '
+        f'still clickable is how a page steers an agent onto something the '
+        f'user never saw, so nothing was done. The content is still readable '
+        f'through the labeled route, get_text(include_hidden=true), and the '
+        f'read\'s completeness block counts it as hidden interactive with the '
+        f'technique named.')
+
+
+#: The Python mirror of `KS_CLOAK_TECHNIQUES`, for the paths that receive a
+#: bare reason string (the write-time re-check reads it off the live field
+#: probe rather than running the cloak probe a second time).
+_CLOAK_WHY = {
+    "opacity-0": "its opacity is zero",
+    "near-transparent": "its opacity is near zero",
+    "filter-transparent": "a CSS filter reduces it to full transparency",
+    "filter-blur": "a CSS filter blurs it past legibility",
+    "transparent-text": "its foreground colour is transparent",
+    "low-contrast": "its foreground colour matches its background",
+    "content-visibility-hidden": "content-visibility:hidden stops it rendering",
+    "details-collapsed": "it sits inside a collapsed <details>",
+    "unslotted": "it is a light child of a component that never slotted it",
+    "visibility-hidden": "visibility:hidden stops it rendering",
+    "occluded": "an opaque panel is painted over it",
+}
+
+
 async def refuse_if_cloaked(page, handle, *, tool: str) -> None:
     """Refuse to act on an element a human cannot see, naming the technique.
 
@@ -997,16 +1154,26 @@ async def refuse_if_cloaked(page, handle, *, tool: str) -> None:
         verdict = await page.evaluate(_CLOAK_JS, handle)
     except Exception:
         return                      # a probe that cannot run never refuses
-    if not verdict:
-        return
-    raise TargetNotFound(
-        f'{tool} will not act on this element: it is in the page and a human '
-        f'cannot see it ({verdict["why"]}). A control that is invisible and '
-        f'still clickable is how a page steers an agent onto something the '
-        f'user never saw, so nothing was done. The content is still readable '
-        f'through the labeled route, get_text(include_hidden=true), and the '
-        f'read\'s completeness block counts it as hidden interactive with the '
-        f'technique named.')
+    _refuse_cloak_verdict(verdict, tool)
+
+
+async def arm_for_dispatch(page, handle, *, tool: str) -> None:
+    """Focus the target and re-take the cloak verdict, in that order, in one
+    JS turn, immediately before the input is dispatched.
+
+    ORDER OF OPERATIONS, not a new scan (A7). The cloak check at resolution
+    answers a question about the page as it was several round trips earlier,
+    and the acting path's own focus is an event the page observes. Focusing
+    HERE means the handler that raises a lid has raised it before the verdict
+    is read, and a call that would have clicked an invisible button refuses
+    instead. The focus is not extra exposure either: a trusted click focuses
+    the control anyway, so this only moves the moment earlier than the check.
+    """
+    try:
+        verdict = await page.evaluate(_ARM_JS, handle)
+    except Exception:
+        return                      # a probe that cannot run never refuses
+    _refuse_cloak_verdict(verdict, tool)
 
 
 def _candidate_text(candidates) -> str:

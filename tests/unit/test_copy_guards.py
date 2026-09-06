@@ -55,15 +55,38 @@ BANNED_OVERCLAIM = (
 
 
 def _public_strings() -> dict[str, str]:
-    """Every string a user or a model can see in Phase 0."""
-    server.configure()
-    tools = asyncio.run(server.mcp.list_tools())
-    out = {f"tool:{t.name}": (t.description or "") for t in tools}
-    out.update({f"hint:{c}": h for c, h in envelope.HINTS.items()})
-    out["server:instructions"] = server.mcp.instructions or ""
-    out["packaging:pyproject"] = (ROOT / "pyproject.toml").read_text(
-        encoding="utf-8")
-    return out
+    """Every string a user or a model can see in Phase 0.
+
+    THE GRADE IS RESTORED, and it is the same defect the `launch` fixture
+    already carries in its own teardown one call site earlier. This helper
+    runs OUTSIDE that fixture, and a bare `configure()` resolves the SHIPPED
+    default grade, `browse`, so it left the whole process read-only for
+    whatever ran next. Under a file order that puts this module last among
+    the unit tests, two browser tests that assert the process is actable
+    failed on nothing but their position in the run (found by re-attack 2's
+    ordering check, 2026-09-06, and present on the baseline commit too).
+
+    The CAPTURE still runs under the shipped default, deliberately. Scanning
+    the actable surface as well would widen what this guard covers, and it
+    turns out to find something (see the wave 5 report: `find_and_act`'s
+    description carries a word `BANNED_SAFETY` forbids, and no run has ever
+    read it because a mutating tool is ABSENT under the default grade). That
+    is a copy decision and a scope decision for the author, not a silent
+    change smuggled in by a teardown fix."""
+    try:
+        server.configure()
+        tools = asyncio.run(server.mcp.list_tools())
+        out = {f"tool:{t.name}": (t.description or "") for t in tools}
+        out.update({f"hint:{c}": h for c, h in envelope.HINTS.items()})
+        out["server:instructions"] = server.mcp.instructions or ""
+        out["packaging:pyproject"] = (ROOT / "pyproject.toml").read_text(
+            encoding="utf-8")
+        return out
+    finally:
+        # A fresh process starts with no grade applied at all, so the honest
+        # restore is the un-graded surface this helper found rather than the
+        # launch default it configured.
+        server.configure(read_only=False)
 
 
 def test_no_em_dashes_anywhere_public():

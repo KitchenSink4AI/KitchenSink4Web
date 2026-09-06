@@ -28,6 +28,7 @@
 // @@KS4WEB_INSTRUMENT@@
 // @@KS4WEB_VISIBILITY@@
 // @@KS4WEB_PAYMENT@@
+// @@KS4WEB_ACTIVATION@@
   opts = opts || {};
   // `location=` scoping. The read is the same read, run over a subtree: the
   // same blocks, the same ladder, the same completeness discipline, over a
@@ -1012,19 +1013,12 @@
             // anywhere, matching <input type=submit>; the default-submit
             // case applies only inside a form, where a click can actually
             // submit something.
-            let type = null;
-            if (tag === 'INPUT') {
-              type = (el.type || 'text').toLowerCase();
-            } else if (tag === 'BUTTON') {
-              const rawType = (el.getAttribute('type') || '').trim().toLowerCase();
-              if (rawType === 'button' || rawType === 'reset') type = rawType;
-              else if (rawType === 'submit') type = 'submit';
-              else type = formEl ? 'submit' : (rawType || null);
-            }
+            const type = ksSubmitTypeOf(el, !!formEl);
             const ac = ((el.getAttribute && el.getAttribute('autocomplete')) || '').toLowerCase();
             const secret = type === 'password' ||
               /current-password|new-password|one-time-code/.test(ac);
             const payment = ksPaymentField(el);
+            const panGroup = ksPanGroup(el);
             // The same rule as the headings above: DISPLAY detail is computed
             // only for the elements that will be returned, while everything
             // CLASSIFICATION needs is computed for all of them so the
@@ -1157,6 +1151,17 @@
                 region_label: region ? region.label : null,
                 ordinal: roleOrdinals[role],
                 state: state.join(','), secret: secret, payment: payment,
+                tag: tag,
+                placeholder: (el.getAttribute('placeholder') || ''),
+                editable: !!el.isContentEditable,
+                pan_shape: ksPanShape('value' in el ? el.value : ''),
+                pan_group_size: panGroup ? panGroup.size : null,
+                pan_group_digits: panGroup ? panGroup.digits : null,
+                // Which element a click on this one ACTIVATES (re-attack 2,
+                // C1): a <label> forwards to its control, and a node with no
+                // activation behaviour delegates to the nearest ancestor that
+                // has one.
+                activates: ksDelegatedActivation(el),
                 href: href, path: path, external: external, type: type,
                 in_viewport: geo.rect.top < window.innerHeight
                   && geo.rect.bottom > 0 && geo.rect.left < window.innerWidth,

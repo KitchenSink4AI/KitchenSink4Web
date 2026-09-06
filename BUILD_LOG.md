@@ -2688,3 +2688,177 @@ corpus A's digests are unchanged, and the projection output on
 fixtures live in `corpus/ra/` ported unchanged, joined by three pages this wave
 added for the mechanism battery, the threshold control arms, and the occlusion
 false-positive arms. Report: `internal notes/20260906_web_fixwave4.md`.
+
+---
+
+## Re-attack 2, and fix wave 5 (2026-09-06)
+
+The acceptance round against wave 4 came back NOT CLEAN: fifteen findings,
+seven of them HIGH, and the report's own summary line is the one that matters.
+**The recurring defect recurred inside the wave that named it.** Wave 4 wrote
+"a rule against the INSTANCE rather than the CLASS" into this log and then did
+it three more times, in three different areas, in the same afternoon.
+
+**The lid was a `<div>` with a background colour.** That is what R4 presented
+and that is what `ksOccluders` learned. It asked two questions of every box on
+the page: is the background colour at least half opaque, or is there a
+background image. A REPLACED element answers no to both while painting its
+content over everything beneath it, so an `<img>` (a full-bleed loading
+spinner), a `<canvas>` (a drawing overlay), an `<iframe>` (a consent wall, a
+chat widget, an ad) and an inline `<svg>` were each a lid the build could not
+see. `backdrop-filter` answers no to both while re-rendering the whole
+backdrop, and its screenshot is a blank white rectangle. Five boxes at alpha
+0.45 each answer no individually while the stack passes 3% of what is behind
+it. A `position:static` box was skipped before it was ever measured, on an
+early-out that assumes static boxes cannot overlap, which is simply false in
+CSS: same-cell grid items are the standard way to stack a loading state over
+content. And 70 decorative 12x12 boxes earlier in the document filled a
+60-occluder cap with chaff so the scan stopped before the box that mattered.
+
+So the lid definition is now ONE NUMBER per box: how much of what is behind it
+does it replace. Replaced elements paint at 1, a background image paints at 1,
+a backdrop-filter that goes past the blur floor or carries any non-blur
+function paints at 1, and a background colour paints at its own alpha, all
+multiplied by the effective opacity down the chain. Coverage at a point is the
+stack COMPOSITED rather than any box tested alone, which is what closes the
+threshold-sitting shape for good and still leaves corpus B's
+`rgba(255,0,0,.06)` shield alone at 94% transmission. The positioning early-out
+is gone, the count caps are gone, and the only limit left is a wall-clock
+budget that stops a pathological page from hanging the tool rather than
+deciding a verdict.
+
+**The occlusion scan was the one function in this build that forgot shadow
+DOM.** `document.querySelectorAll('*')` stops at every boundary, so an opaque
+`position:fixed` lid inside an OPEN root was unreachable while the same page's
+read honestly counted twenty closed roots two lines away. An open root is not
+an attack, it is how web components ship, so any component library rendering a
+skeleton loader into its own root defeated this check by accident. There were
+three private copies of the shadow recursion by then (the search's, the acting
+resolver's, and this one, which was not a recursion at all). `ksDeepEach` in
+`visibility.js` is the one deep walk now and all three call it.
+
+**A majority rule sampling the wrong rectangle.** A 340x12 opaque band sited
+exactly on a button's label covers three of nine points on the button's BOX and
+every point of its TEXT. The rule is right and the rectangle was wrong: a human
+recognises a control by its label. The sample set is the accessible name's own
+client rects where the element renders text and the box grid where it does not.
+Both false-positive arms stay green, and the documented centre-badge trade
+stays where wave 4 put it, because a 60x20 badge over a 195px label is one
+sample column of three.
+
+**The verdict had a TOCTOU window and the acting path opened it itself.** The
+cloak check ran at resolution; `recheck_at_write` then focused the element and
+re-read type, autocomplete, and payment shape, and the code's own comment says
+"focusing an element is something the page can observe." A page with a `focus`
+handler that appends a lid was handed a callback that fires after the only
+occlusion check and before the click. `arm_for_dispatch` focuses and reads the
+cloak verdict in ONE JS turn, immediately before dispatch, so the handler has
+already run when the verdict is taken. Order of operations, not a new scan.
+
+**The payment classifier read one language, and the normalizer erased the
+rest.** `kartennummer` was not in the list, and `[^a-z0-9]+ -> ' '` reduced a
+Korean 카드번호 or a Japanese カード番号 to the EMPTY STRING before a single
+token was compared, so the `length > 2` guard dropped the field. The classifier
+was not missing a Korean word; it could not see any Korean word. The squash
+keeps letters and digits of every script now and folds diacritics, and the
+vocabulary carries card-number, expiry, and security-code terms for German,
+French, Spanish, Italian, Portuguese, Korean, Japanese, and Chinese, taken from
+the localized labels browser autofill heuristics match on because those are
+what real checkout pages in those markets write. Generic neighbour terms
+(유효기간, 有効期限, "fecha de caducidad") classify only where the same form
+carries a card number, so a passport expiry stays out.
+
+**A card number does not have to arrive in one box or be spelled in digits.** A
+2-to-6 box group of short numeric inputs totalling 13 to 19 digits reads as a
+split PAN, which is a mainstream checkout layout that classified NOWHERE: no
+field gated, the form was not payment-shaped either, and the submit that
+actually sends the number got the weaker gate. A date is 2+2+4, a phone is
+3+3+4, an OTP is six boxes of one, and a split IBAN runs past 19. A PAN shape
+shown to the human, `placeholder="1234 5678 9012 3456"` or a masked
+`value="**** **** **** ****"`, is the same declaration as `pattern` aimed at a
+person instead of a validator. The page takes the measurements because only the
+page can see a field's siblings or its current value; the RULE is applied
+server-side on those numbers, and the masked value itself never rides a
+descriptor, because that string can be a card number.
+
+**And the gate fired where it should not.** "Library card number" and "Loyalty
+card number" both classified as payment, because `cardnumber` matches as a
+substring, which is the same property that makes `Card number` work. A payment
+confirmation on a library form is the erosion DESIGN names by name. The match
+is boundary-aware now: the token before `card` names the instrument, and a
+non-payment instrument strikes the compound out before matching. A gift card is
+a payment instrument and stays. In the same direction, Enter in a `<textarea>`
+gated as a submission the browser never performs, because `key_submits` asked
+only about form membership while its own docstring said "single-line."
+
+**THE PRIOR QUESTION, which is C1 and the best finding in the round.** R1
+widened the submit test to HTML's three submit states, correctly, and never
+asked what comes before it: between the element the tool touches and the
+element that acts, is there a step? `<label for=go>Continue</label>` over an
+off-screen submit button is ordinary styling, and clicking it submitted a
+card-carrying form with no class computed at all, because a label is neither a
+payment field nor a submitter. HTML defines the class: label activation
+behaviour forwards to `label.control`, and a node with no activation behaviour
+delegates up to the nearest ancestor that has one. `projection/activation.js`
+is the one in-page answer to "which element does this activate", it returns the
+delegate's submission FACTS rather than a verdict, and `action_class_for` reads
+them beside the touched element's own. Building the battery turned up a member
+the report had not: clicking a `<span>` INSIDE a submit button was ungated on
+baseline too, and the same rule closes it.
+
+**TWO MORE BATTERIES, on the mechanism battery's principle.** That battery
+varied the submission against a target that was always the submitter itself,
+which is exactly why C1 walked past it. `test_occlusion_battery.py` varies the
+LID against a fixed target and a fixed expected verdict (background div, image,
+canvas, iframe, svg, video, object, backdrop-filter, stacked alpha, static grid
+item, shadow-root child, past-the-budget, raised-on-focus) and varies the
+TARGET against a fixed card-carrying form (submit button, input submit, input
+image, typeless button, span inside a button, label-for, wrapping label). Both
+carry their control side in the same run. Adding a class is adding a dict
+entry. Run against detached baseline `18944b0`, 18 of its 30 tests FAIL, which
+is the only evidence that a battery is load-bearing rather than decorative.
+
+**Three things found on the way, none of them a re-attack-2 finding, all three
+attributed against detached baseline `18944b0` rather than assumed.** The suite
+was NOT green in both orders before this wave: a bare `server.configure()` in
+`test_copy_guards.py` resolves the shipped `browse` default and never restores
+it, so under a reversed file order every browser test after that module
+inherited a read-only process and two of them failed with `ReadOnlyMode`. It
+fails identically on baseline. Fixed at the call site and, at the class level,
+with an autouse known-grade fixture in the browser conftest, because most files
+there already reset the grade in their own `clean` fixture and that is a list
+rather than a rule. Restoring the grade then made a second thing visible and it
+is FLAGGED rather than fixed: the copy guard captures under the shipped
+default, where every MUTATING tool is absent, so no run has ever read a
+mutating tool's description, and `find_and_act`'s carries a word
+`BANNED_SAFETY` forbids. Widening the guard is a scope call and rewriting a
+tool description is product copy; neither is an agent's. Third, two pinned
+corpus numbers in `gates/corpus_a.json` are stale: baseline produces the same
+3,512 and 4,477 this tree does, and the rendered projection on
+`wikipedia_gdp_table` is byte-identical between the trees, so the stored file
+(dated 2026-09-05, before wave 4) simply predates a wave that did not
+re-measure.
+
+Gate: **all 46 acceptance rows correct** across every re-attack-2 fixture and
+the held lines carried with them. Full suite **671 green in BOTH orders**, up
+30, and the reversed order is green for the first time. Phase 3 **12/12
+GREEN**, Phase 5 **8/8 GREEN**, Phase 4 **six of seven parts GREEN**. **No
+pinned measurement moved.** Zero orphaned browsers.
+
+**The one gate not green is LATENCY, and the attribution is measured rather
+than argued.** The projection is over its p95 budget at 25,000 nodes and cannot
+be certified at 50,000 or 100,000 because the gate's own reference arm is over
+the same budget there, which is that gate's UNCERTIFIED verdict meaning the
+machine rather than the code. Its control arm is a worktree at `a58c575f`, the
+commit it last certified, so its "+73% over the reference" spans every wave
+since then. Measured against `18944b0` instead, interleaved one repetition
+after the other on the same page in the same browser, **fix wave 5 costs +6.0%
+at 10,000 nodes, +5.7% at 25,000, and +3.6% at 50,000**, and baseline itself
+measures 440 ms p50 at 25,000 on this machine against a 500 ms bound. The
+extractor pays for the delegation question once per affordance, and the climb
+short-circuits on any control that is its own activation target, which is
+correctness before it is economy: the browser runs the innermost activatable
+element's behaviour, so a `<button>` is the answer without a `closest()` call.
+Re-certification belongs in a quiet window, the way 2026-09-06 06:08 did it.
+
+Report: `internal notes/20260906_web_fixwave5.md`.

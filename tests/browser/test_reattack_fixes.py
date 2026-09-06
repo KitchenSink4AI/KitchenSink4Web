@@ -302,7 +302,29 @@ def test_the_payment_classifier_is_multi_signal_and_still_narrow():
            {"label": "Security code"},
            {"attr_name": "card_exp"},
            {"name": "Name on card"},
-           {"pattern": "[0-9]{13,19}"}]
+           {"pattern": "[0-9]{13,19}"},
+           # RE-ATTACK 2 (B1): the field a human reads as a card number, in
+           # the languages a human reads it in. The squash used to reduce the
+           # non-Latin ones to the empty string before a token was compared.
+           {"name": "Kartennummer", "attr_name": "kartennummer"},
+           {"name": "카드번호"},
+           {"name": "カード番号"},
+           {"name": "クレジットカード"},
+           {"name": "Numéro de carte"},
+           {"name": "Número de tarjeta"},
+           {"name": "Numero della carta"},
+           {"name": "信用卡"},
+           {"name": "卡号"},
+           # The neighbour tier, which needs a card number in the same form.
+           {"name": "유효기간", "form_payment": True},
+           {"name": "セキュリティコード", "form_payment": True},
+           # B3/B4: a PAN shape shown to the human rather than declared.
+           {"placeholder": "1234 5678 9012 3456"},
+           {"pan_shape": True},
+           # B2: a split card number, measured by the page and ruled on here.
+           {"pan_group_size": 4, "pan_group_digits": 16},
+           # B6's true positive: a gift card IS a payment instrument.
+           {"name": "Gift card number"}]
     for field in yes:
         assert credentials.is_payment_field(field), field
     no = [{"name": "Email address"},
@@ -314,6 +336,25 @@ def test_the_payment_classifier_is_multi_signal_and_still_narrow():
           {"name": "Quantity", "inputmode": "numeric"},
           {"pattern": "[0-9]{5}"},
           {"name": "Passport expiry"},          # expiry alone is not a card
+          # B6: the instrument qualifier decides, and none of these is a
+          # payment instrument. A confirmation prompt on a library form is
+          # the erosion DESIGN names by name.
+          {"name": "Library card number", "attr_name": "librarycard"},
+          {"name": "Loyalty card number", "attr_name": "loyalty"},
+          {"name": "Boarding card number"},
+          {"name": "ID card number"},
+          {"name": "Membership card number"},
+          # A generic expiry or security code with no card number in the form.
+          {"name": "유효기간"},
+          {"name": "セキュリティコード"},
+          # PAN SHAPE, both directions: an IBAN carries letters and an expiry
+          # placeholder is too short.
+          {"placeholder": "GB29 NWBK 6016 1331 9268 19"},
+          {"placeholder": "MM / YY"},
+          # SPLIT GROUPS that are not card numbers: a phone is 3+3+4 and an
+          # OTP is six boxes of one.
+          {"pan_group_size": 3, "pan_group_digits": 10},
+          {"pan_group_size": 6, "pan_group_digits": 6},
           {}]
     for field in no:
         assert not credentials.is_payment_field(field), field
@@ -325,10 +366,21 @@ def test_the_two_payment_token_lists_do_not_drift():
     rather than trusted."""
     from kitchensink4web import projection
     source = projection.PAYMENT_JS
-    for token in credentials.PAYMENT_NAME_SUBSTRINGS:
-        assert f"'{token}'" in source, token
+    for table in (credentials.PAYMENT_PAN_TERMS,
+                  credentials.PAYMENT_CARD_SIDE_TERMS,
+                  credentials.PAYMENT_NEIGHBOUR_TERMS,
+                  credentials.NOT_PAYMENT_CARDS):
+        for token in table:
+            assert f"'{token}'" in source, token
     for word in credentials.PAYMENT_NAME_WORDS:
         assert word in source, word
+    # The NORMALIZER is half the rule and drifted on its first outing: the
+    # Python side stripped every combining mark, which also strips U+3099 and
+    # turns ド into ト, so カード番号 matched nothing while the in-page rule was
+    # correct. Both sides fold the Latin diacritics block and nothing else.
+    assert "\\u0300-\\u036f" in source
+    assert credentials._fold("カード番号") == "カード番号"
+    assert credentials._fold("Numéro gültig") == "Numero gultig"
 
 
 def test_a_form_associated_card_field_belongs_to_its_form(ra_site):
