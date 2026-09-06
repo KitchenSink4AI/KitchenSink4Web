@@ -25,7 +25,7 @@ touches must resolve inside one of those directories or the call refuses
 with SandboxViolation before any file is opened.
 
 The check applies to READS as well as writes. A read outside the sandbox
-exfiltrates file content to the calling agent just as surely as a write
+sends private data out to the calling agent just as surely as a write
 plants content, so upload sources, saved-auth-state loads, HAR reads, and
 downloaded-file reads are all gated, not only download destinations.
 

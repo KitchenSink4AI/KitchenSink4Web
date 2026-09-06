@@ -1244,7 +1244,7 @@ async def navigate(
             # The identifiers a site owner asks for when a user requests
             # access. Surfaced here because the refusal is the only place the
             # user sees, and the page they would have read them off is gone.
-            + (' Quote this to the site owner if you ask to be allowed: '
+            + (' Quote this to the site owner when asking for access: '
                + ', '.join(f'{k} {v}' for k, v in
                            verdict["reference_ids"].items()) + '.'
                if verdict.get("reference_ids") else ''))
@@ -2709,8 +2709,7 @@ async def manage_session(
     degrades, and cannot do, and status reports any emulation in force. The
     status action also names the browsers installed on this machine and
     which lane suits which job, as steering: nothing switches a lane on its
-    own. Tool availability reflects the extension's current settings; when
-    settings change, the tool list refreshes in this conversation.
+    own. Tool availability reflects the packs this server was started with.
     """
     action = (action or "status").strip().lower()
 
@@ -3077,8 +3076,7 @@ async def get_workflows(topic: str | None = None) -> dict:
     exact launch flag that loads it, and how to record and replay a
     multi-step flow. Packs are chosen at launch rather than at runtime, so this is
     where you learn which flag you need before restarting. Tool
-    availability reflects the extension's current settings; when settings
-    change, the tool list refreshes in this conversation.
+    availability reflects the packs this server was started with.
     """
     from .. import packs
 
@@ -3301,7 +3299,7 @@ async def handle_dialog(
 ) -> dict:
     """Answer native browser dialogs (alert, confirm, prompt, beforeunload)
     instead of letting the driver dismiss every one of them. With nothing
-    armed the shipped posture stands: a dialog is dismissed the moment it
+    armed the default posture stands: a dialog is dismissed the moment it
     opens, which a confirm() reads as Cancel, and every dismissal is recorded
     with the reason. 'arm_accept' and 'arm_dismiss' set what answers the NEXT
     dialog on this page, so arm before the click that raises it; 'hold' leaves

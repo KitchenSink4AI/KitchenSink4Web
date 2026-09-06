@@ -66,8 +66,8 @@ async def download(
     timeout_ms: int = 30000,
     request_id: str | None = None,
 ) -> dict:
-    """Handle the download lifecycle explicitly, which is the fix for the
-    incumbents' silent breakage. 'click' arms a download listener and then
+    """Handle the download lifecycle explicitly, so a download is never
+    fire-and-forget. 'click' arms a download listener and then
     clicks the located trigger; 'goto' navigates to a direct file URL;
     'fetch' re-requests a url through the browser's own signed-in session
     and writes the bytes, which is the way out of a PDF the browser is
