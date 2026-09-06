@@ -2002,8 +2002,8 @@ async def find_and_act(
     a four-step workflow cost sixteen calls, and half of them were this pair.
     The target is resolved FRESH inside this call, so nothing here acts on a
     ref that has been sitting in a transcript. The ambiguity contract is the
-    same one the two tools carry separately and is the reason this is safe to
-    fuse: several matches REFUSE and list every candidate with an actable
+    same one the two tools carry separately and it is why fusing them costs
+    nothing: several matches REFUSE and list every candidate with an actable
     ref, exactly as find_elements lists them, and no match refuses with the
     nearest misses, exactly as an action does. Nothing acts on first match.
     `action` is 'click', 'type' (pass `text`), 'press' (pass `keys`), or

@@ -1,9 +1,8 @@
-name: Publish
+name: Publish to PyPI
 
-# Phase 9 artifact, wired early and deliberately not enabled. Trusted
-# publishing needs a PyPI project that does not exist yet, and the KS4PPT
-# v1.0.1 lesson is that the release scaffolding should exist BEFORE the first
-# release rather than be assembled during one.
+# Trusted publishing, registered by the author against THIS filename and the
+# `pypi` environment below. Both halves have to match the registration or the
+# release runs, looks green, and publishes nothing.
 #
 # Ship-phase checklist this workflow does NOT do for you (PLAN Phase 9):
 #   - the `mcp-name` marker in README line 1, before the first release
@@ -11,8 +10,11 @@ name: Publish
 #   - registry publish IMMEDIATELY after device auth (the JWT dies in under an
 #     hour, confirmed twice in the family)
 #   - the author READOUT of all public copy before the commit
+#   - attaching the packed .mcpb to the GitHub release
 
 on:
+  release:
+    types: [published]
   workflow_dispatch:
 
 jobs:
@@ -23,11 +25,28 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
-      - name: Build
+      - name: Build sdist and wheel
         run: |
-          pip install build
+          python -m pip install --upgrade build
           python -m build
       - name: Verify the distribution
         run: |
-          pip install twine
+          python -m pip install --upgrade twine
           twine check dist/*
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write  # trusted publishing, no tokens anywhere
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1

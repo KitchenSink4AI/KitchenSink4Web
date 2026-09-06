@@ -9,3 +9,4 @@ dist/
 spikes/*/.venv/
 spikes/*/out/raw/
 gates/_victim_*.json
+spikes/*/out/

@@ -1,0 +1,71 @@
+name: "🔧 Bug report"
+description: "Something glitched, refused, or came back with the wrong page"
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report! One important note before you start:
+        **never attach a saved session or a signed-in page.** If the bug needs
+        a page to reproduce, link a public URL or rebuild the structure with
+        placeholder content.
+  - type: input
+    id: tool
+    attributes:
+      label: Which tool?
+      placeholder: "e.g. get_page_view, find_elements, find_and_act"
+    validations:
+      required: true
+  - type: textarea
+    id: call
+    attributes:
+      label: The exact tool call
+      description: The arguments you passed (redact any private paths/text).
+      render: json
+    validations:
+      required: true
+  - type: textarea
+    id: happened
+    attributes:
+      label: What happened
+      description: The response or error you got, verbatim if possible.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: textarea
+    id: pageshape
+    attributes:
+      label: Page characteristics
+      description: >
+        What's on the page near the failure? (shadow roots, iframes, a cookie
+        banner, a login wall, infinite scroll, a single-page app that rewrites
+        the DOM, a canvas or PDF viewer, content that only appears on
+        hover...)
+  - type: input
+    id: version
+    attributes:
+      label: KitchenSink4Web version
+      placeholder: "pip show kitchensink4web"
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      placeholder: "Windows 11, Python 3.12, lane A (bundled Chromium)"
+  - type: input
+    id: packs
+    attributes:
+      label: Which packs were enabled?
+      placeholder: "lite only / lite + extract / KS4WEB_ALL_PACKS=1"
+  - type: input
+    id: acting
+    attributes:
+      label: Was acting turned on?
+      placeholder: "no (the default) / yes, KS4WEB_ALLOW_ACTING=1"

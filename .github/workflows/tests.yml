@@ -21,9 +21,42 @@ jobs:
           python-version: ${{ matrix.python }}
       - name: Install
         run: pip install -e ".[dev]"
-      # Phase 0 needs no browser. `playwright install` joins this workflow when
-      # Phase 1 opens and the engine extra becomes a required dependency.
       - name: Run test suite
+        # tests/unit only. The browser half runs in its own job below, which
+        # needs a downloaded browser and is therefore slower and narrower.
         run: python -m pytest tests/unit -q
       - name: Surface report (counts come from the script, never hand-math)
         run: python -X utf8 scripts/measure_surface.py
+
+  browser:
+    # The half that proves the product. Phase 1 opened long ago and this job
+    # is it arriving: 243 test definitions that drive a real Chromium against
+    # the local corpus. Split from the unit matrix rather than folded into it
+    # because it downloads a browser, so a unit regression still reports in
+    # a minute or two instead of waiting on this.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: pip install -e ".[dev]"
+      - name: Install Chromium and its system libraries (Linux)
+        # Lane A is the browser the server ships with. Lane B drives an
+        # installed Chrome, Edge, or Firefox and stays a local gate: a runner
+        # has no installed browser the server did not put there itself.
+        # `--with-deps` is a Linux-only apt step, so the two runners get
+        # separate lines rather than one line that warns on Windows.
+        if: runner.os == 'Linux'
+        run: python -m playwright install --with-deps chromium
+      - name: Install Chromium (Windows)
+        if: runner.os == 'Windows'
+        run: python -m playwright install chromium
+      - name: Run browser suite
+        run: python -m pytest tests/browser -q

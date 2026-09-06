@@ -1,0 +1,22 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.nometalalchemist/kitchensink4web",
+  "title": "KitchenSink4Web",
+  "description": "Everything plus the kitchen sink for the open web: reads a whole page for the price of a paragraph.",
+  "version": "0.0.0",
+  "websiteUrl": "https://nometalalchemist.github.io/KitchenSink4Web/",
+  "repository": {
+    "url": "https://github.com/nometalalchemist/KitchenSink4Web",
+    "source": "github"
+  },
+  "packages": [
+    {
+      "registryType": "pypi",
+      "identifier": "kitchensink4web",
+      "version": "0.0.0",
+      "transport": {
+        "type": "stdio"
+      }
+    }
+  ]
+}

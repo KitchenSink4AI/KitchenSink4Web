@@ -1,3 +1,5 @@
+<!-- mcp-name: io.github.nometalalchemist/kitchensink4web -->
+
 # 🚰 KitchenSink4Web
 
 Everything plus the kitchen sink for the open web: a browser MCP server that reads a whole page

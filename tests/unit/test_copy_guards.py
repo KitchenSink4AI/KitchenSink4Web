@@ -28,6 +28,8 @@ import asyncio
 import re
 from pathlib import Path
 
+import pytest
+
 from kitchensink4web import envelope, server
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -66,13 +68,12 @@ def _public_strings() -> dict[str, str]:
     failed on nothing but their position in the run (found by re-attack 2's
     ordering check, 2026-09-06, and present on the baseline commit too).
 
-    The CAPTURE still runs under the shipped default, deliberately. Scanning
-    the actable surface as well would widen what this guard covers, and it
-    turns out to find something (see the wave 5 report: `find_and_act`'s
-    description carries a word `BANNED_SAFETY` forbids, and no run has ever
-    read it because a mutating tool is ABSENT under the default grade). That
-    is a copy decision and a scope decision for the author, not a silent
-    change smuggled in by a teardown fix."""
+    The CAPTURE runs under the shipped default, which is what a first
+    session sees. The FULL surface is captured separately by
+    `_every_tool_description` below and carries the same grammar rules, so
+    the wave 5 gap is closed: `find_and_act`'s description used a word
+    `BANNED_SAFETY` forbids and no run had ever read it, because a mutating
+    tool is ABSENT under the default grade."""
     try:
         server.configure()
         tools = asyncio.run(server.mcp.list_tools())
@@ -89,8 +90,32 @@ def _public_strings() -> dict[str, str]:
         server.configure(read_only=False)
 
 
+def _every_tool_description() -> dict[str, str]:
+    """EVERY tool description in the product, not only the ones a default
+    launch registers.
+
+    The shipped default is `browse` with no packs, so the mutating tools and
+    the seven packs are simply absent from `_public_strings`. Fix wave 5
+    found what that costs: `find_and_act`'s description carried a banned
+    word for its whole life and no guard had ever read the string, because
+    the tool does not exist under the grade the guard ran at. The widest
+    surface is the honest one to hold to the copy rules, since it is the
+    surface a user who turns everything on actually reads."""
+    try:
+        server.configure(mode="full", read_only=False)
+        tools = asyncio.run(server.mcp.list_tools())
+        return {f"tool:{t.name}": (t.description or "") for t in tools}
+    finally:
+        server.configure(read_only=False)
+
+
 def test_no_em_dashes_anywhere_public():
     for where, text in _public_strings().items():
+        assert "—" not in text, f"em dash in {where}"
+
+
+def test_no_em_dashes_in_any_tool_description():
+    for where, text in _every_tool_description().items():
         assert "—" not in text, f"em dash in {where}"
 
 
@@ -105,6 +130,65 @@ def test_safety_copy_grammar():
                 f"grammar is reduces / gates / flags / logs / requires "
                 f"confirmation for."
             )
+
+
+#: Strings the widened guard found on its first run, on tools no earlier run
+#: had ever read. Each one needs a REWRITE, and a rewrite of a tool
+#: description is product copy the main thread writes, not something a guard
+#: gets to paper over. So the list is explicit, it is named per tool and per
+#: matched string, and `test_the_pending_copy_list_only_shrinks` fails the
+#: moment one of these is fixed, which is what stops it becoming permanent.
+PENDING_MAIN_THREAD_COPY = {
+    # "an upload exfiltrates file content to the site as surely as a read
+    # does" - states the behavior by naming the technique.
+    ("tool:upload_file", "exfiltrat"),
+    # "can read anything the page can, exfiltrate it, or act as the
+    # logged-in user"
+    ("tool:evaluate_script", "exfiltrat"),
+    # "The dry run is the safe first move" - `safe` as an unqualified verb,
+    # the same class as find_and_act's, which the main thread has already
+    # ruled on once.
+    ("tool:list_workflows", "safe"),
+}
+
+
+def test_safety_copy_grammar_covers_every_tool_description():
+    """The wave 5 widening. Same rules, applied to the surface a user who
+    loads every pack and allows acting is reading.
+
+    Three strings were waiting there on the day this guard was widened, and
+    they are listed above rather than fixed here. Everything else on the
+    41-tool surface is held to the rules from this commit on."""
+    surface = _every_tool_description()
+    assert len(surface) > 30, (
+        f"the full surface registered only {len(surface)} tools; this guard "
+        f"is meant to read all of them")
+    for where, text in surface.items():
+        for pattern in BANNED_SAFETY + BANNED_RECIPES + BANNED_OVERCLAIM:
+            hit = re.search(pattern, text, re.IGNORECASE)
+            if not hit:
+                continue
+            if (where, hit.group(0).lower()) in PENDING_MAIN_THREAD_COPY:
+                continue
+            raise AssertionError(
+                f"{where} uses banned copy {hit.group(0)!r}. The grammar is "
+                f"reduces / gates / flags / logs / requires confirmation for."
+            )
+
+
+def test_the_pending_copy_list_only_shrinks():
+    """A known-failures list that nobody prunes is a guard that was turned
+    off. Every entry has to still be a real hit, so fixing one turns this
+    red until the entry goes with it."""
+    surface = _every_tool_description()
+    stale = [
+        entry for entry in sorted(PENDING_MAIN_THREAD_COPY)
+        if not re.search(re.escape(entry[1]), surface.get(entry[0], ""),
+                         re.IGNORECASE)
+    ]
+    assert not stale, (
+        f"these entries are fixed or gone and must be deleted from "
+        f"PENDING_MAIN_THREAD_COPY: {stale}")
 
 
 def test_no_feature_is_framed_by_the_attack_it_stops():
@@ -276,6 +360,79 @@ def test_the_page_carries_its_non_affiliation_line():
         f"expected 7 (one per language)")
     for text in affil:
         assert "Google" in text and "Mozilla" in text and "Microsoft" in text
+
+
+def test_the_mcp_name_marker_is_readme_line_one():
+    """The registry validates the PyPI package against this marker, and it
+    has to be there BEFORE the first release. PLAN W4 names it so the KS4PPT
+    v1.0.1 lesson does not get relearned."""
+    first = (ROOT / "README.md").read_text(encoding="utf-8").splitlines()[0]
+    assert first == (
+        "<!-- mcp-name: io.github.nometalalchemist/kitchensink4web -->"
+    ), "README line 1 mcp-name marker was lost"
+
+
+def test_the_server_json_description_fits_the_registry_cap():
+    """The registry caps the description at 100 characters. XL's Phase A
+    found a 127-character one and called it a likely hard publish failure,
+    which is the check this repo gets to have in advance."""
+    import json
+
+    server_json = json.loads(
+        (ROOT / "server.json").read_text(encoding="utf-8"))
+    description = server_json["description"]
+    assert len(description) < 100, (
+        f"server.json description is {len(description)} characters and the "
+        f"registry cap is 100")
+    assert "—" not in description
+    assert server_json["name"] == "io.github.nometalalchemist/kitchensink4web"
+
+
+def test_version_is_consistent_across_manifests():
+    """One version, six fields: pyproject, the package, server.json twice,
+    and both bundle manifests with their own uvx pins. XL had this guard and
+    it caught real drift; this one also covers the dev manifest, which is a
+    file the siblings do not have."""
+    import json
+    import sys
+    import tomllib
+
+    pyproject = tomllib.loads(
+        (ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    version = pyproject["project"]["version"]
+
+    server_json = json.loads(
+        (ROOT / "server.json").read_text(encoding="utf-8"))
+    assert server_json["version"] == version, "server.json version drifted"
+    assert server_json["packages"][0]["version"] == version, \
+        "server.json's PyPI package version drifted"
+
+    for rel in ("manifest.json", "dev/manifest.json"):
+        manifest = json.loads(
+            (ROOT / "bundle" / rel).read_text(encoding="utf-8"))
+        assert manifest["version"] == version, rel
+        assert manifest["server"]["mcp_config"]["args"] == [
+            f"kitchensink4web=={version}"
+        ], f"{rel}'s uvx pin does not match the package version"
+
+    sys.path.insert(0, str(ROOT / "src"))
+    import kitchensink4web
+    if kitchensink4web.__version__ == "0.0.0":
+        pytest.skip(
+            "package version not stamped yet; stamping "
+            "src/kitchensink4web/__init__.py at ship turns this guard on"
+        )
+    assert kitchensink4web.__version__ == version, (
+        f"src/kitchensink4web/__init__.py says "
+        f"{kitchensink4web.__version__}, pyproject says {version}")
+
+
+def test_no_beta_language_in_public_copy():
+    """KS4Web ships as a full 1.0 born-right (author ruling, the XL
+    pattern). No beta labels anywhere a reader meets the product."""
+    for where, text in _published_files().items():
+        assert not re.search(r"\bbeta\b", text, re.IGNORECASE), \
+            f"{where} still carries a beta label"
 
 
 def test_the_readme_carries_its_non_affiliation_line():
