@@ -166,10 +166,31 @@ PAYMENT_NEIGHBOUR_TERMS = (
     "有效期", "安全码", "安全碼",
 )
 
-#: The instrument qualifiers that make a "<something> card number" NOT a
-#: payment field. A library card, a boarding pass, and an ID card are not
-#: payment instruments and a confirmation prompt on a library form is the
-#: erosion DESIGN names; a GIFT card is one and stays.
+#: THE PAYMENT INSTRUMENTS, which is the closed set. Re-attack 2 (B6) named
+#: the right rule -- the token before `card` names the instrument -- and then
+#: implemented it as a list of the things a card can be that are NOT payment
+#: instruments, which is unbounded. Re-attack 3 (M4) found the unlisted member
+#: on the first try: `Residence card number` classified as payment. Enumerate
+#: the small side instead, and `residence`, `fishing`, and `punch` need no
+#: entry. The mirror of `KS_PAYMENT_QUALIFIERS`.
+PAYMENT_CARD_QUALIFIERS = (
+    "credit", "debit", "gift", "bank", "prepaid", "pre", "charge", "payment",
+    "pay", "visa", "master", "mastercard", "amex", "american", "express",
+    "discover", "jcb", "unionpay", "maestro", "atm", "cash", "store", "travel",
+)
+
+#: English function words, which qualify nothing. Without these `Name on card`
+#: would read as an `on` card and stop being a payment field. The mirror of
+#: `KS_TRANSPARENT_WORDS`.
+TRANSPARENT_QUALIFIERS = (
+    "on", "the", "a", "an", "my", "your", "our", "their", "this", "that",
+    "of", "for", "to", "and", "or", "in", "no", "new", "enter", "please",
+    "valid", "number", "nr",
+)
+
+#: The GLUED spellings the word rule cannot reach, because `librarycard` is one
+#: token with no space to read a preceding word from. This list stays for that
+#: case and is no longer the whole rule.
 NOT_PAYMENT_CARDS = (
     "library", "loyalty", "membership", "member", "boarding", "id", "identity",
     "sim", "key", "room", "door", "access", "badge", "business", "report",
@@ -246,15 +267,72 @@ def payment_haystack(field: dict) -> str:
     return " " + _NONWORD.sub(" ", _fold(raw.lower())).strip() + " "
 
 
-def payment_compact(hay: str) -> str:
-    """The de-spaced haystack with every non-payment card compound struck out,
-    so a substring match cannot land inside `librarycard`."""
-    compact = hay.replace(" ", "")
+def _is_foreign_qualifier(prev: str) -> bool:
+    """Does this token read as a word naming an instrument.
+
+    A haystack is every identifier on the control run together, so `id=c_card`
+    contributes the token pair `c card` and a rule that took any preceding
+    token would read `c` as an instrument. Three guards: at least three
+    characters, not `card` repeating from a second identifier, and not already
+    a card term."""
+    if len(prev) < 3 or prev == "card":
+        return False
+    if prev in PAYMENT_CARD_QUALIFIERS or prev in TRANSPARENT_QUALIFIERS:
+        return False
+    return not any(token in prev for token in PAYMENT_NAME_SUBSTRINGS)
+
+
+def foreign_card_strike(hay: str) -> tuple[str, bool]:
+    """Break every `<foreign> card` compound in a spaced haystack.
+
+    `card` becomes a space, which a substring match cannot cross, and the
+    qualifier stays where it was: deleting both is what let a `Card number`
+    label written alongside an `id=c_card` lose its own `cardnumber` token to
+    a cascade. So `library card number` leaves `library number` and matches
+    nothing, while `gift card number` and `name on card` survive -- a gift
+    card is a payment instrument and `on` is a function word."""
+    out: list[str] = []
+    foreign = False
+    words = hay.strip().split(" ")
+    for i, word in enumerate(words):
+        if word == "card" and i and _is_foreign_qualifier(words[i - 1]):
+            foreign = True
+            out.append(" ")
+            continue
+        out.append(word)
+    return "".join(out), foreign
+
+
+def payment_compact_info(hay: str) -> tuple[str, bool]:
+    """The de-spaced haystack with every foreign-instrument card compound
+    struck out, plus whether one was struck. Both routes run: the word rule
+    reads the qualifier off the spaced string and reaches ANY qualifier, and
+    the glued list catches the spellings that carry no space to read."""
+    compact, foreign = foreign_card_strike(hay)
     for qualifier in NOT_PAYMENT_CARDS:
         token = qualifier + "card"
         if token in compact:
             compact = compact.replace(token, " ")
-    return compact
+            foreign = True
+    return compact, foreign
+
+
+def payment_compact(hay: str) -> str:
+    """The de-spaced, struck haystack on its own, for the callers that do not
+    need to know whether a foreign instrument was named."""
+    return payment_compact_info(hay)[0]
+
+
+#: Any identifier carrying two letters in a row, which is what "this field has
+#: a name" means. It decides whether the SHAPE tiers may speak alone.
+_HAS_LETTERS = re.compile(r"[^\W\d_]{2}", re.UNICODE)
+
+
+def has_naming(hay: str) -> bool:
+    """Whether the page NAMED this field. A page that names a field is telling
+    the truth about it, so the name governs and the shape tiers below become
+    corroboration; a page that names nothing leaves the shape to speak."""
+    return bool(_HAS_LETTERS.search(hay))
 
 
 def is_payment_field(field: dict) -> bool:
@@ -282,10 +360,11 @@ def is_payment_field(field: dict) -> bool:
     if any(token in ac for token in PAYMENT_AUTOCOMPLETE):
         return True
     hay = payment_haystack(field)
+    foreign = False
     if len(hay) > 2:
         if any(f" {word} " in hay for word in PAYMENT_NAME_WORDS):
             return True
-        compact = payment_compact(hay)
+        compact, foreign = payment_compact_info(hay)
         if any(token in compact for token in PAYMENT_NAME_SUBSTRINGS):
             return True
         # The neighbour tier: an expiry or a security code as it is written in
@@ -295,27 +374,45 @@ def is_payment_field(field: dict) -> bool:
         if (field.get("form_payment")
                 and any(token in compact for token in PAYMENT_NEIGHBOUR_TERMS)):
             return True
+    # `<X> card number` where X is not a payment instrument. Not a card field
+    # on its own (M4), and still one where the form corroborates it: a declared
+    # `cc-*` token or a form the page itself says is payment-shaped.
+    if foreign:
+        return bool(field.get("form_payment"))
+    # THE SHAPE TIERS, which are subordinate to the NAME (M3, M5). A phone
+    # field declaring `[0-9]{13,15}`, an IMEI field showing fifteen digits, a
+    # tracking-number field showing four groups of four, and a field labelled
+    # IBAN holding `**** **** **** ****` all gated as payment on shape alone.
+    # `pan_shape` rides the descriptor for the one string that must never
+    # travel with it, the field's current VALUE: a masked card number is
+    # evidence and putting it in the audit record would leak the thing this
+    # gate protects.
     pattern = str(field.get("pattern") or "")
-    if (pattern and _PAN_PATTERN.search(pattern)
-            and ("0-9" in pattern or "\\d" in pattern)):
+    shaped = bool(
+        (pattern and _PAN_PATTERN.search(pattern)
+         and ("0-9" in pattern or "\\d" in pattern))
+        or field.get("pan_shape")
+        or pan_shape(field.get("placeholder")))
+    if shaped and (not has_naming(hay) or field.get("form_payment")):
         return True
-    # A PAN shape the page shows the human. `pan_shape` rides the descriptor
-    # for the one string that must never travel with it, the field's current
-    # VALUE: a masked card number is evidence and putting it in the audit
-    # record would be leaking the thing this gate protects.
-    if field.get("pan_shape"):
-        return True
-    if pan_shape(field.get("placeholder")):
-        return True
-    # A SPLIT card number. The page supplies the measurements (how many short
-    # numeric boxes share this field's group, and how many digits they total)
-    # and the rule is applied here, the way `pattern` is supplied and read
-    # here, so a descriptor cannot classify itself harmless by asserting a
-    # verdict.
+    # A SPLIT card number. The page supplies the measurements -- how many short
+    # numeric boxes belong to this box's run, how many digits they total, what
+    # the run leads with, its shortest box, and whether the region names an
+    # instrument -- and the rule is applied HERE, the way `pattern` is supplied
+    # and read here, so a descriptor cannot classify itself harmless by
+    # asserting a verdict.
     size = field.get("pan_group_size")
     digits = field.get("pan_group_digits")
-    return bool(isinstance(size, int) and isinstance(digits, int)
-                and 2 <= size <= 6 and 13 <= digits <= 19)
+    if not (isinstance(size, int) and isinstance(digits, int)
+            and 2 <= size <= 6 and 13 <= digits <= 19):
+        return False
+    if field.get("pan_group_region") == -1:
+        return False
+    first = field.get("pan_group_first")
+    shortest = field.get("pan_group_min")
+    if isinstance(first, int) and first < 4:
+        return False
+    return not (isinstance(shortest, int) and shortest < 4)
 
 
 def refuse_secret_write(field: dict, tool: str) -> None:

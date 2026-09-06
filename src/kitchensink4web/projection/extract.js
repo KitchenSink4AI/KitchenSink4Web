@@ -1157,6 +1157,9 @@
                 pan_shape: ksPanShape('value' in el ? el.value : ''),
                 pan_group_size: panGroup ? panGroup.size : null,
                 pan_group_digits: panGroup ? panGroup.digits : null,
+                pan_group_first: panGroup ? panGroup.first : null,
+                pan_group_min: panGroup ? panGroup.min : null,
+                pan_group_region: panGroup ? panGroup.region : null,
                 // Which element a click on this one ACTIVATES (re-attack 2,
                 // C1): a <label> forwards to its control, and a node with no
                 // activation behaviour delegates to the nearest ancestor that
