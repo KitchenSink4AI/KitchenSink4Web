@@ -2977,8 +2977,9 @@ them compatibility surface.
 1. **The license.** Which of the three, and if open-core, where does the seam
    run given that the safety layer is the differentiator (Section 10.2c)?
 
-   **RULED 2026-09-06, relayed through the main thread during Phase 9: the
-   family AGPL.** AGPL-3.0-only, the same wording and the same
+   **RULED 2026-09-06 as an orchestrator ruling under standing delegation
+   (the author's rule 9: technical and engineering calls are Claude's, and
+   vision-level questions escalate), during Phase 9: the family AGPL.** AGPL-3.0-only, the same wording and the same
    LICENSE/NOTICE.md split the three shipped siblings use, free for
    individuals and personal use, with a commercial license negotiated case by
    case through the issue tracker. The open-core seam is NOT drawn: the

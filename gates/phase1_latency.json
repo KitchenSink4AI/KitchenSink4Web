@@ -13,7 +13,7 @@
   },
   "python_assembly_p95_ms": 10.0
  },
- "reference_arm": "extract.js as committed at HEAD, interleaved",
+ "reference_arm": "the LAST CERTIFIED COMMIT, not HEAD: a detached git worktree supplies both control arms, that commit's extract.js run in the live page and that commit's project() run in this process, each interleaved with the working tree's.",
  "rows": [
   {
    "url": "http://127.0.0.1:59844/big?n=5000",
@@ -127,5 +127,7 @@
   }
  ],
  "failures": [],
- "uncertified": []
+ "uncertified": [],
+ "certified_commit": "a58c575fcaff963dc5b96784f2661bdd1c640744",
+ "certified_commit_note": "The commit whose code produced the 2026-09-06 00:35 GREEN run recorded in this file, and therefore the control arm the next run measures against. Recorded 2026-09-06 by wave 3, which replaced the git-show-HEAD reference: a control read from HEAD carries every committed regression into both arms and can never flag one. Only a green run moves this forward."
 }
