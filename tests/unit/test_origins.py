@@ -52,6 +52,39 @@ def test_exempt_schemes_always_allowed(monkeypatch):
     assert origins.evaluate("about:blank") == "allowed"
 
 
+def test_non_web_schemes_are_denied_outright():
+    """Gauntlet 3, F7: `file:` and every other hostname-less or non-web
+    scheme early-returned "allowed" before either list ran, which is the
+    hole a page-published file:/// next-link rode into a local-file read."""
+    assert origins.evaluate(
+        "file:///C:/Windows/System32/drivers/etc/hosts") == "denied-scheme"
+    assert origins.evaluate(
+        "file://attacker-host/share/x.txt") == "denied-scheme"
+    assert origins.evaluate("data:text/html,<h1>x</h1>") == "denied-scheme"
+    assert origins.evaluate("javascript:alert(1)") == "denied-scheme"
+    assert origins.evaluate("view-source:https://example.com") \
+        == "denied-scheme"
+
+
+def test_an_allowlist_never_widens_the_scheme_refusal(monkeypatch):
+    """The gauntlet's browserless proof: with an allowlist configured,
+    file: and data: still returned "allowed" while an off-list http origin
+    was correctly caught. The scheme refusal must be unconditional."""
+    monkeypatch.setenv(origins.ENV_ALLOW, "example.com")
+    assert origins.evaluate("file:///C:/Windows/win.ini") == "denied-scheme"
+    assert origins.evaluate("data:text/html,x") == "denied-scheme"
+    assert origins.evaluate("http://evil.example.net/") == "off-list"
+
+
+def test_check_navigation_refuses_a_scheme_denial_and_says_why():
+    from kitchensink4web.errors import NavigationBlocked
+    with pytest.raises(NavigationBlocked) as exc:
+        origins.check_navigation("file:///C:/Windows/win.ini", None)
+    message = str(exc.value)
+    assert "http(s)" in message
+    assert "not started" in message
+
+
 def test_check_navigation_denied_raises_and_names_the_env(monkeypatch):
     monkeypatch.setenv(origins.ENV_DENY, "blocked.example")
     with pytest.raises(NavigationBlocked) as exc:

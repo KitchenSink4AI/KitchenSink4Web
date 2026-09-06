@@ -129,6 +129,7 @@ def test_no_gate_class_touches_policy_state():
         "form_submit", "payment_form", "file_upload", "download_to_disk",
         "storage_clear", "storage_load", "evaluate_script", "dialog_accept",
         "navigation_offlist", "action_offlist", "budget_reset",
+        "clipboard_read",
     }
     # dialog_accept joined 2026-09-06 with handle_dialog. It gates ANSWERING
     # a native dialog with OK and never dismissal, because dismissal is the
@@ -140,6 +141,12 @@ def test_no_gate_class_touches_policy_state():
     # load that describes itself as a wipe.
     assert "clear" not in gates.GATED_CLASSES["storage_load"]
     assert "load" in gates.GATED_CLASSES["storage_load"]
+    # clipboard_read joined 2026-09-06 by author ruling (gauntlet 3, F6):
+    # the clipboard holds whatever the human last copied from any
+    # application, and the read used to run with no human in the loop
+    # outside read-only mode.
+    assert "clipboard" in gates.GATED_CLASSES["clipboard_read"]
+    assert "copied" in gates.GATED_CLASSES["clipboard_read"]
     for name in gates.GATED_CLASSES:
         for forbidden in ("read_only", "readonly", "unlock", "disable",
                           "enable", "allow", "policy", "safety"):

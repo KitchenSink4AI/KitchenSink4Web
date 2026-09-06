@@ -76,6 +76,13 @@ GATED_CLASSES: dict[str, str] = {
     # gating on doubt and supplying the sentence the human reads.
     "dialog_accept": "answering a native browser dialog with OK",
     "evaluate_script": "evaluating script in the page",
+    # Joined 2026-09-06 by author ruling (gauntlet 3, F6): the clipboard can
+    # hold whatever the human last copied, from any application — a
+    # password-manager copy, a 2FA code, a private address — and the tool
+    # grants itself the browser permission, so this gate is the only human
+    # in the loop outside read-only mode. Write stays ungated: it
+    # overwrites, it does not exfiltrate.
+    "clipboard_read": "reading whatever was last copied to the clipboard",
     "navigation_offlist": "navigating to an origin outside the allowlist",
     "action_offlist": "acting inside an origin outside the allowlist",
     "budget_reset": "resetting the session's action budgets",
