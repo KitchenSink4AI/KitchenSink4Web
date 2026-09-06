@@ -1,0 +1,25 @@
+<!doctype html><meta charset=utf-8><title>legitimate overlap</title>
+<style>
+  body { margin: 0; font: 14px system-ui, sans-serif; }
+  /* THE FALSE-POSITIVE ARMS for the occlusion check (R4). Sticky headers,
+     toasts, and cookie bars overlap real controls on real pages every day,
+     and a cloak verdict on any of these would strip a working interface. */
+  #bar { position: fixed; top: 0; left: 0; width: 100%; height: 52px;
+         background: #ffffff; border-bottom: 1px solid #ccc; z-index: 900; }
+  #spacer { height: 60px; }
+  /* Clipped at the TOP edge by the sticky bar and clear at the centre. */
+  #clipped { position: relative; top: -26px; left: 20px;
+             width: 240px; height: 44px; z-index: 1; }
+  /* A toast covering one corner and nothing near the middle. */
+  #toast { position: fixed; right: 8px; bottom: 8px; width: 200px; height: 60px;
+           background: #333333; color: #fff; z-index: 900; padding: 6px; }
+  #corner { position: fixed; right: 120px; bottom: 40px;
+            width: 240px; height: 44px; z-index: 1; }
+</style>
+<body>
+<div id="bar">A sticky header</div>
+<div id="spacer"></div>
+<button id="clipped" onclick="window.__hit='clipped'">Clipped by the header</button>
+<button id="corner" onclick="window.__hit='corner'">Beside the toast</button>
+<div id="toast">Saved your changes</div>
+<script>window.__hit = null;</script>

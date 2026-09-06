@@ -1,0 +1,51 @@
+<!doctype html><meta charset=utf-8><title>submission mechanisms</title>
+<body>
+<h1>Every way a form goes</h1>
+
+<!-- THE MECHANISM BATTERY's page. Two forms, identical in every way except
+     that one of them can reach a card number, and between them they carry
+     every native submission mechanism the platform has. The point is that the
+     gate verdict must depend on the FORM and not on which mechanism the page
+     chose to expose, so a mechanism the classifier does not recognise fails a
+     test here instead of shipping. -->
+
+<h2>A form with no payment field anywhere</h2>
+<form id="plainf" action="blank.html" method="get">
+  <input id="p_user" name="user" value="">
+  <input id="p_submit" type="submit" value="Delete by input submit">
+  <input id="p_image" type="image" alt="Delete by image submit" width="90" height="30"
+         src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==">
+  <button id="p_typeless">Delete by typeless button</button>
+  <button id="p_explicit" type="submit">Delete by explicit submit</button>
+  <!-- The control arm. type=button submits nothing, so it must act UNGATED
+       however hard the rest of this page is gated; a gate that fires on
+       everything is a gate people route around. -->
+  <button id="p_plain" type="button" onclick="window.__plain = 'ran'">Just a button</button>
+</form>
+
+<h2>A form whose only card field is associated, not contained</h2>
+<form id="payf" action="blank.html" method="get">
+  <input id="c_user" name="user" value="">
+  <input id="c_submit" type="submit" value="Pay by input submit">
+  <input id="c_image" type="image" alt="Pay by image submit" width="90" height="30"
+         src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==">
+  <button id="c_typeless">Pay by typeless button</button>
+</form>
+<!-- OUTSIDE the <form> tag and still one of its controls. `form="payf"` makes
+     this a form-ASSOCIATED element: it lives in form.elements, it submits with
+     the form, and a descendant-only querySelector walks straight past it.
+     It also declares no autocomplete token, so the two halves of R3 are in
+     one element: association and name-only detection. -->
+<label for="c_card">Card number</label>
+<input id="c_card" form="payf" name="cardnumber" type="tel" inputmode="numeric" value="">
+
+<script>
+window.__submitted = null;
+window.__plain = null;
+for (const id of ['plainf', 'payf']) {
+  document.getElementById(id).addEventListener('submit', function (e) {
+    window.__submitted = id;
+    e.preventDefault();
+  });
+}
+</script>

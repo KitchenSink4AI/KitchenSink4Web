@@ -1,0 +1,11 @@
+<!doctype html><meta charset=utf-8><title>space submit</title>
+<body>
+<h1>Delete account</h1>
+<form id="del" action="blank.html" method="get">
+  <input id="u" name="user" value="">
+  <button id="go" type="submit">Delete account</button>
+</form>
+<script>
+window.__submitted = false;
+document.getElementById('del').addEventListener('submit', function(e){ window.__submitted = true; e.preventDefault(); });
+</script>

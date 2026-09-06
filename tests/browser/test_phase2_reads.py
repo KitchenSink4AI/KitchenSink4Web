@@ -268,7 +268,17 @@ def test_every_printed_price_is_within_tolerance_on_the_statistical_page(
             got = await lite.get_text(page=page, location={"ref": ref},
                                       max_chars=400000)
             measured = ntok(got["text"])
-            if measured < 60:      # priced by overhead, not by content
+            # WHICH regions are priced by overhead rather than by content is
+            # decided on the UNWRAPPED content, because the wrapped payload
+            # carries a random per-call nonce and tokenizes differently run to
+            # run. `r6` measured 51 to 61 tokens across eight identical reads
+            # with a threshold of 60 sitting inside that band, which failed
+            # this test roughly one run in eight for reasons that had nothing
+            # to do with pricing. A threshold a value can sit on is exactly
+            # what the re-attack's R5 was about, one layer down. The band
+            # comparison below still runs on `measured`, unchanged, so no
+            # tolerance is recalibrated by this.
+            if ntok(pagedata.unwrap(got["text"])) < 40:
                 continue
             checked += 1
             advertised = int(advertised.replace(",", ""))
