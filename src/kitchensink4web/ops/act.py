@@ -140,6 +140,7 @@ _RESOLVE_JS = r"""
 (opts) => {
 // @@KS4WEB_INSTRUMENT@@
 // @@KS4WEB_VISIBILITY@@
+// @@KS4WEB_PAYMENT@@
   const loc = opts.location || {};
   const squash = (s) => (typeof s === 'string' ? s : '').replace(/\s+/g, ' ').trim();
   const clip = (s, n) => { s = squash(s); return s.length <= n ? s : s.slice(0, n) + '...'; };
@@ -219,10 +220,6 @@ _RESOLVE_JS = r"""
     catch (e) { return el.getAttribute('href'); }
   }
   const INTERACTIVE = 'a[href],button,input,select,textarea,summary,[role],[onclick],[tabindex]:not([tabindex="-1"])';
-  // A form is payment-shaped when ANY field in it is, so every control in
-  // that form -- including its submit button -- gates as one.
-  const PAYMENT_SEL = '[autocomplete*="cc-number"],[autocomplete*="cc-exp"],'
-    + '[autocomplete*="cc-csc"],[autocomplete*="cc-name"]';
 
   let cands = [], how = '';
   try {
@@ -313,13 +310,16 @@ _RESOLVE_JS = r"""
     KS.refof.set(el, ref);
     const d = describe(el);
     const r = d.role;
-    const formEl = el.form || el.closest('form');
+    const formEl = ksFormOf(el);
     const inForm = !!formEl;
     // Effective submission type, the SAME rule the extractor applies (C1):
     // a <button> with a missing or invalid type is a submit button per the
     // HTML spec ('button'/'reset' opt out), with the default-submit case
     // scoped to buttons inside a form. Reading only the raw attribute here
     // left a typeless in-form button unclassified on the live path.
+    // `<input type=submit>` and `<input type=image>` need no folding: the
+    // IDL `type` getter already reports both, and the CLASSIFIER is where
+    // R1 went wrong, not the reading of the type.
     let type = '';
     if (el.tagName === 'INPUT') {
       type = (el.type || 'text').toLowerCase();
@@ -365,7 +365,10 @@ _RESOLVE_JS = r"""
     return { count: 1, how: how, ref: ref, role: r, name: d.name, path: d.path,
       tag: el.tagName, type: type, autocomplete: ac, secret: (type === 'password'),
       in_form: inForm, form_action: formEl ? (formEl.getAttribute('action') || '') : '',
-      form_payment: !!(formEl && formEl.querySelector(PAYMENT_SEL)),
+      form_payment: ksFormPayment(formEl),
+      payment: ksPaymentField(el),
+      pattern: (el.getAttribute && el.getAttribute('pattern')) || '',
+      inputmode: (el.getAttribute && el.getAttribute('inputmode')) || '',
       page_key: pageKey,
       anchor: { page_key: pageKey, role: r, name: d.name,
         landmark: lm.kind, landmark_label: lm.label,
@@ -505,6 +508,16 @@ def target_descriptor(unit: dict) -> dict:
         "payment": unit.get("payment"),
         "type": unit.get("type"),
         "autocomplete": unit.get("autocomplete"),
+        # The identifiers the server-side payment re-derivation reads. The
+        # in-page rule already looked at these; the Python side could not,
+        # because the descriptor dropped them on the way out, so a
+        # caller-supplied descriptor could omit `payment` and be believed
+        # (R3, 2026-09-06). Same shape as `is_secret_field`: the flag is a
+        # hint and the identifiers are the evidence.
+        "attr_id": unit.get("attr_id") or a.get("attr_id"),
+        "attr_name": unit.get("attr_name") or a.get("attr_name"),
+        "pattern": unit.get("pattern"),
+        "inputmode": unit.get("inputmode"),
         # Form membership travels with the descriptor because the submission
         # classifier needs it: Enter is only a submission inside a form. The
         # extractor spells it `form`, the live resolver spells it `in_form`,
@@ -516,6 +529,30 @@ def target_descriptor(unit: dict) -> dict:
         # be about.
         "form_payment": unit.get("form_payment"),
     }
+
+
+#: THE SUBMIT-BUTTON STATES, and this list is the whole class rather than the
+#: instances anyone happened to think of. HTML defines exactly three ways an
+#: element is a submit button: `<input type=submit>`, `<input type=image>`,
+#: and a `<button>` whose type attribute is missing or invalid (only `button`
+#: and `reset` opt out). The third is folded in upstream -- the extractor and
+#: the live resolver both compute an effective `type` of `submit` for an
+#: in-form typeless button -- so by the time a descriptor reaches the
+#: classifier the whole class is these two strings.
+#:
+#: The re-attack (2026-09-06, R1) went through `type=image`, which is the
+#: submit button with a picture on it and has been in the language since
+#: HTML 2.0. Clicking one submitted a checkout form carrying a live card
+#: number with no gate computed at all, because the classifier compared
+#: `type == "submit"` against the ONE instance rather than testing the class.
+#: `type=image` also POSTs its click coordinates, so it is if anything the
+#: more consequential of the two.
+SUBMIT_TYPES = frozenset({"submit", "image"})
+
+
+def is_native_submitter(desc: dict) -> bool:
+    """Whether ACTIVATING this control natively submits the form it is in."""
+    return (desc.get("type") or "").strip().lower() in SUBMIT_TYPES
 
 
 def action_class_for(desc: dict, *, submitting: bool = False) -> str | None:
@@ -540,7 +577,7 @@ def action_class_for(desc: dict, *, submitting: bool = False) -> str | None:
     # WRITING a payment-shaped field is `payment_form` wherever it happens.
     if credentials.is_payment_field(desc):
         return "payment_form"
-    if submitting or (desc.get("type") or "").lower() == "submit":
+    if submitting or is_native_submitter(desc):
         # And SUBMITTING is judged by the form, not by the control that
         # triggered it, because the submission is the moment the card number
         # leaves. Reading payment as a field-only property split the four
@@ -561,18 +598,65 @@ def action_class_for(desc: dict, *, submitting: bool = False) -> str | None:
 _SUBMIT_KEYS = ("enter", "numpadenter", "return")
 
 
-def submits_by_key(keys: str | None) -> bool:
-    """Whether this key or chord is a form submission in a form context."""
+#: Keys that ACTIVATE whatever holds focus. Space is the other half of the
+#: keyboard's activation contract and always has been: a focused `<button>`
+#: fires its click on Space, and if that button is a submit control the form
+#: goes. The Enter family is in both tuples because Enter both activates a
+#: focused button AND submits implicitly from a text field, which are two
+#: different mechanisms reaching the same place.
+_ACTIVATION_KEYS = ("space", " ", "spacebar", "enter", "numpadenter", "return")
+
+
+def _base_and_mods(keys: str | None) -> tuple[str, set[str]]:
     parts = [p.strip().lower() for p in str(keys or "").split("+") if p.strip()]
     if not parts:
-        return False
-    base = parts[-1]
-    modifiers = set(parts[:-1])
+        return "", set()
+    return parts[-1], set(parts[:-1])
+
+
+def submits_by_key(keys: str | None) -> bool:
+    """Whether this key or chord is an IMPLICIT form submission in a form
+    context: Enter pressed in a single-line control."""
+    base, modifiers = _base_and_mods(keys)
     if base not in _SUBMIT_KEYS:
         return False
     # Shift+Enter is the newline convention, not a submission; Alt+Enter is a
     # platform chord. Ctrl/Meta+Enter and a bare Enter both submit.
     return not (modifiers & {"shift", "alt"})
+
+
+def activates_by_key(keys: str | None) -> bool:
+    """Whether this key or chord ACTIVATES the focused control."""
+    base, modifiers = _base_and_mods(keys)
+    if base not in _ACTIVATION_KEYS:
+        return False
+    # The same two exclusions, for the same reasons one key along: Shift+Space
+    # scrolls up and Alt+Space opens a window menu, and neither presses the
+    # button under the cursor.
+    return not (modifiers & {"shift", "alt"})
+
+
+def key_submits(keys: str | None, desc: dict) -> bool:
+    """Whether pressing `keys` against THIS descriptor submits its form.
+
+    TWO MECHANISMS, and the re-attack (2026-09-06, R2) rode the second one
+    past a gate written only for the first. `submits_by_key` describes
+    IMPLICIT submission -- Enter in a text control -- which is what the gate
+    knew about. ACTIVATION is the other one: a submit button that holds focus
+    is pressed by Space exactly as it is pressed by a click, so
+    `press_keys(keys='Space')` with no location at all submitted a "Delete
+    account" form while the same call with Enter refused correctly. The class
+    that carries the harm is the NATIVE SUBMITTER, not the key, so the key
+    only has to be an activation and the descriptor has to be one of these.
+
+    Shift+Enter stays a newline in a text context, because both halves
+    exclude it.
+    """
+    if not desc or not desc.get("in_form"):
+        return False
+    if submits_by_key(keys):
+        return True
+    return activates_by_key(keys) and is_native_submitter(desc)
 
 
 #: What the live element says about itself RIGHT NOW: the field-type flip
@@ -581,23 +665,29 @@ def submits_by_key(keys: str | None) -> bool:
 #: keystrokes. Classification has to be re-taken against the focused element,
 #: not against the descriptor that was true a moment earlier.
 _LIVE_FIELD_JS = r"""
-(el) => ({
-  tag: el.tagName,
-  type: (el.type || '').toLowerCase(),
-  autocomplete: (el.getAttribute('autocomplete') || '').toLowerCase(),
-  name: (el.getAttribute('aria-label') || el.getAttribute('name')
-         || el.getAttribute('placeholder') || '').slice(0, 80),
-  in_form: !!(el.form || (el.closest ? el.closest('form') : null)),
-  action: (el.form && el.form.getAttribute('action')) || '',
-  form_payment: (() => {
-    const f = el.form || (el.closest ? el.closest('form') : null);
-    if (!f) return false;
-    return !!f.querySelector('[autocomplete*="cc-number"],'
-      + '[autocomplete*="cc-exp"],[autocomplete*="cc-csc"],'
-      + '[autocomplete*="cc-name"]');
-  })()
-})
+(el) => {
+// @@KS4WEB_PAYMENT@@
+  const f = ksFormOf(el);
+  return {
+    tag: el.tagName,
+    type: (el.type || '').toLowerCase(),
+    autocomplete: (el.getAttribute('autocomplete') || '').toLowerCase(),
+    name: (el.getAttribute('aria-label') || el.getAttribute('name')
+           || el.getAttribute('placeholder') || '').slice(0, 80),
+    attr_id: el.id || '',
+    attr_name: (el.getAttribute('name') || ''),
+    pattern: (el.getAttribute('pattern') || ''),
+    inputmode: (el.getAttribute('inputmode') || ''),
+    in_form: !!f,
+    action: (f && f.getAttribute('action')) || '',
+    payment: ksPaymentField(el),
+    form_payment: ksFormPayment(f)
+  };
+}
 """
+
+
+_LIVE_FIELD_JS = instrument(_LIVE_FIELD_JS)
 
 
 async def live_field(page, handle) -> dict:
@@ -633,12 +723,18 @@ async def recheck_at_write(page, handle, desc: dict, *, tool: str) -> dict:
     if not live:
         return desc
     merged = dict(desc)
-    for key in ("type", "autocomplete", "in_form", "action",
-                "form_payment"):
+    for key in ("type", "autocomplete", "in_form", "action", "attr_id",
+                "attr_name", "pattern", "inputmode", "form_payment",
+                "payment"):
         if live.get(key) not in (None, ""):
             merged[key] = live[key]
     merged["secret"] = None         # re-derived from the live type, not reused
-    merged["payment"] = None
+    if not live.get("payment"):
+        # Only CLEARED when the live read says no, so the server-side
+        # re-derivation gets the same fresh start the secret check gets. A
+        # stale True from a descriptor resolved before a field flipped is
+        # exactly the M6 shape one classification along.
+        merged["payment"] = None
     credentials.refuse_secret_write(merged, tool)
     return merged
 
@@ -662,7 +758,8 @@ async def resolve(sess, record, location: dict, *, tool: str,
     if group == "ref":
         return await _resolve_ref(sess, record, value, tool=tool,
                                   acting=acting)
-    return await _resolve_live(sess, record, location, tool=tool)
+    return await _resolve_live(sess, record, location, tool=tool,
+                               acting=acting)
 
 
 def _material_name_change(old: str | None, new: str | None) -> bool:
@@ -777,7 +874,8 @@ async def _resolve_ref(sess, record, ref: str, *, tool: str,
         f'{outcome.get("recovery")}')
 
 
-async def _resolve_live(sess, record, location: dict, *, tool: str) -> dict:
+async def _resolve_live(sess, record, location: dict, *, tool: str,
+                        acting: bool = True) -> dict:
     if "anchor" in location:
         raise BadParams(
             "the {'anchor': ...} selector addresses a durable anchor id, which "
@@ -797,6 +895,14 @@ async def _resolve_live(sess, record, location: dict, *, tool: str) -> dict:
             raise StaleAnchor(
                 "the element left the DOM between resolving it and acting on "
                 "it. Re-read the page and try again.")
+        # The resolver's own candidate filter already drops every STYLED cloak
+        # (it shares `visibility.js` with the read), so this adds exactly one
+        # technique: OCCLUSION, which is computed on the acting path only
+        # because it costs a page scan (re-attack R4). Without this the live
+        # selector path was the way around it: `click(location={'css': ...})`
+        # on a button buried under an opaque panel.
+        if acting:
+            await refuse_if_cloaked(record.page, handle, tool=tool)
         unit = dict(found)
         # Absorb the resolved element into the SESSION map, so the ref this
         # action reports (`target.ref`) is one the ladder can re-resolve.

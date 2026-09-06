@@ -1561,26 +1561,42 @@ def _field_location(f: dict) -> dict:
     return {k: v for k, v in f.items() if k not in ("value", "action")}
 
 
-_FOCUSED_JS = r"""
+_FOCUSED_JS = _instrument(r"""
 () => {
+// @@KS4WEB_PAYMENT@@
   const el = document.activeElement;
   if (!el || el === document.body || el === document.documentElement) return null;
-  const f = el.form || (el.closest ? el.closest('form') : null);
+  const f = ksFormOf(el);
+  // The effective submission type, the SAME fold the extractor and the live
+  // resolver apply: a <button> with a missing or invalid type inside a form
+  // IS a submit button, and the focused-descriptor reader has to agree with
+  // them or the key gate and the click gate disagree about one element.
+  let type = (el.type || '').toLowerCase();
+  if (el.tagName === 'BUTTON') {
+    const raw = (el.getAttribute('type') || '').trim().toLowerCase();
+    if (raw === 'button' || raw === 'reset') type = raw;
+    else if (raw === 'submit') type = 'submit';
+    else type = f ? 'submit' : raw;
+  }
   return {
     role: (el.tagName || '').toLowerCase(),
     name: (el.getAttribute('aria-label') || el.getAttribute('name')
-           || el.getAttribute('placeholder') || '').slice(0, 80),
-    type: (el.type || '').toLowerCase(),
+           || el.getAttribute('placeholder') || el.textContent
+           || '').slice(0, 80),
+    attr_id: el.id || '',
+    attr_name: (el.getAttribute('name') || ''),
+    pattern: (el.getAttribute('pattern') || ''),
+    inputmode: (el.getAttribute('inputmode') || ''),
+    type: type,
     autocomplete: (el.getAttribute('autocomplete') || '').toLowerCase(),
     in_form: !!f,
     action: f ? (f.getAttribute('action') || '') : '',
-    form_payment: !!(f && f.querySelector('[autocomplete*="cc-number"],'
-      + '[autocomplete*="cc-exp"],[autocomplete*="cc-csc"],'
-      + '[autocomplete*="cc-name"]')),
+    payment: ksPaymentField(el),
+    form_payment: ksFormPayment(f),
     page_key: location.origin + location.pathname + location.hash
   };
 }
-"""
+""")
 
 
 async def _focused_descriptor(page) -> dict | None:
@@ -1650,9 +1666,18 @@ async def press_keys(
     # With no location the target is whatever holds focus, and that case is
     # gated too: focus-then-global-Enter is the same submission wearing two
     # calls instead of one.
-    if resolved is None and _act.submits_by_key(keys):
+    #
+    # The trigger is ACTIVATION, not implicit submission (re-attack R2,
+    # 2026-09-06). The focused descriptor used to be read only for the Enter
+    # family, so `press_keys(keys='Space')` with a submit button focused
+    # carried no descriptor at all, computed no class, and pressed "Delete
+    # account" while the identical call with Enter refused. Space is the other
+    # half of the keyboard's activation contract; reading the descriptor for
+    # both, and asking `key_submits` which mechanism applies, is what makes the
+    # two keys agree about one element.
+    if resolved is None and _act.activates_by_key(keys):
         desc = await _focused_descriptor(record.page) or {}
-    submitting = bool(_act.submits_by_key(keys) and desc.get("in_form"))
+    submitting = _act.key_submits(keys, desc)
     _policy.approve(_policy.ActionRequest(
         tool="press_keys", kind="act", session=sess.session_id,
         page=record.handle, url=record.page.url,

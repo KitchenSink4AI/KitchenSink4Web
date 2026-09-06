@@ -52,8 +52,13 @@ from ..errors import ConfirmationRequired, TargetChanged, ValidationFailed
 #: test_gates.py asserts that property over this table.
 GATED_CLASSES: dict[str, str] = {
     "form_submit": "submitting a form",
-    "payment_form": "acting on a payment-shaped form (cc-number / cc-exp "
-                    "autocomplete detected)",
+    # The parenthetical named the ONE signal detection used, and stopped being
+    # true when detection went multi-signal (re-attack R3, 2026-09-06): a
+    # field named `cardnumber` with no autocomplete token anywhere now gates,
+    # and telling the human "autocomplete detected" about it would be a
+    # sentence the server cannot back.
+    "payment_form": "acting on a payment-shaped form (a card number, expiry, "
+                    "or security-code field was detected in it)",
     "file_upload": "uploading a file from disk",
     "download_to_disk": "saving a download to disk",
     "storage_clear": "clearing cookies or site storage",

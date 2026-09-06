@@ -35,6 +35,7 @@ adds a feature.
 from __future__ import annotations
 
 import os
+import re
 import threading
 from typing import Any
 
@@ -117,11 +118,77 @@ def is_secret_field(field: dict) -> bool:
     return any(token in ac for token in SECRET_AUTOCOMPLETE)
 
 
+#: Payment NAMES, matched on a field's squashed identifiers, and the exact
+#: mirror of `projection/payment.js` (`test_credentials.py` pins the two lists
+#: equal, the way the secret rule is pinned to the extractor's). Two tiers,
+#: because the short ones are initialisms that collide with ordinary words: a
+#: long token matches as a SUBSTRING of the de-spaced string, so `card_number`,
+#: `cardNumber`, `card-number` and `Card number` all reduce to `cardnumber`,
+#: while a short one must stand as its own WORD.
+PAYMENT_NAME_SUBSTRINGS = (
+    "cardnumber", "cardnum", "cardno", "ccnumber", "ccnum", "cardholder",
+    "creditcard", "debitcard", "nameoncard", "cardname",
+    "cardexpiry", "cardexpiration", "cardexp", "ccexpiry", "ccexp",
+    "securitycode", "cardcode", "cardsecurity", "cvvnumber",
+)
+PAYMENT_NAME_WORDS = ("cvv", "cvv2", "cvc", "cvc2", "csc", "ccv")
+
+#: A `pattern` spelling a 13-to-19 digit run is a card number whatever the
+#: field is called. Nothing else common has that shape: a postcode is four to
+#: nine, a phone number is seven to fifteen and usually admits separators, and
+#: an account number is rarely constrained at all.
+_PAN_PATTERN = re.compile(r"\{\s*1[3-9]\s*(,\s*(1[3-9])?\s*)?\}")
+
+#: Descriptor keys that can NAME a field.
+_NAME_KEYS = ("name", "label", "attr_name", "attr_id", "id", "placeholder",
+              "aria_label", "title")
+
+_CAMEL = re.compile(r"([a-z0-9])([A-Z])")
+_NONWORD = re.compile(r"[^a-z0-9]+")
+
+
+def payment_haystack(field: dict) -> str:
+    """Every identifier on a descriptor, squashed to space-delimited lowercase
+    words. camelCase splits first, so `cardNumber` reads as two words."""
+    raw = " ".join(str(field.get(k)) for k in _NAME_KEYS if field.get(k))
+    raw = _CAMEL.sub(r"\1 \2", raw)[:400]
+    return " " + _NONWORD.sub(" ", raw.lower()).strip() + " "
+
+
 def is_payment_field(field: dict) -> bool:
+    """Classify a field descriptor as payment-shaped.
+
+    MULTI-SIGNAL since the 2026-09-06 re-attack (R3), which walked a live card
+    number into `<input name="cardnumber" type="tel" inputmode="numeric">`
+    with no gate, because this asked one question: does the page declare an
+    `autocomplete` token. A page that wants the gate to fire declares one; the
+    pages this exists to defend against are exactly the ones that do not, and
+    the field the human reads as "Card number" is a card field whatever the
+    markup omits. The rule now re-derives server-side from the identifiers the
+    way `is_secret_field` re-derives from the type, so a caller-supplied
+    descriptor cannot classify itself harmless by leaving the flag out.
+
+    `inputmode` was considered as a signal and REJECTED. `inputmode="numeric"`
+    sits on every quantity box, postcode, OTP field, and page number on the
+    web, and a payment gate that fires on all of them is a gate people learn
+    to route around. It is corroboration a human can read in the audit record,
+    not a classifier input.
+    """
     if field.get("payment"):
         return True
     ac = (field.get("autocomplete") or "").strip().lower()
-    return any(token in ac for token in PAYMENT_AUTOCOMPLETE)
+    if any(token in ac for token in PAYMENT_AUTOCOMPLETE):
+        return True
+    hay = payment_haystack(field)
+    if len(hay) > 2:
+        if any(f" {word} " in hay for word in PAYMENT_NAME_WORDS):
+            return True
+        compact = hay.replace(" ", "")
+        if any(token in compact for token in PAYMENT_NAME_SUBSTRINGS):
+            return True
+    pattern = str(field.get("pattern") or "")
+    return bool(pattern and _PAN_PATTERN.search(pattern)
+                and ("0-9" in pattern or "\\d" in pattern))
 
 
 def refuse_secret_write(field: dict, tool: str) -> None:
