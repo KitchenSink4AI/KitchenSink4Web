@@ -49,7 +49,21 @@ B64_MARKER = base64.b64encode(
 #: plain file server handing these corpus fixtures out at 200 was pinning
 #: exactly the false-positive the gate closed. Live Cloudflare challenges
 #: and CAPTCHA interstitials answer refusing statuses.
-_WALL_STATUS = {"/c/botwall.html": 403, "/c/captcha.html": 403}
+#:
+#: `expired_login.html` joined them for the same reason one round later
+#: (gauntlet 4, G4-01): the AUTH text tier was the last visible-text tier
+#: without the status gate, and it is the tier that costs the most when it
+#: misfires, because `navigate` raises on an auth wall FIRST and withholds the
+#: page whole. "Your session has expired" is a sentence any help-desk article
+#: about session expiry carries at 200; a real expired session answers 401 or
+#: redirects to a login path, so the auth-wall row asks for the SAME corpus
+#: file behind a query tag the server answers 401 to. The route naming the
+#: recovery is what that row is actually pinning and it is unchanged. The
+#: bare path still serves at 200, because reading a login page is an
+#: ordinary thing to do — it is step 2 of the auth workflow the refusal
+#: itself describes — and the credential-blindness row reads exactly that.
+_WALL_STATUS = {"/c/botwall.html": 403, "/c/captcha.html": 403,
+                "/c/expired_login.html?expired=1": 401}
 
 
 class _Quiet(http.server.SimpleHTTPRequestHandler):
@@ -57,7 +71,8 @@ class _Quiet(http.server.SimpleHTTPRequestHandler):
         pass
 
     def do_GET(self):
-        status = _WALL_STATUS.get(self.path.split("?")[0])
+        status = (_WALL_STATUS.get(self.path)
+                  or _WALL_STATUS.get(self.path.split("?")[0]))
         if status:
             body = (CORPUS / self.path.split("?")[0].lstrip("/")).read_bytes()
             self.send_response(status)
@@ -283,8 +298,9 @@ def test_the_expired_session_is_an_auth_wall_with_the_route_named(
                                      headless=True)
         page = session.focused
         with pytest.raises(AuthRequired) as exc:
-            await lite.navigate(page=page,
-                                url=f"{corpus_site}/c/expired_login.html")
+            await lite.navigate(
+                page=page,
+                url=f"{corpus_site}/c/expired_login.html?expired=1")
         text = str(exc.value)
         assert "expired" in text
         assert "load_auth_state" in text and "handoff" in text

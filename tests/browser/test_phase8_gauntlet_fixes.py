@@ -104,11 +104,22 @@ class _Handler(http.server.BaseHTTPRequestHandler):
             self._send(_RENAME)
         elif self.path == "/inject":
             self._send(_INJECT)
-        elif self.path == "/deep":
+        elif self.path.startswith("/deep"):
             # M1's renderer killer: pathological NESTING depth (the 50k-node
             # WIDE floor page degrades correctly; depth is what crashes).
+            # THE DEPTH IS A PARAMETER (gauntlet 4, G4-09): 6000 crashed this
+            # renderer every time on an idle machine and not every time on a
+            # loaded one, which made the row's count unreproducible. The test
+            # escalates rather than accepting a maybe.
+            depth = 6000
+            if "=" in self.path:
+                try:
+                    depth = max(1000, min(60000,
+                                          int(self.path.split("=")[-1])))
+                except ValueError:
+                    depth = 6000
             self._send("<!doctype html><title>deep</title><body>"
-                       + "<div>" * 6000 + "leaf" + "</div>" * 6000
+                       + "<div>" * depth + "leaf" + "</div>" * depth
                        + "</body>")
         elif self.path.startswith("/echo"):
             self._send("<title>echo</title><body><h1>echoed</h1></body>")
@@ -345,13 +356,28 @@ def test_m1_renderer_crash_is_typed_and_the_handle_is_dead(hostile_site):
     naming manage_tabs; a NEW tab actually recovers."""
     async def go():
         session, page = await _open(hostile_site, "/plain")
+        # THE DEPTH ESCALATES UNTIL THE RENDERER ACTUALLY DIES (gauntlet 4,
+        # G4-09). 6000 levels killed this renderer on every idle run and not
+        # on every loaded one, so the row passed alone and failed inside a
+        # full suite that had a browser battery beside it — a load-sensitive
+        # count, which is a defect of its own whichever way it lands. The
+        # contract under test is unchanged: whichever call OBSERVES the
+        # crash, it is typed as a CONFLICT and the handle is dead from that
+        # moment. Which call sees it first was never part of the contract,
+        # and pinning it was the other half of the flake.
         crash_exc = None
-        try:
-            await lite.navigate(page=page, url=f"{hostile_site}/deep",
-                                timeout_ms=30000)
-        except Exception as exc:  # noqa: BLE001 - the raw driver error
-            crash_exc = exc
-        # Give the crash event a beat to land on the record.
+        for depth in (6000, 15000, 30000):
+            try:
+                await lite.navigate(page=page,
+                                    url=f"{hostile_site}/deep?d={depth}",
+                                    timeout_ms=30000)
+            except Exception as exc:  # noqa: BLE001 - the raw driver error
+                crash_exc = exc
+                break
+            # Give the crash event a beat to land on the record.
+            await asyncio.sleep(0.3)
+            if getattr(session.pages[page], "crashed", None):
+                break
         await asyncio.sleep(0.3)
         reuse_exc = None
         try:
@@ -367,11 +393,16 @@ def test_m1_renderer_crash_is_typed_and_the_handle_is_dead(hostile_site):
         return crash_exc, reuse_exc, fresh
 
     crash_exc, reuse_exc, fresh = run(go())
-    assert crash_exc is not None, "the deep page did not crash the renderer"
-    assert "page crashed" in str(crash_exc).lower(), crash_exc
+    # WHICHEVER CALL OBSERVED IT is the one that has to be typed honestly.
+    observed = crash_exc if crash_exc is not None else reuse_exc
+    assert observed is not None, (
+        "no depth up to 30,000 levels crashed the renderer, so the row never "
+        "reached the behaviour it pins")
+    assert ("page crashed" in str(observed).lower()
+            or "renderer" in str(observed).lower()), observed
     # The envelope layer classifies and rewrites it honestly.
-    assert envelope.classify(crash_exc) == "CONFLICT"
-    refusal = envelope.refusal(crash_exc)
+    assert envelope.classify(observed) == "CONFLICT"
+    refusal = envelope.refusal(observed)
     assert refusal["error"]["code"] == "CONFLICT"
     assert "manage_tabs" in refusal["error"]["message"]
     assert "renderer" in refusal["error"]["message"]

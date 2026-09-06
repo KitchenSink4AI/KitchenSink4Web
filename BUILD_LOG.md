@@ -3085,3 +3085,118 @@ origins scheme-denial unit pins. Gauntlet 3's own 28-row standing-law
 regression sweep re-run on the fixed tree: **zero flips, both passes** -
 every wave-6 / re-attack-3 line still holds. Zero orphaned browser
 processes at exit.
+
+## 2026-09-07 01:23 KST - fix wave 8 (the gauntlet-4 nine, closed by class)
+
+Gauntlet 4 ran the fix-wave-7 tree at `7849cc3` and returned nine findings,
+every one reproduced twice on fresh sessions (report:
+`20260907_web_gauntlet4.md`). Six of the nine were wave-7 defect CLASSES
+still alive on a sibling tier, a sibling call site, or a door the wave-7
+sweep did not enumerate, so this wave was run as class kills: every fix
+carries a grep-audit of every peer site in the same file and its siblings,
+and the audit is in the report (`20260907_web_fixwave8.md`). Nine pinning
+tests' worth of rows in `tests/browser/test_gauntlet4_fixes.py`, run
+red-first: 17 of the 21 rows that existed at that point fail on the
+unfixed tree, and the four that pass there are the guard-on-the-guard rows
+that must pass on both trees.
+
+**G4-01 (HIGH), the status-blind auth tier.** `_AUTH_MARKERS` now takes the
+same `REFUSING_STATUSES` gate its four sibling tiers already had. It was
+the last ungated visible-text tier and the most expensive one to get
+wrong, because `navigate` raises on an auth wall FIRST and withholds the
+page whole: three of the five needles are ordinary English on ordinary 200
+pages ("you must be logged in to" is any comment form) and innerText
+carries offscreen text, so one absolutely-positioned div cloaked any page
+from every agent. The 401 branch is the server's own signal and still
+fires alone.
+
+**G4-02 (MED), the header value inside the refusal.** `walls.header_block`
+clamps the header value through the same `^[A-Za-z0-9 ._:-]{1,64}$` filter
+wave 7 built for `reference_ids`, and drops a failing value whole rather
+than truncating it; the evidence still names the vendor and the header,
+which is the part that carries the verdict. Two of the three block headers
+match on PRESENCE only, so the value was entirely the site's to write, and
+5,000 characters of header produced a 5,136-character evidence string in
+the server's own voice. The verdict is unchanged.
+
+**G4-03 (MED), an object rendering its fallback.** The resource probe skips
+an `<object>` whose child content has a real layout box, on BOTH root arms.
+`<object>` renders its children when the resource fails, so an ordinary
+article inside an `<object type="application/pdf">` wrapper bought total
+read denial on every surface with no PDF on the page at all. The dominance
+test measures the box and cannot see the load; the children can.
+
+**G4-04 (MED-HIGH), a page that navigates itself onto a wall.** Meta
+refresh and `location.href` are how a real Cloudflare interstitial usually
+arrives, and both delivered it to the reads as ordinary content while the
+403 and the `cf-mitigated` header were already recorded on the object the
+reads were holding. `navigate`'s refusal is factored into `_blocked_refusal`
+and every read surface now consults the recorded response through
+`Session.nav_record`, which compares the recorded URL against the page's
+own so a stale record can never poison a verdict. Ten read surfaces
+gated; `save_page`, `take_screenshot`, and `export_pdf` deliberately are
+not, because capturing a wall page is the legitimate evidence use.
+
+**G4-05 (MED), popups.** `context.on("page")` adopts every page the browser
+opens; `_attach_page` is idempotent by page identity so `new_page()` cannot
+mint two handles for one page, and an adopted popup never steals the
+focused handle. A popup's own first navigation is issued before the frame
+that will hold it exists (the driver refuses to name a frame for it), so a
+context-level recorder parks that response by URL and `nav_record` claims
+it: without that half the popup was adopted and still served a 403
+interstitial as content, which the re-run of the gauntlet's own probe
+caught.
+
+**G4-06 (HIGH), the origin policy at every door.** `_landed_origin_check`
+is the origin twin of wave 7's `_post_navigation_wall`, wired into the same
+door list plus the ones the sweep found. A denied landing parks to
+about:blank and raises; an OFF-LIST landing parks FIRST and then asks the
+`navigation_offlist` gate, because a gate asked while the off-list content
+is still readable is the same laundering with an extra step. `navigate` and
+`manage_tabs(open)` run the shared helper too, which closes their own
+off-list-redirect hole. The doors-times-policies matrix is in the report:
+22 doors, every cell closed or refused with a recorded reason.
+
+**G4-07 (LOW-MED), the frame verdict nobody rendered.** `_frame_lines`
+renders each entered frame's wall verdict in `navigate`'s vocabulary. The
+verdict was computed and carried on the frame's dict; the block an agent
+reads never consulted it, while the interstitial's own heading did reach
+the content digest.
+
+**G4-08 (MED), page-authored text in refusal sentences.** Nine sites, three
+named in the report and six found by the sweep: the three
+`_candidate_text` ambiguity refusals and the nearest-by-name hint in
+`act.py`, the rebind `TargetChanged` and the frame-label `TargetChanged`,
+`find_and_act`'s nearest-miss branch, `get_table`'s and `get_list`'s
+inventory listings, and `upload_file`'s chooser timeout, all now inside the
+`wrap_line` envelope their sibling branches already used.
+`resource.filename_for` flattens every C0/C1 control character in BOTH
+branches, not only the CR and LF the disposition branch handled.
+
+**G4-09 (MED, intermittent), the rAF-timed cloak.** The arming probe yields
+TWO animation frames instead of one and the pixel arbiter yields one before
+the shutter. One frame put the second verdict in the same frame batch as
+the lid the page's focus handler queued, which is enough to SEE the node
+and not enough for it to be PAINTED - and painted is what the arbiter's two
+photographs compare, so an uncomposited lid read as identical in both and
+cleared a real occlusion. The miss did not reproduce on this machine
+before the change (6/6 standalone, 4/4 under four concurrent batteries), so
+the fix is reasoned from the mechanism and pinned at the mechanism. The
+other load-sensitive row is de-flaked too: the renderer-crash row escalates
+DOM depth until the renderer actually dies and no longer pins WHICH call
+observes the crash, which was never part of the contract.
+
+Gate: full suite **956 green in both orders** (`-p no:randomly` 560.3s,
+`--randomly-seed=20260906` 534.1s, zero failures and zero skips in either),
+up 23 from the 933 this tree collects: the 23 gauntlet-4 pins. Gauntlet 3's
+28-row standing-law regression sweep re-run with its original
+expectations: **zero flips across two passes**, including the
+`lid_raf-on-focus` row. Gauntlet 4's own 41-probe battery re-run twice:
+every finding dead, and **zero occurrences of any injection payload**
+(`operator-allowlisted`, `verify=false`, `IGNORE PRIOR RULES`, `KS4WEB
+NOTE`, `KS4WEB OPERATOR NOTE`) anywhere in the battery output. Two stale
+pins updated to the truthful contract, corpus untouched:
+`test_phase3_policy` serves `expired_login.html` at 401 behind a query tag
+(the bare path still serves at 200, because reading a login page is an
+ordinary thing to do), and the renderer-crash row as described above. Zero
+orphaned browser processes at exit; everything headless throughout.
