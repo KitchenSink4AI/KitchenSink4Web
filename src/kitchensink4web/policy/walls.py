@@ -196,7 +196,22 @@ def header_block(headers: dict | None) -> tuple[str, str] | None:
             continue
         if needle is not None and needle not in value:
             continue
-        detail = f"{evidence} (`{name}: {value}`)" if value else evidence
+        # THE VALUE IS CLAMPED BEFORE IT MAY BE QUOTED (gauntlet 4, G4-02),
+        # exactly as `reference_ids` clamps its own (gauntlet 3, F5). Two of
+        # the three block headers match on PRESENCE ONLY, so the value is
+        # entirely the site's to write, and this string ends up inside the
+        # `Evidence:` sentence of a refusal in the server's own voice — the
+        # one sentence an agent reads most carefully, outside any page-data
+        # envelope. A live probe put 322 characters of attacker prose there,
+        # and 5,000 characters of header produced a 5,136-character evidence
+        # string, so the channel was unbounded as well as unvalidated. A
+        # value that fails the clamp is DROPPED, never truncated: the
+        # evidence still names the header and the vendor, which is the part
+        # that carries the verdict, and a half-quoted value is worse than
+        # none. The verdict itself is unchanged — a block-only header still
+        # fires on its own presence at any status.
+        safe = _safe_reference(value)
+        detail = f"{evidence} (`{name}: {safe}`)" if safe else evidence
         return vendor, detail
     return None
 

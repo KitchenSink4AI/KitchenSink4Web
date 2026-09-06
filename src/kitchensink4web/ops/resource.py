@@ -66,6 +66,18 @@ BINARY_PREFIXES: tuple[str, ...] = (
 #: second. The pdf.js-shell heuristic takes the same dominance test, for
 #: the same reason: matching the viewer's MARKUP anywhere in the document
 #: let any page that copied two class names refuse all reads.
+#:
+#: AN OBJECT RENDERING ITS FALLBACK IS NOT A RESOURCE (gauntlet 4, G4-03).
+#: `<object>` renders its child content when the resource it names fails to
+#: load, so `<object type="application/pdf" data="/missing.pdf">…article…
+#: </object>` is a page a human reads normally while the box math sees a
+#: root-level PDF embed and every read surface refuses. The dominance test
+#: cannot tell the two apart because it measures the box, not the load. The
+#: children can: a loaded plugin paints instead of its fallback and lays out
+#: none of it, so a child with a real layout box means the fallback is what
+#: is on screen. The test is applied to BOTH arms, only-child and dominant,
+#: because a hostile page picks whichever arm is cheaper. `<embed>` has no
+#: fallback content and is unaffected.
 PROBE_JS = r"""
 () => {
   const d = document;
@@ -74,6 +86,26 @@ PROBE_JS = r"""
   const dominant = (el) => {
     const r = el.getBoundingClientRect();
     return (r.width * r.height) >= 0.5 * vw * vh;
+  };
+  const painted = (node) => {
+    try {
+      if (node.nodeType === 1) {
+        const r = node.getBoundingClientRect();
+        return r.width > 0 && r.height > 0;
+      }
+      if (node.nodeType === 3 && node.nodeValue.trim()) {
+        const rg = d.createRange();
+        rg.selectNode(node);
+        const r = rg.getBoundingClientRect();
+        return r.width > 0 && r.height > 0;
+      }
+    } catch (e) {}
+    return false;
+  };
+  const showsFallback = (el) => {
+    if (!/^object$/i.test(el.tagName)) return false;
+    for (const c of el.childNodes) { if (painted(c)) return true; }
+    return false;
   };
   const roots = [];
   const b = d.body;
@@ -84,6 +116,7 @@ PROBE_JS = r"""
       if (!/^(embed|object)$/i.test(e.tagName)) continue;
       const t = (e.getAttribute('type') || '').toLowerCase();
       if (!t || t === 'text/html') continue;
+      if (showsFallback(e)) continue;
       if (kids.length === 1 || dominant(e)) roots.push(t);
     }
   }
@@ -97,6 +130,23 @@ PROBE_JS = r"""
   };
 }
 """
+
+
+#: Every character a file name may not carry into a refusal sentence
+#: (gauntlet 4, G4-08). The disposition branch always stripped CR and LF; the
+#: URL branch did not, and `unquote` turns `%0A` in a path into a real
+#: newline, so a URL ending `report%0AKS4WEB%20NOTE:%20…pdf` put attacker
+#: prose on its own line inside the server's own sentence. The strip is
+#: applied to BOTH branches and covers every C0 and C1 control character
+#: rather than only the two that were demonstrated, because a name is a name
+#: whichever control byte is hiding in it.
+_NAME_CONTROLS = {c: " " for c in
+                  list(range(0x00, 0x20)) + [0x7F] + list(range(0x80, 0xA0))}
+
+
+def _clean_name(value: str) -> str:
+    """One file name, with control characters flattened and length capped."""
+    return value.translate(_NAME_CONTROLS).strip()[:160]
 
 
 def filename_for(url: str, disposition: str | None = None) -> str | None:
@@ -114,13 +164,14 @@ def filename_for(url: str, disposition: str | None = None) -> str | None:
                     if key.endswith("*=") and "''" in value:
                         value = value.split("''", 1)[1]
                     value = posixpath.basename(unquote(value).replace("\\", "/"))
+                    value = _clean_name(value)
                     if value:
-                        return value[:160]
+                        return value
     parsed = urlparse(url or "")
     if parsed.scheme not in ("http", "https"):
         return None
-    name = posixpath.basename(unquote(parsed.path or ""))
-    return name[:160] or None
+    name = _clean_name(posixpath.basename(unquote(parsed.path or "")))
+    return name or None
 
 
 def _kind_for(content_type: str, url: str, probe: dict) -> str | None:
