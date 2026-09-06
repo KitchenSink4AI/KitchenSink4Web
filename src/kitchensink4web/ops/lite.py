@@ -1569,6 +1569,11 @@ def _field_location(f: dict) -> dict:
 
 _FOCUSED_JS = _instrument(r"""
 () => {
+// The visibility block is spliced here for its FLATTENED-TREE PARENT rather
+// than for its hidden rule: `ksActivatableAncestor` climbs with `ksUp`, so
+// the focused-descriptor reader agrees with the acting resolver about which
+// element a click on a slotted node activates (re-attack 3, R6).
+// @@KS4WEB_VISIBILITY@@
 // @@KS4WEB_PAYMENT@@
 // @@KS4WEB_ACTIVATION@@
   const el = document.activeElement;
@@ -1599,6 +1604,9 @@ _FOCUSED_JS = _instrument(r"""
     pan_shape: ksPanShape('value' in el ? el.value : ''),
     pan_group_size: grp ? grp.size : null,
     pan_group_digits: grp ? grp.digits : null,
+    pan_group_first: grp ? grp.first : null,
+    pan_group_min: grp ? grp.min : null,
+    pan_group_region: grp ? grp.region : null,
     type: type,
     autocomplete: (el.getAttribute('autocomplete') || '').toLowerCase(),
     in_form: !!f,

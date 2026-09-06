@@ -60,6 +60,30 @@ function ksSubmitTypeOf(el, inForm) {
   return inForm ? 'submit' : (raw || null);
 }
 
+// THE NEAREST ACTIVATABLE ANCESTOR IN THE FLATTENED TREE, and the tree is the
+// whole point (re-attack 3, R6). This used to be `el.closest(KS_ACTIVATABLE)`,
+// and `closest()` walks the LIGHT tree: a light-DOM `<span>` slotted into a
+// shadow-root submit button climbs `span -> pay-box -> body` and finds no
+// activatable ancestor at all, so a click on it submitted a card-carrying
+// shadow form with no class computed and no gate. The element the browser
+// activates is the shadow `<button>`, because the browser runs the INNERMOST
+// activatable element's behaviour in the FLATTENED tree -- which is the
+// principle stated at the top of this file, and which `closest()` does not
+// implement. Slotting a light child into a shadow control is what every
+// component library does; it is furniture, not an attack.
+//
+// `ksUp` is `visibility.js`'s flattened-tree parent, spliced in alongside
+// this block, so the slot hop and the host hop are the same ones every other
+// subsystem in the build has used since the shadow rebuild.
+function ksActivatableAncestor(el) {
+  for (var n = ksUp(el), guard = 0; n && guard++ < 64; n = ksUp(n)) {
+    if (n.nodeType !== 1) continue;
+    try { if (n.matches && n.matches(KS_ACTIVATABLE)) return n; }
+    catch (e) { return null; }   // a selector engine that dislikes the list
+  }
+  return null;
+}
+
 // The element the browser activates when this one is clicked.
 function ksActivationTarget(el) {
   if (!el || el.nodeType !== 1) return el;
@@ -73,11 +97,7 @@ function ksActivationTarget(el) {
     var role = (el.getAttribute('role') || '').trim().toLowerCase();
     if (KS_ACTIVATION_ROLES[role]) return el;
   }
-  var n = el;
-  try {
-    var host = el.closest ? el.closest(KS_ACTIVATABLE) : null;
-    if (host) n = host;
-  } catch (e) { /* a selector engine that dislikes :has() etc. */ }
+  var n = ksActivatableAncestor(el) || el;
   if (n && n.tagName === 'LABEL') {
     // `control` is null on a label that labels nothing, in which case the
     // label is the end of the line and activates only itself.
