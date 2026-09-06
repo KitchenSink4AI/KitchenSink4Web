@@ -519,6 +519,21 @@ class Renderer:
                       f'{_num(got["elements"])} elements'
                       if got else "read")
             lines.append(f'   {fr["fid"]} | entered | {fr["label"]} | {detail}')
+            # THE FRAME'S WALL VERDICT, RENDERED (gauntlet 4, G4-07). The
+            # verdict was computed and carried on the frame's dict and this
+            # block never consulted it, so a child frame that was a real
+            # Cloudflare challenge read `entered | <origin> | 3 elements`
+            # here while the interstitial's own "Just a moment..." heading
+            # appeared in the content digest as ordinary content. The
+            # wording is `navigate`'s, so one wall reads the same whichever
+            # door it arrived through.
+            wall = fr.get("wall")
+            if wall:
+                lines.append(
+                    f'      {fr["fid"]} answered with a {wall["wall"]} '
+                    f'rather than the page (HTTP {wall["status"]}); anything '
+                    f'from it below is the interstitial, not the site. '
+                    f'Evidence: {wall.get("marker") or "HTTP status"}.')
         if len(read) > 8:
             lines.append(f'   [{len(read) - 8} more entered frame(s)]')
         for fr in skipped[:8]:

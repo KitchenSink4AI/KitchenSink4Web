@@ -266,8 +266,19 @@ async def _wall_verdict(page, status: int | None,
     text_gated = status in _walls.REFUSING_STATUSES
     marker = next((m for m in _WALL_MARKERS if m in title or m in body),
                   None) if text_gated else None
+    # THE AUTH TEXT TIER TAKES THE SAME GATE (gauntlet 4, G4-01). It is the
+    # one visible-text tier the F1 sweep left ungated, eight lines below the
+    # one it fixed, and it costs MORE than the others when it misfires:
+    # `navigate` raises on an auth-wall first of all, so the page is withheld
+    # whole. Three of the five needles are ordinary English on ordinary 200
+    # pages ("you must be logged in to" is any comment form, "sign in to
+    # continue" is any membership tease, "session expired" is any help-desk
+    # article about it), and innerText carries offscreen text, so one
+    # absolutely-positioned div cloaked a 200 page from every agent. The 401
+    # branch below is the server's own signal and keeps firing on its own.
     auth_marker = next(
-        (m for m in _AUTH_MARKERS if m in title or m in body), None)
+        (m for m in _AUTH_MARKERS if m in title or m in body),
+        None) if text_gated else None
     landed = None
     try:
         landed = page.url
@@ -428,6 +439,10 @@ async def get_page_view(
                     url=record.page.url, lane=sess.spec.label)
     budget = max(200, int(budget_tokens * _DETAIL_SCALE[detail]))
     record.touch(record.page.url)
+    # THE TWO POLICIES A READ HAS TO RE-ASK (gauntlet 4, G4-04/05/06): the
+    # page may have moved itself onto a wall or onto an origin no door
+    # ruled on since the last tool call.
+    await _read_gate(sess, record, tool="get_page_view")
     # The PDF and blob escape (research §2.4, the inverted finding). A tab
     # holding a PDF, an image, or a blob is not a document with readable
     # text, and scraping the viewer would return chrome and canvas labels
@@ -895,6 +910,7 @@ async def get_text(
     _audit.annotate(session=sess.session_id, page=record.handle,
                     url=record.page.url, lane=sess.spec.label)
     record.touch(record.page.url)
+    await _read_gate(sess, record, tool="get_text")
     held = await _resource.probe_page(record.page)
     if held is not None:
         raise _resource.read_refusal(held, "get_text")
@@ -1186,20 +1202,13 @@ async def navigate(
     # THE LANDED CHECK. The origin policy applies to where the navigation
     # LANDED, not only to where it was aimed, so a mid-action redirect to a
     # blocked origin aborts: the page is parked to about:blank, nothing is
-    # read from it, and the refusal says the redirect already happened.
-    try:
-        _origins.check_navigation(record.page.url, readonly.grade(),
-                                  phase="landed")
-    except Exception:
-        try:
-            await record.page.goto("about:blank", timeout=10000)
-        except Exception:
-            pass
-        record.touch("about:blank")
-        sess.invalidate_page(
-            record.handle, "the navigation landed on a blocked origin and "
-                           "was aborted to about:blank")
-        raise
+    # read from it, and the refusal says the redirect already happened. The
+    # body of the check is shared with every other door now (gauntlet 4,
+    # G4-06), which is also what closes the off-list half here: a redirect
+    # onto an origin outside the allowlist used to pass silently, because
+    # the gate had already been answered about the origin that was asked
+    # for rather than the one that answered.
+    await _landed_origin_check(sess, record, tool="navigate")
 
     # A site that said 429 stays said: the Retry-After window is recorded
     # and later requests to the domain refuse until it passes.
@@ -1225,38 +1234,8 @@ async def navigate(
     if verdict["wall"] == "auth-wall":
         raise _auth_refusal(record.page.url, verdict.get("marker"))
     if verdict["wall"]:
-        # LANE STEERING, not evasion (standing rule): nothing here patches a
-        # user agent or pretends to be a browser it is not. The field test
-        # 2026-09-05 measured that both Firefox lanes read pages the
-        # Chromium lane was turned away from, so the refusal names the lane
-        # that has a real chance instead of leaving the agent to retry the
-        # same one.
-        lane_hint = ""
-        if sess.spec.engine == "chromium" and verdict["wall"] in (
-                "bot-wall-or-captcha", "forbidden-challenge",
-                "service-unavailable-or-bot-wall"):
-            lane_hint = (
-                'Sites that turn away automated Chromium often serve '
-                'Firefox normally, so manage_session(action="open", '
-                'lane="B:moz-firefox") (your installed Firefox) or '
-                'lane="A:firefox" (the bundled one) is worth one try before '
-                'the handoff. ')
-        raise BlockedBySite(
-            f'{record.page.url} answered with a {verdict["wall"]} rather than '
-            f'the page (HTTP {status}). KS4Web does not retry against a wall '
-            f'and does not defeat one: {lane_hint}open the page in a headed '
-            f'window with manage_session(action="handoff") so a human can '
-            f'clear it, or come back later. '
-            + (f'Retry-After honored: {retry_after_s:.0f}s. '
-               if retry_after_s else '')
-            + f'Evidence: {verdict.get("marker") or "HTTP status"}.'
-            # The identifiers a site owner asks for when a user requests
-            # access. Surfaced here because the refusal is the only place the
-            # user sees, and the page they would have read them off is gone.
-            + (' Quote this to the site owner when asking for access: '
-               + ', '.join(f'{k} {v}' for k, v in
-                           verdict["reference_ids"].items()) + '.'
-               if verdict.get("reference_ids") else ''))
+        raise _blocked_refusal(sess, record.page.url, status, verdict,
+                               retry_after_s)
     # A navigation that LANDED on a PDF, an image, or a blob is not an error
     # (going to a PDF in order to save it is a normal thing to do), so this
     # is an advisory rather than a refusal. It says what the tab holds and
@@ -1444,6 +1423,178 @@ def _action_result(record, tool: str, desc: dict, resolved: dict,
     return result
 
 
+async def _park_to_blank(sess, record, why: str) -> None:
+    """Abandon whatever this page landed on, and say so to the ref ladder."""
+    try:
+        await record.page.goto("about:blank", timeout=10000)
+    except Exception:
+        pass
+    record.touch("about:blank")
+    sess.invalidate_page(record.handle, why)
+
+
+async def _landed_origin_check(sess, record, *, tool: str) -> None:
+    """The origin policy at the door a navigation came through (gauntlet 4,
+    G4-06).
+
+    `origins.py`'s module docstring states the property this restores: "the
+    ops layer re-evaluates the final URL after every navigation and aborts to
+    about:blank on a denied verdict, so a redirect cannot launder a blocked
+    origin." Before this helper that held for `navigate` and
+    `manage_tabs(open)` and for nothing else, so a CLICK on a link to a
+    deny-listed origin navigated there and served its content, and a
+    `read_pages` hop laundered the same origin through a redirect. Neither
+    door evaluated the destination either: `click` hands `approve()` the URL
+    it is LEAVING.
+
+    Both list verdicts are honored, because both were bypassed by the same
+    door. A denied origin refuses with the sentence `check_navigation`
+    already writes. An OFF-LIST landing is the `navigation_offlist` gate, one
+    of the twelve gated classes, and it is asked AFTER the page is parked:
+    the navigation already happened, so the only way the gate can still mean
+    what it says is for the off-list content to be unreachable while the
+    human answers it."""
+    landed = record.page.url
+    try:
+        verdict = _origins.check_navigation(landed, readonly.grade(),
+                                            phase="landed")
+    except Exception:
+        await _park_to_blank(
+            sess, record, "the navigation landed on a blocked origin and "
+                          "was aborted to about:blank")
+        raise
+    if verdict == "off-list":
+        await _park_to_blank(
+            sess, record, "the navigation landed outside the origin "
+                          "allowlist and was parked to about:blank until a "
+                          "human answers the confirmation")
+        _gates.ENGINE.ask(
+            "navigation_offlist", tool=tool, session=sess.session_id,
+            page=record.handle, target=None,
+            summary=f"the page landed on {landed}, which is outside "
+                    f"{_origins.ENV_ALLOW}, during {tool}. It was parked to "
+                    f"about:blank and nothing was read from it.")
+    record.vetted_url = landed
+
+
+async def _ensure_vetted(sess, record, *, tool: str) -> None:
+    """The origin policy on a document no tool navigated to (gauntlet 4).
+
+    Three ways a page arrives at a URL nothing ruled on: a meta refresh, a
+    `location.href` assignment, and a popup the browser opened from
+    `window.open` (G4-04 and G4-05 respectively). None of them passes through
+    any door, so the check runs where the consequences are — the surfaces
+    that hand page content to the model and the surfaces that dispatch
+    trusted input into it. A page whose current URL has already been ruled on
+    costs one string comparison."""
+    if record.page.url != record.vetted_url:
+        await _landed_origin_check(sess, record, tool=tool)
+
+
+def _blocked_refusal(sess, url: str, status: int | None, verdict: dict,
+                     retry_after_s: float | None = None):
+    """`navigate`'s wall refusal, as one sentence every surface can raise.
+
+    Factored out unchanged (gauntlet 4, G4-04) so a read surface that finds a
+    recorded wall verdict says the same thing `navigate` says about the same
+    page, rather than a second wording of the same fact."""
+    lane_hint = ""
+    if sess.spec.engine == "chromium" and verdict["wall"] in (
+            "bot-wall-or-captcha", "forbidden-challenge",
+            "service-unavailable-or-bot-wall"):
+        # LANE STEERING, not evasion (standing rule): nothing here patches a
+        # user agent or pretends to be a browser it is not. The field test
+        # 2026-09-05 measured that both Firefox lanes read pages the Chromium
+        # lane was turned away from, so the refusal names the lane that has a
+        # real chance instead of leaving the agent to retry the same one.
+        lane_hint = (
+            'Sites that turn away automated Chromium often serve '
+            'Firefox normally, so manage_session(action="open", '
+            'lane="B:moz-firefox") (your installed Firefox) or '
+            'lane="A:firefox" (the bundled one) is worth one try before '
+            'the handoff. ')
+    return BlockedBySite(
+        f'{url} answered with a {verdict["wall"]} rather than '
+        f'the page (HTTP {status}). KS4Web does not retry against a wall '
+        f'and does not defeat one: {lane_hint}open the page in a headed '
+        f'window with manage_session(action="handoff") so a human can '
+        f'clear it, or come back later. '
+        + (f'Retry-After honored: {retry_after_s:.0f}s. '
+           if retry_after_s else '')
+        + f'Evidence: {verdict.get("marker") or "HTTP status"}.'
+        # The identifiers a site owner asks for when a user requests access.
+        # Surfaced here because the refusal is the only place the user sees,
+        # and the page they would have read them off is gone.
+        + (' Quote this to the site owner when asking for access: '
+           + ', '.join(f'{k} {v}' for k, v in
+                       verdict["reference_ids"].items()) + '.'
+           if verdict.get("reference_ids") else ''))
+
+
+def _recorded_wall_possible(sess, record) -> dict | None:
+    """The recorded response, when it could name a wall, without touching
+    the page. The read surfaces ask this first so an ordinary page pays a
+    dict lookup rather than a title-and-innerText round trip on every
+    read. `sess.nav_record` is what settles WHICH response describes the
+    document on screen, including the popup case where the response was
+    dispatched before any frame existed to attribute it to."""
+    got = sess.nav_record(record)
+    if got is None:
+        return None
+    status = got["status"]
+    if status == 202 or status in _walls.REFUSING_STATUSES:
+        return got
+    return got if _walls.header_block(got["headers"]) else None
+
+
+async def _recorded_wall_refusal(sess, record) -> None:
+    """The wall verdict a READ has to consult (gauntlet 4, G4-04).
+
+    The verdict used to be attached at navigation time only, so a page that
+    moved ITSELF onto a challenge — a meta refresh or a `location.href`
+    assignment, which is how a real Cloudflare interstitial usually arrives —
+    handed the interstitial to `get_text` and `get_page_view` as ordinary
+    content with no verdict on it. The sting was that the response listener
+    had ALREADY recorded the 403 and the `cf-mitigated` header on the very
+    object the read surfaces were holding; nothing asked for it. The same
+    gap left the tab readable after `navigate` refused a wall, since the
+    refusal was the only place the verdict was ever stated.
+
+    The recorded response is only evidence about the document currently on
+    screen, so `_recorded_wall_possible` compares the recorded URL against
+    `page.url` before anything else and a mismatched record is ignored
+    rather than reasoned from."""
+    got = _recorded_wall_possible(sess, record)
+    if got is None:
+        return
+    verdict = await _wall_verdict(record.page, got["status"],
+                                 headers=got["headers"])
+    if not verdict.get("wall"):
+        return
+    if verdict["wall"] == "auth-wall":
+        raise _auth_refusal(record.page.url, verdict.get("marker"))
+    raise _blocked_refusal(sess, record.page.url, got["status"], verdict)
+
+
+async def _read_gate(sess, record, *, tool: str) -> None:
+    """Both re-asked policies, in the order the answers matter: an origin
+    nothing ruled on is refused before its content is classified."""
+    await _ensure_vetted(sess, record, tool=tool)
+    await _recorded_wall_refusal(sess, record)
+
+
+async def _post_navigation_origin(sess, record, outcome: dict, *,
+                                  tool: str) -> None:
+    """`_landed_origin_check`, on the act doors, gated on a real navigation.
+
+    The twin of `_post_navigation_wall`, wired into the same door list for
+    the same reason: one lock, and every door that opens onto a page has to
+    turn it."""
+    if outcome.get("effect") != "navigated":
+        return
+    await _landed_origin_check(sess, record, tool=tool)
+
+
 async def _post_navigation_wall(record, outcome: dict) -> dict | None:
     """The wall verdict for a navigation an ACTION caused (gauntlet 3, F4).
 
@@ -1482,6 +1633,10 @@ async def click(
     sess, record = MANAGER.locate(page)
     _audit.annotate(session=sess.session_id, page=record.handle,
                     url=record.page.url, lane=sess.spec.label)
+    # THE ORIGIN CHECK ON A DOCUMENT NO DOOR RULED ON (gauntlet 4,
+    # G4-05/G4-06): a popup the browser opened, or a page that moved
+    # itself, before trusted input is dispatched into it.
+    await _ensure_vetted(sess, record, tool="click")
     resolved = await _act.resolve(sess, record, location, tool="click")
     desc = resolved["descriptor"]
     _audit.annotate(replay=_replay_record(
@@ -1521,6 +1676,10 @@ async def click(
     outcome = await _act.verify(ctx, resolved["node_ref"], before)
     result = _action_result(record, "click", desc, resolved, outcome)
     result["session"] = sess.session_id
+    # THE ORIGIN TWIN OF THE WALL CHECK (gauntlet 4, G4-06), first, because a
+    # denied landing parks the page and a wall verdict on about:blank is a
+    # verdict about nothing.
+    await _post_navigation_origin(sess, record, outcome, tool="click")
     wall = await _post_navigation_wall(record, outcome)
     if wall:
         result["wall"] = wall
@@ -1555,6 +1714,10 @@ async def type_text(
     sess, record = MANAGER.locate(page)
     _audit.annotate(session=sess.session_id, page=record.handle,
                     url=record.page.url, lane=sess.spec.label)
+    # THE ORIGIN CHECK ON A DOCUMENT NO DOOR RULED ON (gauntlet 4,
+    # G4-05/G4-06): a popup the browser opened, or a page that moved
+    # itself, before trusted input is dispatched into it.
+    await _ensure_vetted(sess, record, tool="type_text")
     resolved = await _act.resolve(sess, record, location, tool="type_text")
     desc = resolved["descriptor"]
     if (resolved["unit"].get("tag") or "").upper() == "SELECT":
@@ -1649,6 +1812,8 @@ async def type_text(
     result = _action_result(record, "type_text", desc, resolved, outcome,
                             value_state=value_state)
     result["session"] = sess.session_id
+    # The origin twin (gauntlet 4, G4-06); see the note on click.
+    await _post_navigation_origin(sess, record, outcome, tool="type_text")
     wall = await _post_navigation_wall(record, outcome)
     if wall:
         result["wall"] = wall
@@ -1757,6 +1922,10 @@ async def fill_form(
     sess, record = MANAGER.locate(page)
     _audit.annotate(session=sess.session_id, page=record.handle,
                     url=record.page.url, lane=sess.spec.label)
+    # THE ORIGIN CHECK ON A DOCUMENT NO DOOR RULED ON (gauntlet 4,
+    # G4-05/G4-06): a popup the browser opened, or a page that moved
+    # itself, before trusted input is dispatched into it.
+    await _ensure_vetted(sess, record, tool="fill_form")
     if not fields or not isinstance(fields, list):
         raise BadParams(
             "fill_form needs a non-empty list of fields, each carrying one "
@@ -1916,6 +2085,9 @@ async def fill_form(
         submitted = {"submitted": True, "how": submitted,
                      "changed": {"effect": outcome["effect"],
                                  "details": outcome["details"]}}
+        # The origin twin (gauntlet 4, G4-06); see the note on click.
+        await _post_navigation_origin(sess, record, outcome,
+                                      tool="fill_form")
         wall = await _post_navigation_wall(record, outcome)
         if wall:
             submitted["wall"] = wall
@@ -2087,6 +2259,10 @@ async def press_keys(
     sess, record = MANAGER.locate(page)
     _audit.annotate(session=sess.session_id, page=record.handle,
                     url=record.page.url, lane=sess.spec.label)
+    # THE ORIGIN CHECK ON A DOCUMENT NO DOOR RULED ON (gauntlet 4,
+    # G4-05/G4-06): a popup the browser opened, or a page that moved
+    # itself, before trusted input is dispatched into it.
+    await _ensure_vetted(sess, record, tool="press_keys")
     if not (keys or "").strip():
         raise BadParams(
             "press_keys needs a key or chord, for example 'Enter', "
@@ -2156,6 +2332,8 @@ async def press_keys(
         _reraise_driver(exc, what="press_keys", timeout_ms=15000,
                         sess=sess, page_handle=record.handle)
     outcome = await _act.verify(kctx, node_ref, before)
+    # The origin twin (gauntlet 4, G4-06); see the note on click.
+    await _post_navigation_origin(sess, record, outcome, tool="press_keys")
     wall = await _post_navigation_wall(record, outcome)
     return {
         "session": sess.session_id, "page": record.handle, "tool": "press_keys",
@@ -2586,9 +2764,15 @@ async def find_and_act(
             f'{record.handle!r}, location={{"ref": "..."}})), or narrow the '
             f'search with role= or a longer query.')
     if not visible:
+        # THE SAME ENVELOPE THE BRANCH TWELVE LINES ABOVE USES (gauntlet 4,
+        # G4-08). The asymmetry was inside one function: the ambiguity arm
+        # wrapped its page-authored names and the nearest-miss arm quoted
+        # five of them raw, at 60 characters each, in the server's voice.
         misses = "; ".join(f'{n["role"]} "{n["name"]}"'
                            for n in found["nearest_misses"])
-        hint = (f' Nearest by name: {misses}.' if misses else
+        hint = (' Nearest by name:\n'
+                + _pagedata.wrap_line(misses, url=found["url"]) + '\n'
+                if misses else
                 ' No near misses either; the target may be inside a '
                 'cross-origin iframe, a closed shadow root, or content that '
                 'has not rendered yet. Open shadow roots were searched, and '
@@ -2691,18 +2875,9 @@ async def manage_tabs(
                 raise
             record.touch(new_page.url)
             sess.counters["navigations"] += 1
-            # THE LANDED CHECK, same as navigate's: the policy applies to
-            # where the navigation landed, not only where it was aimed.
-            try:
-                _origins.check_navigation(record.page.url, readonly.grade(),
-                                          phase="landed")
-            except Exception:
-                try:
-                    await record.page.goto("about:blank", timeout=10000)
-                except Exception:
-                    pass
-                record.touch("about:blank")
-                raise
+            # THE LANDED CHECK, same as navigate's and now literally the
+            # same helper (gauntlet 4, G4-06).
+            await _landed_origin_check(sess, record, tool="manage_tabs")
             # The wall verdict is REPORTED here rather than raised
             # (gauntlet 3, F4): the tab is open either way, and the caller
             # deserves to know what it holds without losing the handle.
@@ -2717,6 +2892,9 @@ async def manage_tabs(
         await record.page.bring_to_front()
         sess.focused = record.handle
         record.touch()
+        # Selecting an ADOPTED popup is the moment a caller starts working
+        # on a page nothing policed (gauntlet 4, G4-05).
+        await _ensure_vetted(sess, record, tool="manage_tabs")
     elif action == "close":
         record = sess.page(page)
         await record.page.close()
@@ -2957,6 +3135,12 @@ async def manage_session(
                         rec.page.goto(current_url),
                         _session.DEFAULT_TIMEOUT_MS, "handoff upgrade")
                     rec.touch(rec.page.url)
+                    # The landed check on the handoff re-goto as well
+                    # (gauntlet 4, G4-06): the URL was policed in the old
+                    # session, and where it lands in the new one is its
+                    # own question.
+                    await _landed_origin_check(sess, rec,
+                                               tool="manage_session")
                 except Exception:
                     pass
             await MANAGER.close(old.session_id)

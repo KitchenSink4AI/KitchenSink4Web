@@ -102,9 +102,24 @@ class PageHandle:
     #: here and the last per-child-frame ones in `frame_nav`, keyed by the
     #: driver's Frame object and pruned so a frame-churning page cannot grow
     #: it without bound.
+    #: The URL that response was for (gauntlet 4, G4-04). A recorded status
+    #: is only evidence about the document that is on screen NOW, and a page
+    #: can push a main-frame navigation to something else afterwards, so
+    #: every consumer that reads the record outside a navigation it just
+    #: performed compares this against `page.url` first and ignores a
+    #: mismatched record rather than reasoning from a stale one.
+    last_nav_url: str | None = None
     last_nav_status: int | None = None
     last_nav_headers: dict | None = None
     frame_nav: dict = field(default_factory=dict)
+    #: THE URL THE ORIGIN POLICY LAST RULED ON for this page (gauntlet 4,
+    #: G4-04 / G4-05 / G4-06). A page can arrive at a URL no tool asked for:
+    #: a meta refresh, a `location.href` assignment, or a popup the browser
+    #: opened from `window.open`. Comparing this against `page.url` is how
+    #: the read and act surfaces know the document in front of them has
+    #: never been through the deny/allow lists, and it is set only where a
+    #: check actually passed.
+    vetted_url: str | None = None
 
     def frame_id(self, key: str) -> str:
         if key not in self.frame_ids:
@@ -139,6 +154,18 @@ class Session:
         default_factory=lambda: {"navigations": 0, "reads": 0, "actions": 0,
                                  "pages_opened": 0, "origins": 0})
     origins: set[str] = field(default_factory=set)
+    #: NAVIGATION RESPONSES THAT ARRIVED BEFORE THEIR PAGE DID (gauntlet
+    #: 4, G4-05). A popup's own first navigation is issued BEFORE the
+    #: frame that will hold it exists — the driver refuses to name a
+    #: frame for it at all — so the per-page recorder cannot have seen
+    #: it and there is no record to write it on either. Without this the
+    #: read surfaces held an adopted popup with no recorded status and
+    #: served a 403 interstitial as ordinary content. Keyed by the
+    #: response URL, because the URL is the only identity such a response
+    #: carries; claimed by `nav_record` the first time a tool asks about
+    #: the page that landed there, and bounded so a popup-spamming site
+    #: cannot grow it.
+    pending_nav: dict = field(default_factory=dict)
     #: The sticky element map and the delta store, per SESSION rather than
     #: per page, because refs are unique across the session (DESIGN 3.5) so a
     #: bare `e12` is never ambiguous. The engine owns them and the anchors
@@ -163,6 +190,31 @@ class Session:
         self.saved_auth_at = time.time()
         self.saved_auth_path = path
 
+    def nav_record(self, record) -> dict | None:
+        """The navigation response that produced the document CURRENTLY on
+        `record`, or None when nothing recorded describes it.
+
+        The URL comparison is the point (gauntlet 4, G4-04): a recorded
+        status is evidence about one document, and a page that pushes a
+        main-frame navigation afterwards would otherwise poison every
+        later verdict with a status that belongs to something else. The
+        `pending_nav` fallback is the popup case, where the response was
+        dispatched before any frame existed to attribute it to; the first
+        lookup claims it onto the record so it is only resolved once."""
+        try:
+            url = record.page.url
+        except Exception:
+            return None
+        if record.last_nav_url == url:
+            return {"url": url, "status": record.last_nav_status,
+                    "headers": record.last_nav_headers}
+        pending = self.pending_nav.pop(url, None)
+        if pending is not None:
+            record.last_nav_url = pending["url"]
+            record.last_nav_status = pending["status"]
+            record.last_nav_headers = pending["headers"]
+            return pending
+        return None
     def invalidate_page(self, handle: str, why: str) -> dict:
         """A navigation, a page close, or a session end. Refs and read tokens
         minted on a page do not survive it, and the counts come back so the
@@ -313,12 +365,72 @@ class SessionManager:
                 self._attach_page(session, page)
             if not session.pages:
                 self._attach_page(session, await context.new_page())
+            # POPUPS ARE ADOPTED (gauntlet 4, G4-05). `_attach_page` used to
+            # run for `context.pages` at open and for `manage_tabs(open)` and
+            # nowhere else, so a page a click opened in a new tab really
+            # existed in the browser and had no handle, was absent from
+            # `manage_tabs(list)`, and carried no policy of any kind — no
+            # origin check, no wall verdict, nothing. The context event is
+            # the only place the browser reports one. Attaching here gives it
+            # the same handle, the same dialog desk, the same crash mark and
+            # the same navigation-response recorder every other page has; its
+            # `vetted_url` stays unset, so the first read or act on it runs
+            # the origin check the popup itself never got.
+            try:
+                context.on("page", lambda p: self._attach_page(
+                    session, p, adopted=True))
+            except Exception:
+                pass            # a lane without the event keeps the old shape
+            # THE CONTEXT-LEVEL RESPONSE RECORDER (gauntlet 4, G4-05). The
+            # per-page recorder in `_attach_page` cannot see a popup's own
+            # first navigation response, because the response is dispatched
+            # before the `page` event hands us the page to attach it to.
+            # This listener exists from before the first popup can be
+            # created and parks such a response for `_attach_page` to
+            # drain. It writes nothing when a record already exists: the
+            # per-page recorder owns that case and the two must not
+            # disagree about which response is the last one.
+            def on_context_response(response):
+                try:
+                    if not response.request.is_navigation_request():
+                        return
+                except Exception:
+                    return
+                try:
+                    response.request.frame
+                    return          # a frame exists; the per-page
+                except Exception:   # recorder owns that case
+                    pass
+                try:
+                    session.pending_nav[response.url] = {
+                        "url": response.url, "status": response.status,
+                        "headers": dict(response.headers)}
+                    while len(session.pending_nav) > 16:
+                        session.pending_nav.pop(
+                            next(iter(session.pending_nav)))
+                except Exception:
+                    pass
+
+            try:
+                context.on("response", on_context_response)
+            except Exception:
+                pass
             self.sessions[sid] = session
             for hook in SESSION_OPEN_HOOKS:
                 hook(session)
             return session
 
-    def _attach_page(self, session: Session, page: Any) -> PageHandle:
+    def _attach_page(self, session: Session, page: Any,
+                     adopted: bool = False) -> PageHandle:
+        # IDEMPOTENT BY PAGE IDENTITY (gauntlet 4, G4-05). `context.new_page()`
+        # fires the context's own `page` event before it returns, so the
+        # adoption hook and `manage_tabs(open)`'s explicit call both arrive
+        # for the same object; a second handle for one page would mean two
+        # dialog desks, two response recorders, and a tab list that
+        # double-counts.
+        for existing in session.pages.values():
+            if existing.page is page:
+                return existing
         handle = self._next_page_handle()
         record = PageHandle(handle=handle, page=page)
         # The renderer-crash mark (M1). The event is the reliable signal:
@@ -345,6 +457,7 @@ class SessionManager:
                     return
                 frame = request.frame
                 if frame == page.main_frame:
+                    record.last_nav_url = response.url
                     record.last_nav_status = response.status
                     record.last_nav_headers = dict(response.headers)
                 else:
@@ -363,7 +476,10 @@ class SessionManager:
         self._attach_dialog_desk(session, record)
         session.pages[handle] = record
         session.counters["pages_opened"] += 1
-        if session.focused is None:
+        if session.focused is None and not adopted:
+            # A popup never steals the focused handle: the caller is working
+            # on the page it opened from, and a tool call with no `page`
+            # argument must not be redirected onto a page the site opened.
             session.focused = handle
         return record
 

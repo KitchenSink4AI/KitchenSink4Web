@@ -132,6 +132,15 @@ async def download(
                     await record.page.goto(url, timeout=timeout_ms)
                 except Exception:
                     pass  # a download URL aborts the navigation by design
+                # THE LANDED CHECK ON THIS DOOR TOO (gauntlet 4, G4-06).
+                # The requested URL went through the ladder; a redirect
+                # on the way is the half no door but navigate used to
+                # re-evaluate. A download URL usually aborts the
+                # navigation and leaves the page where it was, in which
+                # case this costs one string comparison.
+                from . import lite as _lite
+                await _lite._landed_origin_check(sess, record,
+                                                 tool="download")
             download_obj = await info.value
         return await _finish(sess, record, download_obj, path)
 
@@ -363,15 +372,21 @@ async def _upload_via_chooser(sess, record, location, checked, timeout_ms
             await resolved["handle"].click(timeout=timeout_ms)
         chooser = await info.value
     except Exception as exc:
+        # The accessible name is page-authored, so it rides the envelope
+        # (gauntlet 4, G4-08 class sweep).
         raise Timeout(
-            f"clicking {resolved['descriptor'].get('name')!r} on "
-            f"{record.handle} opened no file chooser within {timeout_ms} ms, "
+            f"clicking the control on {record.handle} opened no file chooser "
+            f"within {timeout_ms} ms, "
             f"so nothing was uploaded (driver detail: "
             f"{str(exc).splitlines()[0][:160]}). A control that opens a "
             f"picker does it in the click handler; if this one does not, the "
             f"page has a real <input type=file> somewhere and "
             f"upload_file(via='input', location={{'css': 'input[type=file]'}}) "
-            f"is the route.") from exc
+            f"is the route.\n"
+            + _pagedata.wrap_line(
+                f"the control clicked was "
+                f"{resolved['descriptor'].get('name')!r}",
+                url=record.page.url)) from exc
     await chooser.set_files(checked, timeout=timeout_ms)
     desk = _dialogs.desk(sess)
     seen = desk.chooser_for(record.handle)

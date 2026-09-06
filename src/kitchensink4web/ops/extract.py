@@ -215,13 +215,15 @@ async def _table_data(sess, record, location, index, start_row, max_rows):
     if "choose" in got and not got["choose"]:
         raise TargetNotFound(_NO_TABLES)
     if got.get("choose"):
+        # A caption is page-authored, so the listing rides the envelope
+        # (gauntlet 4, G4-08 class sweep).
         listing = "; ".join(
             f'index={t["index"]} {t["kind"]} "{t["caption"] or "(uncaptioned)"}"'
             f' ({t["rows"]} rows)' for t in got["choose"])
         raise AmbiguousLocation(
             f'this page has {got["count"]} data tables and none was named; '
-            f'no tool acts on first match. Pass index=N or a location: '
-            f'{listing}.')
+            f'no tool acts on first match. Pass index=N or a location:\n'
+            + _pagedata.wrap_line(listing, url=record.page.url))
     return got
 
 
@@ -243,6 +245,10 @@ async def get_table(
     page, the inventory comes back as a refusal listing each candidate.
     """
     sess, record = common.locate(page)
+    # THE READ GATE (gauntlet 4, G4-04/05/06): a page that moved
+    # itself onto a wall, or a popup no door ever policed, is
+    # refused before any of its content is returned.
+    await _lite._read_gate(sess, record, tool="get_table")
     sess.counters["reads"] += 1
     got = await _table_data(sess, record, location, index, start_row, max_rows)
     more = (f'get_table(page="{record.handle}", '
@@ -357,6 +363,10 @@ async def get_list(
     because get_page_view already carries them.
     """
     sess, record = common.locate(page)
+    # THE READ GATE (gauntlet 4, G4-04/05/06): a page that moved
+    # itself onto a wall, or a popup no door ever policed, is
+    # refused before any of its content is returned.
+    await _lite._read_gate(sess, record, tool="get_list")
     sess.counters["reads"] += 1
     el = None
     if location:
@@ -380,13 +390,16 @@ async def get_list(
     if "choose" in got and not got["choose"]:
         raise TargetNotFound(_NO_LISTS)
     if got.get("choose"):
+        # The first item of each list is page text, so the listing rides the
+        # envelope (gauntlet 4, G4-08 class sweep).
         listing = "; ".join(
             f'index={c["index"]} <{c["tag"]}> {c["items"]} items, first: '
             f'"{c["first"]}"' for c in got["choose"])
         raise AmbiguousLocation(
             f'this page has {got["count"]} candidate lists and none was '
             f'named; no tool acts on first match. Pass index=N or a '
-            f'location: {listing}.')
+            f'location:\n'
+            + _pagedata.wrap_line(listing, url=record.page.url))
     more = (f'get_list(page="{record.handle}", '
             f'start_index={got["next_start_index"]}'
             + (f', index={index}' if index is not None else '')
@@ -461,6 +474,10 @@ async def get_links(
     if kind not in kinds:
         raise BadParams(f"unknown kind {kind!r}; the kinds are {list(kinds)}.")
     sess, record = common.locate(page)
+    # THE READ GATE (gauntlet 4, G4-04/05/06): a page that moved
+    # itself onto a wall, or a popup no door ever policed, is
+    # refused before any of its content is returned.
+    await _lite._read_gate(sess, record, tool="get_links")
     sess.counters["reads"] += 1
     el = None
     if location:
@@ -546,6 +563,10 @@ async def get_metadata(page: str) -> dict:
     same page always answers the same way.
     """
     sess, record = common.locate(page)
+    # THE READ GATE (gauntlet 4, G4-04/05/06): a page that moved
+    # itself onto a wall, or a popup no door ever policed, is
+    # refused before any of its content is returned.
+    await _lite._read_gate(sess, record, tool="get_metadata")
     sess.counters["reads"] += 1
     got = await record.page.evaluate(_META_JS)
     return {
@@ -661,6 +682,10 @@ async def extract_fields(page: str, fields: list | dict) -> dict:
             "(['price', 'author']) or a dict of name to hint "
             "({'price': 'the listed product price'}).")
     sess, record = common.locate(page)
+    # THE READ GATE (gauntlet 4, G4-04/05/06): a page that moved
+    # itself onto a wall, or a popup no door ever policed, is
+    # refused before any of its content is returned.
+    await _lite._read_gate(sess, record, tool="extract_fields")
     sess.counters["reads"] += 1
     got = await record.page.evaluate(_FIELDS_JS)
     sources = got["sources"]
@@ -736,6 +761,9 @@ async def export_data(
         raise BadParams(
             f"unknown format {format!r}: the formats are 'csv' and 'json'.")
     sess, record = common.locate(page)
+    # The read gate (gauntlet 4, G4-04/05/06); an export is a content read
+    # that happens to land on disk.
+    await _lite._read_gate(sess, record, tool="export_data")
     got = await _table_data(sess, record, location, index,
                             start_row=0, max_rows=max_rows)
     truncated = got["next_start_row"] is not None
@@ -830,6 +858,10 @@ async def get_article(
             f"into the body text as [text](path), and 'none' returns the "
             f"prose bare.")
     sess, record = common.locate(page)
+    # THE READ GATE (gauntlet 4, G4-04/05/06): a page that moved
+    # itself onto a wall, or a popup no door ever policed, is
+    # refused before any of its content is returned.
+    await _lite._read_gate(sess, record, tool="get_article")
     sess.counters["reads"] += 1
     # The SAME ref-to-node-ref resolver `get_page_view` and `get_text` scope
     # with, imported rather than reimplemented: the extractor keys its in-page
@@ -1030,6 +1062,9 @@ async def read_pages(
     max_chars = max(500, int(max_chars))
     budget_chars = max(1, int(budget_chars))
     sess, record = common.locate(page)
+    # The read gate on the page the walk STARTS on (gauntlet 4,
+    # G4-04/05/06). Every later hop is classified in the loop below.
+    await _lite._read_gate(sess, record, tool="read_pages")
     pages: list[dict] = []
     visited: list[str] = []
     total = 0
@@ -1129,6 +1164,12 @@ async def read_pages(
             break
         record.touch(record.page.url)
         sess.counters["navigations"] += 1
+        # THE LANDED CHECK ON THIS DOOR TOO (gauntlet 4, G4-06). The hop's
+        # destination went through `approve()`, and a redirect on the way
+        # laundered a deny-listed origin straight into the payload: the
+        # walk completed the hop, put the blocked origin's content in the
+        # result, and left the browser sitting on it.
+        await _lite._landed_origin_check(sess, record, tool="read_pages")
         if record.page.url != before:
             sess.invalidate_page(
                 record.handle,

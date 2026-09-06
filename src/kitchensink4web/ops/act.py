@@ -883,11 +883,17 @@ async def _frame_context(record, fid: str, *, tool: str, ref: str | None):
             f'takes every ref minted inside it with it. Re-read the page '
             f'(get_page_view) and use the refs it returns.')
     if not found.entered:
+        # `label()` carries the frame's own `title` attribute, which the
+        # embedding page writes, so the line rides the envelope (gauntlet 4,
+        # G4-08). The sandbox half of the same label was already validated
+        # token-by-token (gauntlet 3, F3); the title half was not.
         raise TargetChanged(
             f'frame {fid} is on the page and this build will not enter it: '
-            f'{found.why_not}. It is now {found.label()}. Nothing was done, '
-            f'because acting through the main document instead would be '
-            f'acting on a different element than the one you addressed.')
+            f'{found.why_not}. Nothing was done, because acting through the '
+            f'main document instead would be acting on a different element '
+            f'than the one you addressed.\n'
+            + _pagedata.wrap_line(f'it is now {found.label()}',
+                                  url=record.page.url))
     return found
 
 
@@ -1009,16 +1015,21 @@ async def _resolve_ref(sess, record, ref: str, *, tool: str,
             new_name = unit.get("name")
             if (acting and tier.startswith("fingerprint (")
                     and _material_name_change(old_name, new_name)):
+                # Both names are page-authored, and the new one is authored
+                # by the page that just renamed the control under a reused
+                # key, so they ride the envelope too (gauntlet 4, G4-08).
                 raise TargetChanged(
                     f'{ref!r} still carries its stable attribute key, but '
                     f'the element wearing that key is no longer what you '
-                    f'read: it was {entry.anchor.get("role")} '
-                    f'"{old_name}" and is now {unit.get("role")} '
-                    f'"{new_name}". Acting on a renamed control through a '
-                    f'reused key is how the wrong element gets clicked, so '
-                    f'nothing was done. Re-read the page (get_page_view or '
+                    f'read. Acting on a renamed control through a reused key '
+                    f'is how the wrong element gets clicked, so nothing was '
+                    f'done. Re-read the page (get_page_view or '
                     f'find_elements) and act on the ref that read returns '
-                    f'if the renamed control is really the one you want.')
+                    f'if the renamed control is really the one you want.\n'
+                    + _pagedata.wrap_line(
+                        f'it was {entry.anchor.get("role")} "{old_name}" and '
+                        f'is now {unit.get("role")} "{new_name}"',
+                        url=record.page.url))
             rebound = (f'{ref} was rebound: {outcome.get("was")} -> '
                        f'{outcome.get("now")} (tier {outcome.get("tier")})')
         return {"handle": handle, "node_ref": node_ref, "session_ref": ref,
@@ -1038,10 +1049,18 @@ async def _resolve_ref(sess, record, ref: str, *, tool: str,
             + _pagedata.wrap_line(f'modal: {outcome.get("dialog")}',
                                   url=record.page.url))
     if verdict == Outcome.AMBIGUOUS:
+        # THE CANDIDATE NAMES RIDE THE ENVELOPE (gauntlet 4, G4-08), like the
+        # modal name above them and like `find_elements` and `find_and_act`
+        # already do with the identical strings. An accessible name is
+        # page-authored, up to eight of them land in this sentence, and this
+        # is the direct `click` path — the most-used one in the product.
         raise AmbiguousLocation(
-            f'{ref!r} no longer resolves to one element ({outcome.get("tier")}): '
-            f'{_candidate_text(outcome.get("candidates"))}. '
-            f'{outcome.get("recovery")}')
+            f'{ref!r} no longer resolves to one element '
+            f'({outcome.get("tier")}). Candidates:\n'
+            + _pagedata.wrap_line(
+                _candidate_text(outcome.get("candidates")),
+                url=record.page.url)
+            + f'\n{outcome.get("recovery")}')
     if verdict == Outcome.BAD_PARAMS:
         raise BadParams(
             f'{ref!r} belongs to page {outcome.get("minted_on")}, not '
@@ -1131,9 +1150,11 @@ async def _resolve_live(sess, record, location: dict, *, tool: str,
         raise AmbiguousLocation(
             f'{count} visible elements match ({found.get("how")}) across '
             f'{len(hits)} document(s) on this page; no tool acts on first '
-            f'match, and a frame boundary is not a tie-break. Candidates: '
-            f'{_candidate_text(candidates)}. Narrow with '
-            f'{{"frame": "ifN"}}, or read the page and use a ref.')
+            f'match, and a frame boundary is not a tie-break. Candidates:\n'
+            + _pagedata.wrap_line(_candidate_text(candidates),
+                                  url=record.page.url)
+            + '\nNarrow with {"frame": "ifN"}, or read the page and use a '
+              'ref.')
     if count == 1:
         handle = await _handle(target, found["ref"])
         if handle is None:
@@ -1181,10 +1202,12 @@ async def _resolve_live(sess, record, location: dict, *, tool: str,
                 "rebound": None}
     if count and count > 1:
         raise AmbiguousLocation(
-            f'{count} visible elements match ({found.get("how")}); no tool acts '
-            f'on first match. Candidates: '
-            f'{_candidate_text(found.get("candidates"))}. Narrow the selector, '
-            f'or read the page and use a ref.')
+            f'{count} visible elements match ({found.get("how")}); no tool '
+            f'acts on first match. Candidates:\n'
+            + _pagedata.wrap_line(
+                _candidate_text(found.get("candidates")),
+                url=record.page.url)
+            + '\nNarrow the selector, or read the page and use a ref.')
     # Nearest misses from EVERY realm swept, not only the first to answer.
     # The whole job of the list is to turn a dead end into one more turn, and
     # a page that put the control in a frame is exactly the case where the
@@ -1194,7 +1217,9 @@ async def _resolve_live(sess, record, location: dict, *, tool: str,
         misses.extend(g.get("nearest") or [])
     misses = misses[:6]
     swept = len(targets)
-    hint = (" Nearest by name: " + _candidate_text(misses)) if misses else \
+    hint = ("\nNearest by name:\n"
+            + _pagedata.wrap_line(_candidate_text(misses),
+                                  url=record.page.url)) if misses else \
         (" No near misses either; the target may be inside a cross-origin "
          "iframe, a closed shadow root, or content that has not rendered "
          "yet. Open shadow roots were searched"
@@ -1285,7 +1310,26 @@ _CLOAK_JS = instrument(r"""
 #: that hangs is worse than one that gives up. Whichever arrives first, the
 #: probe still goes through one task turn afterward, so a `queueMicrotask` lid
 #: is caught even where no frame is ever produced.
-_ARM_FRAME_CEILING_MS = 250
+#: TWO FRAMES, NOT ONE (gauntlet 4, G4-09). One frame put the second verdict
+#: in the SAME animation-frame batch as the lid the page's own `focus` handler
+#: queued, behind it in callback order, which is enough to SEE the appended
+#: node and is not enough for the browser to have painted it. That matters
+#: because `occluded` is the one verdict the pixel arbiter re-decides against
+#: the compositor: it photographs the control with the lid in the paint and
+#: again with it out, and if the lid has not been composited yet the two
+#: frames are identical, the arbiter clears a real occlusion, and the trusted
+#: click lands on a control a human cannot see. The gauntlet measured that
+#: miss at roughly one run in eight standalone and two in three inside its own
+#: battery, where more browser churn shifts the timing — a cloak check whose
+#: answer depends on how fast the machine is, which is the failure mode this
+#: family exists to rule out. Yielding a second frame commits the first
+#: frame's paint before anything is observed or photographed. The ceiling
+#: covers the whole wait rather than each frame, and it is raised to keep the
+#: same margin the one-frame version had over a cold renderer's 50-60ms first
+#: frame; it is paid only where the browser has stopped producing frames at
+#: all, and the task turn afterwards still catches a `queueMicrotask` lid on a
+#: renderer that never animates.
+_ARM_FRAME_CEILING_MS = 400
 
 _ARM_JS = instrument(r"""
 async (el) => {
@@ -1300,7 +1344,7 @@ async (el) => {
       settled = true;
       setTimeout(done, 0);
     };
-    requestAnimationFrame(finish);
+    requestAnimationFrame(function () { requestAnimationFrame(finish); });
     setTimeout(finish, __KS_FRAME_CEILING__);
   });
   ksResetPaintCaches();
@@ -1316,9 +1360,22 @@ async (el) => {
 #: those lids out of the paint; `release` undoes both. They are three calls
 #: rather than one because a screenshot happens between them, and a screenshot
 #: is a Python-side operation.
+#: `prep` YIELDS A FRAME FIRST (gauntlet 4, G4-09). The arbiter's whole
+#: method is a difference between two renders, so a lid the box math can
+#: already see but the compositor has not painted yet reads as identical in
+#: both photographs and clears an occlusion that is really there. One frame
+#: before the shutter opens costs about 16ms on a path that is already
+#: spending two screenshots, and it is only ever reached once the geometry
+#: has flagged.
 _PIXEL_PREP_JS = instrument(r"""
-(el) => {
+async (el) => {
 // @@KS4WEB_VISIBILITY@@
+  await new Promise(function (done) {
+    let settled = false;
+    const finish = function () { if (settled) return; settled = true; done(); };
+    requestAnimationFrame(finish);
+    setTimeout(finish, 250);
+  });
   const p = ksPixelPrep(el);
   if (!p) return null;
   p.epoch = [document.documentElement.scrollWidth,
