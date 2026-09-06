@@ -826,7 +826,7 @@ async def get_text(
         parts = [got["text"]]
         for fr, sub in frame_reads:
             parts.append(
-                f'\n\n--- {fr.fid} | frame content from {fr.origin} | '
+                f'\n\n--- {fr.fid} | frame content: '
                 f'{frames.provenance(fr)} ---\n{sub["text"]}')
         got["text"] = "".join(parts)
         for fr, sub in frame_reads:

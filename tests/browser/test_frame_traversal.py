@@ -397,7 +397,10 @@ def test_an_injection_inside_a_frame_arrives_labelled(corpus_site):
         head = [ln for ln in got["text"].splitlines()
                 if ln.startswith("--- if")]
         assert head, "frame prose arrived with no provenance header"
-        assert any("frame content from" in ln for ln in head)
+        assert any("frame content: " in ln for ln in head)
+        # The srcdoc frame is the one that carried the instruction, and its
+        # header says the markup was written inline rather than served.
+        assert any("srcdoc" in ln for ln in head)
         assert "prose was read from" in got["stripped"]
 
     run(go())

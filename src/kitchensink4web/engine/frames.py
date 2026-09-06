@@ -147,8 +147,12 @@ class FrameRef:
                 "title": self.title, "provenance": provenance(self)}
 
     def label(self) -> str:
-        """One line naming this frame, its origin, and its provenance."""
-        bits = [self.fid or "main", self.origin or self.url or "(no url)"]
+        """One line naming this frame's origin and how it was embedded.
+
+        The id is NOT in here. Every caller prints the id itself, in the
+        position its own line wants it, and a label that repeated it read as
+        `if1 | entered | if1 | ...`."""
+        bits = [self.origin or self.url or "(no url)"]
         if self.how != "src":
             bits.append(self.how)
         if self.sandbox is not None:
@@ -400,8 +404,11 @@ def provenance(ref: FrameRef) -> str:
     else:
         base = f"a document served from {ref.origin}"
     if ref.sandbox is not None:
-        base += (f'; the frame is sandboxed (sandbox="{ref.sandbox}")'
-                 if ref.sandbox else "; the frame is sandboxed")
+        # A comma rather than a semicolon, because the envelope's label joins
+        # one of these per frame WITH semicolons and a second level of them
+        # made a sandbox clause read as another frame.
+        base += (f', and the frame is sandboxed (sandbox="{ref.sandbox}")'
+                 if ref.sandbox else ", and the frame is sandboxed")
     return base
 
 

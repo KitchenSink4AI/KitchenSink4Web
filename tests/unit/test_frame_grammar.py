@@ -82,7 +82,7 @@ def test_provenance_separates_same_origin_from_first_party():
     inline = frames.provenance(_ref(how="srcdoc"))
     assert "srcdoc" in inline and "whatever wrote the string" in inline
     sandboxed = frames.provenance(_ref(sandbox="allow-scripts"))
-    assert 'sandboxed (sandbox="allow-scripts")' in sandboxed
+    assert 'and the frame is sandboxed (sandbox="allow-scripts")' in sandboxed
     assert frames.provenance(_ref(fid="")) == "the page's own document"
 
 
