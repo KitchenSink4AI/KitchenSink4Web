@@ -404,7 +404,9 @@ async def manage_clipboard(
     that only accepts a paste. Reading is classed as an ACTION, not a read:
     it needs a browser permission, it reaches outside the page, and what
     comes back is whatever was last copied, so it is absent under read-only
-    mode like every other acting tool. Returns the clipboard text inside the
+    mode like every other acting tool. Reading requires a human
+    confirmation, because the clipboard can hold whatever the human last
+    copied from any application. Returns the clipboard text inside the
     labeled data envelope with its provenance stated, since a page's copy
     button chooses that text, plus the character count and whether it was
     clipped. Clipboard permissions are a Chromium capability; other engines
@@ -420,9 +422,15 @@ async def manage_clipboard(
             "manage_clipboard(action='write') needs the text to put on the "
             "clipboard.")
     sess, record = common.locate(page)
+    # THE READ IS CONFIRMATION-GATED (gauntlet 3, F6, author ruling): the
+    # clipboard may hold anything the human last copied from any
+    # application, and until this class existed the read ran with no human
+    # in the loop outside read-only mode — the tool even grants itself the
+    # browser permission below, so no other prompt ever fires.
     _policy.approve(_policy.ActionRequest(
         tool="manage_clipboard", kind="act", session=sess.session_id,
         page=record.handle, url=record.page.url,
+        action_class="clipboard_read" if action == "read" else None,
         args={"action": action, "chars": len(text or "")},
         summary=f"clipboard {action} on {record.handle}"))
     origin = None

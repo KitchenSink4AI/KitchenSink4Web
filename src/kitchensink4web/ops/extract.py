@@ -28,6 +28,7 @@ from __future__ import annotations
 import csv
 import io
 import json
+from urllib.parse import urlparse
 
 from .. import pagedata as _pagedata
 from ..errors import AmbiguousLocation, BadParams, TargetNotFound
@@ -37,6 +38,7 @@ from ..projection import read_article as _read_article
 from ..projection.meter import ENCODING_NAME as _ENCODING
 from . import act as _act
 from . import common
+from . import lite as _lite
 from . import resource as _resource
 
 #: Per-cell and per-value clip lengths. Clipping is counted, never silent.
@@ -1017,8 +1019,9 @@ async def read_pages(
     a next-page word second; nothing is clicked and no URL is guessed, so a
     site with no such link stops rather than inventing one. Returns every
     page read, the reason the walk stopped (the page cap, the character
-    budget, no next link, or a link that leads back to a page already read),
-    and the URL to resume from.
+    budget, no next link, a link that leads back to a page already read, or
+    a hop that landed on a bot wall or CAPTCHA interstitial, reported with
+    its verdict rather than read as content), and the URL to resume from.
     """
     # Two independent ceilings and neither quietly widens the other: a
     # budget_chars under max_chars means the first page is read in full and
@@ -1070,13 +1073,29 @@ async def read_pages(
             found = await record.page.evaluate(_NEXT_JS)
         except Exception:
             found = []
-        candidate = next((c for c in (found or []) if c.get("url")), None)
+        # THE SCHEME CHECK IS SERVER-SIDE (gauntlet 3, F7). `_NEXT_JS` has
+        # its own startsWith('http') guard, but it runs in the PAGE's JS
+        # realm, where a hostile page can tamper String.prototype and pass
+        # any URL through — which is exactly how a published file:/// next
+        # link became a local-file read. The page-realm filter is a
+        # convenience; this filter is the boundary, and the origin policy
+        # (which now denies non-web schemes outright) is the backstop
+        # behind it.
+        harvested = [c for c in (found or []) if c.get("url")]
+        candidate = next(
+            (c for c in harvested
+             if urlparse(c["url"]).scheme.lower() in ("http", "https")),
+            None)
         if candidate is None:
             stop = {"reason": "end",
-                    "detail": "this page publishes no next-page link (no "
-                              "rel=\"next\" and no link whose name is a "
-                              "next-page word), so the series ends here as "
-                              "far as the markup says"}
+                    "detail": ("the only next-page link(s) this page "
+                               "publishes are not http(s) URLs, which "
+                               "read_pages never follows, so the series "
+                               "ends here" if harvested else
+                               "this page publishes no next-page link (no "
+                               "rel=\"next\" and no link whose name is a "
+                               "next-page word), so the series ends here as "
+                               "far as the markup says")}
             break
         if candidate["url"] in visited:
             stop = {"reason": "loop",
@@ -1098,8 +1117,8 @@ async def read_pages(
                     f'{candidate["url"]}'))
         before = record.page.url
         try:
-            await record.page.goto(candidate["url"], wait_until="load",
-                                   timeout=30000)
+            response = await record.page.goto(
+                candidate["url"], wait_until="load", timeout=30000)
         except Exception as exc:
             stop = {"reason": "navigation-failed",
                     "detail": f'following {candidate["how"]} to '
@@ -1115,6 +1134,29 @@ async def read_pages(
                 record.handle,
                 f"read_pages navigated from {before}")
         resume = record.page.url
+        # EVERY HOP IS WALL-CLASSIFIED (gauntlet 3, F4). The hop loop always
+        # asked one post-navigation question (the resource probe) and never
+        # the other, so a rel=next chain that ended on a real Cloudflare
+        # challenge read the interstitial as the next page. The verdict is
+        # REPORTED in the stop record rather than raised — the pages read
+        # before the wall are complete and belong to the caller — and the
+        # wall page itself is never read as content.
+        status = response.status if response is not None else None
+        try:
+            headers = dict(response.headers) if response is not None else None
+        except Exception:
+            headers = None
+        verdict = await _lite._wall_verdict(record.page, status,
+                                            headers=headers)
+        if verdict.get("wall"):
+            stop = {"reason": "wall",
+                    "detail": f'{record.page.url} answered with a '
+                              f'{verdict["wall"]} rather than the page '
+                              f'(HTTP {status}); the pages read before it '
+                              f'are complete',
+                    "verdict": verdict}
+            resume = None
+            break
     if stop["reason"] in ("page-cap", "char-budget"):
         resume = resume or record.page.url
     return {

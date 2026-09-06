@@ -52,20 +52,48 @@ BINARY_PREFIXES: tuple[str, ...] = (
     "application/x-rar", "application/epub",
 )
 
-#: The one-line probe the read surfaces run. Cheap by construction: four
-#: property reads and one selector, no tree walk, no text extraction.
+#: The probe the read surfaces run. Cheap by construction: a few property
+#: reads, one shallow walk over body's direct children, no text extraction.
+#:
+#: SCOPED TO THE DOCUMENT ROOT (gauntlet 3, F2), which is what the evidence
+#: string always claimed. The old probe ran querySelectorAll over the whole
+#: document, so a council-minutes page with one inline PDF preview refused
+#: every read, and a hostile page bought total read denial with a 1x1
+#: offscreen embed. An embed or object counts as the document root when it
+#: is the only element child of body or when it covers at least half the
+#: viewport — the wrapper documents browsers synthesize around a bare PDF
+#: are exactly the first shape, and a full-page inline viewer is the
+#: second. The pdf.js-shell heuristic takes the same dominance test, for
+#: the same reason: matching the viewer's MARKUP anywhere in the document
+#: let any page that copied two class names refuse all reads.
 PROBE_JS = r"""
 () => {
   const d = document;
-  const embeds = Array.from(d.querySelectorAll('embed[type], object[type]'))
-    .map((e) => (e.getAttribute('type') || '').toLowerCase())
-    .filter((t) => t && t !== 'text/html');
+  const vw = Math.max(1, window.innerWidth || 0);
+  const vh = Math.max(1, window.innerHeight || 0);
+  const dominant = (el) => {
+    const r = el.getBoundingClientRect();
+    return (r.width * r.height) >= 0.5 * vw * vh;
+  };
+  const roots = [];
+  const b = d.body;
+  if (b) {
+    const kids = Array.from(b.children).filter((e) =>
+      !/^(script|style|link|meta|template)$/i.test(e.tagName));
+    for (const e of kids) {
+      if (!/^(embed|object)$/i.test(e.tagName)) continue;
+      const t = (e.getAttribute('type') || '').toLowerCase();
+      if (!t || t === 'text/html') continue;
+      if (kids.length === 1 || dominant(e)) roots.push(t);
+    }
+  }
+  const vc = d.querySelector('#viewerContainer');
+  const pdfjs = !!(vc && d.querySelector('.pdfViewer') && dominant(vc));
   return {
     content_type: (d.contentType || '').toLowerCase(),
     url: location.href,
-    embedded_types: Array.from(new Set(embeds)).slice(0, 4),
-    pdf_js_viewer: !!(d.querySelector('#viewerContainer')
-                      && d.querySelector('.pdfViewer')),
+    embedded_types: Array.from(new Set(roots)).slice(0, 4),
+    pdf_js_viewer: pdfjs,
   };
 }
 """

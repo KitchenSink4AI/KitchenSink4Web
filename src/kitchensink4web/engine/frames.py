@@ -61,6 +61,7 @@ from dataclasses import dataclass, field
 from typing import Any
 from urllib.parse import urlsplit
 
+from ..policy import walls as _walls
 from ..projection import instrument
 
 #: How deep the traversal goes, counting the main document as depth 0. Five is
@@ -77,6 +78,47 @@ COUNT_CAP = max(1, int(os.environ.get("KS4WEB_FRAME_COUNT_CAP", "24")))
 
 #: The reasons a frame was not entered, in the words the completeness block
 #: prints. Every frame this build skips carries exactly one of these.
+#: Every token the sandbox attribute can carry, per the HTML standard.
+#: The `sandbox` value is page-authored text that ends up interpolated into
+#: the data envelope's LABEL — the server's own trust sentence — so it is
+#: never printed raw (gauntlet 3, F3): browsers ignore unknown tokens, which
+#: means an attacker can append arbitrary prose after real tokens and lose
+#: nothing, and the prose landed verbatim inside the one sentence whose job
+#: is to say the payload is untrusted. `safe_sandbox` below keeps known
+#: tokens and replaces anything else with a fixed marker.
+SANDBOX_TOKENS: frozenset[str] = frozenset({
+    "allow-downloads", "allow-downloads-without-user-activation",
+    "allow-forms", "allow-modals", "allow-orientation-lock",
+    "allow-pointer-lock", "allow-popups",
+    "allow-popups-to-escape-sandbox", "allow-presentation",
+    "allow-same-origin", "allow-scripts",
+    "allow-storage-access-by-user-activation", "allow-top-navigation",
+    "allow-top-navigation-by-user-activation",
+    "allow-top-navigation-to-custom-protocols",
+})
+
+#: What an unknown sandbox token prints as. A fixed marker rather than the
+#: token itself, because the token is the injection channel.
+SANDBOX_INVALID = "<invalid>"
+
+
+def safe_sandbox(value: str | None) -> str | None:
+    """The sandbox attribute, token-validated and bounded, or None.
+
+    Known tokens pass through lowercased in their original order; anything
+    unknown becomes the fixed `<invalid>` marker, so the rendered value can
+    only ever be spelled from the standard's own vocabulary plus one marker.
+    The result is capped outright: fifty invalid tokens do not earn fifty
+    markers' worth of label."""
+    if value is None:
+        return None
+    tokens = value[:400].split()
+    rendered = " ".join(
+        t.lower() if t.lower() in SANDBOX_TOKENS else SANDBOX_INVALID
+        for t in tokens)
+    return rendered[:100]
+
+
 CROSS_ORIGIN = "cross-origin"
 DEPTH_EXCEEDED = "past the frame depth cap"
 COUNT_EXCEEDED = "past the frame count cap"
@@ -133,6 +175,13 @@ class FrameRef:
     #: inside a frame is only visible if the `<iframe>` element is visible
     #: WHERE IT SITS, and that is a question only the parent can answer.
     parent: object = None
+    #: The status and headers of the response that produced this frame's
+    #: document, from the session's per-page navigation-response recorder
+    #: (gauntlet 3, F4). A child frame landing on a challenge used to be
+    #: read as frame content with nothing saying so; `wall_note` turns these
+    #: into the completeness entry's verdict.
+    nav_status: int | None = None
+    nav_headers: dict | None = None
 
     @property
     def is_main(self) -> bool:
@@ -141,11 +190,41 @@ class FrameRef:
     def to_dict(self) -> dict:
         """The reporting shape. The projection package never sees a Frame
         object, only this, which is what keeps it free of the driver."""
+        wall = self.wall_note()
         return {"fid": self.fid, "entered": self.entered,
                 "why_not": self.why_not, "label": self.label(),
                 "origin": self.origin, "url": self.url, "how": self.how,
                 "sandbox": self.sandbox, "depth": self.depth,
-                "title": self.title, "provenance": provenance(self)}
+                "title": self.title, "provenance": provenance(self),
+                **({"wall": wall} if wall else {})}
+
+    def wall_note(self) -> dict | None:
+        """A wall verdict for THIS frame's document, or None (F4).
+
+        Built from the server-side signals only — the recorded status and
+        the vendors' block-only headers — because a frame's text is page
+        content and the F1 rule (text signals need a refusing status) holds
+        here too. The vocabulary is `navigate`'s own verdict vocabulary, so
+        one wall reads the same whichever door it arrived through."""
+        status = self.nav_status
+        hit = _walls.header_block(self.nav_headers)
+        if hit is not None:
+            vendor, evidence = hit
+            return {"wall": "bot-wall-or-captcha", "status": status,
+                    "marker": f"{vendor} wall: {evidence}"}
+        if status == 401:
+            return {"wall": "auth-wall", "status": status,
+                    "marker": "HTTP 401"}
+        if status == 429:
+            return {"wall": "rate-limited", "status": status,
+                    "marker": f"HTTP {status}"}
+        if status == 503:
+            return {"wall": "service-unavailable-or-bot-wall",
+                    "status": status, "marker": f"HTTP {status}"}
+        if status in (403, 405, 406):
+            return {"wall": "forbidden-challenge", "status": status,
+                    "marker": f"HTTP {status}"}
+        return None
 
     def label(self) -> str:
         """One line naming this frame's origin and how it was embedded.
@@ -201,7 +280,7 @@ _FRAME_FACTS_JS = instrument(r"""
     same = !!(el.contentDocument && el.contentDocument.documentElement);
   } catch (e) { same = false; }
   const sandbox = el.hasAttribute('sandbox')
-    ? (el.getAttribute('sandbox') || '') : null;
+    ? (el.getAttribute('sandbox') || '').slice(0, 400) : null;
   const src = el.getAttribute('src') || '';
   const how = el.hasAttribute('srcdoc') ? 'srcdoc'
     : (!src || src === 'about:blank') ? 'about:blank'
@@ -280,6 +359,13 @@ async def ladder(record, *, depth_cap: int | None = None,
                        depth=parent.depth + 1, url=url,
                        origin=origin_of(url), chain=list(parent.chain))
         await _classify(record, parent, ref, top_origin)
+        # The response that produced this frame's document, recorded by the
+        # session's page-level listener (F4). Looked up by the driver's own
+        # Frame object, which is the identity the listener keyed on.
+        nav = (getattr(record, "frame_nav", None) or {}).get(frame)
+        if nav:
+            ref.nav_status = nav.get("status")
+            ref.nav_headers = nav.get("headers")
         # THE ID IS MINTED AFTER CLASSIFICATION, because the identity it is
         # keyed on comes from the parent: the ref the parent minted for the
         # `<iframe>` element. Position in the tree is not an identity, and a
@@ -357,7 +443,10 @@ async def _classify(record, parent: FrameRef, ref: FrameRef,
         ref.why_not = UNREADABLE
         return
     ref.same_origin = bool(facts["same_origin"])
-    ref.sandbox = facts["sandbox"]
+    # Token-validated at the boundary (F3), so no consumer downstream — the
+    # provenance clause, the inventory label, the completeness dict — ever
+    # holds the raw page-authored string.
+    ref.sandbox = safe_sandbox(facts["sandbox"])
     ref.how = facts["how"]
     ref.title = facts["title"]
     ref.src = facts["src"]

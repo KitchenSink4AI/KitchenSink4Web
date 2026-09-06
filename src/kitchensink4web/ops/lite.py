@@ -256,7 +256,16 @@ async def _wall_verdict(page, status: int | None,
             ".slice(0, 4000)") or "").lower()
     except Exception:
         pass
-    marker = next((m for m in _WALL_MARKERS if m in title or m in body), None)
+    # TEXT SIGNALS ARE STATUS-GATED (gauntlet 3, F1). Title and innerText are
+    # page-controlled, and innerText includes offscreen text, so an ungated
+    # needle both refused ordinary 200 pages whole ("press & hold" is any
+    # hardware instruction) and let a hostile 200 page cloak itself with one
+    # absolutely-positioned div of wall phrases. `source_block` always had
+    # this gate; the visible-text tiers now match it. Headers and the status
+    # branches below are the server's own signals and stay ungated.
+    text_gated = status in _walls.REFUSING_STATUSES
+    marker = next((m for m in _WALL_MARKERS if m in title or m in body),
+                  None) if text_gated else None
     auth_marker = next(
         (m for m in _AUTH_MARKERS if m in title or m in body), None)
     landed = None
@@ -1435,6 +1444,26 @@ def _action_result(record, tool: str, desc: dict, resolved: dict,
     return result
 
 
+async def _post_navigation_wall(record, outcome: dict) -> dict | None:
+    """The wall verdict for a navigation an ACTION caused (gauntlet 3, F4).
+
+    The verdict used to be a property of one function that arrives at a page
+    (`navigate`) rather than of arriving at a page, so a click that landed on
+    a real Cloudflare challenge reported `effect: "navigated"` and nothing
+    else, and the agent read the interstitial as content. The contract here
+    is REPORT, not raise: an acting sequence may legitimately route around a
+    wall it can see, and a raise mid-sequence would take that choice away.
+    Direct `navigate` keeps raising exactly as before. The status and headers
+    come from the response listener the session attaches per page, which
+    records the last main-frame navigation response."""
+    if outcome.get("effect") != "navigated":
+        return None
+    verdict = await _wall_verdict(
+        record.page, getattr(record, "last_nav_status", None),
+        headers=getattr(record, "last_nav_headers", None))
+    return verdict if verdict.get("wall") else None
+
+
 async def click(
     page: str,
     location: dict,
@@ -1492,6 +1521,9 @@ async def click(
     outcome = await _act.verify(ctx, resolved["node_ref"], before)
     result = _action_result(record, "click", desc, resolved, outcome)
     result["session"] = sess.session_id
+    wall = await _post_navigation_wall(record, outcome)
+    if wall:
+        result["wall"] = wall
     return result
 
 
@@ -1617,6 +1649,9 @@ async def type_text(
     result = _action_result(record, "type_text", desc, resolved, outcome,
                             value_state=value_state)
     result["session"] = sess.session_id
+    wall = await _post_navigation_wall(record, outcome)
+    if wall:
+        result["wall"] = wall
     return result
 
 
@@ -1881,6 +1916,9 @@ async def fill_form(
         submitted = {"submitted": True, "how": submitted,
                      "changed": {"effect": outcome["effect"],
                                  "details": outcome["details"]}}
+        wall = await _post_navigation_wall(record, outcome)
+        if wall:
+            submitted["wall"] = wall
 
     return {
         "session": sess.session_id, "page": record.handle, "tool": "fill_form",
@@ -2118,10 +2156,12 @@ async def press_keys(
         _reraise_driver(exc, what="press_keys", timeout_ms=15000,
                         sess=sess, page_handle=record.handle)
     outcome = await _act.verify(kctx, node_ref, before)
+    wall = await _post_navigation_wall(record, outcome)
     return {
         "session": sess.session_id, "page": record.handle, "tool": "press_keys",
         "keys": keys, "repeat": repeat, "url": record.page.url,
         "changed": {"effect": outcome["effect"], "details": outcome["details"]},
+        **({"wall": wall} if wall else {}),
         **({"warnings": [outcome["warning"]]} if outcome.get("none_observed")
            else {}),
     }
@@ -2626,11 +2666,22 @@ async def manage_tabs(
         return {"session": sess.session_id, "focused": sess.focused,
                 "url": sess.page(sess.focused).page.url}
     elif action == "open":
+        if url:
+            # THE SAME LADDER navigate runs (gauntlet 3, F7 scope sweep):
+            # this was the one navigation door with no policy approve at
+            # all, so a denied origin, a file: URL, or a budget already
+            # spent could all ride in through a new tab. Approved BEFORE
+            # the tab is opened, so a refusal strands nothing.
+            url = _validated_url(url)
+            _policy.approve(_policy.ActionRequest(
+                tool="manage_tabs", kind="navigate",
+                session=sess.session_id, url=url,
+                args={"action": "open", "url": url},
+                summary=f"manage_tabs opens a tab at {url}."))
         new_page = await sess.context.new_page()
         record = MANAGER._attach_page(sess, new_page)
         sess.focused = record.handle
         if url:
-            url = _validated_url(url)
             try:
                 await _session.with_timeout(
                     new_page.goto(url), _session.DEFAULT_TIMEOUT_MS,
@@ -2640,6 +2691,27 @@ async def manage_tabs(
                 raise
             record.touch(new_page.url)
             sess.counters["navigations"] += 1
+            # THE LANDED CHECK, same as navigate's: the policy applies to
+            # where the navigation landed, not only where it was aimed.
+            try:
+                _origins.check_navigation(record.page.url, readonly.grade(),
+                                          phase="landed")
+            except Exception:
+                try:
+                    await record.page.goto("about:blank", timeout=10000)
+                except Exception:
+                    pass
+                record.touch("about:blank")
+                raise
+            # The wall verdict is REPORTED here rather than raised
+            # (gauntlet 3, F4): the tab is open either way, and the caller
+            # deserves to know what it holds without losing the handle.
+            verdict = await _wall_verdict(
+                record.page, getattr(record, "last_nav_status", None),
+                headers=getattr(record, "last_nav_headers", None))
+            if verdict.get("wall"):
+                return {"session": sess.session_id, "focused": sess.focused,
+                        "wall": verdict, "pages": _tab_list(sess)}
     elif action == "select":
         record = sess.page(page)
         await record.page.bring_to_front()

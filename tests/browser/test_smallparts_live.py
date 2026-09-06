@@ -309,7 +309,10 @@ def test_the_clipboard_round_trips_and_arrives_labeled(fixture_site):
         wrote = await files.manage_clipboard(page=page, action="write",
                                              text="hello from the test")
         assert wrote["chars_written"] == 19
-        got = await files.manage_clipboard(page=page, action="read")
+        # The read is confirmation-gated since gauntlet 3 (F6); answer the
+        # gate rather than dodge it, same as the download tests do.
+        got = await _allowed(
+            lambda: files.manage_clipboard(page=page, action="read"))
         assert "hello from the test" in got["text"]
         # Provenance, not censorship: the text is byte-identical inside the
         # envelope and the label states who could have authored it.
@@ -331,7 +334,8 @@ def test_a_page_written_clipboard_reads_back_as_page_authored(fixture_site):
         session, page = await _open(fixture_site, "/clipboard")
         await files.manage_clipboard(page=page, action="write", text="seed")
         await lite.click(page=page, location={"css": "#copy"})
-        got = await files.manage_clipboard(page=page, action="read")
+        got = await _allowed(
+            lambda: files.manage_clipboard(page=page, action="read"))
         assert "copied by the page" in got["text"]
         assert "the page" in got["provenance"]
         return session

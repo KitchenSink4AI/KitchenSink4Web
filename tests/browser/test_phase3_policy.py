@@ -43,9 +43,30 @@ B64_MARKER = base64.b64encode(
     b"state file.").decode()
 
 
+#: The interstitial pages, served at the status a real interstitial
+#: answers with. Gauntlet 3 (F1) status-gated the visible-text wall
+#: needles, so a wall PAGE at an ordinary 200 is read as the page it is; a
+#: plain file server handing these corpus fixtures out at 200 was pinning
+#: exactly the false-positive the gate closed. Live Cloudflare challenges
+#: and CAPTCHA interstitials answer refusing statuses.
+_WALL_STATUS = {"/c/botwall.html": 403, "/c/captcha.html": 403}
+
+
 class _Quiet(http.server.SimpleHTTPRequestHandler):
     def log_message(self, *args):
         pass
+
+    def do_GET(self):
+        status = _WALL_STATUS.get(self.path.split("?")[0])
+        if status:
+            body = (CORPUS / self.path.split("?")[0].lstrip("/")).read_bytes()
+            self.send_response(status)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+        return super().do_GET()
 
 
 @pytest.fixture(scope="module")

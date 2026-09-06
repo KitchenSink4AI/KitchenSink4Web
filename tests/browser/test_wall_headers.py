@@ -83,6 +83,18 @@ class _EdgeHandler(http.server.BaseHTTPRequestHandler):
         elif self.path == "/cf-security-verification":
             # The interstitial wording added to _WALL_MARKERS, served with
             # NO telltale header so the body marker is what has to catch it.
+            # At 403 since gauntlet 3 (F1): live Cloudflare challenges
+            # answer refusing statuses, and the text tiers are now
+            # status-gated exactly like BLOCK_SOURCE always was.
+            self._send(403, "<html><head><title>Loading</title></head><body>"
+                            "<p>example.com needs to review the security of "
+                            "your connection before performing security "
+                            "verification.</p></body></html>")
+        elif self.path == "/cf-security-verification-200":
+            # The SAME wording on an ordinary 200. Gauntlet 3, F1: title and
+            # innerText are page-controlled, so an ungated marker refused
+            # real pages whole and let a hostile page cloak itself with one
+            # offscreen div. A 200 with wall words is a page, not a wall.
             self._send(200, "<html><head><title>Loading</title></head><body>"
                             "<p>example.com needs to review the security of "
                             "your connection before performing security "
@@ -246,9 +258,18 @@ def test_a_painted_challenge_is_still_caught(edge_site):
 
 def test_security_verification_wording_is_a_wall(edge_site):
     """The marker added from the observed interstitial text, caught with no
-    header help at all."""
+    header help at all (at a refusing status, per the F1 gate)."""
     with pytest.raises(BlockedBySite):
         _navigate(edge_site, "/cf-security-verification")
+
+
+def test_wall_wording_on_an_ordinary_200_is_not_a_wall(edge_site):
+    """Gauntlet 3, F1: the text needles and markers are status-gated now,
+    so a 200 page carrying wall phrases (in prose, or in an offscreen
+    cloaking div) is read as the page it is."""
+    result = _navigate(edge_site, "/cf-security-verification-200")
+    assert result["verdict"]["wall"] is None
+    assert result["status"] == 200
 
 
 def test_the_refusal_still_steers_to_another_lane(edge_site):

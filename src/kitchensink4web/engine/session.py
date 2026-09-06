@@ -93,6 +93,18 @@ class PageHandle:
     #: exists and its id is never handed to another frame afterward.
     frame_ids: dict = field(default_factory=dict)
     frame_seq: int = 0
+    #: THE LAST NAVIGATION RESPONSE, per realm (gauntlet 3, F4). The wall
+    #: verdict needs the status and headers of the response that produced
+    #: the CURRENT document, and only `navigate` used to hold one (its own
+    #: goto's). A click that navigates, a read_pages hop, and a child frame
+    #: landing on a challenge all navigate without a response in hand, so a
+    #: page-level listener records the last main-frame navigation response
+    #: here and the last per-child-frame ones in `frame_nav`, keyed by the
+    #: driver's Frame object and pruned so a frame-churning page cannot grow
+    #: it without bound.
+    last_nav_status: int | None = None
+    last_nav_headers: dict | None = None
+    frame_nav: dict = field(default_factory=dict)
 
     def frame_id(self, key: str) -> str:
         if key not in self.frame_ids:
@@ -320,6 +332,34 @@ class SessionManager:
                 f"{time.strftime('%Y-%m-%dT%H:%M:%S')}"))
         except Exception:
             pass  # a lane without the event still gets the message-sniff path
+        # The navigation-response recorder (gauntlet 3, F4). One listener,
+        # attached at page creation like the dialog desk, so every door onto
+        # a page — navigate, an action that navigates, a read_pages hop, a
+        # child frame's own load — leaves the status and headers the wall
+        # classifier needs. Synchronous, swallows everything: a recorder
+        # must never turn a working navigation into an error.
+        def on_response(response):
+            try:
+                request = response.request
+                if not request.is_navigation_request():
+                    return
+                frame = request.frame
+                if frame == page.main_frame:
+                    record.last_nav_status = response.status
+                    record.last_nav_headers = dict(response.headers)
+                else:
+                    record.frame_nav[frame] = {
+                        "status": response.status,
+                        "headers": dict(response.headers)}
+                    while len(record.frame_nav) > 32:
+                        record.frame_nav.pop(next(iter(record.frame_nav)))
+            except Exception:
+                pass
+
+        try:
+            page.on("response", on_response)
+        except Exception:
+            pass  # a lane without the event keeps navigate's own response
         self._attach_dialog_desk(session, record)
         session.pages[handle] = record
         session.counters["pages_opened"] += 1
