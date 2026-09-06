@@ -498,6 +498,47 @@ class Renderer:
 
     # --------------------------------------------------------- completeness
 
+    def _frame_lines(self, ladder: list, c: dict) -> list[str]:
+        """The frame half of the completeness block.
+
+        Two layers, the same two the shadow-root line separates and for the
+        same reason: a frame this read ENTERED, and a frame nothing in this
+        build may enter. A cross-origin frame is not a frame we did not get
+        around to; it is content the embedding page's own origin cannot read,
+        and a tool that read it anyway would be handing the model data the
+        page it is browsing could not obtain for itself."""
+        read = [f for f in ladder if f.get("entered")]
+        skipped = [f for f in ladder if not f.get("entered")]
+        lines = [
+            f'iframes: {len(ladder)} on the page, {len(read)} entered '
+            f'(same-origin), {len(skipped)} not entered']
+        for fr in read[:8]:
+            got = next((r for r in (c.get("frames_read") or [])
+                        if r["frame"] == fr["fid"]), None)
+            detail = (f'{got["affordances"]} affordance(s), '
+                      f'{_num(got["elements"])} elements'
+                      if got else "read")
+            lines.append(f'   {fr["fid"]} | entered | {fr["label"]} | {detail}')
+        if len(read) > 8:
+            lines.append(f'   [{len(read) - 8} more entered frame(s)]')
+        for fr in skipped[:8]:
+            lines.append(
+                f'   {fr["fid"]} | NOT entered ({fr["why_not"]}) | '
+                f'{fr["label"]}')
+        if len(skipped) > 8:
+            lines.append(f'   [{len(skipped) - 8} more frame(s) not entered]')
+        if any(f.get("why_not") == "cross-origin" for f in skipped):
+            lines.append(
+                '   a cross-origin frame is never read: its document belongs '
+                'to another origin, which this page cannot script into '
+                'either, so the content is absent rather than unreported')
+        if c.get("frame_modals"):
+            for fm in c["frame_modals"][:3]:
+                lines.append(
+                    f'   {fm["frame"]} has a dialog open ({fm["dialog"]}); it '
+                    f'blocks that frame and nothing outside it')
+        return lines
+
     def completeness(self) -> list[str]:
         """The block that computes nothing.
 
@@ -512,7 +553,13 @@ class Renderer:
             "COMPLETENESS (what this read did NOT see, rendered from the "
             "budget meter's own ledger)")]
 
-        if c["frames"]:
+        ladder = c.get("frame_ladder")
+        if ladder:
+            lines += self._frame_lines(ladder, c)
+        elif c["frames"]:
+            # The pre-traversal shape, kept for the paths that do not build a
+            # ladder (a recorded extraction replayed in a unit test, a driver
+            # that could not enumerate the tree).
             lines.append(
                 f'iframes not traversed: {c["frames_same"]} same-origin, '
                 f'{c["frames_cross"]} cross-origin')

@@ -53,6 +53,14 @@ class Entry:
     url: str
     page_key: str
     doc_epoch: str = ""
+    #: Which frame's realm this element lives in: "" for the main document,
+    #: "if2" for the second frame on the page. It is a PREFIX on the ref
+    #: itself (`if2e5`) as well as a field here, because the model reading a
+    #: result needs to see that a control is inside a frame, and the resolver
+    #: needs to know which execution context to run in. A page with no frames
+    #: mints exactly the refs it minted before frames existed, which is what
+    #: keeps a frame-free projection byte-identical.
+    frame: str = ""
     gone: bool = False
     gone_as: str = ""
     #: Minted for this turn and deliberately NOT sticky, because nothing in
@@ -106,12 +114,21 @@ class ElementMap:
 
     # ------------------------------------------------------------- minting
 
-    def _mint(self, kind: str) -> str:
-        self.counters[kind] += 1
-        return f"{NAMESPACES[kind]}{self.counters[kind]}"
+    def _mint(self, kind: str, frame: str = "") -> str:
+        """Mint the next ref in one namespace, inside one frame's realm.
+
+        Numbering is PER FRAME, so a frame's controls read `if2e1`, `if2e2`
+        rather than continuing the main document's count. Two properties fall
+        out of that: the main document's refs are unchanged by the presence of
+        frames, and a frame's refs do not renumber when a sibling frame gains
+        or loses elements."""
+        key = f"{frame}|{kind}" if frame else kind
+        self.counters[key] = self.counters.get(key, 0) + 1
+        return f"{frame}{NAMESPACES[kind]}{self.counters[key]}"
 
     def absorb(self, extraction: dict, handle: str, token: str,
-               ts: str = "", scope: str | None = None) -> ReadState:
+               ts: str = "", scope: str | None = None,
+               frame: str = "", into: ReadState | None = None) -> ReadState:
         """Give every printed unit in this read its session ref, IN PLACE.
 
         The extractor numbers what it finds in document order, which is a
@@ -119,13 +136,21 @@ class ElementMap:
         is kept as `node_ref` (that is the key `window.__ks4web_refs` holds,
         and therefore how an action tool reaches the real element), and `ref`
         is overwritten with the session ref the map decides. The renderer
-        never learns the difference, and no second evaluate is needed."""
+        never learns the difference, and no second evaluate is needed.
+
+        `frame` names the realm this extraction came from, and `into` carries
+        the read state a previous frame's absorb built. A framed page absorbs
+        once per frame and the units all belong to ONE read, so a delta taken
+        against it covers the frames too; a page with no frames absorbs once
+        with both parameters at their defaults and behaves exactly as before.
+        """
         identity = extraction.get("identity", {})
         url = identity.get("url", "")
         page_key = identity.get("page_key", url)
         doc_epoch = identity.get("doc_epoch", "")
-        state = ReadState(token=token, handle=handle, url=url,
-                          page_key=page_key, ts=ts, scope=scope)
+        state = into if into is not None else ReadState(
+            token=token, handle=handle, url=url, page_key=page_key, ts=ts,
+            scope=scope)
         seen: set[str] = set()
 
         remap: dict[str, dict[str, str]] = {}
@@ -137,7 +162,7 @@ class ElementMap:
             for unit, anchor in zip(units, anchors):
                 node_ref = unit.get("ref")
                 ref = self._bind(kind, anchor, handle, url, page_key,
-                                 doc_epoch, idx, seen)
+                                 doc_epoch, idx, seen, frame)
                 unit["node_ref"] = node_ref
                 unit["ref"] = ref
                 seen.add(ref)
@@ -165,9 +190,15 @@ class ElementMap:
         # looked at one region, so "not in this read" says nothing at all
         # about the rest of the page, and treating it as evidence would mark
         # most of the page dead every time a caller expanded a section.
+        # ...and only within the FRAME this read covered. A page view of a
+        # framed page absorbs once per frame, so a sweep that ignored the
+        # frame would have the second call mark every ref the first one just
+        # minted as gone. A frame that vanished entirely is handled by
+        # `mark_frames_gone`, because a frame nobody absorbed cannot be swept
+        # by an absorb.
         if scope is None:
             for ref, entry in self.entries.items():
-                if entry.handle == handle and ref not in seen                         and not entry.gone:
+                if entry.handle == handle and entry.frame == frame                         and ref not in seen and not entry.gone:
                     entry.gone = True
                     entry.gone_as = (f'{entry.anchor.get("role")} '
                                      f'"{entry.anchor.get("name")}"')
@@ -177,41 +208,68 @@ class ElementMap:
 
     def _bind(self, kind: str, anchor: dict, handle: str, url: str,
               page_key: str, doc_epoch: str, idx: dict,
-              seen: set[str]) -> str:
+              seen: set[str], frame: str = "") -> str:
         candidates = _keys.unique_keys(anchor, idx)
         if not candidates:
             # Nothing in the ladder distinguishes this element from its
             # neighbours in its own read. It still gets a ref for this turn;
             # it just cannot be sticky, and the map says so rather than
             # inventing a key that will collide later.
-            ref = self._mint(kind)
+            ref = self._mint(kind, frame)
             self.entries[ref] = Entry(
                 ref=ref, kind=kind, handle=handle, key_kind="turn-local",
                 key=(), anchor=dict(anchor), url=url, page_key=page_key,
-                doc_epoch=doc_epoch, turn_local=True)
+                doc_epoch=doc_epoch, frame=frame, turn_local=True)
             return ref
 
         ref = None
         key_kind, key = candidates[0]
+        # The FRAME is part of the key. Two frames on one page can hold
+        # structurally identical documents -- the same widget embedded twice
+        # is the ordinary case, not a hostile one -- and a key that ignored
+        # which realm an element lives in would hand both copies the same ref
+        # and act on whichever one the lookup reached first.
         # Strongest first: an id key must not lose to a role-plus-name key
         # that happens to have been registered by some other element.
         for candidate_kind, candidate_key in candidates:
-            prior = self.by_key.get((handle, kind, candidate_kind)
+            prior = self.by_key.get((handle, frame, kind, candidate_kind)
                                     + candidate_key)
             if prior is not None and prior not in seen:
                 ref, key_kind, key = prior, candidate_kind, candidate_key
                 break
         if ref is None:
-            ref = self._mint(kind)
+            ref = self._mint(kind, frame)
         for candidate_kind, candidate_key in candidates:
-            self.by_key[(handle, kind, candidate_kind) + candidate_key] = ref
+            self.by_key[(handle, frame, kind, candidate_kind)
+                        + candidate_key] = ref
         self.entries[ref] = Entry(
             ref=ref, kind=kind, handle=handle, key_kind=key_kind, key=key,
             anchor=dict(anchor), url=url, page_key=page_key,
-            doc_epoch=doc_epoch)
+            doc_epoch=doc_epoch, frame=frame)
         return ref
 
     # -------------------------------------------------------- invalidation
+
+    def mark_frames_gone(self, handle: str, live: set[str], why: str) -> int:
+        """Mark every ref from a frame that is no longer on the page.
+
+        A whole-page absorb sweeps its own frame and no other, which is
+        correct while the frame exists and silent when it stops existing: a
+        frame the page removed between two reads is never absorbed again, so
+        nothing would ever mark its refs gone and a later action on one would
+        refuse with a bare "not found" instead of naming what happened. This
+        is the sweep for the frames themselves, run by the read once it knows
+        which frames the page now has."""
+        touched = 0
+        for ref, entry in self.entries.items():
+            if (entry.handle == handle and entry.frame
+                    and entry.frame not in live and not entry.gone):
+                entry.gone = True
+                entry.gone_as = (f'{entry.anchor.get("role")} '
+                                 f'"{entry.anchor.get("name")}" '
+                                 f'(in {entry.frame}, {why})')
+                touched += 1
+        return touched
 
     def invalidate_page(self, handle: str, why: str) -> int:
         """Navigation, page close, or session end. Refs minted on a page do

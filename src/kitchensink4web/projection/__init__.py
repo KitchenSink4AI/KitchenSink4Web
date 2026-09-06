@@ -39,7 +39,7 @@ __all__ = ["EXTRACT_JS", "FIND_JS", "TEXT_JS", "VISIBILITY_JS", "PAYMENT_JS",
            "ACTIVATION_JS",
            "CLOSED_SHADOW_HOOK", "INSTRUMENT_KEY", "instrument",
            "Projection", "project", "extract", "find", "read_text",
-           "read_page", "ntok", "ENCODING_NAME", "RUNGS"]
+           "read_page", "stitch", "ntok", "ENCODING_NAME", "RUNGS"]
 
 _HERE = Path(__file__).parent
 
@@ -185,18 +185,116 @@ async def read_text(page, root: str | None = None, start_index: int = 0,
         "include_hidden": include_hidden}))
 
 
+#: The completeness counters that ADD across frames, and the ones that do not.
+#: A frame's hidden nodes are hidden nodes on this page; a frame's viewport
+#: height is its own and means nothing merged.
+_SUMMED = (
+    "hidden_interactive", "hidden_nodes", "hidden_text_chars",
+    "open_shadow_roots", "shadow_roots_traversed", "closed_shadow_roots",
+    "injection_suspects", "zero_width_hits", "reordered_containers",
+    "total_elements", "walked_elements", "text_chars",
+    "affordances_collected", "affordances_uncollected",
+    "headings_uncollected", "depth_cut_subtrees", "extract_ms",
+)
+_MERGED_MAPS = ("hidden_reasons", "hidden_interactive_reasons",
+                "reorder_reasons", "name_fallbacks")
+
+
+def stitch(main: dict, parts: list) -> dict:
+    """Fold each frame's extraction into the main document's, IN PLACE.
+
+    The design decision this function is: frame content joins the SAME
+    payload and therefore the SAME degradation ladder, rather than riding in a
+    parallel structure the budget does not see. A control inside a checkout
+    frame competes for the read's tokens against a control in the page chrome,
+    which is what "frame-scoped budget charging on the same ladder" means and
+    what keeps every printed price executable. Nothing here re-ranks: the
+    ranker and the meter run once, afterward, over one list.
+
+    Each part is `(frame_id, extraction, frame_facts)`. Units arrive carrying
+    the session refs their own absorb minted, which are already frame-
+    qualified (`if2e5`), so no relabelling happens here and no unit can
+    collide with a unit from another realm."""
+    c = main["completeness"]
+    for fid, data, facts in parts:
+        for group in ("affordances", "regions", "headings", "forms", "tables"):
+            for unit in data.get(group) or []:
+                unit["frame"] = fid
+            (main.setdefault(group, [])).extend(data.get(group) or [])
+        totals = data.get("affordance_class_totals") or {}
+        merged = main.setdefault("affordance_class_totals", {})
+        for cls, n in totals.items():
+            merged[cls] = merged.get(cls, 0) + n
+        main["affordance_total"] = (main.get("affordance_total", 0)
+                                    + data.get("affordance_total", 0))
+        main["headings_total"] = (main.get("headings_total", 0)
+                                  + data.get("headings_total", 0))
+        # A modal inside a frame blocks that frame, not the page. Reporting it
+        # as the page's modal would make every ref on the page refuse
+        # MODAL_BLOCKED because a cookie widget opened a dialog in its own
+        # document, so it is recorded and not promoted.
+        if data.get("modal"):
+            c.setdefault("frame_modals", []).append(
+                {"frame": fid, "dialog": data["modal"]})
+        fc = data.get("completeness") or {}
+        for key in _SUMMED:
+            if key in fc:
+                c[key] = (c.get(key) or 0) + (fc.get(key) or 0)
+        for key in _MERGED_MAPS:
+            src = fc.get(key) or {}
+            dst = c.setdefault(key, {})
+            for reason, n in src.items():
+                dst[reason] = dst.get(reason, 0) + n
+        c.setdefault("frames_read", []).append(
+            {"frame": fid, "url": facts.get("url", ""),
+             "elements": (fc.get("walked_elements") or 0),
+             "affordances": len(data.get("affordances") or [])})
+    return main
+
+
 async def read_page(page, meta: dict, budget: int = 5000,
                     view: str = "auto", root: str | None = None,
-                    absorb=None, mode: str = "auto") -> Projection:
+                    absorb=None, mode: str = "auto", frames=None,
+                    frame_ladder=None) -> Projection:
     """Extract and project in one call, which is what `get_page_view` does.
 
     `absorb` is the anchor layer's hook, called with the raw extraction before
     anything is rendered. It rewrites every unit's per-read extractor id into
     the session's sticky ref, so `e12` on read one is still `e12` on read
-    three and the renderer never learns the difference."""
+    three and the renderer never learns the difference. It is called once per
+    frame, with the frame id, because refs are minted per realm.
+
+    `frames` is the list of `(frame_id, page_like, facts)` this read may
+    enter, decided by `engine/frames.py` and never by this package: which
+    frames are same-origin is a question about the browser's own boundaries,
+    and the projection deliberately knows nothing about browsers."""
     data = await extract(page, root=root)
     if data.get("error"):
         return data
     if absorb is not None:
-        absorb(data)
+        absorb(data, "")
+    parts = []
+    for fid, target, facts in (frames or []):
+        # A frame that navigates or detaches mid-read is a real event on a
+        # live page and not an error in the read. It is dropped from the
+        # stitch and reported as unreachable, because a partial extraction
+        # from a document that is being replaced is worse than an honest gap.
+        try:
+            got = await extract(target)
+        except Exception as exc:
+            facts["error"] = type(exc).__name__
+            continue
+        if got.get("error"):
+            facts["error"] = got["error"]
+            continue
+        if absorb is not None:
+            absorb(got, fid)
+        parts.append((fid, got, facts))
+    if parts:
+        stitch(data, parts)
+    if frame_ladder:
+        # EVERY frame on the page, entered or not. The completeness block
+        # reports the ones this build refused to touch as loudly as the ones
+        # it read, which is the closed-shadow-root shape one boundary along.
+        data["completeness"]["frame_ladder"] = frame_ladder
     return project(data, meta, budget=budget, view=view, mode=mode)
