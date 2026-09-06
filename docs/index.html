@@ -52,9 +52,9 @@
 @font-face{font-family:"Plex Mono Fallback";src:local("Courier New");size-adjust:100%;line-gap-override:0%}
 @font-face{font-family:"Fraunces Fallback";src:local("Georgia");size-adjust:104%;line-gap-override:0%}
 :root{
-  --paper:#f4f0e1; --paper-deep:#eae4cc; --ink:#1f3b2c; --ink-soft:#42604e;
-  --brass:#7c6418; --brass-bright:#a2841f; --live:#4d9a52; --stamp:#a8452b; --rule:#c7bd9d;
-  --tint:rgba(124,100,24,.06); --drop-op:.18;
+  --paper:#e6f0e4; --paper-deep:#d4e5d1; --ink:#1f3b2c; --ink-soft:#42604e;
+  --brass:#776017; --brass-bright:#a2841f; --live:#4d9a52; --stamp:#a6442a; --rule:#a5c0a2;
+  --tint:rgba(119,96,23,.06); --drop-op:.18;
   --shadow: 0 2px 0 var(--rule), 0 10px 30px rgba(31,59,44,.10);
 }
 *{margin:0;padding:0;box-sizing:border-box}
@@ -69,7 +69,7 @@ body{
 }
 /* watered: the can has been tipped (per visit, never stored) */
 body.watered{
-  --paper:#f4f2e4; --paper-deep:#e6e8c9; --drop-op:1;
+  --paper:#e6f2e7; --paper-deep:#d0e9ce; --drop-op:1;
   --tint:rgba(77,154,82,.18);
 }
 h1,h2,h3,.serif{font-family:'Fraunces',"Fraunces Fallback",Georgia,serif}
@@ -240,7 +240,7 @@ th,td{padding:10px 14px;border-bottom:1px solid var(--rule);text-align:center;wh
 th{background:var(--ink);color:var(--paper);font-weight:600;font-size:11px;letter-spacing:.08em;text-transform:uppercase}
 td:first-child,th:first-child{text-align:left;font-weight:600;white-space:normal;min-width:170px}
 tr:nth-child(even) td{background:var(--paper-deep)}
-.us{background:rgba(124,100,24,.12)!important;font-weight:700}
+.us{background:rgba(119,96,23,.12)!important;font-weight:700}
 th.us{background:var(--brass)!important;color:var(--paper)}
 .scenario td{white-space:normal;font-size:12px;line-height:1.5;vertical-align:top;text-align:left;min-width:150px}
 .scenario td:first-child{font-family:'Fraunces',"Fraunces Fallback",Georgia,serif;font-size:15px;font-weight:700;min-width:200px}
@@ -369,6 +369,7 @@ footer a{color:var(--brass)}
       <path class="leaf" d="M95 30 C106 28 110 20 110 20 C100 18 95 26 95 30 Z"/>
     </svg>
     <span class="can-hint" data-i18n="hero.canhint">tip the can</span>
+    <span class="can-hint bloom" data-i18n="hero.bloom">IN BLOOM</span>
   </div>
   <div class="catalog-no rev d2" data-i18n="hero.catno">Model Context Protocol · Server for the Open Web</div>
   <h1 class="rev d2">KitchenSink<span class="four">4</span>Web</h1>
@@ -394,7 +395,7 @@ footer a{color:var(--brass)}
     <div class="demo-grid">
       <div class="demo-panel bad">
         <span class="corner-tag" data-i18n="demo.badtag">EVERYTHING</span>
-        <h3 data-i18n="demo.badh">What most of the aisle hands you</h3>
+        <h3 data-i18n="demo.badh">What most tools on this shelf hand you</h3>
         <div class="meter">
           <span class="cap" data-i18n="demo.meter1">Tokens spent on this page</span>
           <span class="fig">33,073</span>
@@ -436,11 +437,11 @@ footer a{color:var(--brass)}
 
 <section id="compare">
   <div class="wrap">
-    <div class="sec-head"><span class="no" data-i18n="no2">DEPT. 02</span><h2 data-i18n="h2.cmp">Against the rest of the aisle</h2></div>
+    <div class="sec-head"><span class="no" data-i18n="no2">DEPT. 02</span><h2 data-i18n="h2.cmp">Against the other tools on this shelf</h2></div>
     <p class="for-lead" data-i18n="cmp.lead">Feature grids flatter everybody. Here it is instead as the requests an assistant actually gets:</p>
     <div class="tablewrap">
       <table class="scenario">
-        <tr><th data-i18n="cmp.h1">"Hey, could you…"</th><th class="us">🪴 KitchenSink4Web</th><th data-i18n="cmp.h3">The rest of the aisle</th></tr>
+        <tr><th data-i18n="cmp.h1">"Hey, could you…"</th><th class="us">🪴 <span data-i18n="cmp.h2">This one</span></th><th data-i18n="cmp.h3">Other tools on this shelf</th></tr>
         <tr><td data-i18n="cr1.q">"Read this article and tell me what actually matters."</td><td class="us" data-i18n="cr1.us">A priced map first, at a budget you set: 4,426 tokens for the same article, and the completeness block says what was left out.</td><td data-i18n="cr1.oth">The whole page arrives at once, menus and footers included. The same article this page demos costs 33,073 tokens as a raw dump.</td></tr>
         <tr><td data-i18n="cr2.q">"Find the issue about the broken d-pad. There are 771 open ones."</td><td class="us" data-i18n="cr2.us">find_elements searches the whole page, shadow roots included, and returns actable matches; find_and_act clicks the right one in the same call.</td><td data-i18n="cr2.oth">Scroll, dump, repeat has been the pattern; the strongest peer added a text search over its snapshot in mid-2026.</td></tr>
         <tr><td data-i18n="cr3.q">"Before you read that page: what will it cost me?"</td><td class="us" data-i18n="cr3.us">Every region line carries the price of expanding it, and the budget is a ceiling the read cannot cross.</td><td data-i18n="cr3.oth">No surveyed server documents a way to ask. The read costs what it costs, and you learn afterward.</td></tr>
@@ -486,13 +487,21 @@ footer a{color:var(--brass)}
         <p style="margin-top:14px" data-i18n="inst.p2">Packs and read-only mode are chosen at launch (<code>--packs</code>, <code>KS4WEB_MODE</code>, <code>KS4WEB_ALLOW_ACTING</code>) and are identical for every connection to the process.</p>
       </div>
     </div>
+    <details class="devfold">
+      <summary><span class="shedtag" data-i18n="inst.shed">POTTING SHED</span><span data-i18n="inst.dev">For developers: pip, uvx, source, other MCP clients</span></summary>
+      <div class="devbody">
+        <p data-i18n="inst.dp1">Install the package and point any MCP client at the executable:</p>
+        <div class="term"><div><span class="c">$</span> <span class="p">pip install kitchensink4web</span></div></div>
+        <p data-i18n="inst.dp2">Then in any client's config: <code>{"mcpServers": {"web": {"command": "kitchensink4web"}}}</code>. Running from a clone works the same way; point the command at the <code>web-mcp</code> executable in the clone's virtual environment. Full setup, including the pack and mode switches, is in the <a href="https://github.com/nometalalchemist/KitchenSink4Web#install">README</a>.</p>
+      </div>
+    </details>
     <p class="tipbox" data-i18n="inst.tip"><b>Tip for Claude Desktop:</b> in Tool permissions, set this server's <b>Read-only tools</b> group to <b>Always Allow</b>. Those tools cannot change anything on any page, and it stops most permission prompts.</p>
   </div>
 </section>
 
 <section id="service">
   <div class="wrap">
-    <div class="sec-head"><span class="no" data-i18n="no5">DEPT. 05</span><h2 data-i18n="h2.svc">Service department</h2></div>
+    <div class="sec-head"><span class="no" data-i18n="no5">DEPT. 05</span><h2 data-i18n="h2.svc">CUSTOMER SERVICE</h2></div>
     <div class="maturity">
       <h3 data-i18n="maturity.h">Young, and raised in a hard school</h3>
       <p data-i18n="maturity.p">This is the newest fixture in the family, and it grew up under the house rules: every claim measured, every release attacked by adversarial rounds before it ships, every refusal honest about its reason. What it has not had yet is a long life in strangers' browsers. The safety net while it earns that: it starts read-only, it prices every read before taking it, and it tells you what it could not see. If the web is where you live, bring your strangest pages to the service counter and tell us what broke.</p>
@@ -724,6 +733,7 @@ en: {
 "sw.store": "The storefront",
 "hero.stamp": "A MAP,<br>NOT A DUMP",
 "hero.canhint": "tip the can",
+"hero.bloom": "IN BLOOM",
 "hero.catno": "Model Context Protocol · Server for the Open Web",
 "hero.tagline": "Everything <em>plus</em> the kitchen sink for the open web: the browser MCP server that reads a whole page for the price of a paragraph.",
 "spec.dump": "Tokens, one page dumped",
@@ -738,7 +748,7 @@ en: {
 "h2.demo": "Reading a page should not cost the whole conversation",
 "demo.lead": "Ask most browser tools to read a page and they dump everything they see into your assistant's memory: menus, footers, cookie banners, all of it, tens of thousands of tokens for a single article. Do that three times and your assistant starts forgetting what you told it this morning. This server reads differently. It hands back a map: what the page is, what is on it section by section, what each section costs to open, and what it would do next. A page that costs other tools a novel costs this one a paragraph. And nothing is swept under the rug: every read ends with an honest accounting of what was not read and why.",
 "demo.badtag": "EVERYTHING",
-"demo.badh": "What most of the aisle hands you",
+"demo.badh": "What most tools on this shelf hand you",
 "demo.meter1": "Tokens spent on this page",
 "demo.badp": "Forty-nine lines of menus, language pickers and appearance settings before one word of the article. All of it is in your assistant's memory now, and none of it was the question.",
 "demo.wallmore": "…780 more lines, all of them already paid for.",
@@ -758,10 +768,11 @@ en: {
 "tale.p2": "That is not a promise about good behavior. It is a fact about what is installed, and anyone can check it by reading the tool list. When you do want a hand filling forms or clicking through a flow, tick one box in the extension settings and everything unlocks, in the same conversation.",
 "tale.p3": "And it reads defensively either way. Text that a page hides from human eyes, the oldest trick for slipping instructions to an AI, is stripped, counted, and reported. Never obeyed.",
 "no2": "DEPT. 02",
-"h2.cmp": "Against the rest of the aisle",
+"h2.cmp": "Against the other tools on this shelf",
 "cmp.lead": "Feature grids flatter everybody. Here it is instead as the requests an assistant actually gets:",
 "cmp.h1": "\"Hey, could you…\"",
-"cmp.h3": "The rest of the aisle",
+"cmp.h2": "This one",
+"cmp.h3": "Other tools on this shelf",
 "cr1.q": "\"Read this article and tell me what actually matters.\"",
 "cr1.us": "A priced map first, at a budget you set: 4,426 tokens for the same article, and the completeness block says what was left out.",
 "cr1.oth": "The whole page arrives at once, menus and footers included. The same article this page demos costs 33,073 tokens as a raw dump.",
@@ -805,9 +816,13 @@ en: {
 "inst.b2": "One command",
 "inst.s2": "Any other MCP client",
 "inst.p2": "Packs and read-only mode are chosen at launch (<code>--packs</code>, <code>KS4WEB_MODE</code>, <code>KS4WEB_ALLOW_ACTING</code>) and are identical for every connection to the process.",
+"inst.shed": "POTTING SHED",
+"inst.dev": "For developers: pip, uvx, source, other MCP clients",
+"inst.dp1": "Install the package and point any MCP client at the executable:",
+"inst.dp2": "Then in any client's config: <code>{&quot;mcpServers&quot;: {&quot;web&quot;: {&quot;command&quot;: &quot;kitchensink4web&quot;}}}</code>. Running from a clone works the same way; point the command at the <code>web-mcp</code> executable in the clone's virtual environment. Full setup, including the pack and mode switches, is in the <a href='https://github.com/nometalalchemist/KitchenSink4Web#install'>README</a>.",
 "inst.tip": "<b>Tip for Claude Desktop:</b> in Tool permissions, set this server's <b>Read-only tools</b> group to <b>Always Allow</b>. Those tools cannot change anything on any page, and it stops most permission prompts.",
 "no5": "DEPT. 05",
-"h2.svc": "Service department",
+"h2.svc": "CUSTOMER SERVICE",
 "maturity.h": "Young, and raised in a hard school",
 "maturity.p": "This is the newest fixture in the family, and it grew up under the house rules: every claim measured, every release attacked by adversarial rounds before it ships, every refusal honest about its reason. What it has not had yet is a long life in strangers' browsers. The safety net while it earns that: it starts read-only, it prices every read before taking it, and it tells you what it could not see. If the web is where you live, bring your strangest pages to the service counter and tell us what broke.",
 "svc.ticket": "NOW SERVING · TAKE A NUMBER · SAME DESK AS THE WORD, POWERPOINT, AND EXCEL SINKS",
@@ -848,6 +863,7 @@ ko: {
 "sw.store": "스토어",
 "hero.stamp": "쏟아붓기가 아니라<br>지도로",
 "hero.canhint": "물뿌리개를 기울여 보세요",
+"hero.bloom": "개화 중",
 "hero.catno": "Model Context Protocol · 열린 웹을 위한 서버",
 "hero.tagline": "열린 웹을 위해 <em>없는 게 없는</em> 도구 상자. 한 페이지 전체를 문단 하나 값에 읽어 오는 브라우저 MCP 서버입니다.",
 "spec.dump": "토큰, 페이지 하나를 통째로 쏟았을 때",
@@ -862,7 +878,7 @@ ko: {
 "h2.demo": "페이지 하나를 읽는 데 대화 전체를 쓸 수는 없습니다",
 "demo.lead": "대부분의 브라우저 도구에 페이지를 읽어 달라고 하면 보이는 것을 전부 AI의 기억에 쏟아붓습니다. 메뉴, 푸터, 쿠키 배너까지 전부, 기사 하나에 수만 토큰입니다. 그것을 세 번만 하면 AI는 오늘 아침에 했던 말을 잊기 시작합니다. 이 서버는 다르게 읽습니다. 지도를 돌려줍니다. 이 페이지가 무엇인지, 구획별로 무엇이 있는지, 각 구획을 여는 데 얼마가 드는지, 다음에 무엇을 하면 되는지를 알려줍니다. 다른 도구에게 장편소설 값이 드는 페이지가 이 도구에게는 문단 하나 값입니다. 그리고 슬쩍 덮어두는 것은 없습니다. 모든 읽기는 무엇을 읽지 않았고 왜 그랬는지에 대한 정직한 정산으로 끝납니다.",
 "demo.badtag": "전부",
-"demo.badh": "이 통로의 대부분이 건네주는 것",
+"demo.badh": "이 선반의 도구 대부분이 건네주는 것",
 "demo.meter1": "이 페이지에 쓴 토큰",
 "demo.badp": "기사의 첫 단어가 나오기까지 메뉴와 언어 선택기와 화면 설정이 마흔아홉 줄입니다. 이 모든 것이 이제 AI의 기억 안에 있고, 그중 무엇도 질문이 아니었습니다.",
 "demo.wallmore": "…780줄이 더 있고, 전부 이미 값을 치른 것들입니다.",
@@ -882,10 +898,11 @@ ko: {
 "tale.p2": "이것은 얌전히 굴겠다는 약속이 아닙니다. 무엇이 설치되어 있는가에 대한 사실이며, 도구 목록만 읽어 보면 누구나 확인할 수 있습니다. 양식을 채우거나 화면을 눌러 가며 진행하는 손이 필요해지면, 확장 설정에서 체크박스 하나를 켜면 같은 대화 안에서 전부 열립니다.",
 "tale.p3": "그리고 어느 쪽이든 방어적으로 읽습니다. 페이지가 사람 눈에는 감추는 텍스트, AI에게 지시를 몰래 넣는 가장 오래된 수법은 걸러내고, 세고, 보고합니다. 따르는 일은 없습니다.",
 "no2": "2번 매장",
-"h2.cmp": "같은 통로의 다른 물건들과 견주어",
+"h2.cmp": "이 선반의 다른 도구들과 견주어",
 "cmp.lead": "기능 표는 누구에게나 후합니다. 그래서 여기서는 AI가 실제로 받는 요청으로 대신합니다.",
 "cmp.h1": "\"저기, 이것 좀…\"",
-"cmp.h3": "이 통로의 나머지",
+"cmp.h2": "이 도구",
+"cmp.h3": "이 선반의 다른 도구들",
 "cr1.q": "\"이 기사 읽고 진짜 중요한 게 뭔지 말해 줘.\"",
 "cr1.us": "먼저 값이 붙은 지도를, 그것도 지정한 예산 안에서 줍니다. 같은 기사에 4,426토큰이고, 무엇이 빠졌는지는 정산 항목이 말해 줍니다.",
 "cr1.oth": "메뉴와 푸터까지 포함해 페이지 전체가 한꺼번에 옵니다. 이 페이지가 시연하는 바로 그 기사를 통째로 쏟으면 33,073토큰입니다.",
@@ -929,9 +946,13 @@ ko: {
 "inst.b2": "명령 한 줄",
 "inst.s2": "그 밖의 모든 MCP 클라이언트",
 "inst.p2": "팩과 읽기 전용 모드는 실행 시점에 정해지며(<code>--packs</code>, <code>KS4WEB_MODE</code>, <code>KS4WEB_ALLOW_ACTING</code>), 그 프로세스에 연결하는 모든 연결에 동일하게 적용됩니다.",
+"inst.shed": "원예 창고",
+"inst.dev": "개발자용: pip, uvx, 소스, 다른 MCP 클라이언트",
+"inst.dp1": "패키지를 설치하고 원하는 MCP 클라이언트가 실행 파일을 가리키게 하면 됩니다:",
+"inst.dp2": "그다음 클라이언트 설정에 <code>{&quot;mcpServers&quot;: {&quot;web&quot;: {&quot;command&quot;: &quot;kitchensink4web&quot;}}}</code>를 넣으세요. 클론에서 실행할 때도 같은 방식이며, 클론의 가상 환경에 있는 <code>web-mcp</code> 실행 파일을 가리키면 됩니다. 팩과 모드 스위치를 포함한 전체 설정은 <a href='https://github.com/nometalalchemist/KitchenSink4Web#install'>README</a>에 있습니다.",
 "inst.tip": "<b>Claude Desktop 사용 팁:</b> 도구 권한에서 이 서버의 <b>읽기 전용 도구</b> 그룹을 <b>항상 허용</b>으로 두세요. 그 도구들은 어떤 페이지도 바꿀 수 없으며, 권한 확인 창이 대부분 사라집니다.",
 "no5": "5번 매장",
-"h2.svc": "서비스 부문",
+"h2.svc": "고객 서비스",
 "maturity.h": "어리지만, 혹독하게 자랐습니다",
 "maturity.p": "제품군에서 가장 새로 들어온 기구이며, 이 집의 규칙 아래 자랐습니다. 모든 주장은 측정하고, 모든 릴리스는 나가기 전에 적대적 라운드로 두들겨 맞고, 모든 거절은 이유를 정직하게 밝힙니다. 아직 갖지 못한 것은 낯선 사람들의 브라우저에서 보낸 긴 세월입니다. 그것을 얻기까지의 안전망은 이렇습니다. 읽기 전용으로 시작하고, 읽기마다 값을 먼저 매기며, 보지 못한 것을 말해 줍니다. 웹이 당신이 사는 곳이라면, 가장 이상한 페이지를 서비스 창구로 가져와서 무엇이 망가졌는지 알려 주세요.",
 "svc.ticket": "지금 접수 중 · 번호표를 뽑으세요 · 워드, 파워포인트, 엑셀 싱크와 같은 창구",
@@ -972,6 +993,7 @@ ja: {
 "sw.store": "ストア",
 "hero.stamp": "ぶちまけではなく<br>地図を",
 "hero.canhint": "じょうろを傾ける",
+"hero.bloom": "開花中",
 "hero.catno": "Model Context Protocol · オープンウェブのためのサーバー",
 "hero.tagline": "オープンウェブのために<em>なんでも揃った</em>道具箱。ページまるごとを段落ひとつ分の値段で読むブラウザMCPサーバーです。",
 "spec.dump": "トークン、1ページをぶちまけた場合",
@@ -986,7 +1008,7 @@ ja: {
 "h2.demo": "ページを1枚読むのに会話ぜんぶを使うことはありません",
 "demo.lead": "たいていのブラウザツールにページを読ませると、見えたものを全部AIの記憶にぶちまけます。メニューもフッターもクッキーバナーも、記事1本で数万トークンです。それを3回やればAIは今朝の話を忘れはじめます。このサーバーの読み方は違います。返ってくるのは地図です。このページが何で、区画ごとに何があり、各区画を開くのにいくらかかり、次に何をすればよいか。ほかのツールなら長編小説の値段になるページが、これなら段落ひとつ分です。そして隠しごとはありません。すべての読み取りは、何を読まなかったのか、なぜそうしたのかという正直な精算で終わります。",
 "demo.badtag": "ぜんぶ",
-"demo.badh": "この売り場のたいていが渡してくるもの",
+"demo.badh": "この棚のたいていの道具が渡してくるもの",
 "demo.meter1": "このページに使ったトークン",
 "demo.badp": "記事の1語目にたどり着くまで、メニューと言語切り替えと表示設定が49行。それが今すべてAIの記憶の中にあり、そのどれも問いではありませんでした。",
 "demo.wallmore": "…あと780行、すべてすでに支払い済みです。",
@@ -1006,10 +1028,11 @@ ja: {
 "tale.p2": "これはお行儀の約束ではありません。何が導入されているかという事実であり、ツール一覧を読めば誰でも確かめられます。フォーム入力や画面をたどる作業に手が欲しくなったら、拡張機能の設定でチェックをひとつ入れるだけで、同じ会話の中ですべてが開きます。",
 "tale.p3": "そしてどちらの場合も、守りながら読みます。ページが人の目から隠すテキスト、AIに指示を忍び込ませる最も古い手口は、取り除き、数え、報告します。従うことはありません。",
 "no2": "第02売り場",
-"h2.cmp": "同じ売り場のほかの品と並べて",
+"h2.cmp": "この棚のほかの道具と並べて",
 "cmp.lead": "機能表は誰にでも甘くなります。そこで代わりに、AIが実際に受け取る依頼の形で並べます。",
 "cmp.h1": "「ねえ、ちょっと…」",
-"cmp.h3": "この売り場のほか",
+"cmp.h2": "こちら",
+"cmp.h3": "この棚のほかの道具",
 "cr1.q": "「この記事を読んで、本当に大事なところを教えて。」",
 "cr1.us": "まず値札つきの地図を、指定した予算の中で返します。同じ記事で4,426トークン、何が外れたかは精算ブロックが述べます。",
 "cr1.oth": "メニューもフッターも込みで、ページ全体が一度に届きます。このページが実演しているその記事は、ぶちまけると33,073トークンです。",
@@ -1053,9 +1076,13 @@ ja: {
 "inst.b2": "コマンド1行",
 "inst.s2": "そのほかのMCPクライアント",
 "inst.p2": "パックと読み取り専用モードは起動時に決まり(<code>--packs</code>、<code>KS4WEB_MODE</code>、<code>KS4WEB_ALLOW_ACTING</code>)、そのプロセスへのすべての接続で同じです。",
+"inst.shed": "園芸小屋",
+"inst.dev": "開発者向け: pip、uvx、ソース、その他の MCP クライアント",
+"inst.dp1": "パッケージを入れて、任意の MCP クライアントから実行ファイルを指すだけです:",
+"inst.dp2": "そのうえでクライアントの設定に <code>{&quot;mcpServers&quot;: {&quot;web&quot;: {&quot;command&quot;: &quot;kitchensink4web&quot;}}}</code> を書きます。クローンから動かす場合も同じで、クローンの仮想環境にある <code>web-mcp</code> 実行ファイルを指してください。パックとモードの切り替えを含む完全な手順は <a href='https://github.com/nometalalchemist/KitchenSink4Web#install'>README</a> にあります。",
 "inst.tip": "<b>Claude Desktopのヒント:</b> ツール権限で、このサーバーの<b>読み取り専用ツール</b>グループを<b>常に許可</b>にしてください。どのページも変えられないツールですし、権限の確認がほとんど出なくなります。",
 "no5": "第05売り場",
-"h2.svc": "サービス部門",
+"h2.svc": "カスタマーサービス",
 "maturity.h": "若く、そして厳しく育てられました",
 "maturity.p": "ファミリーで最も新しい器具で、この家の決まりのもとで育ちました。あらゆる主張は測り、あらゆるリリースは出す前に敵対的ラウンドで叩かれ、あらゆる拒否は理由を正直に述べます。まだ持っていないのは、見知らぬ人のブラウザで過ごした長い年月です。それを得るまでの安全網はこうです。読み取り専用で始まり、読む前に値段をつけ、見えなかったものを教えます。ウェブが暮らしの場なら、いちばん変わったページをサービスカウンターへ持ってきて、何が壊れたか教えてください。",
 "svc.ticket": "ただいま受付中 · 番号札をお取りください · ワード、パワーポイント、エクセルのシンクと同じ窓口",
@@ -1096,6 +1123,7 @@ zh: {
 "sw.store": "门店",
 "hero.stamp": "给你一张地图，<br>不是一堆倾倒",
 "hero.canhint": "把洒水壶倾一下",
+"hero.bloom": "正在开花",
 "hero.catno": "Model Context Protocol · 面向开放网页的服务器",
 "hero.tagline": "为开放网页准备的<em>样样俱全</em>工具箱：用一个段落的价钱读完整页的浏览器 MCP 服务器。",
 "spec.dump": "令牌，整页倾倒一次",
@@ -1110,7 +1138,7 @@ zh: {
 "h2.demo": "读一个页面，不该花掉整场对话",
 "demo.lead": "让大多数浏览器工具读一个页面，它们会把看到的一切倒进助手的记忆里：菜单、页脚、Cookie 横幅，全都算上，一篇文章几万个令牌。这样做三次，助手就开始忘记你今天早上说过的话。这台服务器读法不同。它交回来的是一张地图：这一页是什么，一段一段有什么，每一段打开要多少钱，接下来该做什么。别的工具要按一部长篇小说收费的页面，在这里只值一个段落。而且没有什么被扫到地毯底下：每次读取都以一份诚实的结算收尾，说清楚哪些没读、为什么没读。",
 "demo.badtag": "全都给你",
-"demo.badh": "这条货道上多数货色给你的东西",
+"demo.badh": "这个货架上多数工具给你的东西",
 "demo.meter1": "花在这一页上的令牌",
 "demo.badp": "在文章的第一个字出现之前，是四十九行菜单、语言选择和显示设置。它们现在全都在助手的记忆里，而没有一行是你问的问题。",
 "demo.wallmore": "…还有 780 行，全都已经付过钱了。",
@@ -1130,10 +1158,11 @@ zh: {
 "tale.p2": "这不是一句关于会守规矩的承诺。这是关于装了什么的事实，任何人读一遍工具清单就能核对。等你真的需要有人帮着填表、点着走完一段流程时，在扩展设置里勾上一个框，同一场对话里就全部解锁。",
 "tale.p3": "而且无论哪种情况，它都读得很有戒心。页面对人眼隐藏起来的文字，也就是给 AI 塞指令最老的一招，会被剥掉、计数并报告。绝不照办。",
 "no2": "第 02 号柜台",
-"h2.cmp": "与这条货道上的其他货色相比",
+"h2.cmp": "与这个货架上的其他工具相比",
 "cmp.lead": "功能对照表对谁都客气。这里换成助手实际收到的请求：",
 "cmp.h1": "“帮我个忙……”",
-"cmp.h3": "这条货道上的其他货色",
+"cmp.h2": "这一个",
+"cmp.h3": "这个货架上的其他工具",
 "cr1.q": "“把这篇文章读一下，告诉我真正重要的是什么。”",
 "cr1.us": "先给一张标好价的地图，而且在你设定的预算之内：同一篇文章 4,426 个令牌，哪些没读进来由结算区块说明。",
 "cr1.oth": "整页一次性送到，菜单和页脚一并奉上。本页拿来演示的这篇文章，整页倾倒是 33,073 个令牌。",
@@ -1177,9 +1206,13 @@ zh: {
 "inst.b2": "一条命令",
 "inst.s2": "任何其他 MCP 客户端",
 "inst.p2": "能力包与只读模式在启动时确定（<code>--packs</code>、<code>KS4WEB_MODE</code>、<code>KS4WEB_ALLOW_ACTING</code>），并且对连接到该进程的每一个连接都相同。",
+"inst.shed": "园艺工棚",
+"inst.dev": "开发者选项：pip、uvx、源码、其他 MCP 客户端",
+"inst.dp1": "安装这个包，然后让任意 MCP 客户端指向可执行文件：",
+"inst.dp2": "然后在客户端配置里写 <code>{&quot;mcpServers&quot;: {&quot;web&quot;: {&quot;command&quot;: &quot;kitchensink4web&quot;}}}</code>。从克隆仓库运行的方式相同，指向克隆虚拟环境里的 <code>web-mcp</code> 可执行文件即可。包含能力包与模式开关的完整说明见 <a href='https://github.com/nometalalchemist/KitchenSink4Web#install'>README</a>。",
 "inst.tip": "<b>Claude Desktop 小提示：</b>在工具权限里，把这台服务器的<b>只读工具</b>分组设为<b>始终允许</b>。那些工具改不了任何页面上的任何东西，这样能省掉大部分权限提示。",
 "no5": "第 05 号柜台",
-"h2.svc": "服务部",
+"h2.svc": "客户服务",
 "maturity.h": "年纪轻，管得严",
 "maturity.p": "这是这个系列里最新的一件器具，它是按本店的规矩长大的：每一项主张都要测量，每一次发布在出门之前都要挨一轮对抗测试，每一次拒绝都要诚实说明理由。它还没有得到的，是在陌生人的浏览器里过上很长一段日子。在它挣到这一点之前的安全网是：它以只读启动，它在读之前先给每次读取标价，并且它会告诉你它没能看到什么。如果网页就是你过日子的地方，请把你最古怪的页面带到服务台来，告诉我们哪里坏了。",
 "svc.ticket": "正在叫号 · 请取号 · 与 WORD、POWERPOINT、EXCEL 三个水槽同一个柜台",
@@ -1220,6 +1253,7 @@ de: {
 "sw.store": "Das Ladengeschäft",
 "hero.stamp": "EINE KARTE,<br>KEINE HALDE",
 "hero.canhint": "die Kanne kippen",
+"hero.bloom": "In Blüte",
 "hero.catno": "Model Context Protocol · Server für das offene Web",
 "hero.tagline": "Alles <em>und</em> die Küchenspüle dazu, für das offene Web: der Browser-MCP-Server, der eine ganze Seite zum Preis eines Absatzes liest.",
 "spec.dump": "Tokens, eine Seite ausgekippt",
@@ -1234,7 +1268,7 @@ de: {
 "h2.demo": "Eine Seite zu lesen sollte nicht das ganze Gespräch kosten",
 "demo.lead": "Bitten Sie die meisten Browser-Werkzeuge, eine Seite zu lesen, und sie kippen alles, was sie sehen, in das Gedächtnis Ihrer KI: Menüs, Fußzeilen, Cookie-Banner, alles davon, Zehntausende Tokens für einen einzigen Artikel. Machen Sie das dreimal, und Ihre KI fängt an zu vergessen, was Sie ihr heute Morgen gesagt haben. Dieser Server liest anders. Er gibt eine Karte zurück: was die Seite ist, was Abschnitt für Abschnitt darauf steht, was jeder Abschnitt beim Öffnen kostet und was er als Nächstes tun würde. Eine Seite, die andere Werkzeuge einen Roman kostet, kostet diesen einen Absatz. Und nichts wird unter den Teppich gekehrt: Jeder Lesevorgang endet mit einer ehrlichen Abrechnung darüber, was nicht gelesen wurde und warum.",
 "demo.badtag": "ALLES",
-"demo.badh": "Was der Rest des Gangs Ihnen reicht",
+"demo.badh": "Was die meisten Werkzeuge in diesem Regal Ihnen reichen",
 "demo.meter1": "Tokens für diese Seite",
 "demo.badp": "Neunundvierzig Zeilen Menüs, Sprachauswahl und Darstellungseinstellungen, bevor ein einziges Wort des Artikels kommt. Alles davon steht jetzt im Gedächtnis Ihrer KI, und nichts davon war die Frage.",
 "demo.wallmore": "…780 weitere Zeilen, alle bereits bezahlt.",
@@ -1254,10 +1288,11 @@ de: {
 "tale.p2": "Das ist kein Versprechen über gutes Benehmen. Es ist eine Tatsache darüber, was installiert ist, und jeder kann sie prüfen, indem er die Werkzeugliste liest. Wenn Sie doch eine Hand beim Ausfüllen von Formularen oder beim Durchklicken eines Ablaufs möchten, setzen Sie in den Einstellungen der Erweiterung einen Haken, und im selben Gespräch ist alles freigeschaltet.",
 "tale.p3": "Und gelesen wird in beiden Fällen mit Vorsicht. Text, den eine Seite vor menschlichen Augen verbirgt, der älteste Trick, um einer KI Anweisungen unterzuschieben, wird entfernt, gezählt und gemeldet. Nie befolgt.",
 "no2": "ABT. 02",
-"h2.cmp": "Gegen den Rest des Gangs",
+"h2.cmp": "Gegen die anderen Werkzeuge in diesem Regal",
 "cmp.lead": "Funktionsraster schmeicheln jedem. Hier stattdessen die Anfragen, die eine KI tatsächlich bekommt:",
 "cmp.h1": "\"Du, könntest du…\"",
-"cmp.h3": "Der Rest des Gangs",
+"cmp.h2": "Dieses hier",
+"cmp.h3": "Andere Werkzeuge in diesem Regal",
 "cr1.q": "\"Lies diesen Artikel und sag mir, worauf es wirklich ankommt.\"",
 "cr1.us": "Zuerst eine ausgepreiste Karte, im Budget, das Sie setzen: 4.426 Tokens für denselben Artikel, und der Vollständigkeitsblock sagt, was weggelassen wurde.",
 "cr1.oth": "Die ganze Seite kommt auf einmal, Menüs und Fußzeilen inklusive. Derselbe Artikel, den diese Seite vorführt, kostet als Rohabzug 33.073 Tokens.",
@@ -1301,9 +1336,13 @@ de: {
 "inst.b2": "Ein Befehl",
 "inst.s2": "Jeder andere MCP-Client",
 "inst.p2": "Pakete und Lesemodus werden beim Start gewählt (<code>--packs</code>, <code>KS4WEB_MODE</code>, <code>KS4WEB_ALLOW_ACTING</code>) und sind für jede Verbindung zu diesem Prozess identisch.",
+"inst.shed": "Pflanzschuppen",
+"inst.dev": "Für Entwickler: pip, uvx, Quellcode, andere MCP-Clients",
+"inst.dp1": "Paket installieren und einen beliebigen MCP-Client auf die ausführbare Datei zeigen lassen:",
+"inst.dp2": "Dann in der Konfiguration des Clients: <code>{&quot;mcpServers&quot;: {&quot;web&quot;: {&quot;command&quot;: &quot;kitchensink4web&quot;}}}</code>. Aus einem Klon heraus läuft es genauso, dann zeigt der Befehl auf die ausführbare Datei <code>web-mcp</code> in der virtuellen Umgebung des Klons. Das vollständige Setup samt Paket- und Modusschaltern steht in der <a href='https://github.com/nometalalchemist/KitchenSink4Web#install'>README</a>.",
 "inst.tip": "<b>Tipp für Claude Desktop:</b> Setzen Sie in den Werkzeugberechtigungen die Gruppe <b>Read-only tools</b> dieses Servers auf <b>Always Allow</b>. Diese Werkzeuge können auf keiner Seite etwas ändern, und es erspart die meisten Berechtigungsabfragen.",
 "no5": "ABT. 05",
-"h2.svc": "Serviceabteilung",
+"h2.svc": "Kundenservice",
 "maturity.h": "Jung, und in einer harten Schule aufgewachsen",
 "maturity.p": "Das ist das neueste Gerät der Familie, und es ist unter den Hausregeln groß geworden: jede Behauptung gemessen, jede Auslieferung vorher in gegnerischen Runden angegriffen, jede Ablehnung ehrlich über ihren Grund. Was ihm noch fehlt, ist ein langes Leben in fremden Browsern. Das Netz, bis es sich das verdient hat: Es startet im Lesemodus, es preist jeden Lesevorgang aus, bevor es ihn nimmt, und es sagt Ihnen, was es nicht sehen konnte. Wenn das Web Ihr Zuhause ist, bringen Sie Ihre seltsamsten Seiten an den Servicetresen und sagen Sie uns, was kaputtgegangen ist.",
 "svc.ticket": "JETZT BEDIENUNG · NUMMER ZIEHEN · DERSELBE TRESEN WIE DIE WORD-, POWERPOINT- UND EXCEL-SPÜLEN",
@@ -1344,6 +1383,7 @@ fr: {
 "sw.store": "La boutique",
 "hero.stamp": "UNE CARTE,<br>PAS UN DÉVERSEMENT",
 "hero.canhint": "penchez l'arrosoir",
+"hero.bloom": "En fleur",
 "hero.catno": "Model Context Protocol · Serveur pour le web ouvert",
 "hero.tagline": "Tout, <em>et</em> l'évier de la cuisine avec, pour le web ouvert : le serveur MCP de navigation qui lit une page entière au prix d'un paragraphe.",
 "spec.dump": "Jetons, une page déversée",
@@ -1358,7 +1398,7 @@ fr: {
 "h2.demo": "Lire une page ne devrait pas coûter toute la conversation",
 "demo.lead": "Demandez à la plupart des outils de navigation de lire une page et ils déversent tout ce qu'ils voient dans la mémoire de votre assistant : menus, pieds de page, bandeaux de cookies, tout, des dizaines de milliers de jetons pour un seul article. Faites-le trois fois et votre assistant commence à oublier ce que vous lui avez dit ce matin. Ce serveur lit autrement. Il rend une carte : ce qu'est la page, ce qui s'y trouve section par section, ce que coûte l'ouverture de chaque section, et ce qu'il ferait ensuite. Une page qui coûte un roman aux autres outils coûte un paragraphe à celui-ci. Et rien n'est glissé sous le tapis : chaque lecture se termine par un décompte honnête de ce qui n'a pas été lu et pourquoi.",
 "demo.badtag": "TOUT",
-"demo.badh": "Ce que le reste du rayon vous tend",
+"demo.badh": "Ce que la plupart des outils de ce rayonnage vous tendent",
 "demo.meter1": "Jetons dépensés sur cette page",
 "demo.badp": "Quarante-neuf lignes de menus, de sélecteurs de langue et de réglages d'affichage avant un seul mot de l'article. Tout cela est maintenant dans la mémoire de votre assistant, et rien de tout cela n'était la question.",
 "demo.wallmore": "…780 lignes de plus, toutes déjà payées.",
@@ -1378,10 +1418,11 @@ fr: {
 "tale.p2": "Ce n'est pas une promesse de bonne conduite. C'est un fait sur ce qui est installé, et n'importe qui peut le vérifier en lisant la liste des outils. Quand vous voulez un coup de main pour remplir des formulaires ou cliquer à travers un parcours, cochez une case dans les réglages de l'extension et tout se débloque, dans la même conversation.",
 "tale.p3": "Et il lit sur ses gardes dans les deux cas. Le texte qu'une page cache aux yeux humains, la plus vieille astuce pour glisser des instructions à une IA, est retiré, compté et signalé. Jamais suivi.",
 "no2": "RAYON 02",
-"h2.cmp": "Face au reste du rayon",
+"h2.cmp": "Face aux autres outils de ce rayonnage",
 "cmp.lead": "Les tableaux de fonctionnalités flattent tout le monde. Voici plutôt les demandes qu'un assistant reçoit vraiment :",
 "cmp.h1": "\"Dis, tu pourrais…\"",
-"cmp.h3": "Le reste du rayon",
+"cmp.h2": "Celui-ci",
+"cmp.h3": "Les autres outils de ce rayonnage",
 "cr1.q": "\"Lis cet article et dis-moi ce qui compte vraiment.\"",
 "cr1.us": "D'abord une carte avec les prix, dans le budget que vous fixez : 4 426 jetons pour le même article, et le décompte final dit ce qui a été laissé de côté.",
 "cr1.oth": "La page entière arrive d'un coup, menus et pieds de page compris. Le même article que cette page met en scène coûte 33 073 jetons en déversement brut.",
@@ -1425,9 +1466,13 @@ fr: {
 "inst.b2": "Une commande",
 "inst.s2": "Tout autre client MCP",
 "inst.p2": "Les modules et le mode lecture seule sont choisis au lancement (<code>--packs</code>, <code>KS4WEB_MODE</code>, <code>KS4WEB_ALLOW_ACTING</code>) et sont identiques pour chaque connexion au processus.",
+"inst.shed": "Cabane de rempotage",
+"inst.dev": "Pour les développeurs : pip, uvx, sources, autres clients MCP",
+"inst.dp1": "Installez le paquet, puis pointez n'importe quel client MCP sur l'exécutable :",
+"inst.dp2": "Ensuite, dans la configuration du client : <code>{&quot;mcpServers&quot;: {&quot;web&quot;: {&quot;command&quot;: &quot;kitchensink4web&quot;}}}</code>. Depuis un clone, c'est identique : pointez la commande sur l'exécutable <code>web-mcp</code> de l'environnement virtuel du clone. L'installation complète, modules et modes compris, est dans le <a href='https://github.com/nometalalchemist/KitchenSink4Web#install'>README</a>.",
 "inst.tip": "<b>Astuce pour Claude Desktop :</b> dans les autorisations d'outils, mettez le groupe <b>Read-only tools</b> de ce serveur sur <b>Always Allow</b>. Ces outils ne peuvent rien changer sur aucune page, et cela supprime la plupart des demandes d'autorisation.",
 "no5": "RAYON 05",
-"h2.svc": "Service après-vente",
+"h2.svc": "Service client",
 "maturity.h": "Jeune, et élevé à la dure",
 "maturity.p": "C'est le plus récent instrument de la famille, et il a grandi sous les règles de la maison : chaque affirmation mesurée, chaque version attaquée par des tours adverses avant d'être livrée, chaque refus honnête sur sa raison. Ce qu'il n'a pas encore eu, c'est une longue vie dans les navigateurs d'inconnus. Le filet en attendant qu'il la gagne : il démarre en lecture seule, il chiffre chaque lecture avant de la prendre, et il vous dit ce qu'il n'a pas pu voir. Si le web est là où vous vivez, apportez vos pages les plus étranges au comptoir de service et dites-nous ce qui a cassé.",
 "svc.ticket": "AU SUIVANT · PRENEZ UN TICKET · MÊME COMPTOIR QUE LES ÉVIERS WORD, POWERPOINT ET EXCEL",
@@ -1468,6 +1513,7 @@ es: {
 "sw.store": "La tienda",
 "hero.stamp": "UN MAPA,<br>NO UN VERTIDO",
 "hero.canhint": "incline la regadera",
+"hero.bloom": "En flor",
 "hero.catno": "Model Context Protocol · Servidor para la web abierta",
 "hero.tagline": "Todo <em>y</em> el fregadero de la cocina también, para la web abierta: el servidor MCP de navegación que lee una página entera al precio de un párrafo.",
 "spec.dump": "Tokens, una página volcada",
@@ -1482,7 +1528,7 @@ es: {
 "h2.demo": "Leer una página no debería costar toda la conversación",
 "demo.lead": "Pídale a la mayoría de las herramientas de navegación que lean una página y volcarán todo lo que ven en la memoria de su asistente: menús, pies de página, avisos de cookies, todo, decenas de miles de tokens por un solo artículo. Hágalo tres veces y su asistente empieza a olvidar lo que usted le dijo esta mañana. Este servidor lee de otra manera. Devuelve un mapa: qué es la página, qué hay en ella sección por sección, cuánto cuesta abrir cada sección y qué haría a continuación. Una página que a otras herramientas les cuesta una novela, a esta le cuesta un párrafo. Y nada se barre bajo la alfombra: cada lectura termina con una cuenta honesta de lo que no se leyó y por qué.",
 "demo.badtag": "TODO",
-"demo.badh": "Lo que le entrega el resto del pasillo",
+"demo.badh": "Lo que le entrega la mayoría de las herramientas de este estante",
 "demo.meter1": "Tokens gastados en esta página",
 "demo.badp": "Cuarenta y nueve líneas de menús, selectores de idioma y ajustes de presentación antes de una sola palabra del artículo. Todo eso está ahora en la memoria de su asistente, y nada de ello era la pregunta.",
 "demo.wallmore": "…780 líneas más, todas ya pagadas.",
@@ -1502,10 +1548,11 @@ es: {
 "tale.p2": "Eso no es una promesa de buena conducta. Es un hecho sobre lo que está instalado, y cualquiera puede comprobarlo leyendo la lista de herramientas. Cuando sí quiera una mano para rellenar formularios o ir haciendo clic por un flujo, marque una casilla en los ajustes de la extensión y todo se desbloquea, en la misma conversación.",
 "tale.p3": "Y lee con la guardia alta en ambos casos. El texto que una página esconde a los ojos humanos, el truco más viejo para colarle instrucciones a una IA, se retira, se cuenta y se informa. Nunca se obedece.",
 "no2": "SECCIÓN 02",
-"h2.cmp": "Frente al resto del pasillo",
+"h2.cmp": "Frente a las otras herramientas de este estante",
 "cmp.lead": "Las tablas de funciones halagan a todo el mundo. Aquí están, en su lugar, las peticiones que un asistente recibe de verdad:",
 "cmp.h1": "\"Oye, ¿podrías…\"",
-"cmp.h3": "El resto del pasillo",
+"cmp.h2": "Esta",
+"cmp.h3": "Otras herramientas de este estante",
 "cr1.q": "\"Lee este artículo y dime qué importa de verdad.\"",
 "cr1.us": "Primero un mapa con precios, dentro del presupuesto que usted fije: 4.426 tokens para el mismo artículo, y el bloque de integridad dice qué quedó fuera.",
 "cr1.oth": "La página entera llega de golpe, menús y pies de página incluidos. El mismo artículo que esta página muestra cuesta 33.073 tokens como volcado en bruto.",
@@ -1549,9 +1596,13 @@ es: {
 "inst.b2": "Un comando",
 "inst.s2": "Cualquier otro cliente MCP",
 "inst.p2": "Los paquetes y el modo de solo lectura se eligen al arrancar (<code>--packs</code>, <code>KS4WEB_MODE</code>, <code>KS4WEB_ALLOW_ACTING</code>) y son idénticos para cada conexión al proceso.",
+"inst.shed": "Cobertizo de macetas",
+"inst.dev": "Para desarrolladores: pip, uvx, código fuente, otros clientes MCP",
+"inst.dp1": "Instale el paquete y apunte cualquier cliente MCP al ejecutable:",
+"inst.dp2": "Después, en la configuración del cliente: <code>{&quot;mcpServers&quot;: {&quot;web&quot;: {&quot;command&quot;: &quot;kitchensink4web&quot;}}}</code>. Desde un clon funciona igual: apunte el comando al ejecutable <code>web-mcp</code> del entorno virtual del clon. La instalación completa, con los interruptores de paquetes y modos, está en el <a href='https://github.com/nometalalchemist/KitchenSink4Web#install'>README</a>.",
 "inst.tip": "<b>Consejo para Claude Desktop:</b> en los permisos de herramientas, ponga el grupo <b>Read-only tools</b> de este servidor en <b>Always Allow</b>. Esas herramientas no pueden cambiar nada en ninguna página, y así se evitan casi todos los avisos de permiso.",
 "no5": "SECCIÓN 05",
-"h2.svc": "Departamento de servicio",
+"h2.svc": "Atención al cliente",
 "maturity.h": "Joven, y criado en una escuela dura",
 "maturity.p": "Es el instrumento más nuevo de la familia y creció bajo las normas de la casa: cada afirmación medida, cada versión atacada por rondas adversarias antes de salir, cada rechazo honesto sobre su motivo. Lo que aún no ha tenido es una larga vida en navegadores ajenos. La red de seguridad mientras se la gana: arranca en solo lectura, tasa cada lectura antes de hacerla y le dice qué no ha podido ver. Si la web es donde usted vive, traiga sus páginas más raras al mostrador de servicio y cuéntenos qué se rompió.",
 "svc.ticket": "TURNO ACTUAL · COJA NÚMERO · EL MISMO MOSTRADOR QUE LOS FREGADEROS DE WORD, POWERPOINT Y EXCEL",
