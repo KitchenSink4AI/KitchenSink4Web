@@ -63,9 +63,12 @@ body{
   font-family:'IBM Plex Mono',"Plex Mono Fallback",ui-monospace,monospace;
   background:var(--paper); color:var(--ink); line-height:1.6;
   transition:background-color .6s ease;
+  /* the ground is trellis stock: two runs of lath crossing at 45 degrees,
+     faint enough to read as texture and not as a grid. */
   background-image:
     radial-gradient(ellipse at 50% -12%, var(--tint), transparent 58%),
-    repeating-linear-gradient(0deg, transparent 0 27px, rgba(31,59,44,.035) 27px 28px);
+    repeating-linear-gradient(45deg, transparent 0 33px, rgba(31,59,44,.032) 33px 34px),
+    repeating-linear-gradient(-45deg, transparent 0 33px, rgba(31,59,44,.032) 33px 34px);
 }
 /* watered: the can has been tipped (per visit, never stored) */
 body.watered{
@@ -141,6 +144,10 @@ body.watered .bed .sprout{stroke-dashoffset:0}
 body.watered .bed .leaf{opacity:var(--drop-op)}
 .can-hint{display:block;font-size:9px;letter-spacing:.22em;text-transform:uppercase;
   color:var(--ink-soft);opacity:.55;margin-top:6px}
+/* tipped, the hint stops instructing and starts reporting */
+.can-hint.bloom{display:none;color:var(--live);opacity:.95;font-weight:600}
+body.watered .can-hint{display:none}
+body.watered .can-hint.bloom{display:block}
 
 .specs-strip{display:flex;justify-content:center;gap:0;margin:44px auto 0;
   border:2px solid var(--ink);max-width:820px;background:var(--paper-deep);
@@ -163,14 +170,24 @@ body.watered .bed .leaf{opacity:var(--drop-op)}
 .d4{animation-delay:.42s}.d5{animation-delay:.56s}
 
 /* ---------- sections ---------- */
-section{padding:64px 0;border-top:1px solid var(--rule)}
+section{padding:64px 0;border-top:1px solid var(--rule);position:relative}
+/* every section opens under a run of crossed lath. Structure, never a caption. */
+section:before{content:"";position:absolute;left:0;right:0;top:0;height:12px;
+  pointer-events:none;opacity:.6;
+  background:
+    repeating-linear-gradient(45deg, transparent 0 7px, var(--rule) 7px 8px),
+    repeating-linear-gradient(-45deg, transparent 0 7px, var(--rule) 7px 8px)}
 .sec-head{display:flex;align-items:baseline;gap:16px;margin-bottom:34px}
 .sec-head h2{font-size:clamp(24px,3.8vw,38px);font-weight:800}
 .sec-head .no{font-size:12px;letter-spacing:.25em;color:var(--brass);white-space:nowrap;
   border:2px solid currentColor;border-radius:3px;padding:3px 10px;transform:rotate(-2deg);
   display:inline-block;opacity:.85;
   mask-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='4' height='4'%3E%3Crect width='4' height='4' fill='white'/%3E%3Ccircle cx='2.5' cy='1.5' r='.3' fill='black'/%3E%3C/svg%3E")}
-.sec-head:after{content:"";flex:1;border-bottom:2px dotted var(--rule);transform:translateY(-6px)}
+.sec-head:after{content:"";flex:1;align-self:center;height:10px;opacity:.75;
+  transform:translateY(-2px);
+  background:
+    repeating-linear-gradient(45deg, transparent 0 5px, var(--rule) 5px 6px),
+    repeating-linear-gradient(-45deg, transparent 0 5px, var(--rule) 5px 6px)}
 .for-lead{font-family:'Fraunces',"Fraunces Fallback",Georgia,serif;font-size:clamp(16px,2.1vw,20px);line-height:1.65;max-width:840px;margin:0 auto 30px}
 .foot-note{font-size:11px;color:var(--ink-soft);margin-top:10px}
 
@@ -179,7 +196,10 @@ section{padding:64px 0;border-top:1px solid var(--rule)}
   border:2px solid var(--ink);box-shadow:var(--shadow)}
 @media(max-width:820px){.demo-grid{grid-template-columns:1fr}}
 .demo-panel{background:var(--paper);padding:22px 22px 18px;position:relative;min-width:0}
-.demo-panel h3{font-size:12px;letter-spacing:.22em;text-transform:uppercase;margin-bottom:6px}
+.demo-panel h3{font-size:12px;letter-spacing:.22em;text-transform:uppercase;
+  margin-bottom:6px;padding-right:118px}
+@media(max-width:520px){.demo-panel h3{padding-right:0}
+  .corner-tag{position:static;display:inline-block;margin-bottom:8px;transform:none}}
 .demo-panel.bad h3{color:var(--stamp)}
 .demo-panel.good h3{color:var(--brass)}
 .demo-panel>p{font-size:12.5px;color:var(--ink-soft);margin-top:12px;line-height:1.55}
@@ -196,25 +216,31 @@ section{padding:64px 0;border-top:1px solid var(--rule)}
 /* the wall: a real dump of a real page, scrolling, uninteractable on purpose */
 .wall{height:300px;overflow:auto;border:1px solid var(--rule);background:var(--paper-deep);
   padding:10px 12px;font-size:11px;line-height:1.5;color:var(--ink-soft);
-  cursor:not-allowed;user-select:none;white-space:pre-wrap;overflow-wrap:anywhere}
+  cursor:not-allowed;user-select:none;white-space:pre-wrap;overflow-wrap:anywhere;
+  background-image:repeating-linear-gradient(90deg, transparent 0 21px,
+    rgba(31,59,44,.035) 21px 23px)}
 .wall b{color:var(--ink);font-weight:600}
 .wall .chrome{opacity:.72}
 .wall .more{display:block;margin-top:10px;color:var(--stamp);font-weight:600}
 /* the map: the same page as priced beds */
 .map{height:300px;overflow:auto;border:1px solid var(--rule);background:var(--paper-deep);
-  padding:10px 12px;font-size:11.5px;line-height:1.5}
+  padding:10px 12px;font-size:11.5px;line-height:1.5;
+  background-image:repeating-linear-gradient(0deg, transparent 0 12px,
+    rgba(31,59,44,.055) 12px 13px)}
 .map .idline{color:var(--ink-soft);font-size:10.5px;border-bottom:1px dotted var(--rule);
   padding-bottom:6px;margin-bottom:8px;overflow-wrap:anywhere}
-.bedrow{width:100%;text-align:left;background:var(--paper);border:1px solid var(--rule);
+.bedrow{width:100%;text-align:left;background-color:var(--paper);border:1px solid var(--rule);
   border-left:3px solid var(--brass);color:var(--ink);font-family:inherit;font-size:11.5px;
-  padding:5px 8px;margin-bottom:4px;cursor:pointer;display:flex;justify-content:space-between;
-  gap:10px;align-items:baseline}
-.bedrow:hover{background:var(--paper-deep);border-left-color:var(--ink)}
+  padding:5px 8px 5px 23px;margin-bottom:4px;cursor:pointer;display:flex;
+  justify-content:space-between;gap:10px;align-items:baseline;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8'%3E%3Cellipse cx='4' cy='4' rx='2.3' ry='3' fill='%23776017' opacity='.5' transform='rotate(-25 4 4)'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:7px center}
+.bedrow:hover{background-color:var(--paper-deep);border-left-color:var(--ink)}
 .bedrow:focus-visible{outline:2px dashed var(--brass);outline-offset:2px}
 .bedrow .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .bedrow .px{color:var(--brass);white-space:nowrap;font-variant-numeric:tabular-nums}
-.bedrow[aria-pressed="true"]{background:var(--paper-deep);border-left-color:var(--live);
-  border-left-width:5px}
+.bedrow[aria-pressed="true"]{background-color:var(--paper-deep);
+  border-left-color:var(--live);border-left-width:5px;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='15'%3E%3Cpath d='M5.5 15 V5' stroke='%234d9a52' stroke-width='1.5' fill='none'/%3E%3Cpath d='M5.5 9 C1.5 8 .5 3.5 .5 3.5 C4.5 2.5 5.5 7 5.5 9 Z' fill='%234d9a52'/%3E%3Cpath d='M5.5 11.5 C9 10.8 10 7.5 10 7.5 C6.8 6.8 5.5 10 5.5 11.5 Z' fill='%234d9a52' opacity='.72'/%3E%3C/svg%3E");background-position:6px center}
 .bedrow[aria-pressed="true"] .px{color:var(--live);font-weight:600}
 .demo-controls{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px}
 .stampbtn{font-family:'IBM Plex Mono',"Plex Mono Fallback",monospace;font-size:10px;letter-spacing:.16em;
@@ -267,7 +293,43 @@ th.us{background:var(--brass)!important;color:var(--paper)}
 .step h3{font-size:16px;font-weight:800;margin:6px 0 8px}
 .step p{font-size:13px;color:var(--ink-soft);line-height:1.6;margin-bottom:14px}
 .tipbox{border-left:4px solid var(--brass);background:var(--paper-deep);padding:14px 18px;
-  font-size:12.5px;color:var(--ink-soft);margin-top:22px}
+  font-size:12.5px;color:var(--ink-soft);margin-top:22px;position:relative}
+/* the left rule is a stem, so it puts out one leaf. One is the whole idea. */
+.tipbox:before{content:"";position:absolute;left:-11px;top:12px;width:18px;height:15px;
+  opacity:.8;transform:scaleX(-1);background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='15'%3E%3Cpath d='M1 14 C6 13 17 9 17 1 C17 1 4 1 1 8 Z' fill='%23776017'/%3E%3C/svg%3E") no-repeat}
+
+/* ---------- FOR DEVELOPERS: the parts window ----------
+   The family treatment, in garden dress. Not a caveat hanging off the install
+   cards, a station of its own: pegboard field, hard ink frame, an accent spine
+   on the hinge side, and the paperwork handed over on an inset slip. The spine
+   and the sign take --brass, because --live disappears into emerald paper and
+   brass is already this page's accent everywhere else. */
+details.devfold{position:relative;margin-top:30px;padding:0;
+  border:2px solid var(--ink);border-left:5px solid var(--brass);
+  box-shadow:var(--shadow);background-color:var(--paper-deep);
+  background-image:radial-gradient(circle at center, rgba(31,59,44,.17) 1.1px,
+    transparent 1.4px);
+  background-size:14px 14px}
+details.devfold .shedtag{position:absolute;top:-11px;left:24px;background:var(--brass);
+  color:var(--paper);font-size:10px;letter-spacing:.3em;padding:4px 12px;font-weight:600;
+  text-transform:uppercase}
+details.devfold summary{cursor:pointer;list-style:none;padding:24px 20px 16px;
+  font-size:11.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--ink);
+  font-weight:600}
+details.devfold summary::-webkit-details-marker{display:none}
+details.devfold summary:before{content:"\25B8  ";color:var(--brass)}
+details.devfold[open] summary:before{content:"\25BE  "}
+details.devfold[open] summary{border-bottom:1px dashed var(--rule)}
+details.devfold summary:hover{color:var(--brass)}
+details.devfold summary:focus-visible{outline:2px dashed var(--brass);outline-offset:3px}
+details.devfold .devbody{margin:16px;padding:20px 20px 16px;background:var(--paper);
+  border:1px solid var(--rule)}
+details.devfold .devbody p{font-size:12.5px;color:var(--ink-soft);line-height:1.6;
+  margin:0 0 10px}
+details.devfold .devbody p:last-child{margin-bottom:0}
+details.devfold .term{margin-bottom:14px;font-size:13px;padding:16px 18px}
+details.devfold code{background-color:var(--paper-deep);border:1px solid var(--rule);
+  padding:1px 5px;font-size:12px;overflow-wrap:anywhere}
 
 /* ---------- maturity, guarantee, counters ---------- */
 .maturity{border:2px solid var(--ink);background:var(--paper-deep);box-shadow:var(--shadow);
@@ -298,6 +360,35 @@ th.us{background:var(--brass)!important;color:var(--paper)}
 .counter p{font-size:12.5px;color:var(--ink-soft);line-height:1.55}
 .counter .go{display:inline-block;margin-top:14px;font-size:11px;letter-spacing:.18em;
   text-transform:uppercase;color:var(--brass);font-weight:600}
+/* The four aisle cards are goods, so they are packets: a serrated tear strip
+   with a punched hang hole, the illustration in its window, and the little
+   printed band at the bottom where a real packet prints its sowing season. */
+#family .counter{padding:44px 22px 24px}
+#family .counter:before{content:"";position:absolute;top:0;left:0;right:0;height:27px;
+  background-color:var(--paper-deep);border-bottom:1px dashed var(--ink);
+  background-image:repeating-linear-gradient(90deg, transparent 0 8px,
+    rgba(31,59,44,.17) 8px 9px)}
+#family .counter:after{content:"";position:absolute;top:8px;left:50%;margin-left:-6px;
+  width:12px;height:12px;border:1.5px solid var(--ink);border-radius:50%;
+  background:var(--paper)}
+#family .counter:hover:before{background-color:var(--paper)}
+#family .counter:hover:after{background:var(--paper-deep)}
+#family .counter .icon{display:flex;align-items:center;justify-content:center;width:100%;
+  height:64px;font-size:34px;margin:0 0 14px;border:1px solid var(--rule);
+  background-color:var(--paper-deep);
+  background-image:repeating-linear-gradient(-45deg, transparent 0 6px,
+    rgba(31,59,44,.05) 6px 7px)}
+#family .counter:hover .icon{background-color:var(--paper)}
+#family .counter .go:after{content:"";display:block;width:58px;height:9px;margin-top:12px;
+  border:1px solid var(--rule);
+  background:
+    linear-gradient(90deg, var(--live) 0 13px, transparent 13px),
+    repeating-linear-gradient(90deg, transparent 0 13px, var(--rule) 13px 14px)}
+/* two tendrils, opposite corners, and that is the whole vine budget */
+.guarantee:before,.guarantee:after{content:"";position:absolute;width:44px;height:44px;
+  opacity:.4;pointer-events:none;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='44' height='44' fill='none' stroke='%231f3b2c' stroke-width='1.6' stroke-linecap='round'%3E%3Cpath d='M2 42 C2 22 12 12 30 10'/%3E%3Cpath d='M30 10 C36 10 40 6 38 2.5 C36 0 31.5 2.5 33.5 7 C35.5 11.5 41 12.5 43 8.5'/%3E%3Cpath d='M13 26 C7 22.5 5.5 16.5 9.5 14.5'/%3E%3C/svg%3E") no-repeat center/contain}
+.guarantee:before{top:-4px;left:-4px}
+.guarantee:after{bottom:-4px;right:-4px;transform:rotate(180deg)}
 
 /* ---------- footer ---------- */
 footer{border-top:3px double var(--ink);padding:36px 0 48px;font-size:12px;color:var(--ink-soft)}
@@ -369,11 +460,11 @@ footer a{color:var(--brass)}
       <path class="leaf" d="M95 30 C106 28 110 20 110 20 C100 18 95 26 95 30 Z"/>
     </svg>
     <span class="can-hint" data-i18n="hero.canhint">tip the can</span>
-    <span class="can-hint bloom" data-i18n="hero.bloom">IN BLOOM</span>
+    <span class="can-hint bloom" data-i18n="hero.bloom">in bloom</span>
   </div>
   <div class="catalog-no rev d2" data-i18n="hero.catno">Model Context Protocol · Server for the Open Web</div>
   <h1 class="rev d2">KitchenSink<span class="four">4</span>Web</h1>
-  <p class="tagline rev d3" data-i18n="hero.tagline">Everything <em>plus</em> the kitchen sink for the open web: the browser MCP server that reads a whole page for the price of a paragraph.</p>
+  <p class="tagline rev d3" data-i18n="hero.tagline">Everything plus the kitchen sink for the open web: this server lets your AI browse real websites, reads whole pages for a fraction of the usual cost, and cannot click anything until you say so.</p>
   <div class="specs-strip rev d4">
     <div class="spec"><span class="n">33,073</span><span class="l" data-i18n="spec.dump">Tokens, one page dumped</span></div>
     <div class="spec"><span class="n">4,426</span><span class="l" data-i18n="spec.read">Tokens, the same page read</span></div>
@@ -385,13 +476,14 @@ footer a{color:var(--brass)}
     <a class="btn primary" href="#install" data-i18n="btn.install">Install the Sink</a>
     <a class="btn" href="https://github.com/nometalalchemist/KitchenSink4Web" data-i18n="btn.source">Read the Source</a>
   </div>
-  <a class="demo-invite rev d5" href="#headline" data-i18n="hero.invite">↓ or see the difference first: what your assistant pays to read one page, there versus here</a>
+  <a class="demo-invite rev d5" href="#headline" data-i18n="hero.invite">↓ or try the demo first: the same page read the usual way, and read here</a>
 </header>
 
 <section id="headline">
   <div class="wrap">
     <div class="sec-head"><span class="no" data-i18n="no0">DEPT. 00</span><h2 data-i18n="h2.demo">Reading a page should not cost the whole conversation</h2></div>
-    <p class="for-lead" data-i18n="demo.lead">Ask most browser tools to read a page and they dump everything they see into your assistant's memory: menus, footers, cookie banners, all of it, tens of thousands of tokens for a single article. Do that three times and your assistant starts forgetting what you told it this morning. This server reads differently. It hands back a map: what the page is, what is on it section by section, what each section costs to open, and what it would do next. A page that costs other tools a novel costs this one a paragraph. And nothing is swept under the rug: every read ends with an honest accounting of what was not read and why.</p>
+    <p class="for-lead" data-i18n="demo.lead2">This server reads differently. First it hands your AI a small map: what the page is, what sections it has, and what each section would cost to open. The AI opens only what it needs. Same article, a fraction of the memory. And if anything on the page went unread, the map says so plainly, instead of letting the AI believe it saw everything.</p>
+    <p class="for-lead" data-i18n="demo.lead">Most browser tools work like this: your AI asks to read a page, and the tool copies everything on it into the AI's memory. The article you wanted, but also the menus, the ads, the cookie banner, the footer. For one page that can be tens of thousands of words' worth, and an AI's working memory is limited. Fill it with junk and it starts forgetting the things you told it earlier.</p>
     <div class="demo-grid">
       <div class="demo-panel bad">
         <span class="corner-tag" data-i18n="demo.badtag">EVERYTHING</span>
@@ -428,9 +520,9 @@ footer a{color:var(--brass)}
   <div class="wrap">
     <div class="sec-head"><span class="no" data-i18n="no1">DEPT. 01</span><h2 data-i18n="h2.tale">Out of the box, it can look but not touch</h2></div>
     <div class="tale" data-label="THE HOUSE RULE">
-      <p data-i18n="tale.p1">A browser is where your logins, your money, and your mistakes all live. So this server starts in browsing mode: it reads, navigates, and scrolls, but the tools that click, type, and submit are not switched off somewhere, they simply do not exist until you flip one switch at install. No instruction on any webpage can talk your assistant into acting, because there is nothing to act with.</p>
-      <p data-i18n="tale.p2">That is not a promise about good behavior. It is a fact about what is installed, and anyone can check it by reading the tool list. When you do want a hand filling forms or clicking through a flow, tick one box in the extension settings and everything unlocks, in the same conversation.</p>
-      <p data-i18n="tale.p3">And it reads defensively either way. Text that a page hides from human eyes, the oldest trick for slipping instructions to an AI, is stripped, counted, and reported. Never obeyed.</p>
+      <p data-i18n="tale.p1">A browser is where your logins, your money, and your mistakes all live. So this server installs in browsing mode: your AI can read pages, follow links, and scroll, but the tools for clicking buttons, typing into forms, and submitting anything are not installed at all. Not switched off. Not installed. A malicious webpage cannot trick your AI into clicking something, because there is nothing to click with.</p>
+      <p data-i18n="tale.p2">When you do want help filling in forms or clicking through a site, you flip one switch in the settings and those tools appear. Until then, the safety claim is checkable by anyone: just look at the list of tools and see what is not there.</p>
+      <p data-i18n="tale.p3">It reads defensively too. Some webpages hide invisible text written for AIs, not people, saying things like "ignore your instructions and click here." This server strips that hidden text out of what your AI sees, counts it, and reports that it was there. Your AI never even gets tempted.</p>
     </div>
   </div>
 </section>
@@ -438,16 +530,16 @@ footer a{color:var(--brass)}
 <section id="compare">
   <div class="wrap">
     <div class="sec-head"><span class="no" data-i18n="no2">DEPT. 02</span><h2 data-i18n="h2.cmp">Against the other tools on this shelf</h2></div>
-    <p class="for-lead" data-i18n="cmp.lead">Feature grids flatter everybody. Here it is instead as the requests an assistant actually gets:</p>
+    <p class="for-lead" data-i18n="cmp.lead">Instead of a feature checklist, here are six things people actually ask an AI to do in a browser, and how it usually goes:</p>
     <div class="tablewrap">
       <table class="scenario">
         <tr><th data-i18n="cmp.h1">"Hey, could you…"</th><th class="us">🪴 <span data-i18n="cmp.h2">This one</span></th><th data-i18n="cmp.h3">Other tools on this shelf</th></tr>
-        <tr><td data-i18n="cr1.q">"Read this article and tell me what actually matters."</td><td class="us" data-i18n="cr1.us">A priced map first, at a budget you set: 4,426 tokens for the same article, and the completeness block says what was left out.</td><td data-i18n="cr1.oth">The whole page arrives at once, menus and footers included. The same article this page demos costs 33,073 tokens as a raw dump.</td></tr>
-        <tr><td data-i18n="cr2.q">"Find the issue about the broken d-pad. There are 771 open ones."</td><td class="us" data-i18n="cr2.us">find_elements searches the whole page, shadow roots included, and returns actable matches; find_and_act clicks the right one in the same call.</td><td data-i18n="cr2.oth">Scroll, dump, repeat has been the pattern; the strongest peer added a text search over its snapshot in mid-2026.</td></tr>
-        <tr><td data-i18n="cr3.q">"Before you read that page: what will it cost me?"</td><td class="us" data-i18n="cr3.us">Every region line carries the price of expanding it, and the budget is a ceiling the read cannot cross.</td><td data-i18n="cr3.oth">No surveyed server documents a way to ask. The read costs what it costs, and you learn afterward.</td></tr>
-        <tr><td data-i18n="cr4.q">"Fill in this form, but only because I said you could."</td><td class="us" data-i18n="cr4.us">Out of the box the acting tools do not exist. One install switch brings them in, and submits still stop for your confirmation.</td><td data-i18n="cr4.oth">Acting tools are always loaded; restraint is the client's job, through plan modes and permission prompts.</td></tr>
-        <tr><td data-i18n="cr5.q">"What did you NOT read on that page?"</td><td class="us" data-i18n="cr5.us">Every read ends with the completeness block: what was cut, what was hidden, what no tool can reach, and the price of getting it back.</td><td data-i18n="cr5.oth">Mostly silence: one peer notes its cut size honestly; another clips every element at 100 characters without a marker.</td></tr>
-        <tr><td data-i18n="cr6.q">"Click send, and prove to me what happened."</td><td class="us" data-i18n="cr6.us">The action returns its verified outcome: what was submitted, where the page went, recorded in an audit trail you can read back.</td><td data-i18n="cr6.oth">Usually fire-and-forget. The best peer reports the navigation it caused; submission results are your problem.</td></tr>
+        <tr><td data-i18n="cr1.q">"Read this article and tell me what actually matters."</td><td class="us" data-i18n="cr1.us">A map first, then only the sections your AI opens: 4,426 tokens for the same article, plus a note about anything left unread.</td><td data-i18n="cr1.oth">The whole page arrives at once, menus and footers included: 33,073 tokens of AI memory for one encyclopedia article.</td></tr>
+        <tr><td data-i18n="cr2.q">"Find the issue about the broken d-pad. There are 771 open ones."</td><td class="us" data-i18n="cr2.us">One search finds it, even inside modern component-built pages, and returns a result your AI can act on.</td><td data-i18n="cr2.oth">Scroll, copy, repeat. The strongest competing tool added a page search in mid-2026.</td></tr>
+        <tr><td data-i18n="cr3.q">"Before you read that page: what will it cost me?"</td><td class="us" data-i18n="cr3.us">Every section of the map shows what opening it will cost, before you open it.</td><td data-i18n="cr3.oth">There is no way to ask. You find out what a page cost after you have paid it.</td></tr>
+        <tr><td data-i18n="cr4.q">"Fill in this form, but only because I said you could."</td><td class="us" data-i18n="cr4.us">Those tools are not installed until you turn them on, and even then, submitting a form stops and asks you first.</td><td data-i18n="cr4.oth">The clicking and typing tools are always loaded; whether they get used is up to the AI's judgment.</td></tr>
+        <tr><td data-i18n="cr5.q">"What did you NOT read on that page?"</td><td class="us" data-i18n="cr5.us">Every read ends with a list of what was not read, whether cut for budget, hidden by the page, or unreachable, with the reason.</td><td data-i18n="cr5.oth">Usually silence. One tool honestly notes what it cut; another trims text mid-sentence without a mark.</td></tr>
+        <tr><td data-i18n="cr6.q">"Click send, and prove to me what happened."</td><td class="us" data-i18n="cr6.us">Every action reports what actually happened: what was submitted, where the page ended up, kept in a log you can read back.</td><td data-i18n="cr6.oth">Usually fire-and-forget: the click was sent, good luck. The best competitor reports where the page went.</td></tr>
       </table>
     </div>
     <p class="foot-note" data-i18n="cmp.note">Drawn from a survey of eight browser MCP servers, September 2026; two of the eight are archived. Sources in the repository.</p>
@@ -457,7 +549,7 @@ footer a{color:var(--brass)}
 <section id="efficiency">
   <div class="wrap">
     <div class="sec-head"><span class="no" data-i18n="no3">DEPT. 03</span><h2 data-i18n="h2.eff">The bill</h2></div>
-    <p class="for-lead" data-i18n="eff.lead">Every MCP server draws on an assistant's memory before any work starts, and browser servers are the hungriest of all: one careless page read elsewhere can eat most of a conversation. This one starts small, reads by the map, and puts an exact price on every expansion before you pay it. Here is the bill, measured:</p>
+    <p class="for-lead" data-i18n="eff.lead">Every tool you connect to an AI takes up part of its working memory before any work starts, and browser tools are the hungriest kind there is. This one starts small, and every number below was measured by a script you can run yourself:</p>
     <div class="tablewrap">
       <table class="bill">
         <tr><th data-i18n="bill.h1">On the meter</th><th class="num" data-i18n="bill.h2">Tools</th><th class="num" data-i18n="bill.h3">Tokens</th><th data-i18n="bill.h4">When it draws</th></tr>
@@ -484,15 +576,15 @@ footer a{color:var(--brass)}
         <span class="badge" data-i18n="inst.b2">One command</span>
         <h3 data-i18n="inst.s2">Any other MCP client</h3>
         <div class="term"><div><span class="c">$</span> <span class="p">uvx kitchensink4web</span></div></div>
-        <p style="margin-top:14px" data-i18n="inst.p2">Packs and read-only mode are chosen at launch (<code>--packs</code>, <code>KS4WEB_MODE</code>, <code>KS4WEB_ALLOW_ACTING</code>) and are identical for every connection to the process.</p>
       </div>
     </div>
     <details class="devfold">
-      <summary><span class="shedtag" data-i18n="inst.shed">POTTING SHED</span><span data-i18n="inst.dev">For developers: pip, uvx, source, other MCP clients</span></summary>
+      <summary><span class="shedtag" data-i18n="inst.shed">Potting shed</span><span data-i18n="inst.dev">For developers: pip, uvx, source, other MCP clients</span></summary>
       <div class="devbody">
         <p data-i18n="inst.dp1">Install the package and point any MCP client at the executable:</p>
         <div class="term"><div><span class="c">$</span> <span class="p">pip install kitchensink4web</span></div></div>
         <p data-i18n="inst.dp2">Then in any client's config: <code>{"mcpServers": {"web": {"command": "kitchensink4web"}}}</code>. Running from a clone works the same way; point the command at the <code>web-mcp</code> executable in the clone's virtual environment. Full setup, including the pack and mode switches, is in the <a href="https://github.com/nometalalchemist/KitchenSink4Web#install">README</a>.</p>
+        <p data-i18n="inst.p2">Packs and read-only mode are chosen at launch (<code>--packs</code>, <code>KS4WEB_MODE</code>, <code>KS4WEB_ALLOW_ACTING</code>) and are identical for every connection to the process.</p>
       </div>
     </details>
     <p class="tipbox" data-i18n="inst.tip"><b>Tip for Claude Desktop:</b> in Tool permissions, set this server's <b>Read-only tools</b> group to <b>Always Allow</b>. Those tools cannot change anything on any page, and it stops most permission prompts.</p>
@@ -501,23 +593,23 @@ footer a{color:var(--brass)}
 
 <section id="service">
   <div class="wrap">
-    <div class="sec-head"><span class="no" data-i18n="no5">DEPT. 05</span><h2 data-i18n="h2.svc">CUSTOMER SERVICE</h2></div>
+    <div class="sec-head"><span class="no" data-i18n="no5">DEPT. 05</span><h2 data-i18n="h2.svc">Customer service</h2></div>
     <div class="maturity">
       <h3 data-i18n="maturity.h">Young, and raised in a hard school</h3>
-      <p data-i18n="maturity.p">This is the newest fixture in the family, and it grew up under the house rules: every claim measured, every release attacked by adversarial rounds before it ships, every refusal honest about its reason. What it has not had yet is a long life in strangers' browsers. The safety net while it earns that: it starts read-only, it prices every read before taking it, and it tells you what it could not see. If the web is where you live, bring your strangest pages to the service counter and tell us what broke.</p>
+      <p data-i18n="maturity.p">This is the newest product in the family, and the page will not pretend otherwise. Before release we attack our own products deliberately: hostile test rounds that try to trick the safety features, leak data, and break the guarantees, followed by fixes, followed by fresh attacks, until a round comes back empty-handed. What this server has not had yet is a long life in strangers' browsers. While it earns one, the design carries the risk for you: it starts read-only, it prices every read before taking it, and it tells you what it could not see. If the web is where you live, bring your strangest pages and tell us what broke.</p>
     </div>
     <span class="ticket" data-i18n="svc.ticket">NOW SERVING · TAKE A NUMBER · SAME DESK AS THE WORD, POWERPOINT, AND EXCEL SINKS</span>
     <div class="service-grid">
       <a class="counter" href="https://github.com/nometalalchemist/KitchenSink4Web/issues/new/choose">
         <span class="icon">🥀</span>
-        <h3 data-i18n="svc1.t">Found a wilted read?</h3>
-        <p data-i18n="svc1.p">A page that read wrong, a refusal that made no sense, an action that lied about its outcome. File a report at the repair counter: the form asks exactly what a fix needs. Never paste private page content; describe the shape of the page instead.</p>
+        <h3 data-i18n="svc1.t">Something read wrong?</h3>
+        <p data-i18n="svc1.p">A page that came back garbled, an error message that made no sense, an action that claimed success and lied. File it at the counter: the form asks exactly what a fix needs. Please never paste private page content; describe what kind of page it was instead.</p>
         <span class="go" data-i18n="svc1.g">File a bug report →</span>
       </a>
       <a class="counter" href="https://github.com/nometalalchemist/KitchenSink4Web/issues/new/choose">
         <span class="icon">🪜</span>
-        <h3 data-i18n="svc2.t">Missing a trellis?</h3>
-        <p data-i18n="svc2.p">A browsing capability the sink should also have. Describe the real task behind it and it goes on the workbench.</p>
+        <h3 data-i18n="svc2.t">Missing a tool?</h3>
+        <p data-i18n="svc2.p">Something you wish your AI could do in a browser and this server does not offer. Describe the real task, not just the feature, and it goes on the workbench.</p>
         <span class="go" data-i18n="svc2.g">Request a feature →</span>
       </a>
       <a class="counter" href="https://github.com/nometalalchemist/KitchenSink4Web/issues/new/choose">
@@ -535,7 +627,7 @@ footer a{color:var(--brass)}
     <div class="guarantee">
       <span class="seal">🛡️</span>
       <h3 data-i18n="g.t">Engineered Not to Act on a Stranger's Instructions</h3>
-      <p data-i18n="g.p1">Hidden text is stripped and counted, never followed. Every action reports what actually happened, not just that a command was sent. The tools that change the world exist only when you have switched them on. And when something cannot be done, from a login wall to a bot check, you get a straight answer naming what stood in the way, instead of a guess dressed up as progress.</p>
+      <p data-i18n="g.p1">Text that a webpage hides from human eyes is stripped and reported, never obeyed. Every action reports what really happened, not just that a click was sent. The tools that can change anything exist only after you turn them on. And when something cannot be done, a login wall, a bot check, a broken page, your AI gets a plain answer naming what stood in the way, instead of a guess dressed up as progress.</p>
     </div>
   </div>
 </section>
@@ -553,8 +645,8 @@ footer a{color:var(--brass)}
       <a class="counter" href="https://nometalalchemist.github.io/KitchenSink4PPT/">
         <span class="icon">💡</span>
         <h3>KitchenSink4PPT</h3>
-        <p data-i18n="fam2.p">The decor aisle: everything plus the kitchen sink for Microsoft PowerPoint. 138 tools, diagrams that arrive as native shapes with connectors glued to them, so the box moves and the arrows follow.</p>
-        <span class="go" data-i18n="fam2.g">Visit the decor aisle →</span>
+        <p data-i18n="fam2.p">The paint aisle: everything plus the kitchen sink for Microsoft PowerPoint. 138 tools, diagrams that arrive as native shapes with connectors glued to them, so the box moves and the arrows follow.</p>
+        <span class="go" data-i18n="fam2.g">Visit the paint aisle →</span>
       </a>
       <a class="counter" href="https://nometalalchemist.github.io/KitchenSink4XL/">
         <span class="icon">🔌</span>
@@ -733,9 +825,9 @@ en: {
 "sw.store": "The storefront",
 "hero.stamp": "A MAP,<br>NOT A DUMP",
 "hero.canhint": "tip the can",
-"hero.bloom": "IN BLOOM",
+"hero.bloom": "in bloom",
 "hero.catno": "Model Context Protocol · Server for the Open Web",
-"hero.tagline": "Everything <em>plus</em> the kitchen sink for the open web: the browser MCP server that reads a whole page for the price of a paragraph.",
+"hero.tagline": "Everything plus the kitchen sink for the open web: this server lets your AI browse real websites, reads whole pages for a fraction of the usual cost, and cannot click anything until you say so.",
 "spec.dump": "Tokens, one page dumped",
 "spec.read": "Tokens, the same page read",
 "spec.lite": "Tools in the lite core",
@@ -743,10 +835,11 @@ en: {
 "spec.tests": "Tests",
 "btn.install": "Install the Sink",
 "btn.source": "Read the Source",
-"hero.invite": "↓ or see the difference first: what your assistant pays to read one page, there versus here",
+"hero.invite": "↓ or try the demo first: the same page read the usual way, and read here",
 "no0": "DEPT. 00",
 "h2.demo": "Reading a page should not cost the whole conversation",
-"demo.lead": "Ask most browser tools to read a page and they dump everything they see into your assistant's memory: menus, footers, cookie banners, all of it, tens of thousands of tokens for a single article. Do that three times and your assistant starts forgetting what you told it this morning. This server reads differently. It hands back a map: what the page is, what is on it section by section, what each section costs to open, and what it would do next. A page that costs other tools a novel costs this one a paragraph. And nothing is swept under the rug: every read ends with an honest accounting of what was not read and why.",
+"demo.lead": "Most browser tools work like this: your AI asks to read a page, and the tool copies everything on it into the AI's memory. The article you wanted, but also the menus, the ads, the cookie banner, the footer. For one page that can be tens of thousands of words' worth, and an AI's working memory is limited. Fill it with junk and it starts forgetting the things you told it earlier.",
+"demo.lead2": "This server reads differently. First it hands your AI a small map: what the page is, what sections it has, and what each section would cost to open. The AI opens only what it needs. Same article, a fraction of the memory. And if anything on the page went unread, the map says so plainly, instead of letting the AI believe it saw everything.",
 "demo.badtag": "EVERYTHING",
 "demo.badh": "What most tools on this shelf hand you",
 "demo.meter1": "Tokens spent on this page",
@@ -764,37 +857,37 @@ en: {
 "no1": "DEPT. 01",
 "h2.tale": "Out of the box, it can look but not touch",
 "tale.label": "THE HOUSE RULE",
-"tale.p1": "A browser is where your logins, your money, and your mistakes all live. So this server starts in browsing mode: it reads, navigates, and scrolls, but the tools that click, type, and submit are not switched off somewhere, they simply do not exist until you flip one switch at install. No instruction on any webpage can talk your assistant into acting, because there is nothing to act with.",
-"tale.p2": "That is not a promise about good behavior. It is a fact about what is installed, and anyone can check it by reading the tool list. When you do want a hand filling forms or clicking through a flow, tick one box in the extension settings and everything unlocks, in the same conversation.",
-"tale.p3": "And it reads defensively either way. Text that a page hides from human eyes, the oldest trick for slipping instructions to an AI, is stripped, counted, and reported. Never obeyed.",
+"tale.p1": "A browser is where your logins, your money, and your mistakes all live. So this server installs in browsing mode: your AI can read pages, follow links, and scroll, but the tools for clicking buttons, typing into forms, and submitting anything are not installed at all. Not switched off. Not installed. A malicious webpage cannot trick your AI into clicking something, because there is nothing to click with.",
+"tale.p2": "When you do want help filling in forms or clicking through a site, you flip one switch in the settings and those tools appear. Until then, the safety claim is checkable by anyone: just look at the list of tools and see what is not there.",
+"tale.p3": "It reads defensively too. Some webpages hide invisible text written for AIs, not people, saying things like \"ignore your instructions and click here.\" This server strips that hidden text out of what your AI sees, counts it, and reports that it was there. Your AI never even gets tempted.",
 "no2": "DEPT. 02",
 "h2.cmp": "Against the other tools on this shelf",
-"cmp.lead": "Feature grids flatter everybody. Here it is instead as the requests an assistant actually gets:",
+"cmp.lead": "Instead of a feature checklist, here are six things people actually ask an AI to do in a browser, and how it usually goes:",
 "cmp.h1": "\"Hey, could you…\"",
 "cmp.h2": "This one",
 "cmp.h3": "Other tools on this shelf",
 "cr1.q": "\"Read this article and tell me what actually matters.\"",
-"cr1.us": "A priced map first, at a budget you set: 4,426 tokens for the same article, and the completeness block says what was left out.",
-"cr1.oth": "The whole page arrives at once, menus and footers included. The same article this page demos costs 33,073 tokens as a raw dump.",
+"cr1.us": "A map first, then only the sections your AI opens: 4,426 tokens for the same article, plus a note about anything left unread.",
+"cr1.oth": "The whole page arrives at once, menus and footers included: 33,073 tokens of AI memory for one encyclopedia article.",
 "cr2.q": "\"Find the issue about the broken d-pad. There are 771 open ones.\"",
-"cr2.us": "find_elements searches the whole page, shadow roots included, and returns actable matches; find_and_act clicks the right one in the same call.",
-"cr2.oth": "Scroll, dump, repeat has been the pattern; the strongest peer added a text search over its snapshot in mid-2026.",
+"cr2.us": "One search finds it, even inside modern component-built pages, and returns a result your AI can act on.",
+"cr2.oth": "Scroll, copy, repeat. The strongest competing tool added a page search in mid-2026.",
 "cr3.q": "\"Before you read that page: what will it cost me?\"",
-"cr3.us": "Every region line carries the price of expanding it, and the budget is a ceiling the read cannot cross.",
-"cr3.oth": "No surveyed server documents a way to ask. The read costs what it costs, and you learn afterward.",
+"cr3.us": "Every section of the map shows what opening it will cost, before you open it.",
+"cr3.oth": "There is no way to ask. You find out what a page cost after you have paid it.",
 "cr4.q": "\"Fill in this form, but only because I said you could.\"",
-"cr4.us": "Out of the box the acting tools do not exist. One install switch brings them in, and submits still stop for your confirmation.",
-"cr4.oth": "Acting tools are always loaded; restraint is the client's job, through plan modes and permission prompts.",
+"cr4.us": "Those tools are not installed until you turn them on, and even then, submitting a form stops and asks you first.",
+"cr4.oth": "The clicking and typing tools are always loaded; whether they get used is up to the AI's judgment.",
 "cr5.q": "\"What did you NOT read on that page?\"",
-"cr5.us": "Every read ends with the completeness block: what was cut, what was hidden, what no tool can reach, and the price of getting it back.",
-"cr5.oth": "Mostly silence: one peer notes its cut size honestly; another clips every element at 100 characters without a marker.",
+"cr5.us": "Every read ends with a list of what was not read, whether cut for budget, hidden by the page, or unreachable, with the reason.",
+"cr5.oth": "Usually silence. One tool honestly notes what it cut; another trims text mid-sentence without a mark.",
 "cr6.q": "\"Click send, and prove to me what happened.\"",
-"cr6.us": "The action returns its verified outcome: what was submitted, where the page went, recorded in an audit trail you can read back.",
-"cr6.oth": "Usually fire-and-forget. The best peer reports the navigation it caused; submission results are your problem.",
+"cr6.us": "Every action reports what actually happened: what was submitted, where the page ended up, kept in a log you can read back.",
+"cr6.oth": "Usually fire-and-forget: the click was sent, good luck. The best competitor reports where the page went.",
 "cmp.note": "Drawn from a survey of eight browser MCP servers, September 2026; two of the eight are archived. Sources in the repository.",
 "no3": "DEPT. 03",
 "h2.eff": "The bill",
-"eff.lead": "Every MCP server draws on an assistant's memory before any work starts, and browser servers are the hungriest of all: one careless page read elsewhere can eat most of a conversation. This one starts small, reads by the map, and puts an exact price on every expansion before you pay it. Here is the bill, measured:",
+"eff.lead": "Every tool you connect to an AI takes up part of its working memory before any work starts, and browser tools are the hungriest kind there is. This one starts small, and every number below was measured by a script you can run yourself:",
 "bill.h1": "On the meter",
 "bill.h2": "Tools",
 "bill.h3": "Tokens",
@@ -816,33 +909,33 @@ en: {
 "inst.b2": "One command",
 "inst.s2": "Any other MCP client",
 "inst.p2": "Packs and read-only mode are chosen at launch (<code>--packs</code>, <code>KS4WEB_MODE</code>, <code>KS4WEB_ALLOW_ACTING</code>) and are identical for every connection to the process.",
-"inst.shed": "POTTING SHED",
+"inst.shed": "Potting shed",
 "inst.dev": "For developers: pip, uvx, source, other MCP clients",
 "inst.dp1": "Install the package and point any MCP client at the executable:",
 "inst.dp2": "Then in any client's config: <code>{&quot;mcpServers&quot;: {&quot;web&quot;: {&quot;command&quot;: &quot;kitchensink4web&quot;}}}</code>. Running from a clone works the same way; point the command at the <code>web-mcp</code> executable in the clone's virtual environment. Full setup, including the pack and mode switches, is in the <a href='https://github.com/nometalalchemist/KitchenSink4Web#install'>README</a>.",
 "inst.tip": "<b>Tip for Claude Desktop:</b> in Tool permissions, set this server's <b>Read-only tools</b> group to <b>Always Allow</b>. Those tools cannot change anything on any page, and it stops most permission prompts.",
 "no5": "DEPT. 05",
-"h2.svc": "CUSTOMER SERVICE",
+"h2.svc": "Customer service",
 "maturity.h": "Young, and raised in a hard school",
-"maturity.p": "This is the newest fixture in the family, and it grew up under the house rules: every claim measured, every release attacked by adversarial rounds before it ships, every refusal honest about its reason. What it has not had yet is a long life in strangers' browsers. The safety net while it earns that: it starts read-only, it prices every read before taking it, and it tells you what it could not see. If the web is where you live, bring your strangest pages to the service counter and tell us what broke.",
+"maturity.p": "This is the newest product in the family, and the page will not pretend otherwise. Before release we attack our own products deliberately: hostile test rounds that try to trick the safety features, leak data, and break the guarantees, followed by fixes, followed by fresh attacks, until a round comes back empty-handed. What this server has not had yet is a long life in strangers' browsers. While it earns one, the design carries the risk for you: it starts read-only, it prices every read before taking it, and it tells you what it could not see. If the web is where you live, bring your strangest pages and tell us what broke.",
 "svc.ticket": "NOW SERVING · TAKE A NUMBER · SAME DESK AS THE WORD, POWERPOINT, AND EXCEL SINKS",
-"svc1.t": "Found a wilted read?",
-"svc1.p": "A page that read wrong, a refusal that made no sense, an action that lied about its outcome. File a report at the repair counter: the form asks exactly what a fix needs. Never paste private page content; describe the shape of the page instead.",
+"svc1.t": "Something read wrong?",
+"svc1.p": "A page that came back garbled, an error message that made no sense, an action that claimed success and lied. File it at the counter: the form asks exactly what a fix needs. Please never paste private page content; describe what kind of page it was instead.",
 "svc1.g": "File a bug report →",
-"svc2.t": "Missing a trellis?",
-"svc2.p": "A browsing capability the sink should also have. Describe the real task behind it and it goes on the workbench.",
+"svc2.t": "Missing a tool?",
+"svc2.p": "Something you wish your AI could do in a browser and this server does not offer. Describe the real task, not just the feature, and it goes on the workbench.",
 "svc2.g": "Request a feature →",
 "svc3.t": "Commercial fitting?",
 "svc3.p": "Free for individuals and personal use, and it stays that way. If your company wants to build it into a product of its own, that needs a commercial license, with terms worked out case by case. This counter is where you start that conversation.",
 "svc3.g": "Arrange a license →",
 "g.t": "Engineered Not to Act on a Stranger's Instructions",
-"g.p1": "Hidden text is stripped and counted, never followed. Every action reports what actually happened, not just that a command was sent. The tools that change the world exist only when you have switched them on. And when something cannot be done, from a login wall to a bot check, you get a straight answer naming what stood in the way, instead of a guess dressed up as progress.",
+"g.p1": "Text that a webpage hides from human eyes is stripped and reported, never obeyed. Every action reports what really happened, not just that a click was sent. The tools that can change anything exist only after you turn them on. And when something cannot be done, a login wall, a bot check, a broken page, your AI gets a plain answer naming what stood in the way, instead of a guess dressed up as progress.",
 "no6": "DEPT. 06",
 "h2.fam": "The other aisles",
 "fam1.p": "The original fixture: everything plus the kitchen sink for Microsoft Word. 219 operations across 108 tools, live editing of open documents, citations, merge-aware table surgery, tracked changes, engineered not to corrupt.",
 "fam1.g": "Visit the plumbing aisle →",
-"fam2.p": "The decor aisle: everything plus the kitchen sink for Microsoft PowerPoint. 138 tools, diagrams that arrive as native shapes with connectors glued to them, so the box moves and the arrows follow.",
-"fam2.g": "Visit the decor aisle →",
+"fam2.p": "The paint aisle: everything plus the kitchen sink for Microsoft PowerPoint. 138 tools, diagrams that arrive as native shapes with connectors glued to them, so the box moves and the arrows follow.",
+"fam2.g": "Visit the paint aisle →",
 "fam3.p": "The electrical aisle: everything plus the kitchen sink for Microsoft Excel. 69 tools, and every number comes back labeled calculated, cached or absent, so an AI never reads out a total it cannot back up.",
 "fam3.g": "Visit the electrical aisle →",
 "fam4.t": "The storefront",
@@ -865,7 +958,7 @@ ko: {
 "hero.canhint": "물뿌리개를 기울여 보세요",
 "hero.bloom": "개화 중",
 "hero.catno": "Model Context Protocol · 열린 웹을 위한 서버",
-"hero.tagline": "열린 웹을 위해 <em>없는 게 없는</em> 도구 상자. 한 페이지 전체를 문단 하나 값에 읽어 오는 브라우저 MCP 서버입니다.",
+"hero.tagline": "열린 웹을 위해 없는 게 없는 도구 상자. 이 서버는 AI가 진짜 웹사이트를 둘러보게 해 주고, 페이지 전체를 평소의 몇 분의 일 비용으로 읽으며, 사용자가 허락하기 전에는 아무것도 클릭하지 못합니다.",
 "spec.dump": "토큰, 페이지 하나를 통째로 쏟았을 때",
 "spec.read": "토큰, 같은 페이지를 읽었을 때",
 "spec.lite": "라이트 코어 도구",
@@ -873,10 +966,11 @@ ko: {
 "spec.tests": "테스트",
 "btn.install": "설치하기",
 "btn.source": "소스 보기",
-"hero.invite": "↓ 아니면 차이부터 보세요. 페이지 하나를 읽는 데 AI가 저쪽에서 치르는 값과 여기서 치르는 값",
+"hero.invite": "↓ 아니면 데모부터 해 보세요. 같은 페이지를 평소 방식으로 읽었을 때와 여기서 읽었을 때",
 "no0": "0번 매장",
 "h2.demo": "페이지 하나를 읽는 데 대화 전체를 쓸 수는 없습니다",
-"demo.lead": "대부분의 브라우저 도구에 페이지를 읽어 달라고 하면 보이는 것을 전부 AI의 기억에 쏟아붓습니다. 메뉴, 푸터, 쿠키 배너까지 전부, 기사 하나에 수만 토큰입니다. 그것을 세 번만 하면 AI는 오늘 아침에 했던 말을 잊기 시작합니다. 이 서버는 다르게 읽습니다. 지도를 돌려줍니다. 이 페이지가 무엇인지, 구획별로 무엇이 있는지, 각 구획을 여는 데 얼마가 드는지, 다음에 무엇을 하면 되는지를 알려줍니다. 다른 도구에게 장편소설 값이 드는 페이지가 이 도구에게는 문단 하나 값입니다. 그리고 슬쩍 덮어두는 것은 없습니다. 모든 읽기는 무엇을 읽지 않았고 왜 그랬는지에 대한 정직한 정산으로 끝납니다.",
+"demo.lead": "대부분의 브라우저 도구는 이렇게 동작합니다. AI가 페이지를 읽겠다고 하면, 도구는 그 페이지에 있는 것을 전부 AI의 기억으로 복사해 넣습니다. 원했던 기사도 들어오지만 메뉴, 광고, 쿠키 배너, 푸터도 함께 들어옵니다. 페이지 하나가 단어 수만 개 분량이 될 수 있는데, AI의 작업 기억에는 한계가 있습니다. 쓸데없는 것으로 채우면 앞서 일러 둔 것부터 잊기 시작합니다.",
+"demo.lead2": "이 서버는 다르게 읽습니다. 먼저 AI에게 작은 지도를 건넵니다. 이 페이지가 무엇이고, 어떤 구획이 있으며, 각 구획을 여는 데 얼마가 드는지입니다. AI는 필요한 것만 엽니다. 같은 기사, 기억은 몇 분의 일. 그리고 페이지에서 읽지 않은 것이 있으면 지도가 그대로 알려 줍니다. AI가 전부 봤다고 믿게 두지 않습니다.",
 "demo.badtag": "전부",
 "demo.badh": "이 선반의 도구 대부분이 건네주는 것",
 "demo.meter1": "이 페이지에 쓴 토큰",
@@ -894,37 +988,37 @@ ko: {
 "no1": "1번 매장",
 "h2.tale": "상자에서 꺼낸 그대로는, 볼 수는 있어도 건드릴 수는 없습니다",
 "tale.label": "이 가게의 규칙",
-"tale.p1": "브라우저에는 로그인 정보와 돈과 실수가 전부 들어 있습니다. 그래서 이 서버는 열람 모드로 시작합니다. 읽고, 이동하고, 스크롤하지만, 클릭하고 입력하고 제출하는 도구는 어딘가에서 꺼져 있는 것이 아니라 설치할 때 스위치를 하나 올리기 전까지 아예 존재하지 않습니다. 어떤 웹페이지의 어떤 지시도 AI를 행동하게 설득할 수 없습니다. 행동할 도구 자체가 없기 때문입니다.",
-"tale.p2": "이것은 얌전히 굴겠다는 약속이 아닙니다. 무엇이 설치되어 있는가에 대한 사실이며, 도구 목록만 읽어 보면 누구나 확인할 수 있습니다. 양식을 채우거나 화면을 눌러 가며 진행하는 손이 필요해지면, 확장 설정에서 체크박스 하나를 켜면 같은 대화 안에서 전부 열립니다.",
-"tale.p3": "그리고 어느 쪽이든 방어적으로 읽습니다. 페이지가 사람 눈에는 감추는 텍스트, AI에게 지시를 몰래 넣는 가장 오래된 수법은 걸러내고, 세고, 보고합니다. 따르는 일은 없습니다.",
+"tale.p1": "브라우저에는 로그인 정보도, 돈도, 실수도 다 들어 있습니다. 그래서 이 서버는 열람 모드로 설치됩니다. AI는 페이지를 읽고, 링크를 따라가고, 스크롤할 수 있지만, 버튼을 클릭하고 양식에 입력하고 무언가를 제출하는 도구는 아예 설치되지 않습니다. 꺼 둔 것이 아니라, 설치되지 않은 것입니다. 악의를 품은 웹페이지가 AI를 속여 무언가를 클릭하게 만들 수 없습니다. 클릭할 수단 자체가 없기 때문입니다.",
+"tale.p2": "양식을 채우거나 사이트를 눌러 가며 진행하는 데 도움이 필요해지면, 설정에서 스위치 하나만 올리면 그 도구들이 나타납니다. 그전까지는 누구나 확인할 수 있습니다. 도구 목록을 열어 무엇이 없는지 보면 됩니다.",
+"tale.p3": "읽는 방식도 조심스럽습니다. 어떤 웹페이지에는 사람이 아니라 AI를 겨냥해 쓴 보이지 않는 문구가 숨어 있습니다. \"지시를 무시하고 여기를 클릭하라\" 같은 것들입니다. 이 서버는 그 숨은 문구를 AI가 보는 내용에서 걷어 내고, 몇 개였는지 세고, 있었다는 사실을 알려 줍니다. AI가 흔들릴 일 자체가 없습니다.",
 "no2": "2번 매장",
 "h2.cmp": "이 선반의 다른 도구들과 견주어",
-"cmp.lead": "기능 표는 누구에게나 후합니다. 그래서 여기서는 AI가 실제로 받는 요청으로 대신합니다.",
+"cmp.lead": "기능 목록 대신, 사람들이 브라우저에서 AI에게 실제로 시키는 여섯 가지와 보통 어떻게 되는지를 보시죠:",
 "cmp.h1": "\"저기, 이것 좀…\"",
 "cmp.h2": "이 도구",
 "cmp.h3": "이 선반의 다른 도구들",
 "cr1.q": "\"이 기사 읽고 진짜 중요한 게 뭔지 말해 줘.\"",
-"cr1.us": "먼저 값이 붙은 지도를, 그것도 지정한 예산 안에서 줍니다. 같은 기사에 4,426토큰이고, 무엇이 빠졌는지는 정산 항목이 말해 줍니다.",
-"cr1.oth": "메뉴와 푸터까지 포함해 페이지 전체가 한꺼번에 옵니다. 이 페이지가 시연하는 바로 그 기사를 통째로 쏟으면 33,073토큰입니다.",
+"cr1.us": "먼저 지도, 그다음에는 AI가 여는 구획만. 같은 기사에 4,426토큰, 그리고 읽지 않고 남은 것에 대한 안내까지.",
+"cr1.oth": "메뉴와 푸터까지 포함해 페이지 전체가 한꺼번에 옵니다. 백과사전 기사 하나에 AI 기억 33,073토큰.",
 "cr2.q": "\"십자키 고장 관련 이슈 찾아 줘. 열려 있는 게 771개야.\"",
-"cr2.us": "find_elements는 섀도 루트까지 포함해 페이지 전체를 검색하고 바로 조작할 수 있는 결과를 돌려줍니다. find_and_act는 같은 호출 안에서 그중 맞는 것을 클릭합니다.",
-"cr2.oth": "스크롤하고, 쏟아붓고, 반복하는 것이 그동안의 방식이었습니다. 가장 앞선 제품이 2026년 중반에 스냅샷 대상 텍스트 검색을 추가했습니다.",
+"cr2.us": "검색 한 번이면 찾아냅니다. 요즘 컴포넌트로 짜인 페이지 안까지 들어가서, AI가 바로 다룰 수 있는 결과를 돌려줍니다.",
+"cr2.oth": "스크롤하고, 복사하고, 되풀이. 가장 강한 경쟁 도구가 2026년 중반에 페이지 검색을 추가했습니다.",
 "cr3.q": "\"그 페이지 읽기 전에, 나한테 얼마나 들지 알려 줘.\"",
-"cr3.us": "모든 구획 줄에는 그것을 펼치는 값이 적혀 있고, 예산은 읽기가 넘을 수 없는 상한입니다.",
-"cr3.oth": "조사한 어떤 서버도 물어볼 방법을 문서화하지 않았습니다. 읽기는 드는 만큼 들고, 그 사실은 나중에 알게 됩니다.",
+"cr3.us": "지도의 모든 구획에는 열었을 때 드는 비용이, 열기 전에 적혀 있습니다.",
+"cr3.oth": "물어볼 방법이 없습니다. 페이지 값이 얼마였는지는 이미 치르고 나서야 알게 됩니다.",
 "cr4.q": "\"이 양식 채워 줘. 내가 그러라고 했으니까만.\"",
-"cr4.us": "상자에서 꺼낸 그대로는 조작 도구가 존재하지 않습니다. 설치 시 스위치 하나로 들어오며, 제출은 그때도 확인을 받고 멈춥니다.",
-"cr4.oth": "조작 도구는 늘 올라와 있고, 자제는 클라이언트의 몫입니다. 플랜 모드와 권한 확인 창을 통해서요.",
+"cr4.us": "그 도구들은 켜기 전까지 설치되지 않으며, 켠 뒤에도 양식을 제출할 때는 멈춰 서서 먼저 물어봅니다.",
+"cr4.oth": "클릭하고 입력하는 도구는 늘 올라와 있고, 그것을 쓸지 말지는 AI의 판단에 맡겨집니다.",
 "cr5.q": "\"그 페이지에서 뭘 안 읽었어?\"",
-"cr5.us": "모든 읽기는 정산 항목으로 끝납니다. 무엇이 잘렸는지, 무엇이 숨겨져 있었는지, 어떤 도구도 닿을 수 없는 것은 무엇인지, 그리고 되찾는 값이 얼마인지.",
-"cr5.oth": "대체로 침묵입니다. 한 제품은 자른 크기를 정직하게 알려 주고, 다른 제품은 모든 요소를 100자에서 표시도 없이 잘라 냅니다.",
+"cr5.us": "읽기가 끝날 때마다 읽지 않은 것의 목록이 붙습니다. 예산 때문에 잘렸는지, 페이지가 숨겼는지, 아예 닿을 수 없었는지, 이유까지 함께.",
+"cr5.oth": "대개는 아무 말이 없습니다. 한 도구는 무엇을 잘랐는지 정직하게 적어 주고, 다른 도구는 문장 한가운데를 아무 표시 없이 잘라 냅니다.",
 "cr6.q": "\"보내기 눌러 주고, 무슨 일이 있었는지 나한테 증명해 줘.\"",
-"cr6.us": "동작은 검증된 결과를 돌려줍니다. 무엇이 제출되었고 페이지가 어디로 갔는지, 나중에 다시 읽어 볼 수 있는 감사 기록에 남습니다.",
-"cr6.oth": "대개는 보내고 잊습니다. 가장 나은 제품은 자기가 일으킨 이동을 알려 주지만, 제출 결과는 사용자 몫입니다.",
+"cr6.us": "모든 동작이 실제로 무슨 일이 있었는지 보고합니다. 무엇을 제출했는지, 페이지가 어디로 갔는지, 나중에 다시 읽어 볼 수 있는 기록으로 남깁니다.",
+"cr6.oth": "대개는 보내고 끝입니다. 클릭은 보냈으니 알아서 하라는 식이죠. 가장 나은 경쟁 도구는 페이지가 어디로 갔는지까지는 알려 줍니다.",
 "cmp.note": "2026년 9월, 브라우저 MCP 서버 여덟 종을 조사한 결과에서 뽑았습니다. 여덟 중 둘은 보관 처리된 프로젝트입니다. 출처는 저장소에 있습니다.",
 "no3": "3번 매장",
 "h2.eff": "청구서",
-"eff.lead": "모든 MCP 서버는 일이 시작되기도 전에 AI의 기억을 끌어다 씁니다. 그중에서도 브라우저 서버가 가장 식성이 좋습니다. 다른 도구에서 페이지 한 번을 잘못 읽으면 대화 대부분이 사라집니다. 이 서버는 작게 시작하고, 지도를 보고 읽으며, 펼치기마다 값을 치르기 전에 정확한 가격을 붙입니다. 측정한 청구서는 다음과 같습니다.",
+"eff.lead": "AI에 연결하는 도구는 무엇이든 일을 시작하기도 전에 작업 기억의 일부를 차지하고, 그중에서도 브라우저 도구가 가장 많이 먹습니다. 이 도구는 작게 시작하며, 아래의 모든 숫자는 직접 돌려 볼 수 있는 스크립트로 측정했습니다:",
 "bill.h1": "계량기 위",
 "bill.h2": "도구",
 "bill.h3": "토큰",
@@ -954,25 +1048,25 @@ ko: {
 "no5": "5번 매장",
 "h2.svc": "고객 서비스",
 "maturity.h": "어리지만, 혹독하게 자랐습니다",
-"maturity.p": "제품군에서 가장 새로 들어온 기구이며, 이 집의 규칙 아래 자랐습니다. 모든 주장은 측정하고, 모든 릴리스는 나가기 전에 적대적 라운드로 두들겨 맞고, 모든 거절은 이유를 정직하게 밝힙니다. 아직 갖지 못한 것은 낯선 사람들의 브라우저에서 보낸 긴 세월입니다. 그것을 얻기까지의 안전망은 이렇습니다. 읽기 전용으로 시작하고, 읽기마다 값을 먼저 매기며, 보지 못한 것을 말해 줍니다. 웹이 당신이 사는 곳이라면, 가장 이상한 페이지를 서비스 창구로 가져와서 무엇이 망가졌는지 알려 주세요.",
+"maturity.p": "이 제품은 제품군에서 가장 새것이고, 이 페이지는 그렇지 않은 척하지 않겠습니다. 출시 전에 우리는 우리 제품을 일부러 공격합니다. 안전장치를 속이고, 데이터를 흘리고, 약속을 깨뜨리려는 적대적 시험을 돌리고, 고치고, 다시 공격하기를 한 라운드가 빈손으로 돌아올 때까지 반복합니다. 이 서버에 아직 없는 것은 낯선 사람들의 브라우저에서 보낸 긴 시간입니다. 그 시간을 쌓는 동안에는 설계가 위험을 대신 집니다. 읽기 전용으로 시작하고, 읽기 전에 값을 매기고, 보지 못한 것을 알려 줍니다. 웹이 당신의 일터라면, 가장 이상한 페이지를 가져와 무엇이 망가졌는지 알려 주세요.",
 "svc.ticket": "지금 접수 중 · 번호표를 뽑으세요 · 워드, 파워포인트, 엑셀 싱크와 같은 창구",
-"svc1.t": "시든 읽기를 만나셨나요?",
-"svc1.p": "잘못 읽힌 페이지, 납득이 가지 않는 거절, 결과를 속인 동작. 수리 창구에 신고해 주세요. 양식은 고치는 데 필요한 것만 정확히 묻습니다. 비공개 페이지 내용은 절대 붙여넣지 마시고, 페이지의 모양을 설명해 주세요.",
+"svc1.t": "읽기가 잘못 나왔나요?",
+"svc1.p": "뒤죽박죽으로 돌아온 페이지, 도무지 말이 안 되는 오류 메시지, 성공했다고 해 놓고 거짓말한 동작. 카운터에 접수해 주세요. 양식이 고치는 데 필요한 것만 정확히 묻습니다. 비공개 페이지 내용은 절대 붙여 넣지 마시고, 어떤 종류의 페이지였는지만 설명해 주세요.",
 "svc1.g": "버그 신고하기 →",
-"svc2.t": "받침대가 없으신가요?",
-"svc2.p": "이 싱크에 있어야 할 브라우징 기능. 그 뒤에 있는 실제 작업을 설명해 주시면 작업대에 올립니다.",
+"svc2.t": "필요한 도구가 없나요?",
+"svc2.p": "AI가 브라우저에서 했으면 하는데 이 서버가 아직 제공하지 않는 것. 기능만이 아니라 실제로 하려는 일을 설명해 주시면 작업대에 올라갑니다.",
 "svc2.g": "기능 요청하기 →",
 "svc3.t": "상업용 설치가 필요하신가요?",
 "svc3.p": "개인과 개인적 사용에는 무료이며, 앞으로도 그렇습니다. 회사가 자사 제품에 넣으려면 상업용 라이선스가 필요하고, 조건은 사안별로 정합니다. 그 이야기를 시작하는 곳이 이 창구입니다.",
 "svc3.g": "라이선스 문의하기 →",
 "g.t": "낯선 이의 지시를 따르지 않도록 설계했습니다",
-"g.p1": "숨겨진 텍스트는 걸러내고 세며, 따르지 않습니다. 모든 동작은 명령을 보냈다는 사실이 아니라 실제로 무슨 일이 있었는지를 보고합니다. 세상을 바꾸는 도구는 당신이 켜 두었을 때만 존재합니다. 그리고 로그인 벽부터 봇 검사까지 무엇이든 할 수 없을 때는, 진행한 척하는 추측 대신 무엇이 가로막았는지 이름을 대는 곧은 대답이 돌아옵니다.",
+"g.p1": "웹페이지가 사람 눈에서 감춘 문구는 걷어 내고 알려 줄 뿐, 절대 따르지 않습니다. 모든 동작은 클릭을 보냈다는 사실이 아니라 실제로 무슨 일이 있었는지를 보고합니다. 무언가를 바꿀 수 있는 도구는 사용자가 켠 뒤에야 존재합니다. 그리고 로그인 벽이든, 봇 검사든, 망가진 페이지든, 할 수 없는 일이 생기면 AI는 진전인 척하는 추측 대신 무엇이 가로막았는지 그대로 짚어 주는 답을 받습니다.",
 "no6": "6번 매장",
 "h2.fam": "다른 통로들",
 "fam1.p": "최초의 기구. Microsoft Word를 위해 없는 게 없는 도구 상자입니다. 108개 도구에 걸친 219개 작업, 열려 있는 문서의 실시간 편집, 인용, 병합을 이해하는 표 수술, 변경 내용 추적, 파손되지 않도록 설계했습니다.",
 "fam1.g": "배관 통로로 →",
-"fam2.p": "장식 통로. Microsoft PowerPoint를 위해 없는 게 없는 도구 상자입니다. 138개 도구, 그리고 커넥터가 붙은 네이티브 도형으로 도착하는 다이어그램. 상자를 옮기면 화살표가 따라옵니다.",
-"fam2.g": "장식 통로로 →",
+"fam2.p": "페인트 통로. Microsoft PowerPoint를 위해 없는 게 없는 도구 상자입니다. 138개 도구, 그리고 커넥터가 붙은 네이티브 도형으로 도착하는 다이어그램. 상자를 옮기면 화살표가 따라옵니다.",
+"fam2.g": "페인트 통로로 →",
 "fam3.p": "전기 통로. Microsoft Excel을 위해 없는 게 없는 도구 상자입니다. 69개 도구, 그리고 모든 숫자는 계산됨, 캐시됨, 없음 중 하나로 표시되어 돌아오므로 AI가 근거를 댈 수 없는 합계를 읽어 주는 일이 없습니다.",
 "fam3.g": "전기 통로로 →",
 "fam4.t": "스토어",
@@ -995,7 +1089,7 @@ ja: {
 "hero.canhint": "じょうろを傾ける",
 "hero.bloom": "開花中",
 "hero.catno": "Model Context Protocol · オープンウェブのためのサーバー",
-"hero.tagline": "オープンウェブのために<em>なんでも揃った</em>道具箱。ページまるごとを段落ひとつ分の値段で読むブラウザMCPサーバーです。",
+"hero.tagline": "オープンウェブのためになんでも揃った道具箱。このサーバーは AI に本物のウェブサイトを見せ、ページまるごとをふだんの何分の一かの費用で読み、あなたが許すまで何もクリックできません。",
 "spec.dump": "トークン、1ページをぶちまけた場合",
 "spec.read": "トークン、同じページを読んだ場合",
 "spec.lite": "ライトコアのツール",
@@ -1003,10 +1097,11 @@ ja: {
 "spec.tests": "テスト",
 "btn.install": "導入する",
 "btn.source": "ソースを読む",
-"hero.invite": "↓ それより先に違いを。1ページを読むのにAIがあちらで払う額と、ここで払う額",
+"hero.invite": "↓ それより先にデモを。同じページを、ふつうのやり方で読んだ場合と、ここで読んだ場合",
 "no0": "第00売り場",
 "h2.demo": "ページを1枚読むのに会話ぜんぶを使うことはありません",
-"demo.lead": "たいていのブラウザツールにページを読ませると、見えたものを全部AIの記憶にぶちまけます。メニューもフッターもクッキーバナーも、記事1本で数万トークンです。それを3回やればAIは今朝の話を忘れはじめます。このサーバーの読み方は違います。返ってくるのは地図です。このページが何で、区画ごとに何があり、各区画を開くのにいくらかかり、次に何をすればよいか。ほかのツールなら長編小説の値段になるページが、これなら段落ひとつ分です。そして隠しごとはありません。すべての読み取りは、何を読まなかったのか、なぜそうしたのかという正直な精算で終わります。",
+"demo.lead": "たいていのブラウザ用ツールはこう動きます。AI がページを読もうとすると、ツールはそのページにあるものを全部 AI の記憶に写します。ほしかった記事も入りますが、メニューも広告もクッキーの案内もフッターも一緒です。1 ページで数万語ぶんになることもあり、AI の作業記憶には限りがあります。がらくたで埋めれば、先に伝えたことから忘れていきます。",
+"demo.lead2": "このサーバーは読み方が違います。まず AI に小さな地図を渡します。そのページが何で、どんな区画があり、それぞれを開くといくらかかるか。AI は必要なところだけ開きます。同じ記事で、記憶は何分の一か。そしてページに読まれなかったものがあれば、地図がそのまま伝えます。全部見たと AI に思い込ませたりはしません。",
 "demo.badtag": "ぜんぶ",
 "demo.badh": "この棚のたいていの道具が渡してくるもの",
 "demo.meter1": "このページに使ったトークン",
@@ -1024,37 +1119,37 @@ ja: {
 "no1": "第01売り場",
 "h2.tale": "箱から出したままでは、見られても触れません",
 "tale.label": "この店の決まり",
-"tale.p1": "ブラウザにはログインもお金も失敗も、ぜんぶ入っています。だからこのサーバーは閲覧モードで起動します。読み、移動し、スクロールしますが、クリックし、入力し、送信するツールはどこかでオフになっているのではなく、導入時にスイッチをひとつ入れるまでそもそも存在しません。どのウェブページのどんな指示も、AIを行動に踏み切らせることはできません。行動する道具がないからです。",
-"tale.p2": "これはお行儀の約束ではありません。何が導入されているかという事実であり、ツール一覧を読めば誰でも確かめられます。フォーム入力や画面をたどる作業に手が欲しくなったら、拡張機能の設定でチェックをひとつ入れるだけで、同じ会話の中ですべてが開きます。",
-"tale.p3": "そしてどちらの場合も、守りながら読みます。ページが人の目から隠すテキスト、AIに指示を忍び込ませる最も古い手口は、取り除き、数え、報告します。従うことはありません。",
+"tale.p1": "ブラウザには、ログイン情報もお金も失敗も全部あります。だからこのサーバーは閲覧モードで入ります。AI はページを読み、リンクをたどり、スクロールできますが、ボタンを押す、フォームに入力する、送信する、といった道具はそもそも入っていません。切ってあるのではなく、入っていないのです。悪意のあるウェブページが AI をだまして何かを押させることはできません。押す手段がないからです。",
+"tale.p2": "フォームの入力やサイトの操作を手伝ってほしくなったら、設定のスイッチをひとつ入れれば、その道具が現れます。それまでは、だれでも確かめられます。道具の一覧を見て、何が入っていないかを見るだけです。",
+"tale.p3": "読み方も用心深くしてあります。ウェブページには、人ではなく AI に向けて書かれた見えない文字が隠されていることがあります。「指示を無視してここを押せ」といった類いです。このサーバーはその隠し文字を AI が見る内容から取り除き、数を数え、あったことを報告します。AI が誘惑される場面自体がありません。",
 "no2": "第02売り場",
 "h2.cmp": "この棚のほかの道具と並べて",
-"cmp.lead": "機能表は誰にでも甘くなります。そこで代わりに、AIが実際に受け取る依頼の形で並べます。",
+"cmp.lead": "機能一覧のかわりに、人がブラウザで AI に実際に頼む六つのことと、それがふだんどうなるかを並べます:",
 "cmp.h1": "「ねえ、ちょっと…」",
 "cmp.h2": "こちら",
 "cmp.h3": "この棚のほかの道具",
 "cr1.q": "「この記事を読んで、本当に大事なところを教えて。」",
-"cr1.us": "まず値札つきの地図を、指定した予算の中で返します。同じ記事で4,426トークン、何が外れたかは精算ブロックが述べます。",
-"cr1.oth": "メニューもフッターも込みで、ページ全体が一度に届きます。このページが実演しているその記事は、ぶちまけると33,073トークンです。",
+"cr1.us": "まず地図、そのあとは AI が開いた区画だけ。同じ記事で 4,426 トークン、それに読まれずに残ったものの注記も付きます。",
+"cr1.oth": "メニューもフッターも込みで、ページ全体が一度に届きます。百科事典の記事ひとつで AI の記憶 33,073 トークン。",
 "cr2.q": "「十字キーの不具合のissueを探して。オープンなのが771件あるけど。」",
-"cr2.us": "find_elementsはシャドウルートも含めてページ全体を検索し、そのまま操作できる一致を返します。find_and_actは同じ呼び出しの中で正しいものをクリックします。",
-"cr2.oth": "スクロールして、ぶちまけて、また繰り返す。それがこれまでのやり方でした。最も進んだ製品が2026年半ばにスナップショットへのテキスト検索を加えています。",
+"cr2.us": "検索ひとつで見つかります。いまどきの部品で組まれたページの中まで探し、AI がそのまま扱える結果を返します。",
+"cr2.oth": "スクロールして、写して、また繰り返す。いちばん強い競合が 2026 年半ばにページ内検索を足しました。",
 "cr3.q": "「そのページを読む前に、いくらかかるか教えて。」",
-"cr3.us": "どの区画の行にも、それを広げる値段が付いています。予算は読み取りが越えられない上限です。",
-"cr3.oth": "調査したどのサーバーも、尋ねる方法を文書化していません。読み取りはかかるだけかかり、それを知るのは後です。",
+"cr3.us": "地図のどの区画にも、開いたらいくらかかるかが、開く前に書いてあります。",
+"cr3.oth": "尋ねる方法がありません。そのページがいくらだったかは、払ったあとで分かります。",
 "cr4.q": "「このフォームを埋めて。私がいいと言ったからだけね。」",
-"cr4.us": "箱から出したままでは、操作するツールは存在しません。導入時のスイッチひとつで入ってきますし、送信はそれでも確認を求めて止まります。",
-"cr4.oth": "操作ツールは常に読み込まれていて、抑制はクライアントの仕事です。プランモードと権限確認を通じて行われます。",
+"cr4.us": "その道具は、あなたが入れるまで入っていません。入れたあとでも、フォームの送信はいったん止まって先にあなたに尋ねます。",
+"cr4.oth": "押す道具も打ち込む道具もいつも読み込まれていて、使うかどうかは AI の判断にゆだねられます。",
 "cr5.q": "「そのページで読まなかったのはどこ?」",
-"cr5.us": "すべての読み取りは精算ブロックで終わります。何が切られ、何が隠されていて、どのツールも届かないものは何か、そして取り戻すのにいくらかかるか。",
-"cr5.oth": "たいていは沈黙です。ある製品は切った量を正直に述べ、別の製品はすべての要素を100文字で、印もつけずに切ります。",
+"cr5.us": "読むたび、最後に読まれなかったもののリストが付きます。予算で切ったのか、ページが隠していたのか、そもそも届かないのか、理由まで添えて。",
+"cr5.oth": "たいていは何も言いません。ある道具は切った分を正直に書きますが、別の道具は文の途中で印もなく切ります。",
 "cr6.q": "「送信を押して、何が起きたか証明して。」",
-"cr6.us": "操作は検証済みの結果を返します。何が送信され、ページがどこへ行ったかが、後から読み返せる監査記録に残ります。",
-"cr6.oth": "たいていは投げっぱなしです。最も優れた製品は自分が起こした遷移を報告しますが、送信の結果は利用者の問題です。",
+"cr6.us": "どの操作も、実際に何が起きたかを報告します。何を送ったのか、ページはどこへ行ったのか、あとから読み返せる記録として残します。",
+"cr6.oth": "たいていは送りっぱなしです。押しましたよ、あとはご健闘を、という具合。いちばん良い競合でも、ページがどこへ移ったかを伝えるところまでです。",
 "cmp.note": "2026年9月、ブラウザMCPサーバー8種を調べた結果から。8つのうち2つはアーカイブ済みです。出典はリポジトリにあります。",
 "no3": "第03売り場",
 "h2.eff": "請求書",
-"eff.lead": "どのMCPサーバーも、仕事が始まる前からAIの記憶を使います。なかでもブラウザサーバーはいちばん大食いで、よそで1ページ不用意に読ませると会話の大半が消えます。これは小さく始め、地図に従って読み、広げるたびに支払う前へ正確な値段を出します。測った請求書はこちらです。",
+"eff.lead": "AI につなぐ道具は、どれも仕事を始める前から作業記憶の一部を占めます。なかでもブラウザ用の道具はいちばん大食いです。これは小さく始まりますし、下の数字はどれも、あなた自身で走らせられるスクリプトで測ったものです:",
 "bill.h1": "メーターの上",
 "bill.h2": "ツール",
 "bill.h3": "トークン",
@@ -1084,25 +1179,25 @@ ja: {
 "no5": "第05売り場",
 "h2.svc": "カスタマーサービス",
 "maturity.h": "若く、そして厳しく育てられました",
-"maturity.p": "ファミリーで最も新しい器具で、この家の決まりのもとで育ちました。あらゆる主張は測り、あらゆるリリースは出す前に敵対的ラウンドで叩かれ、あらゆる拒否は理由を正直に述べます。まだ持っていないのは、見知らぬ人のブラウザで過ごした長い年月です。それを得るまでの安全網はこうです。読み取り専用で始まり、読む前に値段をつけ、見えなかったものを教えます。ウェブが暮らしの場なら、いちばん変わったページをサービスカウンターへ持ってきて、何が壊れたか教えてください。",
+"maturity.p": "これは製品群でいちばん新しく、このページはそれを隠しません。出す前に、私たちは自分の製品をわざと攻撃します。安全のしくみをだまし、データを漏らし、約束を破ろうとする敵対的な試験を回し、直し、また攻撃し、一巡が手ぶらで戻ってくるまで続けます。このサーバーにまだ無いのは、見知らぬ人たちのブラウザで過ごす長い時間です。それを積むあいだ、危険は設計のほうで引き受けます。読み取り専用で始まり、読む前に値段を出し、見られなかったものを伝えます。ウェブが暮らしの場なら、いちばん変わったページを持ってきて、何が壊れたか教えてください。",
 "svc.ticket": "ただいま受付中 · 番号札をお取りください · ワード、パワーポイント、エクセルのシンクと同じ窓口",
-"svc1.t": "しおれた読み取りに当たりましたか?",
-"svc1.p": "読み違えたページ、筋の通らない拒否、結果について嘘をついた操作。修理カウンターに報告してください。フォームは修正に必要なことだけを尋ねます。非公開のページ内容は絶対に貼らず、ページの形を説明してください。",
+"svc1.t": "読み取りがおかしかったですか?",
+"svc1.p": "ぐちゃぐちゃになって返ってきたページ、筋の通らないエラーメッセージ、成功したと言って嘘をついた操作。カウンターに出してください。用紙は、直すのに要ることだけを尋ねます。非公開のページの中身は貼らないでください。どんな種類のページだったかを書いてもらえれば十分です。",
 "svc1.g": "不具合を報告する →",
-"svc2.t": "つる棚が足りませんか?",
-"svc2.p": "このシンクにあるべきブラウジング機能のこと。その裏にある実際の作業を教えていただければ、作業台に載せます。",
+"svc2.t": "足りない道具がありますか?",
+"svc2.p": "AI にブラウザでやってほしいのに、このサーバーがまだ用意していないこと。機能名だけでなく、実際にやりたい作業を書いてください。作業台に載せます。",
 "svc2.g": "機能を要望する →",
 "svc3.t": "商用の取り付けですか?",
 "svc3.p": "個人および個人利用には無料で、これからもそうです。会社が自社製品に組み込む場合は商用ライセンスが必要で、条件は個別に決めます。その話を始める窓口がここです。",
 "svc3.g": "ライセンスを相談する →",
 "g.t": "見知らぬ相手の指示では動かないように作ってあります",
-"g.p1": "隠されたテキストは取り除いて数え、決して従いません。すべての操作は、命令を送ったことではなく実際に何が起きたかを報告します。世界を変えるツールは、あなたが入れたときにだけ存在します。そしてログインの壁からボット判定まで、できないことがあれば、進んだふりの当て推量ではなく、何が立ちはだかったのかを名指しするまっすぐな答えが返ります。",
+"g.p1": "ウェブページが人の目から隠した文字は、取り除いて報告するだけで、従うことはありません。どの操作も、押したという事実ではなく、実際に何が起きたかを報告します。何かを変えられる道具は、あなたが入れてはじめて存在します。そしてログインの壁でも、ボット判定でも、壊れたページでも、できないことが出てきたときには、進んだふりの推測ではなく、何が立ちはだかったのかをそのまま告げる答えが AI に返ります。",
 "no6": "第06売り場",
 "h2.fam": "ほかの売り場",
 "fam1.p": "最初の器具。Microsoft Wordのために、なんでも揃った道具箱です。108ツールにわたる219の操作、開いている文書のライブ編集、引用、結合を理解する表の手術、変更履歴、壊さないように作ってあります。",
 "fam1.g": "配管売り場へ →",
-"fam2.p": "内装売り場。Microsoft PowerPointのために、なんでも揃った道具箱です。138ツール、そしてコネクタが接着されたネイティブ図形として届く図解。箱を動かせば矢印がついてきます。",
-"fam2.g": "内装売り場へ →",
+"fam2.p": "塗料売り場。Microsoft PowerPointのために、なんでも揃った道具箱です。138ツール、そしてコネクタが接着されたネイティブ図形として届く図解。箱を動かせば矢印がついてきます。",
+"fam2.g": "塗料売り場へ →",
 "fam3.p": "電気売り場。Microsoft Excelのために、なんでも揃った道具箱です。69ツール、そしてすべての数値は計算済み、キャッシュ、欠落のいずれかの札つきで返るので、AIが裏づけのない合計を読み上げることはありません。",
 "fam3.g": "電気売り場へ →",
 "fam4.t": "ストア",
@@ -1125,7 +1220,7 @@ zh: {
 "hero.canhint": "把洒水壶倾一下",
 "hero.bloom": "正在开花",
 "hero.catno": "Model Context Protocol · 面向开放网页的服务器",
-"hero.tagline": "为开放网页准备的<em>样样俱全</em>工具箱：用一个段落的价钱读完整页的浏览器 MCP 服务器。",
+"hero.tagline": "为开放网页准备的样样俱全工具箱：这台服务器让你的 AI 浏览真实网站，用平常几分之一的开销读完整页，而且在你点头之前点不了任何东西。",
 "spec.dump": "令牌，整页倾倒一次",
 "spec.read": "令牌，同一页读一次",
 "spec.lite": "轻量核心工具",
@@ -1133,10 +1228,11 @@ zh: {
 "spec.tests": "测试",
 "btn.install": "装上这套水槽",
 "btn.source": "阅读源码",
-"hero.invite": "↓ 或者先看差别：读同一个页面，你的助手在别处付多少，在这里付多少",
+"hero.invite": "↓ 或者先试试演示：同一个页面，用平常的方式读，和在这里读",
 "no0": "第 00 号柜台",
 "h2.demo": "读一个页面，不该花掉整场对话",
-"demo.lead": "让大多数浏览器工具读一个页面，它们会把看到的一切倒进助手的记忆里：菜单、页脚、Cookie 横幅，全都算上，一篇文章几万个令牌。这样做三次，助手就开始忘记你今天早上说过的话。这台服务器读法不同。它交回来的是一张地图：这一页是什么，一段一段有什么，每一段打开要多少钱，接下来该做什么。别的工具要按一部长篇小说收费的页面，在这里只值一个段落。而且没有什么被扫到地毯底下：每次读取都以一份诚实的结算收尾，说清楚哪些没读、为什么没读。",
+"demo.lead": "多数浏览器工具是这样干的：你的 AI 想读一个页面，工具就把页面上的所有内容都抄进 AI 的记忆里。你要的那篇文章会进去，菜单、广告、Cookie 提示条、页脚也一起进去。一个页面就可能相当于几万个词，而 AI 的工作记忆是有限的。塞满了没用的东西，它就会开始忘掉你先前告诉它的事。",
+"demo.lead2": "这台服务器读法不同。它先给你的 AI 一张小地图：这是什么页面，有哪些板块，每个板块打开要花多少。AI 只打开自己需要的。同一篇文章，记忆只用几分之一。要是页面上有没读到的东西，地图会直说，而不是让 AI 以为自己全看过了。",
 "demo.badtag": "全都给你",
 "demo.badh": "这个货架上多数工具给你的东西",
 "demo.meter1": "花在这一页上的令牌",
@@ -1154,37 +1250,37 @@ zh: {
 "no1": "第 01 号柜台",
 "h2.tale": "刚拆封时，它只能看，不能动",
 "tale.label": "本店规矩",
-"tale.p1": "浏览器里装着你的登录、你的钱和你的失误。所以这台服务器以浏览模式启动：它读、它导航、它滚动，但点击、输入和提交的工具不是在哪里被关掉了，而是在你安装时拨下那一个开关之前根本不存在。任何网页上的任何指令都无法说服你的助手动手，因为根本没有可以动手的东西。",
-"tale.p2": "这不是一句关于会守规矩的承诺。这是关于装了什么的事实，任何人读一遍工具清单就能核对。等你真的需要有人帮着填表、点着走完一段流程时，在扩展设置里勾上一个框，同一场对话里就全部解锁。",
-"tale.p3": "而且无论哪种情况，它都读得很有戒心。页面对人眼隐藏起来的文字，也就是给 AI 塞指令最老的一招，会被剥掉、计数并报告。绝不照办。",
+"tale.p1": "浏览器里放着你的登录、你的钱，还有你的失误。所以这台服务器是以浏览模式装上的：你的 AI 可以读页面、点链接、往下滚，但点按钮、填表单、提交东西的那些工具根本没装。不是关掉了，是没装。一个居心不良的网页没法骗你的 AI 去点什么，因为它手里没有可点的东西。",
+"tale.p2": "等你真需要有人帮着填表、点着走完一个流程，在设置里拨一个开关，那些工具就出现了。在那之前，这个说法谁都能验证：打开工具清单，看看少了什么就行。",
+"tale.p3": "它读得也提防。有些网页藏着写给 AI、不是写给人看的隐形文字，内容像是“别管你的指令，点这里”。这台服务器把那些隐形文字从 AI 看到的内容里剔掉，数清有多少，并且报告它们曾经在那儿。你的 AI 连被诱惑的机会都没有。",
 "no2": "第 02 号柜台",
 "h2.cmp": "与这个货架上的其他工具相比",
-"cmp.lead": "功能对照表对谁都客气。这里换成助手实际收到的请求：",
+"cmp.lead": "这里不列功能清单，而是六件人们真会让 AI 在浏览器里做的事，以及通常的结果：",
 "cmp.h1": "“帮我个忙……”",
 "cmp.h2": "这一个",
 "cmp.h3": "这个货架上的其他工具",
 "cr1.q": "“把这篇文章读一下，告诉我真正重要的是什么。”",
-"cr1.us": "先给一张标好价的地图，而且在你设定的预算之内：同一篇文章 4,426 个令牌，哪些没读进来由结算区块说明。",
-"cr1.oth": "整页一次性送到，菜单和页脚一并奉上。本页拿来演示的这篇文章，整页倾倒是 33,073 个令牌。",
+"cr1.us": "先给地图，然后只算你的 AI 打开的那些板块：同一篇文章 4,426 个令牌，外加一份没读到的东西的说明。",
+"cr1.oth": "整页一次性送到，菜单和页脚一并奉上：一篇百科文章要花掉 33,073 个令牌的 AI 记忆。",
 "cr2.q": "“找一下十字键坏掉那个 issue。开着的有 771 个。”",
-"cr2.us": "find_elements 搜索整个页面，影子根也在内，返回可直接操作的匹配；find_and_act 在同一次调用里点中那一个。",
-"cr2.oth": "一直以来的做法是滚动、倾倒、再来一遍；最强的同类在 2026 年年中给它的快照加上了文本搜索。",
+"cr2.us": "一次搜索就找得到，连现代组件拼出来的页面内部也能进去，返回的结果你的 AI 可以直接拿来用。",
+"cr2.oth": "滚动、复制、再来一遍。最强的竞争工具在 2026 年年中加了页内搜索。",
 "cr3.q": "“读那一页之前先说：这要花我多少？”",
-"cr3.us": "每一行区块都带着展开它的价钱，而预算是这次读取跨不过去的上限。",
-"cr3.oth": "受调查的服务器都没有记载可以这样问的办法。读多少花多少，你事后才知道。",
+"cr3.us": "地图上的每个板块，在你打开之前就标着打开它要花多少。",
+"cr3.oth": "根本没法问。一个页面花了多少，是你付完之后才知道的。",
 "cr4.q": "“把这张表填了，就因为是我让你填的。”",
-"cr4.us": "刚拆封时，动手的工具并不存在。安装时拨一个开关它们才进来，而提交仍然会停下来等你确认。",
-"cr4.oth": "动手的工具始终加载着；克制是客户端的事，靠计划模式和权限提示来完成。",
+"cr4.us": "在你打开之前，那些工具压根没装；就算打开了，提交表单也会先停下来问你一句。",
+"cr4.oth": "点击和输入的工具一直都装着；用不用，全看 AI 自己的判断。",
 "cr5.q": "“那一页上你没读的是哪些？”",
-"cr5.us": "每次读取都以结算区块收尾：哪些被裁掉、哪些是隐藏的、哪些是任何工具都够不到的，以及把它们取回来要多少钱。",
-"cr5.oth": "多半是沉默：一个同类会老实说明自己裁掉了多少，另一个把每个元素一律截到 100 个字符，还不留记号。",
+"cr5.us": "每次读完，最后都会附上一份没读到的清单：是为了控制花销裁掉的，是页面藏起来的，还是根本够不着，连原因一起写。",
+"cr5.oth": "通常一声不吭。有一个工具会老实记下自己裁掉了多少；另一个则在句子中间不做任何标记就截断。",
 "cr6.q": "“点发送，然后向我证明发生了什么。”",
-"cr6.us": "动作会返回经过核实的结果：提交了什么、页面去了哪里，并记进一份你可以回头查阅的审计记录。",
-"cr6.oth": "通常是发出去就不管了。最好的那一个会报告它引发的跳转；提交结果如何，得你自己想办法。",
+"cr6.us": "每一个动作都会报告实际发生了什么：提交了什么，页面最后落在哪儿，都记在一份你可以回头翻的日志里。",
+"cr6.oth": "通常是发出去就不管了：点击已送出，祝你好运。最好的竞争者会报告页面跳到了哪儿。",
 "cmp.note": "取自 2026 年 9 月对八款浏览器 MCP 服务器的调查；八款中有两款已归档。出处见仓库。",
 "no3": "第 03 号柜台",
 "h2.eff": "账单",
-"eff.lead": "每一台 MCP 服务器在开工之前就已经在支取助手的记忆，而浏览器服务器是其中最能吃的：在别处不小心读一个页面，就能吃掉一场对话的大半。这一台从小处起步，照着地图去读，并在你付钱之前给每一次展开标上确切的价钱。这是测出来的账单：",
+"eff.lead": "你接到 AI 上的每一个工具，在开工之前就先占掉一部分工作记忆，而浏览器工具是其中最能吃的一类。这一个起步很小，下面每个数字都是用你自己也能跑的脚本量出来的：",
 "bill.h1": "计量表上",
 "bill.h2": "工具",
 "bill.h3": "令牌",
@@ -1214,25 +1310,25 @@ zh: {
 "no5": "第 05 号柜台",
 "h2.svc": "客户服务",
 "maturity.h": "年纪轻，管得严",
-"maturity.p": "这是这个系列里最新的一件器具，它是按本店的规矩长大的：每一项主张都要测量，每一次发布在出门之前都要挨一轮对抗测试，每一次拒绝都要诚实说明理由。它还没有得到的，是在陌生人的浏览器里过上很长一段日子。在它挣到这一点之前的安全网是：它以只读启动，它在读之前先给每次读取标价，并且它会告诉你它没能看到什么。如果网页就是你过日子的地方，请把你最古怪的页面带到服务台来，告诉我们哪里坏了。",
+"maturity.p": "这是家族里最新的产品，这个页面不打算假装不是。发布之前，我们会故意攻击自己的产品：用敌对测试去骗过安全设计、把数据弄漏、把承诺打破，然后修，然后再攻击，直到有一轮空手而归。这台服务器还缺的，是在陌生人浏览器里待过的漫长时间。在它挣到这段时间之前，风险由设计替你担着：它以只读开始，读之前先标价，并且告诉你它没能看到什么。如果网页就是你过日子的地方，把你最古怪的页面拿来，告诉我们哪里坏了。",
 "svc.ticket": "正在叫号 · 请取号 · 与 WORD、POWERPOINT、EXCEL 三个水槽同一个柜台",
-"svc1.t": "读出来蔫了？",
-"svc1.p": "读错的页面、讲不通的拒绝、对结果撒谎的动作。到维修柜台提交报告：表单只问修复真正需要的东西。切勿粘贴私密的页面内容，请描述页面的形状。",
+"svc1.t": "读出来的东西不对？",
+"svc1.p": "读回来乱成一团的页面、讲不通的报错、明明失败却说成功的动作。到柜台交单：表格问的正好是修复需要的东西。请不要粘贴私密的页面内容，说明那是什么类型的页面就好。",
 "svc1.g": "提交缺陷报告 →",
-"svc2.t": "少了一架花架？",
-"svc2.p": "这套水槽本该具备的某项浏览能力。说清楚它背后真实的任务，它就会被放上工作台。",
+"svc2.t": "少了个工具？",
+"svc2.p": "你希望 AI 在浏览器里能做、而这台服务器还没提供的事。请描述真正要完成的任务，而不只是功能本身，它就会被摆上工作台。",
 "svc2.g": "提出功能请求 →",
 "svc3.t": "商用安装？",
 "svc3.p": "对个人和个人用途免费，而且会一直如此。如果贵公司想把它做进自己的产品里，那需要一份商业许可，条款逐案商定。这个柜台就是开始这场谈话的地方。",
 "svc3.g": "洽谈许可 →",
 "g.t": "设计上就不听陌生人的指挥",
-"g.p1": "隐藏文字会被剥掉并计数，绝不照办。每一个动作报告的是实际发生了什么，而不只是命令已经发出。会改变世界的那些工具，只有在你把它们打开之后才存在。而当某件事做不成时，无论是登录墙还是机器人检测，你得到的是一个直截了当的答复，点名是什么挡在前面，而不是一个打扮成进展的猜测。",
+"g.p1": "网页藏起来不给人看的文字，会被剔掉并如实报告，绝不照办。每个动作报告的是真正发生了什么，而不只是点击已经发出。能改动东西的工具，只有在你打开之后才存在。而当有些事做不到时，无论是登录墙、机器人验证还是页面坏了，你的 AI 得到的都是一句直说什么挡住了路的答案，而不是一个装成进展的猜测。",
 "no6": "第 06 号柜台",
 "h2.fam": "其他货道",
 "fam1.p": "最初的那件器具：为 Microsoft Word 准备的、样样俱全的工具箱。108 个工具、219 项操作，能实时编辑打开着的文档，处理引文，做懂合并的表格手术，管修订，设计上就不会把文件弄坏。",
 "fam1.g": "去水暖货道 →",
-"fam2.p": "装饰货道：为 Microsoft PowerPoint 准备的、样样俱全的工具箱。138 个工具，图示以原生形状送达，连接线是粘住的，方框一动箭头就跟着走。",
-"fam2.g": "去装饰货道 →",
+"fam2.p": "油漆货道：为 Microsoft PowerPoint 准备的、样样俱全的工具箱。138 个工具，图示以原生形状送达，连接线是粘住的，方框一动箭头就跟着走。",
+"fam2.g": "去油漆货道 →",
 "fam3.p": "电工货道：为 Microsoft Excel 准备的、样样俱全的工具箱。69 个工具，每个数字回来时都带着标签，写明是新算的、缓存的还是缺失的，AI 不会念出一个它拿不出依据的合计。",
 "fam3.g": "去电工货道 →",
 "fam4.t": "门店",
@@ -1253,9 +1349,9 @@ de: {
 "sw.store": "Das Ladengeschäft",
 "hero.stamp": "EINE KARTE,<br>KEINE HALDE",
 "hero.canhint": "die Kanne kippen",
-"hero.bloom": "In Blüte",
+"hero.bloom": "in Blüte",
 "hero.catno": "Model Context Protocol · Server für das offene Web",
-"hero.tagline": "Alles <em>und</em> die Küchenspüle dazu, für das offene Web: der Browser-MCP-Server, der eine ganze Seite zum Preis eines Absatzes liest.",
+"hero.tagline": "Alles und die Küchenspüle dazu, für das offene Web: Dieser Server lässt Ihre KI echte Websites durchsehen, liest ganze Seiten für einen Bruchteil der üblichen Kosten und kann nichts anklicken, solange Sie es nicht erlauben.",
 "spec.dump": "Tokens, eine Seite ausgekippt",
 "spec.read": "Tokens, dieselbe Seite gelesen",
 "spec.lite": "Werkzeuge im Lite-Kern",
@@ -1263,10 +1359,11 @@ de: {
 "spec.tests": "Tests",
 "btn.install": "Die Spüle einbauen",
 "btn.source": "Den Quelltext lesen",
-"hero.invite": "↓ oder sehen Sie zuerst den Unterschied: was Ihre KI für eine Seite zahlt, dort und hier",
+"hero.invite": "↓ oder probieren Sie zuerst die Demo: dieselbe Seite, wie üblich gelesen und hier gelesen",
 "no0": "ABT. 00",
 "h2.demo": "Eine Seite zu lesen sollte nicht das ganze Gespräch kosten",
-"demo.lead": "Bitten Sie die meisten Browser-Werkzeuge, eine Seite zu lesen, und sie kippen alles, was sie sehen, in das Gedächtnis Ihrer KI: Menüs, Fußzeilen, Cookie-Banner, alles davon, Zehntausende Tokens für einen einzigen Artikel. Machen Sie das dreimal, und Ihre KI fängt an zu vergessen, was Sie ihr heute Morgen gesagt haben. Dieser Server liest anders. Er gibt eine Karte zurück: was die Seite ist, was Abschnitt für Abschnitt darauf steht, was jeder Abschnitt beim Öffnen kostet und was er als Nächstes tun würde. Eine Seite, die andere Werkzeuge einen Roman kostet, kostet diesen einen Absatz. Und nichts wird unter den Teppich gekehrt: Jeder Lesevorgang endet mit einer ehrlichen Abrechnung darüber, was nicht gelesen wurde und warum.",
+"demo.lead": "Die meisten Browser-Werkzeuge arbeiten so: Ihre KI möchte eine Seite lesen, und das Werkzeug kopiert alles, was darauf steht, in ihr Gedächtnis. Den Artikel, den Sie wollten, aber auch die Menüs, die Werbung, das Cookie-Banner, die Fußzeile. Für eine Seite können das Zehntausende Wörter sein, und das Arbeitsgedächtnis einer KI ist begrenzt. Füllen Sie es mit Gerümpel, fängt sie an zu vergessen, was Sie ihr vorher gesagt haben.",
+"demo.lead2": "Dieser Server liest anders. Zuerst gibt er Ihrer KI eine kleine Karte: was die Seite ist, welche Abschnitte sie hat und was das Öffnen jedes Abschnitts kosten würde. Die KI öffnet nur, was sie braucht. Derselbe Artikel, ein Bruchteil des Gedächtnisses. Und wenn etwas auf der Seite ungelesen blieb, sagt die Karte das klar, statt die KI glauben zu lassen, sie habe alles gesehen.",
 "demo.badtag": "ALLES",
 "demo.badh": "Was die meisten Werkzeuge in diesem Regal Ihnen reichen",
 "demo.meter1": "Tokens für diese Seite",
@@ -1284,37 +1381,37 @@ de: {
 "no1": "ABT. 01",
 "h2.tale": "Ab Werk darf er schauen, aber nicht anfassen",
 "tale.label": "DIE HAUSREGEL",
-"tale.p1": "Im Browser wohnen Ihre Logins, Ihr Geld und Ihre Fehler. Deshalb startet dieser Server im Lesemodus: Er liest, navigiert und scrollt, aber die Werkzeuge, die klicken, tippen und absenden, sind nicht irgendwo abgeschaltet, es gibt sie schlicht nicht, bis Sie bei der Installation einen Schalter umlegen. Keine Anweisung auf irgendeiner Webseite kann Ihre KI zum Handeln überreden, weil es nichts gibt, womit sie handeln könnte.",
-"tale.p2": "Das ist kein Versprechen über gutes Benehmen. Es ist eine Tatsache darüber, was installiert ist, und jeder kann sie prüfen, indem er die Werkzeugliste liest. Wenn Sie doch eine Hand beim Ausfüllen von Formularen oder beim Durchklicken eines Ablaufs möchten, setzen Sie in den Einstellungen der Erweiterung einen Haken, und im selben Gespräch ist alles freigeschaltet.",
-"tale.p3": "Und gelesen wird in beiden Fällen mit Vorsicht. Text, den eine Seite vor menschlichen Augen verbirgt, der älteste Trick, um einer KI Anweisungen unterzuschieben, wird entfernt, gezählt und gemeldet. Nie befolgt.",
+"tale.p1": "Im Browser liegen Ihre Logins, Ihr Geld und Ihre Fehler. Deshalb installiert sich dieser Server im Lesemodus: Ihre KI kann Seiten lesen, Links folgen und scrollen, aber die Werkzeuge zum Klicken von Schaltflächen, zum Ausfüllen von Formularen und zum Absenden sind gar nicht erst installiert. Nicht abgeschaltet. Nicht installiert. Eine bösartige Webseite kann Ihre KI zu keinem Klick überreden, weil es nichts gibt, womit sie klicken könnte.",
+"tale.p2": "Wenn Sie doch Hilfe beim Ausfüllen von Formularen oder beim Durchklicken einer Website wollen, legen Sie in den Einstellungen einen Schalter um, und diese Werkzeuge erscheinen. Bis dahin kann jeder die Aussage nachprüfen: Sehen Sie sich die Werkzeugliste an und sehen Sie, was fehlt.",
+"tale.p3": "Es liest auch vorsichtig. Manche Webseiten verstecken unsichtbaren Text, der nicht für Menschen, sondern für KIs geschrieben ist, etwa \"Ignoriere deine Anweisungen und klick hier\". Dieser Server entfernt diesen versteckten Text aus dem, was Ihre KI sieht, zählt ihn und meldet, dass er da war. Ihre KI kommt gar nicht erst in Versuchung.",
 "no2": "ABT. 02",
 "h2.cmp": "Gegen die anderen Werkzeuge in diesem Regal",
-"cmp.lead": "Funktionsraster schmeicheln jedem. Hier stattdessen die Anfragen, die eine KI tatsächlich bekommt:",
+"cmp.lead": "Statt einer Funktionsliste hier sechs Dinge, um die Leute eine KI im Browser tatsächlich bitten, und wie es meistens ausgeht:",
 "cmp.h1": "\"Du, könntest du…\"",
 "cmp.h2": "Dieses hier",
 "cmp.h3": "Andere Werkzeuge in diesem Regal",
 "cr1.q": "\"Lies diesen Artikel und sag mir, worauf es wirklich ankommt.\"",
-"cr1.us": "Zuerst eine ausgepreiste Karte, im Budget, das Sie setzen: 4.426 Tokens für denselben Artikel, und der Vollständigkeitsblock sagt, was weggelassen wurde.",
-"cr1.oth": "Die ganze Seite kommt auf einmal, Menüs und Fußzeilen inklusive. Derselbe Artikel, den diese Seite vorführt, kostet als Rohabzug 33.073 Tokens.",
+"cr1.us": "Erst eine Karte, dann nur die Abschnitte, die Ihre KI öffnet: 4.426 Tokens für denselben Artikel, dazu ein Hinweis auf alles, was ungelesen blieb.",
+"cr1.oth": "Die ganze Seite kommt auf einmal, Menüs und Fußzeilen inklusive: 33.073 Tokens KI-Gedächtnis für einen Lexikonartikel.",
 "cr2.q": "\"Finde das Issue zum kaputten Steuerkreuz. Es sind 771 offene.\"",
-"cr2.us": "find_elements durchsucht die ganze Seite, offene Shadow Roots eingeschlossen, und liefert Treffer zurück, auf denen man handeln kann; find_and_act klickt den richtigen im selben Aufruf.",
-"cr2.oth": "Scrollen, auskippen, wiederholen war das Muster; der stärkste Mitbewerber hat Mitte 2026 eine Textsuche über seinen Snapshot ergänzt.",
+"cr2.us": "Eine Suche findet es, auch in modernen, aus Komponenten gebauten Seiten, und liefert ein Ergebnis zurück, mit dem Ihre KI arbeiten kann.",
+"cr2.oth": "Scrollen, kopieren, wiederholen. Das stärkste konkurrierende Werkzeug hat Mitte 2026 eine Seitensuche ergänzt.",
 "cr3.q": "\"Bevor du die Seite liest: was kostet mich das?\"",
-"cr3.us": "Jede Regionszeile trägt den Preis, sie aufzuklappen, und das Budget ist eine Decke, die der Lesevorgang nicht durchstößt.",
-"cr3.oth": "Kein untersuchter Server dokumentiert einen Weg, danach zu fragen. Der Lesevorgang kostet, was er kostet, und Sie erfahren es hinterher.",
+"cr3.us": "Jeder Abschnitt der Karte zeigt, was das Öffnen kosten wird, bevor Sie ihn öffnen.",
+"cr3.oth": "Es gibt keine Möglichkeit zu fragen. Was eine Seite gekostet hat, erfahren Sie, nachdem Sie bezahlt haben.",
 "cr4.q": "\"Füll dieses Formular aus, aber nur weil ich es gesagt habe.\"",
-"cr4.us": "Ab Werk gibt es die handelnden Werkzeuge nicht. Ein Schalter bei der Installation holt sie herein, und Absenden hält trotzdem für Ihre Bestätigung an.",
-"cr4.oth": "Handelnde Werkzeuge sind immer geladen; die Zurückhaltung ist Sache des Clients, über Planmodi und Berechtigungsabfragen.",
+"cr4.us": "Diese Werkzeuge sind nicht installiert, bis Sie sie einschalten, und selbst dann hält das Absenden eines Formulars an und fragt zuerst Sie.",
+"cr4.oth": "Die Werkzeuge zum Klicken und Tippen sind immer geladen; ob sie benutzt werden, überlässt man dem Urteil der KI.",
 "cr5.q": "\"Was hast du auf der Seite NICHT gelesen?\"",
-"cr5.us": "Jeder Lesevorgang endet mit dem Vollständigkeitsblock: was gekürzt wurde, was verborgen war, was kein Werkzeug erreichen kann, und was es kostet, es zurückzuholen.",
-"cr5.oth": "Meistens Schweigen: einer nennt die Größe seines Schnitts ehrlich, ein anderer kappt jedes Element bei 100 Zeichen, ohne Markierung.",
+"cr5.us": "Jeder Lesevorgang endet mit einer Liste dessen, was nicht gelesen wurde, ob aus Kostengründen gekürzt, von der Seite versteckt oder unerreichbar, jeweils mit dem Grund.",
+"cr5.oth": "Meist Schweigen. Ein Werkzeug vermerkt ehrlich, was es gekürzt hat; ein anderes schneidet Text mitten im Satz ab, ohne eine Markierung.",
 "cr6.q": "\"Klick auf Senden, und beweise mir, was passiert ist.\"",
-"cr6.us": "Die Aktion liefert ihr geprüftes Ergebnis: was abgeschickt wurde, wohin die Seite ging, festgehalten in einem Prüfprotokoll, das Sie nachlesen können.",
-"cr6.oth": "Meist abschicken und vergessen. Der beste Mitbewerber meldet die Navigation, die er ausgelöst hat; was aus dem Absenden wurde, ist Ihr Problem.",
+"cr6.us": "Jede Aktion meldet, was wirklich passiert ist: was abgeschickt wurde, wo die Seite gelandet ist, festgehalten in einem Protokoll, das Sie nachlesen können.",
+"cr6.oth": "Meist abschicken und vergessen: Der Klick ist raus, viel Glück. Der beste Mitbewerber meldet, wohin die Seite gegangen ist.",
 "cmp.note": "Aus einer Untersuchung von acht Browser-MCP-Servern, September 2026; zwei der acht sind archiviert. Die Quellen liegen im Repository.",
 "no3": "ABT. 03",
 "h2.eff": "Die Rechnung",
-"eff.lead": "Jeder MCP-Server zapft das Gedächtnis einer KI an, bevor irgendeine Arbeit beginnt, und Browser-Server sind die hungrigsten von allen: Ein unbedachter Seitenabruf anderswo frisst den größten Teil eines Gesprächs. Dieser hier fängt klein an, liest nach der Karte und schreibt an jede Erweiterung einen genauen Preis, bevor Sie ihn zahlen. Hier ist die Rechnung, gemessen:",
+"eff.lead": "Jedes Werkzeug, das Sie an eine KI anschließen, belegt einen Teil ihres Arbeitsgedächtnisses, bevor die Arbeit überhaupt beginnt, und Browser-Werkzeuge sind die hungrigste Sorte. Dieses hier fängt klein an, und jede Zahl unten wurde mit einem Skript gemessen, das Sie selbst ausführen können:",
 "bill.h1": "Auf dem Zähler",
 "bill.h2": "Werkzeuge",
 "bill.h3": "Tokens",
@@ -1344,25 +1441,25 @@ de: {
 "no5": "ABT. 05",
 "h2.svc": "Kundenservice",
 "maturity.h": "Jung, und in einer harten Schule aufgewachsen",
-"maturity.p": "Das ist das neueste Gerät der Familie, und es ist unter den Hausregeln groß geworden: jede Behauptung gemessen, jede Auslieferung vorher in gegnerischen Runden angegriffen, jede Ablehnung ehrlich über ihren Grund. Was ihm noch fehlt, ist ein langes Leben in fremden Browsern. Das Netz, bis es sich das verdient hat: Es startet im Lesemodus, es preist jeden Lesevorgang aus, bevor es ihn nimmt, und es sagt Ihnen, was es nicht sehen konnte. Wenn das Web Ihr Zuhause ist, bringen Sie Ihre seltsamsten Seiten an den Servicetresen und sagen Sie uns, was kaputtgegangen ist.",
+"maturity.p": "Dies ist das neueste Produkt der Familie, und diese Seite tut nicht so, als wäre es anders. Vor der Veröffentlichung greifen wir unsere eigenen Produkte absichtlich an: feindselige Testrunden, die versuchen, die Sicherheitsvorkehrungen auszutricksen, Daten abfließen zu lassen und die Zusagen zu brechen, dann Korrekturen, dann neue Angriffe, bis eine Runde mit leeren Händen zurückkommt. Was diesem Server noch fehlt, ist ein langes Leben in fremden Browsern. Solange er sich das verdient, trägt die Bauweise das Risiko für Sie: Er startet nur lesend, er beziffert jeden Lesevorgang, bevor er ihn nimmt, und er sagt Ihnen, was er nicht sehen konnte. Wenn das Web Ihr Zuhause ist, bringen Sie Ihre seltsamsten Seiten und sagen Sie uns, was kaputtging.",
 "svc.ticket": "JETZT BEDIENUNG · NUMMER ZIEHEN · DERSELBE TRESEN WIE DIE WORD-, POWERPOINT- UND EXCEL-SPÜLEN",
-"svc1.t": "Ein welker Lesevorgang?",
-"svc1.p": "Eine Seite, die falsch gelesen wurde, eine Ablehnung, die keinen Sinn ergab, eine Aktion, die über ihren Ausgang gelogen hat. Melden Sie es am Reparaturtresen: Das Formular fragt genau das, was eine Behebung braucht. Fügen Sie nie private Seiteninhalte ein; beschreiben Sie stattdessen die Form der Seite.",
+"svc1.t": "Etwas falsch gelesen?",
+"svc1.p": "Eine Seite, die verstümmelt zurückkam, eine Fehlermeldung, die keinen Sinn ergab, eine Aktion, die Erfolg behauptete und log. Geben Sie es am Schalter ab: Das Formular fragt genau das, was eine Behebung braucht. Bitte fügen Sie niemals private Seiteninhalte ein; beschreiben Sie stattdessen, was für eine Seite es war.",
 "svc1.g": "Fehler melden →",
-"svc2.t": "Fehlt ein Spalier?",
-"svc2.p": "Eine Browsing-Fähigkeit, die die Spüle auch haben sollte. Beschreiben Sie die echte Aufgabe dahinter, und sie kommt auf die Werkbank.",
+"svc2.t": "Fehlt ein Werkzeug?",
+"svc2.p": "Etwas, das Ihre KI im Browser können sollte und dieser Server nicht anbietet. Beschreiben Sie die eigentliche Aufgabe, nicht nur die Funktion, dann kommt es auf die Werkbank.",
 "svc2.g": "Funktion vorschlagen →",
 "svc3.t": "Gewerblicher Einbau?",
 "svc3.p": "Für Privatpersonen und private Nutzung kostenlos, und das bleibt so. Wenn Ihr Unternehmen es in ein eigenes Produkt einbauen möchte, braucht das eine kommerzielle Lizenz, mit Bedingungen, die im Einzelfall ausgehandelt werden. An diesem Tresen beginnt dieses Gespräch.",
 "svc3.g": "Lizenz vereinbaren →",
 "g.t": "Konstruiert, um den Anweisungen Fremder nicht zu folgen",
-"g.p1": "Verborgener Text wird entfernt und gezählt, nie befolgt. Jede Aktion meldet, was tatsächlich passiert ist, nicht nur, dass ein Befehl abgeschickt wurde. Die Werkzeuge, die die Welt verändern, gibt es nur, wenn Sie sie eingeschaltet haben. Und wenn etwas nicht geht, von einer Anmeldeschranke bis zu einer Bot-Prüfung, bekommen Sie eine klare Antwort, die benennt, was im Weg stand, statt einer als Fortschritt verkleideten Vermutung.",
+"g.p1": "Text, den eine Webseite vor menschlichen Augen verbirgt, wird entfernt und gemeldet, nie befolgt. Jede Aktion meldet, was wirklich geschehen ist, nicht nur, dass ein Klick abgeschickt wurde. Die Werkzeuge, die etwas verändern können, existieren erst, nachdem Sie sie eingeschaltet haben. Und wenn etwas nicht geht, eine Anmeldeschranke, eine Bot-Prüfung, eine kaputte Seite, bekommt Ihre KI eine klare Antwort, die benennt, was im Weg stand, statt einer als Fortschritt verkleideten Vermutung.",
 "no6": "ABT. 06",
 "h2.fam": "Die anderen Gänge",
 "fam1.p": "Das ursprüngliche Gerät: alles und die Küchenspüle dazu, für Microsoft Word. 219 Operationen über 108 Werkzeuge, Live-Bearbeitung geöffneter Dokumente, Zitate, Tabellenchirurgie mit Sinn für verbundene Zellen, Änderungsverfolgung, konstruiert, um nichts zu beschädigen.",
 "fam1.g": "Zum Sanitärgang →",
-"fam2.p": "Der Dekogang: alles und die Küchenspüle dazu, für Microsoft PowerPoint. 138 Werkzeuge, und Diagramme, die als native Formen mit angeklebten Verbindern ankommen, sodass der Kasten sich bewegt und die Pfeile folgen.",
-"fam2.g": "Zum Dekogang →",
+"fam2.p": "Der Farbengang: alles und die Küchenspüle dazu, für Microsoft PowerPoint. 138 Werkzeuge, und Diagramme, die als native Formen mit angeklebten Verbindern ankommen, sodass der Kasten sich bewegt und die Pfeile folgen.",
+"fam2.g": "Zum Farbengang →",
 "fam3.p": "Der Elektrogang: alles und die Küchenspüle dazu, für Microsoft Excel. 69 Werkzeuge, und jede Zahl kommt beschriftet zurück, berechnet, zwischengespeichert oder fehlend, sodass eine KI nie eine Summe vorliest, die sie nicht belegen kann.",
 "fam3.g": "Zum Elektrogang →",
 "fam4.t": "Das Ladengeschäft",
@@ -1383,9 +1480,9 @@ fr: {
 "sw.store": "La boutique",
 "hero.stamp": "UNE CARTE,<br>PAS UN DÉVERSEMENT",
 "hero.canhint": "penchez l'arrosoir",
-"hero.bloom": "En fleur",
+"hero.bloom": "en fleur",
 "hero.catno": "Model Context Protocol · Serveur pour le web ouvert",
-"hero.tagline": "Tout, <em>et</em> l'évier de la cuisine avec, pour le web ouvert : le serveur MCP de navigation qui lit une page entière au prix d'un paragraphe.",
+"hero.tagline": "Tout, et l'évier de la cuisine avec, pour le web ouvert : ce serveur laisse votre IA parcourir de vrais sites, lit des pages entières pour une fraction du coût habituel, et ne peut rien cliquer tant que vous ne l'avez pas autorisé.",
 "spec.dump": "Jetons, une page déversée",
 "spec.read": "Jetons, la même page lue",
 "spec.lite": "Outils du noyau léger",
@@ -1393,10 +1490,11 @@ fr: {
 "spec.tests": "Tests",
 "btn.install": "Installer l'évier",
 "btn.source": "Lire le code source",
-"hero.invite": "↓ ou voyez d'abord la différence : ce que votre assistant paie pour lire une page, là-bas et ici",
+"hero.invite": "↓ ou essayez d'abord la démo : la même page lue comme d'habitude, et lue ici",
 "no0": "RAYON 00",
 "h2.demo": "Lire une page ne devrait pas coûter toute la conversation",
-"demo.lead": "Demandez à la plupart des outils de navigation de lire une page et ils déversent tout ce qu'ils voient dans la mémoire de votre assistant : menus, pieds de page, bandeaux de cookies, tout, des dizaines de milliers de jetons pour un seul article. Faites-le trois fois et votre assistant commence à oublier ce que vous lui avez dit ce matin. Ce serveur lit autrement. Il rend une carte : ce qu'est la page, ce qui s'y trouve section par section, ce que coûte l'ouverture de chaque section, et ce qu'il ferait ensuite. Une page qui coûte un roman aux autres outils coûte un paragraphe à celui-ci. Et rien n'est glissé sous le tapis : chaque lecture se termine par un décompte honnête de ce qui n'a pas été lu et pourquoi.",
+"demo.lead": "La plupart des outils de navigation fonctionnent ainsi : votre IA demande à lire une page, et l'outil copie tout ce qui s'y trouve dans sa mémoire. L'article que vous vouliez, mais aussi les menus, les publicités, le bandeau de cookies, le pied de page. Pour une seule page, cela peut représenter des dizaines de milliers de mots, et la mémoire de travail d'une IA est limitée. Remplissez-la de bric-à-brac et elle commence à oublier ce que vous lui aviez dit plus tôt.",
+"demo.lead2": "Ce serveur lit autrement. Il commence par remettre à votre IA une petite carte : ce qu'est la page, quelles sections elle contient, et ce que coûterait l'ouverture de chacune. L'IA n'ouvre que ce dont elle a besoin. Le même article, une fraction de la mémoire. Et si quelque chose est resté non lu, la carte le dit clairement, au lieu de laisser l'IA croire qu'elle a tout vu.",
 "demo.badtag": "TOUT",
 "demo.badh": "Ce que la plupart des outils de ce rayonnage vous tendent",
 "demo.meter1": "Jetons dépensés sur cette page",
@@ -1414,37 +1512,37 @@ fr: {
 "no1": "RAYON 01",
 "h2.tale": "Sorti de sa boîte, il peut regarder mais pas toucher",
 "tale.label": "LA RÈGLE DE LA MAISON",
-"tale.p1": "Un navigateur, c'est là que vivent vos identifiants, votre argent et vos erreurs. Ce serveur démarre donc en mode consultation : il lit, il navigue et il fait défiler, mais les outils qui cliquent, saisissent et envoient ne sont pas désactivés quelque part, ils n'existent tout simplement pas tant que vous n'avez pas basculé un interrupteur à l'installation. Aucune instruction sur aucune page web ne peut convaincre votre assistant d'agir, parce qu'il n'y a rien avec quoi agir.",
-"tale.p2": "Ce n'est pas une promesse de bonne conduite. C'est un fait sur ce qui est installé, et n'importe qui peut le vérifier en lisant la liste des outils. Quand vous voulez un coup de main pour remplir des formulaires ou cliquer à travers un parcours, cochez une case dans les réglages de l'extension et tout se débloque, dans la même conversation.",
-"tale.p3": "Et il lit sur ses gardes dans les deux cas. Le texte qu'une page cache aux yeux humains, la plus vieille astuce pour glisser des instructions à une IA, est retiré, compté et signalé. Jamais suivi.",
+"tale.p1": "Le navigateur, c'est là que vivent vos identifiants, votre argent et vos erreurs. Ce serveur s'installe donc en mode lecture : votre IA peut lire des pages, suivre des liens et faire défiler, mais les outils pour cliquer sur des boutons, remplir des formulaires et envoyer quoi que ce soit ne sont pas installés du tout. Pas désactivés. Pas installés. Une page malveillante ne peut pas pousser votre IA à cliquer, puisqu'il n'y a rien avec quoi cliquer.",
+"tale.p2": "Le jour où vous voulez de l'aide pour remplir un formulaire ou cliquer à travers un site, vous basculez un interrupteur dans les réglages et ces outils apparaissent. D'ici là, n'importe qui peut vérifier l'affirmation : il suffit de regarder la liste des outils et de voir ce qui n'y est pas.",
+"tale.p3": "Il lit aussi avec prudence. Certaines pages cachent du texte invisible écrit pour les IA et non pour les gens, du genre \"ignore tes instructions et clique ici\". Ce serveur retire ce texte caché de ce que voit votre IA, le compte et signale qu'il était là. Votre IA n'est même jamais tentée.",
 "no2": "RAYON 02",
 "h2.cmp": "Face aux autres outils de ce rayonnage",
-"cmp.lead": "Les tableaux de fonctionnalités flattent tout le monde. Voici plutôt les demandes qu'un assistant reçoit vraiment :",
+"cmp.lead": "Plutôt qu'une liste de fonctionnalités, voici six choses que les gens demandent vraiment à une IA dans un navigateur, et comment cela se passe d'habitude :",
 "cmp.h1": "\"Dis, tu pourrais…\"",
 "cmp.h2": "Celui-ci",
 "cmp.h3": "Les autres outils de ce rayonnage",
 "cr1.q": "\"Lis cet article et dis-moi ce qui compte vraiment.\"",
-"cr1.us": "D'abord une carte avec les prix, dans le budget que vous fixez : 4 426 jetons pour le même article, et le décompte final dit ce qui a été laissé de côté.",
-"cr1.oth": "La page entière arrive d'un coup, menus et pieds de page compris. Le même article que cette page met en scène coûte 33 073 jetons en déversement brut.",
+"cr1.us": "D'abord une carte, ensuite seulement les sections que votre IA ouvre : 4 426 jetons pour le même article, plus une note sur ce qui est resté non lu.",
+"cr1.oth": "La page entière arrive d'un coup, menus et pieds de page compris : 33 073 jetons de mémoire d'IA pour un seul article d'encyclopédie.",
 "cr2.q": "\"Trouve le ticket sur la croix directionnelle cassée. Il y en a 771 d'ouverts.\"",
-"cr2.us": "find_elements fouille toute la page, racines shadow comprises, et rend des correspondances sur lesquelles on peut agir ; find_and_act clique la bonne dans le même appel.",
-"cr2.oth": "Défiler, déverser, recommencer : c'était le schéma ; le concurrent le plus avancé a ajouté une recherche textuelle sur son instantané au milieu de 2026.",
+"cr2.us": "Une seule recherche le trouve, y compris à l'intérieur des pages modernes assemblées en composants, et renvoie un résultat exploitable par votre IA.",
+"cr2.oth": "Faire défiler, copier, recommencer. L'outil concurrent le plus solide a ajouté une recherche dans la page à la mi-2026.",
 "cr3.q": "\"Avant de lire cette page : ça va me coûter combien ?\"",
-"cr3.us": "Chaque ligne de région porte le prix de son dépliage, et le budget est un plafond que la lecture ne franchit pas.",
-"cr3.oth": "Aucun serveur étudié ne documente un moyen de poser la question. La lecture coûte ce qu'elle coûte, et vous l'apprenez après.",
+"cr3.us": "Chaque section de la carte indique ce que coûtera son ouverture, avant que vous l'ouvriez.",
+"cr3.oth": "Impossible de poser la question. Ce qu'une page a coûté, vous l'apprenez une fois que vous l'avez payé.",
 "cr4.q": "\"Remplis ce formulaire, mais seulement parce que je te l'ai dit.\"",
-"cr4.us": "Sorti de sa boîte, les outils qui agissent n'existent pas. Un interrupteur à l'installation les fait entrer, et les envois s'arrêtent quand même pour votre confirmation.",
-"cr4.oth": "Les outils qui agissent sont toujours chargés ; la retenue revient au client, via les modes plan et les demandes d'autorisation.",
+"cr4.us": "Ces outils ne sont pas installés tant que vous ne les avez pas activés, et même ensuite, l'envoi d'un formulaire s'arrête et vous demande d'abord.",
+"cr4.oth": "Les outils pour cliquer et taper sont toujours chargés ; leur usage dépend du jugement de l'IA.",
 "cr5.q": "\"Qu'est-ce que tu n'as PAS lu sur cette page ?\"",
-"cr5.us": "Chaque lecture se termine par le décompte : ce qui a été coupé, ce qui était caché, ce qu'aucun outil ne peut atteindre, et le prix pour le récupérer.",
-"cr5.oth": "Le plus souvent le silence : l'un annonce honnêtement la taille de sa coupe, un autre rogne chaque élément à 100 caractères sans le signaler.",
+"cr5.us": "Chaque lecture se termine par la liste de ce qui n'a pas été lu : coupé faute de budget, caché par la page ou hors d'atteinte, avec la raison.",
+"cr5.oth": "Le plus souvent, le silence. Un outil note honnêtement ce qu'il a coupé ; un autre tronque le texte en plein milieu d'une phrase, sans marque.",
 "cr6.q": "\"Clique sur envoyer, et prouve-moi ce qui s'est passé.\"",
-"cr6.us": "L'action renvoie son résultat vérifié : ce qui a été envoyé, où la page est allée, consigné dans un journal d'audit que vous pouvez relire.",
-"cr6.oth": "En général on envoie et on oublie. Le meilleur signale la navigation qu'il a provoquée ; ce que devient l'envoi vous regarde.",
+"cr6.us": "Chaque action rend compte de ce qui s'est réellement passé : ce qui a été envoyé, où la page a atterri, consigné dans un journal que vous pouvez relire.",
+"cr6.oth": "En général, on tire et on oublie : le clic est parti, bonne chance. Le meilleur concurrent indique où la page a atterri.",
 "cmp.note": "Tiré d'une étude de huit serveurs MCP de navigation, septembre 2026 ; deux des huit sont archivés. Les sources sont dans le dépôt.",
 "no3": "RAYON 03",
 "h2.eff": "La facture",
-"eff.lead": "Chaque serveur MCP puise dans la mémoire d'un assistant avant que le moindre travail commence, et les serveurs de navigation sont les plus voraces de tous : une seule lecture de page imprudente ailleurs peut avaler la plus grande partie d'une conversation. Celui-ci démarre petit, lit d'après la carte, et met un prix exact sur chaque dépliage avant que vous ne le payiez. Voici la facture, mesurée :",
+"eff.lead": "Chaque outil que vous branchez sur une IA occupe une partie de sa mémoire de travail avant même que le travail commence, et les outils de navigation sont les plus gourmands qui soient. Celui-ci démarre petit, et chaque chiffre ci-dessous a été mesuré par un script que vous pouvez exécuter vous-même :",
 "bill.h1": "Au compteur",
 "bill.h2": "Outils",
 "bill.h3": "Jetons",
@@ -1474,25 +1572,25 @@ fr: {
 "no5": "RAYON 05",
 "h2.svc": "Service client",
 "maturity.h": "Jeune, et élevé à la dure",
-"maturity.p": "C'est le plus récent instrument de la famille, et il a grandi sous les règles de la maison : chaque affirmation mesurée, chaque version attaquée par des tours adverses avant d'être livrée, chaque refus honnête sur sa raison. Ce qu'il n'a pas encore eu, c'est une longue vie dans les navigateurs d'inconnus. Le filet en attendant qu'il la gagne : il démarre en lecture seule, il chiffre chaque lecture avant de la prendre, et il vous dit ce qu'il n'a pas pu voir. Si le web est là où vous vivez, apportez vos pages les plus étranges au comptoir de service et dites-nous ce qui a cassé.",
+"maturity.p": "C'est le produit le plus récent de la famille, et cette page ne prétendra pas le contraire. Avant chaque sortie, nous attaquons nos propres produits délibérément : des séries de tests hostiles qui cherchent à tromper les protections, à faire fuiter des données et à casser les promesses, puis des correctifs, puis de nouvelles attaques, jusqu'à ce qu'une série revienne les mains vides. Ce qui manque encore à ce serveur, c'est une longue vie dans les navigateurs d'inconnus. Le temps qu'il la gagne, la conception porte le risque à votre place : il démarre en lecture seule, il chiffre chaque lecture avant de la faire, et il vous dit ce qu'il n'a pas pu voir. Si le web est votre quotidien, apportez vos pages les plus étranges et dites-nous ce qui a cassé.",
 "svc.ticket": "AU SUIVANT · PRENEZ UN TICKET · MÊME COMPTOIR QUE LES ÉVIERS WORD, POWERPOINT ET EXCEL",
-"svc1.t": "Une lecture fanée ?",
-"svc1.p": "Une page mal lue, un refus incompréhensible, une action qui a menti sur son résultat. Déposez un signalement au comptoir de réparation : le formulaire demande exactement ce qu'il faut pour corriger. Ne collez jamais de contenu de page privé ; décrivez plutôt la forme de la page.",
+"svc1.t": "Une lecture qui cloche ?",
+"svc1.p": "Une page revenue en charabia, un message d'erreur qui n'avait aucun sens, une action qui a annoncé un succès et menti. Déposez-le au comptoir : le formulaire demande exactement ce qu'il faut pour corriger. Ne collez jamais de contenu de page privé ; décrivez plutôt de quel genre de page il s'agissait.",
 "svc1.g": "Signaler un défaut →",
-"svc2.t": "Il manque un treillis ?",
-"svc2.p": "Une capacité de navigation que l'évier devrait avoir aussi. Décrivez la tâche réelle derrière, et elle passe sur l'établi.",
+"svc2.t": "Il manque un outil ?",
+"svc2.p": "Quelque chose que vous aimeriez que votre IA sache faire dans un navigateur et que ce serveur ne propose pas. Décrivez la tâche réelle, pas seulement la fonctionnalité, et cela ira sur l'établi.",
 "svc2.g": "Proposer une fonction →",
 "svc3.t": "Une pose commerciale ?",
 "svc3.p": "Gratuit pour les particuliers et l'usage personnel, et cela reste ainsi. Si votre entreprise veut l'intégrer dans un produit à elle, cela demande une licence commerciale, dont les conditions se négocient au cas par cas. Ce comptoir est là où commence cette conversation.",
 "svc3.g": "Négocier une licence →",
 "g.t": "Conçu pour ne pas suivre les instructions d'un inconnu",
-"g.p1": "Le texte caché est retiré et compté, jamais suivi. Chaque action rapporte ce qui s'est réellement passé, pas seulement qu'une commande a été envoyée. Les outils qui changent le monde n'existent que lorsque vous les avez activés. Et quand quelque chose ne peut pas se faire, d'un mur de connexion à un contrôle anti-robot, vous obtenez une réponse franche qui nomme ce qui s'est mis en travers, au lieu d'une supposition déguisée en progrès.",
+"g.p1": "Le texte qu'une page cache aux yeux humains est retiré et signalé, jamais suivi. Chaque action rend compte de ce qui s'est réellement passé, et pas seulement du fait qu'un clic a été envoyé. Les outils capables de modifier quoi que ce soit n'existent qu'après que vous les avez activés. Et quand quelque chose est impossible, mur de connexion, contrôle anti-robot, page cassée, votre IA reçoit une réponse claire qui nomme ce qui a bloqué, au lieu d'une supposition déguisée en progrès.",
 "no6": "RAYON 06",
 "h2.fam": "Les autres rayons",
 "fam1.p": "L'instrument d'origine : tout, et l'évier de la cuisine avec, pour Microsoft Word. 219 opérations réparties sur 108 outils, édition en direct des documents ouverts, citations, chirurgie des tableaux qui comprend les fusions, suivi des modifications, conçu pour ne rien abîmer.",
 "fam1.g": "Aller au rayon plomberie →",
-"fam2.p": "Le rayon décoration : tout, et l'évier de la cuisine avec, pour Microsoft PowerPoint. 138 outils, et des schémas qui arrivent en formes natives avec des connecteurs collés dessus, si bien que la boîte bouge et les flèches suivent.",
-"fam2.g": "Aller au rayon décoration →",
+"fam2.p": "Le rayon peinture : tout, et l'évier de la cuisine avec, pour Microsoft PowerPoint. 138 outils, et des schémas qui arrivent en formes natives avec des connecteurs collés dessus, si bien que la boîte bouge et les flèches suivent.",
+"fam2.g": "Aller au rayon peinture →",
 "fam3.p": "Le rayon électricité : tout, et l'évier de la cuisine avec, pour Microsoft Excel. 69 outils, et chaque nombre revient étiqueté calculé, en cache ou absent, de sorte qu'une IA ne lit jamais un total qu'elle ne peut pas justifier.",
 "fam3.g": "Aller au rayon électricité →",
 "fam4.t": "La boutique",
@@ -1513,9 +1611,9 @@ es: {
 "sw.store": "La tienda",
 "hero.stamp": "UN MAPA,<br>NO UN VERTIDO",
 "hero.canhint": "incline la regadera",
-"hero.bloom": "En flor",
+"hero.bloom": "en flor",
 "hero.catno": "Model Context Protocol · Servidor para la web abierta",
-"hero.tagline": "Todo <em>y</em> el fregadero de la cocina también, para la web abierta: el servidor MCP de navegación que lee una página entera al precio de un párrafo.",
+"hero.tagline": "Todo y el fregadero de la cocina también, para la web abierta: este servidor deja que su IA navegue por sitios reales, lee páginas enteras por una fracción del coste habitual y no puede hacer clic en nada hasta que usted lo permita.",
 "spec.dump": "Tokens, una página volcada",
 "spec.read": "Tokens, la misma página leída",
 "spec.lite": "Herramientas del núcleo ligero",
@@ -1523,10 +1621,11 @@ es: {
 "spec.tests": "Pruebas",
 "btn.install": "Instalar el fregadero",
 "btn.source": "Leer el código",
-"hero.invite": "↓ o vea primero la diferencia: lo que su asistente paga por leer una página, allí y aquí",
+"hero.invite": "↓ o pruebe primero la demostración: la misma página leída como de costumbre, y leída aquí",
 "no0": "SECCIÓN 00",
 "h2.demo": "Leer una página no debería costar toda la conversación",
-"demo.lead": "Pídale a la mayoría de las herramientas de navegación que lean una página y volcarán todo lo que ven en la memoria de su asistente: menús, pies de página, avisos de cookies, todo, decenas de miles de tokens por un solo artículo. Hágalo tres veces y su asistente empieza a olvidar lo que usted le dijo esta mañana. Este servidor lee de otra manera. Devuelve un mapa: qué es la página, qué hay en ella sección por sección, cuánto cuesta abrir cada sección y qué haría a continuación. Una página que a otras herramientas les cuesta una novela, a esta le cuesta un párrafo. Y nada se barre bajo la alfombra: cada lectura termina con una cuenta honesta de lo que no se leyó y por qué.",
+"demo.lead": "La mayoría de las herramientas de navegación funcionan así: su IA pide leer una página y la herramienta copia todo lo que hay en ella a su memoria. El artículo que usted quería, pero también los menús, los anuncios, el aviso de cookies, el pie de página. Para una sola página eso puede equivaler a decenas de miles de palabras, y la memoria de trabajo de una IA es limitada. Llénela de trastos y empezará a olvidar lo que usted le dijo antes.",
+"demo.lead2": "Este servidor lee de otra manera. Primero le entrega a su IA un mapa pequeño: qué es la página, qué secciones tiene y cuánto costaría abrir cada una. La IA abre solo lo que necesita. El mismo artículo, una fracción de la memoria. Y si algo de la página quedó sin leer, el mapa lo dice con claridad, en vez de dejar que la IA crea que lo vio todo.",
 "demo.badtag": "TODO",
 "demo.badh": "Lo que le entrega la mayoría de las herramientas de este estante",
 "demo.meter1": "Tokens gastados en esta página",
@@ -1544,37 +1643,37 @@ es: {
 "no1": "SECCIÓN 01",
 "h2.tale": "Recién sacado de la caja, puede mirar pero no tocar",
 "tale.label": "LA NORMA DE LA CASA",
-"tale.p1": "El navegador es donde viven sus inicios de sesión, su dinero y sus errores. Por eso este servidor arranca en modo consulta: lee, navega y se desplaza, pero las herramientas que hacen clic, escriben y envían no están apagadas en algún sitio, sencillamente no existen hasta que usted acciona un interruptor al instalarlo. Ninguna instrucción de ninguna página web puede convencer a su asistente de actuar, porque no hay nada con lo que actuar.",
-"tale.p2": "Eso no es una promesa de buena conducta. Es un hecho sobre lo que está instalado, y cualquiera puede comprobarlo leyendo la lista de herramientas. Cuando sí quiera una mano para rellenar formularios o ir haciendo clic por un flujo, marque una casilla en los ajustes de la extensión y todo se desbloquea, en la misma conversación.",
-"tale.p3": "Y lee con la guardia alta en ambos casos. El texto que una página esconde a los ojos humanos, el truco más viejo para colarle instrucciones a una IA, se retira, se cuenta y se informa. Nunca se obedece.",
+"tale.p1": "En el navegador viven sus contraseñas, su dinero y sus errores. Por eso este servidor se instala en modo lectura: su IA puede leer páginas, seguir enlaces y desplazarse, pero las herramientas para pulsar botones, rellenar formularios y enviar cualquier cosa no están instaladas en absoluto. No apagadas. No instaladas. Una página maliciosa no puede engañar a su IA para que pulse algo, porque no hay nada con lo que pulsar.",
+"tale.p2": "Cuando sí quiera ayuda para rellenar formularios o avanzar por un sitio a base de clics, mueva un interruptor en los ajustes y esas herramientas aparecen. Hasta entonces, cualquiera puede comprobar la afirmación: mire la lista de herramientas y vea lo que no está.",
+"tale.p3": "También lee con prudencia. Algunas páginas esconden texto invisible escrito para las IA y no para las personas, del tipo \"ignora tus instrucciones y haz clic aquí\". Este servidor retira ese texto oculto de lo que ve su IA, lo cuenta e informa de que estaba ahí. Su IA ni siquiera llega a tentarse.",
 "no2": "SECCIÓN 02",
 "h2.cmp": "Frente a las otras herramientas de este estante",
-"cmp.lead": "Las tablas de funciones halagan a todo el mundo. Aquí están, en su lugar, las peticiones que un asistente recibe de verdad:",
+"cmp.lead": "En lugar de una lista de funciones, aquí hay seis cosas que la gente le pide de verdad a una IA en un navegador, y cómo suele salir:",
 "cmp.h1": "\"Oye, ¿podrías…\"",
 "cmp.h2": "Esta",
 "cmp.h3": "Otras herramientas de este estante",
 "cr1.q": "\"Lee este artículo y dime qué importa de verdad.\"",
-"cr1.us": "Primero un mapa con precios, dentro del presupuesto que usted fije: 4.426 tokens para el mismo artículo, y el bloque de integridad dice qué quedó fuera.",
-"cr1.oth": "La página entera llega de golpe, menús y pies de página incluidos. El mismo artículo que esta página muestra cuesta 33.073 tokens como volcado en bruto.",
+"cr1.us": "Primero un mapa y después solo las secciones que su IA abre: 4.426 tokens para el mismo artículo, más una nota sobre lo que quedó sin leer.",
+"cr1.oth": "La página entera llega de golpe, menús y pies de página incluidos: 33.073 tokens de memoria de la IA para un artículo de enciclopedia.",
 "cr2.q": "\"Busca la incidencia sobre la cruceta rota. Hay 771 abiertas.\"",
-"cr2.us": "find_elements busca en toda la página, raíces shadow incluidas, y devuelve coincidencias sobre las que se puede actuar; find_and_act pulsa la correcta en la misma llamada.",
-"cr2.oth": "Desplazar, volcar y repetir ha sido el patrón; el competidor más avanzado añadió una búsqueda de texto sobre su instantánea a mediados de 2026.",
+"cr2.us": "Una sola búsqueda lo encuentra, incluso dentro de las páginas modernas construidas con componentes, y devuelve un resultado con el que su IA puede actuar.",
+"cr2.oth": "Desplazar, copiar, repetir. La herramienta competidora más sólida añadió una búsqueda en la página a mediados de 2026.",
 "cr3.q": "\"Antes de leer esa página: ¿cuánto me va a costar?\"",
-"cr3.us": "Cada línea de región lleva el precio de desplegarla, y el presupuesto es un techo que la lectura no cruza.",
-"cr3.oth": "Ningún servidor estudiado documenta una forma de preguntarlo. La lectura cuesta lo que cuesta, y usted se entera después.",
+"cr3.us": "Cada sección del mapa muestra lo que costará abrirla, antes de que la abra.",
+"cr3.oth": "No hay forma de preguntarlo. Lo que costó una página se sabe después de haberla pagado.",
 "cr4.q": "\"Rellena este formulario, pero solo porque yo te lo he dicho.\"",
-"cr4.us": "Recién sacado de la caja, las herramientas que actúan no existen. Un interruptor al instalar las trae, y los envíos siguen deteniéndose para que usted confirme.",
-"cr4.oth": "Las herramientas que actúan están siempre cargadas; la contención le toca al cliente, mediante modos de plan y avisos de permiso.",
+"cr4.us": "Esas herramientas no están instaladas hasta que usted las activa, y aun entonces, enviar un formulario se detiene y le pregunta antes.",
+"cr4.oth": "Las herramientas para hacer clic y escribir están siempre cargadas; que se usen o no queda al criterio de la IA.",
 "cr5.q": "\"¿Qué NO leíste de esa página?\"",
-"cr5.us": "Cada lectura termina con el bloque de integridad: qué se recortó, qué estaba oculto, qué no puede alcanzar ninguna herramienta y cuánto cuesta recuperarlo.",
-"cr5.oth": "Casi siempre silencio: uno indica con honestidad cuánto ha recortado; otro corta cada elemento a los 100 caracteres sin marca alguna.",
+"cr5.us": "Cada lectura termina con una lista de lo que no se leyó, sea recortado por presupuesto, escondido por la página o inalcanzable, con el motivo.",
+"cr5.oth": "Normalmente, silencio. Una herramienta anota con honestidad lo que recortó; otra corta el texto a mitad de frase sin ninguna marca.",
 "cr6.q": "\"Dale a enviar y demuéstrame qué ha pasado.\"",
-"cr6.us": "La acción devuelve su resultado verificado: qué se envió, adónde fue la página, anotado en un registro de auditoría que usted puede releer.",
-"cr6.oth": "Lo habitual es enviar y olvidarse. El mejor informa de la navegación que provocó; qué pasó con el envío es cosa suya.",
+"cr6.us": "Cada acción informa de lo que ocurrió de verdad: qué se envió, dónde acabó la página, guardado en un registro que puede releer.",
+"cr6.oth": "Suele ser lanzar y olvidar: el clic se envió, suerte. El mejor competidor informa de a dónde fue la página.",
 "cmp.note": "Extraído de un estudio de ocho servidores MCP de navegación, septiembre de 2026; dos de los ocho están archivados. Las fuentes están en el repositorio.",
 "no3": "SECCIÓN 03",
 "h2.eff": "La factura",
-"eff.lead": "Todo servidor MCP tira de la memoria de un asistente antes de que empiece cualquier trabajo, y los servidores de navegación son los más voraces de todos: una lectura descuidada de una página en otro sitio puede comerse la mayor parte de una conversación. Este empieza pequeño, lee según el mapa y le pone un precio exacto a cada despliegue antes de que usted lo pague. Aquí está la factura, medida:",
+"eff.lead": "Cada herramienta que conecta a una IA ocupa parte de su memoria de trabajo antes de que empiece el trabajo, y las herramientas de navegación son las más voraces que hay. Esta empieza pequeña, y cada número de abajo se midió con un script que usted mismo puede ejecutar:",
 "bill.h1": "En el contador",
 "bill.h2": "Herramientas",
 "bill.h3": "Tokens",
@@ -1604,25 +1703,25 @@ es: {
 "no5": "SECCIÓN 05",
 "h2.svc": "Atención al cliente",
 "maturity.h": "Joven, y criado en una escuela dura",
-"maturity.p": "Es el instrumento más nuevo de la familia y creció bajo las normas de la casa: cada afirmación medida, cada versión atacada por rondas adversarias antes de salir, cada rechazo honesto sobre su motivo. Lo que aún no ha tenido es una larga vida en navegadores ajenos. La red de seguridad mientras se la gana: arranca en solo lectura, tasa cada lectura antes de hacerla y le dice qué no ha podido ver. Si la web es donde usted vive, traiga sus páginas más raras al mostrador de servicio y cuéntenos qué se rompió.",
+"maturity.p": "Este es el producto más nuevo de la familia, y esta página no va a fingir lo contrario. Antes de publicar atacamos nuestros propios productos a propósito: rondas de pruebas hostiles que intentan engañar a las protecciones, filtrar datos y romper las promesas, luego correcciones, luego ataques nuevos, hasta que una ronda vuelve con las manos vacías. Lo que a este servidor aún le falta es una vida larga en navegadores ajenos. Mientras se la gana, el diseño carga con el riesgo por usted: arranca en solo lectura, pone precio a cada lectura antes de hacerla y le dice lo que no pudo ver. Si la web es donde vive, traiga sus páginas más raras y cuéntenos qué se rompió.",
 "svc.ticket": "TURNO ACTUAL · COJA NÚMERO · EL MISMO MOSTRADOR QUE LOS FREGADEROS DE WORD, POWERPOINT Y EXCEL",
-"svc1.t": "¿Una lectura mustia?",
-"svc1.p": "Una página que se leyó mal, un rechazo sin sentido, una acción que mintió sobre su resultado. Presente un informe en el mostrador de reparaciones: el formulario pregunta exactamente lo que hace falta para arreglarlo. Nunca pegue contenido privado de una página; describa en su lugar la forma de la página.",
+"svc1.t": "¿Algo se leyó mal?",
+"svc1.p": "Una página que volvió hecha un lío, un mensaje de error que no tenía sentido, una acción que dijo que había funcionado y mintió. Preséntelo en el mostrador: el formulario pregunta justo lo que hace falta para arreglarlo. Por favor, no pegue nunca contenido privado de una página; describa en su lugar qué tipo de página era.",
 "svc1.g": "Informar de un fallo →",
-"svc2.t": "¿Le falta un enrejado?",
-"svc2.p": "Una capacidad de navegación que el fregadero también debería tener. Describa la tarea real que hay detrás y pasa al banco de trabajo.",
+"svc2.t": "¿Le falta una herramienta?",
+"svc2.p": "Algo que le gustaría que su IA pudiera hacer en un navegador y que este servidor no ofrece. Describa la tarea real, no solo la función, y pasará al banco de trabajo.",
 "svc2.g": "Pedir una función →",
 "svc3.t": "¿Instalación comercial?",
 "svc3.p": "Gratis para particulares y uso personal, y seguirá siendo así. Si su empresa quiere integrarlo en un producto propio, eso necesita una licencia comercial, con condiciones acordadas caso por caso. Este mostrador es donde empieza esa conversación.",
 "svc3.g": "Acordar una licencia →",
 "g.t": "Diseñado para no obedecer las instrucciones de un desconocido",
-"g.p1": "El texto oculto se retira y se cuenta, nunca se sigue. Cada acción informa de lo que ocurrió realmente, no solo de que se envió una orden. Las herramientas que cambian el mundo existen únicamente cuando usted las ha activado. Y cuando algo no se puede hacer, desde un muro de inicio de sesión hasta una comprobación antirrobot, recibe una respuesta directa que nombra lo que se interpuso, en vez de una suposición disfrazada de avance.",
+"g.p1": "El texto que una página esconde a los ojos humanos se retira y se informa, nunca se obedece. Cada acción informa de lo que ocurrió de verdad, no solo de que se envió un clic. Las herramientas capaces de cambiar algo existen solo después de que usted las active. Y cuando algo no se puede hacer, un muro de acceso, una comprobación antirrobots, una página rota, su IA recibe una respuesta clara que nombra lo que se interpuso, en vez de una suposición disfrazada de avance.",
 "no6": "SECCIÓN 06",
 "h2.fam": "Los otros pasillos",
 "fam1.p": "El instrumento original: todo y el fregadero de la cocina también, para Microsoft Word. 219 operaciones repartidas en 108 herramientas, edición en vivo de documentos abiertos, citas, cirugía de tablas que entiende las combinaciones, control de cambios, diseñado para no corromper.",
 "fam1.g": "Visitar el pasillo de fontanería →",
-"fam2.p": "El pasillo de decoración: todo y el fregadero de la cocina también, para Microsoft PowerPoint. 138 herramientas, y diagramas que llegan como formas nativas con los conectores pegados, de modo que la caja se mueve y las flechas la siguen.",
-"fam2.g": "Visitar el pasillo de decoración →",
+"fam2.p": "El pasillo de pintura: todo y el fregadero de la cocina también, para Microsoft PowerPoint. 138 herramientas, y diagramas que llegan como formas nativas con los conectores pegados, de modo que la caja se mueve y las flechas la siguen.",
+"fam2.g": "Visitar el pasillo de pintura →",
 "fam3.p": "El pasillo de electricidad: todo y el fregadero de la cocina también, para Microsoft Excel. 69 herramientas, y cada número vuelve etiquetado como calculado, en caché o ausente, de modo que una IA nunca lee en voz alta un total que no puede respaldar.",
 "fam3.g": "Visitar el pasillo de electricidad →",
 "fam4.t": "La tienda",
