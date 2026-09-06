@@ -31,11 +31,13 @@ import json
 
 from .. import pagedata as _pagedata
 from ..errors import AmbiguousLocation, BadParams, TargetNotFound
-from ..projection import ntok as _ntok
+from ..policy import engine as _policy
+from ..projection import ntok as _ntok, read_text
 from ..projection import read_article as _read_article
 from ..projection.meter import ENCODING_NAME as _ENCODING
 from . import act as _act
 from . import common
+from . import resource as _resource
 
 #: Per-cell and per-value clip lengths. Clipping is counted, never silent.
 CELL_CLIP = 200
@@ -966,5 +968,175 @@ async def get_article(
 
 #: The pack roster, in DESIGN 2.2 order. `server.register_all` registers
 #: exactly this when the extract pack is selected.
+#: Where a "next page" lives, in the order the page's own markup ranks it.
+#: `rel=next` first because it is the declaration rather than a guess, then
+#: an anchor whose accessible name IS a next-page word. Nothing here clicks:
+#: every hop is a navigation to an href the page published, which is what
+#: keeps this tool on the read side of the read-only line.
+_NEXT_JS = r"""
+() => {
+  const out = [];
+  const abs = (u) => { try { return new URL(u, location.href).href; }
+                       catch (e) { return null; } };
+  const bad = (u) => !u || /^(javascript:|mailto:|tel:|#)/i.test(u)
+                     || abs(u) === location.href;
+  const push = (href, how, label) => {
+    if (bad(href)) return;
+    const u = abs(href);
+    if (u && !u.startsWith('http')) return;
+    if (u) out.push({ url: u, how: how,
+                      label: (label || '').replace(/\s+/g, ' ').trim().slice(0, 80) });
+  };
+  const head = document.querySelector('link[rel~="next" i][href]');
+  if (head) push(head.getAttribute('href'), 'link rel=next', 'rel=next');
+  const relA = document.querySelector('a[rel~="next" i][href]');
+  if (relA) push(relA.getAttribute('href'), 'a rel=next', relA.textContent);
+  const word = /^(next|next page|next ›|older|older posts|older entries|more|show more|load more|›|»|→|next\s*[›»→])$/i;
+  for (const a of document.querySelectorAll('a[href]')) {
+    const label = (a.getAttribute('aria-label') || a.textContent || '')
+      .replace(/\s+/g, ' ').trim();
+    if (word.test(label)) { push(a.getAttribute('href'), 'link text', label); break; }
+  }
+  return out;
+}
+"""
+
+
+async def read_pages(
+    page: str,
+    max_pages: int = 5,
+    max_chars: int = 8000,
+    budget_chars: int = 40000,
+) -> dict:
+    """Read a paginated series in one call, following the page's own
+    next-page link up to max_pages and stopping inside one character
+    budget. Each page's prose comes back separately, labeled with the URL it
+    came from, so a five-part article or a three-page result list arrives as
+    one result instead of five navigate-and-read round trips. The next page
+    is found from rel="next" first and from a link whose accessible name is
+    a next-page word second; nothing is clicked and no URL is guessed, so a
+    site with no such link stops rather than inventing one. Returns every
+    page read, the reason the walk stopped (the page cap, the character
+    budget, no next link, or a link that leads back to a page already read),
+    and the URL to resume from.
+    """
+    # Two independent ceilings and neither quietly widens the other: a
+    # budget_chars under max_chars means the first page is read in full and
+    # the walk stops there, which is what the caller asked for.
+    max_pages = max(1, min(int(max_pages), 25))
+    max_chars = max(500, int(max_chars))
+    budget_chars = max(1, int(budget_chars))
+    sess, record = common.locate(page)
+    pages: list[dict] = []
+    visited: list[str] = []
+    total = 0
+    stop = {"reason": "page-cap",
+            "detail": f"the max_pages cap of {max_pages} was reached"}
+    resume = None
+    while True:
+        held = await _resource.probe_page(record.page)
+        if held is not None:
+            stop = {"reason": "unreadable-resource",
+                    "detail": _resource.navigate_note(held)["why"],
+                    "route": _resource.escape_route(held)}
+            break
+        url = record.page.url
+        visited.append(url)
+        sess.counters["reads"] += 1
+        got = await read_text(record.page, root=None, start_index=0,
+                              max_chars=max_chars, include_hidden=False)
+        wrapped, note = _pagedata.wrap(got["text"], url=got["url"])
+        pages.append({
+            "url": got["url"],
+            "text": wrapped,
+            "page_data": note,
+            "chars": {"returned": got["returned_chars"],
+                      "total_on_page": got["total_chars"],
+                      "next_start_index": got["next_start_index"]},
+            "clipped": got["next_start_index"] is not None,
+        })
+        total += got["returned_chars"]
+        if len(pages) >= max_pages:
+            stop = {"reason": "page-cap",
+                    "detail": f"read {len(pages)} page(s), which is the "
+                              f"max_pages cap"}
+            break
+        if total >= budget_chars:
+            stop = {"reason": "char-budget",
+                    "detail": f"{total:,} characters read, at or past the "
+                              f"budget_chars ceiling of {budget_chars:,}"}
+            break
+        try:
+            found = await record.page.evaluate(_NEXT_JS)
+        except Exception:
+            found = []
+        candidate = next((c for c in (found or []) if c.get("url")), None)
+        if candidate is None:
+            stop = {"reason": "end",
+                    "detail": "this page publishes no next-page link (no "
+                              "rel=\"next\" and no link whose name is a "
+                              "next-page word), so the series ends here as "
+                              "far as the markup says"}
+            break
+        if candidate["url"] in visited:
+            stop = {"reason": "loop",
+                    "detail": f'the next-page link points back to '
+                              f'{candidate["url"]}, which was already read '
+                              f'in this walk, so the walk stopped rather '
+                              f'than circling'}
+            resume = None
+            break
+        # Every hop is a real navigation and goes through the real ladder:
+        # origin policy, the 429 book, loop detection, and the navigation
+        # budget, charged per page exactly as if the caller had made the
+        # calls one at a time. A walk is not a way around a budget.
+        _policy.approve(_policy.ActionRequest(
+            tool="read_pages", kind="navigate", session=sess.session_id,
+            page=record.handle, url=candidate["url"],
+            args={"action": "goto", "url": candidate["url"]},
+            summary=f'read_pages follows {candidate["how"]} to '
+                    f'{candidate["url"]}'))
+        before = record.page.url
+        try:
+            await record.page.goto(candidate["url"], wait_until="load",
+                                   timeout=30000)
+        except Exception as exc:
+            stop = {"reason": "navigation-failed",
+                    "detail": f'following {candidate["how"]} to '
+                              f'{candidate["url"]} failed '
+                              f'({type(exc).__name__}: {str(exc)[:160]}); '
+                              f'the pages read before it are complete'}
+            resume = candidate["url"]
+            break
+        record.touch(record.page.url)
+        sess.counters["navigations"] += 1
+        if record.page.url != before:
+            sess.invalidate_page(
+                record.handle,
+                f"read_pages navigated from {before}")
+        resume = record.page.url
+    if stop["reason"] in ("page-cap", "char-budget"):
+        resume = resume or record.page.url
+    return {
+        "page": record.handle, "session": sess.session_id,
+        "pages_read": len(pages),
+        "pages": pages,
+        "urls": visited,
+        "stopped": stop,
+        "chars_total": total,
+        "resume": (f'read_pages(page="{record.handle}") continues from '
+                   f'{record.page.url}' if stop["reason"] in
+                   ("page-cap", "char-budget")
+                   else "there is nothing to resume from; the walk ended "
+                        "for the reason above rather than at a cap"),
+        "refs": ("this walk navigated, so refs and read tokens minted "
+                 "before it are gone; read the page you are on to mint "
+                 "fresh ones" if len(visited) > 1 else
+                 "nothing navigated, so refs minted earlier still hold"),
+        "budget": {"used": _ntok(json.dumps([p["text"] for p in pages])),
+                   "estimator": _ENCODING},
+    }
+
+
 TOOLS = (get_table, get_list, get_links, get_metadata, extract_fields,
-         export_data, get_article)
+         export_data, get_article, read_pages)

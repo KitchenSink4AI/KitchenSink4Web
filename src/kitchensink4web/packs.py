@@ -80,8 +80,9 @@ PACK_SUMMARIES: dict[str, str] = {
         "and load. Values are masked by default"
     ),
     "files": (
-        "download lifecycle into a scoped directory, and uploads including "
-        "synthetic-DataTransfer dropzones"
+        "download lifecycle into a scoped directory (including the fetch "
+        "route out of a browser PDF viewer), uploads including "
+        "synthetic-DataTransfer dropzones, and the page clipboard"
     ),
     "workflows": (
         "named replayable flows recorded from the audit log, with a "
@@ -97,13 +98,14 @@ PACK_SUMMARIES: dict[str, str] = {
 #: still reports any planned-but-unregistered gap.
 PLANNED_MEMBERS: dict[str, tuple[str, ...]] = {
     "extract": ("get_table", "get_list", "get_links", "get_metadata",
-                "extract_fields", "export_data", "get_article"),
+                "extract_fields", "export_data", "get_article",
+                "read_pages"),
     "capture": ("take_screenshot", "export_pdf", "save_page", "emulate"),
     "network": ("list_requests", "get_request", "export_har", "set_routing"),
     "diagnostics": ("list_console", "get_page_errors", "evaluate_script"),
     "storage": ("manage_cookies", "manage_storage", "save_auth_state",
                 "load_auth_state"),
-    "files": ("download", "upload_file"),
+    "files": ("download", "upload_file", "manage_clipboard"),
     "workflows": ("save_workflow", "run_workflow", "list_workflows"),
 }
 

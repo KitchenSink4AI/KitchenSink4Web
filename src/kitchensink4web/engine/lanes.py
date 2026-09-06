@@ -536,7 +536,8 @@ def ensure_installed(spec: LaneSpec, pw: object | None = None,
     return {"installed": True, "action": "downloaded on first use"}
 
 
-def launch_kwargs(spec: LaneSpec, profile_dir: str) -> dict:
+def launch_kwargs(spec: LaneSpec, profile_dir: str,
+                  emulation: dict | None = None) -> dict:
     """The `launch_persistent_context` keyword arguments for this lane.
 
     Persistent context on every lane, not just Lane B: it is the shape that
@@ -552,4 +553,130 @@ def launch_kwargs(spec: LaneSpec, profile_dir: str) -> dict:
         kwargs["channel"] = spec.channel
     if spec.args:
         kwargs["args"] = list(spec.args)
+    if emulation:
+        kwargs.update(emulation)
     return kwargs
+
+
+# -------------------------------------------------- context emulation at open
+
+#: Context options a caller may set when a session OPENS. Every one is a
+#: Playwright native passed straight to `launch_persistent_context`; nothing
+#: here is a KS4Web invention, and nothing here is applied unless it was
+#: asked for. The defaults are unchanged by this route existing.
+EMULATION_KEYS: tuple[str, ...] = (
+    "viewport", "screen", "locale", "timezone_id", "user_agent",
+    "is_mobile", "has_touch", "device_scale_factor",
+)
+
+#: Playwright's own device table drops `default_browser_type` into every
+#: preset, and `launch_persistent_context` does not take it.
+_DEVICE_DROP = ("default_browser_type",)
+
+
+def parse_viewport(value) -> dict:
+    """{'width': N, 'height': N} from a dict or from a '390x844' string.
+
+    The string spelling exists because a caller typing one argument should
+    not have to nest a dict to say how wide the window is, and the dict
+    spelling exists because it is what Playwright and `emulate` already
+    take. Anything else refuses rather than picking a size."""
+    if isinstance(value, str):
+        parts = value.lower().replace(" ", "").split("x")
+        if len(parts) == 2 and all(p.isdigit() for p in parts):
+            return {"width": int(parts[0]), "height": int(parts[1])}
+        raise BadParams(
+            f"viewport {value!r} is not a size: use '1280x900' or "
+            f"{{'width': 1280, 'height': 900}} in CSS pixels.")
+    if isinstance(value, dict) and value.get("width") and value.get("height"):
+        return {"width": int(value["width"]), "height": int(value["height"])}
+    raise BadParams(
+        "viewport takes {'width': N, 'height': N} in CSS pixels, or the "
+        "'1280x900' spelling.")
+
+
+def device_names(pw: object) -> list[str]:
+    try:
+        return sorted(getattr(pw, "devices", {}) or {})
+    except Exception:
+        return []
+
+
+def emulation_kwargs(spec: LaneSpec, pw: object, device: str | None = None,
+                     viewport=None, locale: str | None = None,
+                     timezone: str | None = None) -> tuple[dict, dict]:
+    """Resolve what the caller asked the new context to look like.
+
+    Returns `(kwargs, report)`: the Playwright options to launch with, and
+    the plain account of what was applied, which `manage_session` prints so
+    a session never quietly disagrees with what was requested.
+
+    A named device is Playwright's own preset, applied whole (user agent,
+    viewport, scale factor, touch, mobile flag) and then overridden by any
+    explicit viewport, so 'iPhone 15' plus a viewport means that phone at
+    that size rather than a silent argument fight. **A typo in a device
+    name is an error**, never the desktop default, for the reason the whole
+    lane subsystem exists: a silent downgrade is the failure this product
+    argues against.
+    """
+    kwargs: dict = {}
+    report: dict = {}
+    if device:
+        table = getattr(pw, "devices", None) or {}
+        preset = table.get(device)
+        if preset is None:
+            names = device_names(pw)
+            close = [n for n in names if device.lower() in n.lower()][:8]
+            raise BadParams(
+                f"unknown device preset {device!r}. The presets are "
+                f"Playwright's own device descriptors"
+                + (f"; these match what you typed: {close}" if close else
+                   f" ({len(names)} of them, from 'iPhone 15' to "
+                   f"'Desktop Chrome')")
+                + ". Pass viewport / locale / timezone directly when you "
+                  "want a shape no preset carries.")
+        for key, value in preset.items():
+            if key not in _DEVICE_DROP:
+                kwargs[key] = value
+        report["device"] = device
+        # is_mobile is a Chromium and WebKit capability; Playwright's Firefox
+        # rejects it outright. Refusing here names the lane that can do it
+        # rather than launching a phone-shaped window that is not a phone.
+        if kwargs.get("is_mobile") and spec.engine == "firefox":
+            raise LaneUnsupported(
+                f"[lane {spec.label}] the device preset {device!r} sets "
+                f"is_mobile, and Playwright's Firefox does not support it: "
+                f"the driver refuses the launch rather than approximating a "
+                f"phone. Open this session on Chromium (lane 'A' or "
+                f"'B:chrome') or WebKit (lane 'A:webkit') for mobile device "
+                f"emulation, or pass viewport / user agent parts you do "
+                f"want without a preset.")
+    if viewport is not None:
+        kwargs["viewport"] = parse_viewport(viewport)
+        report["viewport"] = kwargs["viewport"]
+    elif "viewport" in kwargs:
+        report["viewport"] = kwargs["viewport"]
+    if locale is not None:
+        text = str(locale).strip()
+        if not (2 <= len(text) <= 12) or not text.replace("-", "").replace(
+                "_", "").isalnum():
+            raise BadParams(
+                f"locale {locale!r} is not a BCP 47 tag; it looks like "
+                f"'en-US', 'ko-KR', or 'de'.")
+        kwargs["locale"] = text
+        report["locale"] = text
+    if timezone is not None:
+        text = str(timezone).strip()
+        if not text or " " in text:
+            raise BadParams(
+                f"timezone {timezone!r} is not an IANA time zone id; it "
+                f"looks like 'Asia/Seoul', 'America/New_York', or 'UTC'. "
+                f"The browser is the authority on the list.")
+        kwargs["timezone_id"] = text
+        report["timezone"] = text
+    for key in kwargs:
+        if key not in EMULATION_KEYS:                   # pragma: no cover
+            raise BadParams(
+                f"{key!r} is not a context option this route sets; the "
+                f"options are {list(EMULATION_KEYS)}.")
+    return kwargs, report

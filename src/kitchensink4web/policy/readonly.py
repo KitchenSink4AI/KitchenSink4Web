@@ -127,6 +127,12 @@ MUTATING: frozenset[str] = frozenset({
     "set_routing", "evaluate_script",
     "manage_cookies", "manage_storage", "load_auth_state", "save_auth_state",
     "download", "upload_file",
+    # Reading the clipboard is classed as ACTING, deliberately. It needs a
+    # browser permission, it reaches past the page into a buffer the human
+    # also uses, and what comes back can be text they never meant a page to
+    # see. A read-only mode that let a tool drain the clipboard would not be
+    # one.
+    "manage_clipboard",
     "save_workflow", "run_workflow",
     "emulate",
 })
@@ -146,6 +152,11 @@ NON_MUTATING: frozenset[str] = frozenset({
     "save_page",
     "list_requests", "get_request", "export_har",
     "list_console", "get_page_errors", "list_workflows",
+    # read_pages NAVIGATES, following the page's own next-page links, and it
+    # sits here for exactly the reason `navigate` does: going to a URL is
+    # ambiguous rather than mutating, so it is permitted under `browse` and
+    # held to the origin allowlist under `strict`, hop by hop.
+    "read_pages",
 })
 
 #: Tools that are GENUINELY read-only for the MCP readOnlyHint annotation:

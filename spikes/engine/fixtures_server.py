@@ -73,6 +73,26 @@ window.doPost = async () => {
 </script></body></html>"""
 
 
+#: A 1x1 PNG, the smallest honest image document.
+PIXEL_PNG = base64.b64decode(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmM"
+    "IQAAAABJRU5ErkJggg==")
+
+#: A minimal one-page PDF. Valid enough for a viewer to accept and for a
+#: fetch to save; the test that matters is the media type, not the glyphs.
+TINY_PDF = (
+    b"%PDF-1.4\n"
+    b"1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n"
+    b"2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n"
+    b"3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 200 200]>>endobj\n"
+    b"trailer<</Root 1 0 R>>\n%%EOF\n")
+
+CLIPBOARD_PAGE = """<html><body>
+<button id="copy" onclick="navigator.clipboard.writeText('copied by the page')">Copy</button>
+<p id="marker">clipboard fixture</p>
+</body></html>"""
+
+
 def big_page(n: int) -> str:
     """Synthetic heavy DOM: n nodes, mixed interactive / hidden / styled."""
     parts = ["<!doctype html><html><head><title>big fixture %d</title><style>" % n,
@@ -153,6 +173,36 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(b"denied\r\n\r\n"[:9])
             return
+        # --- small-parts wave fixtures -------------------------------------
+        # A three-part series wired with rel="next", which is what the
+        # paginate-until read follows. Part 3 publishes no next link, so the
+        # walk has an honest end rather than a cap.
+        if path.startswith("/series/"):
+            try:
+                n = int(path.rsplit("/", 1)[1])
+            except ValueError:
+                return self._send("<h1>404</h1>", code=404)
+            nxt = ('<link rel="next" href="/series/%d">' % (n + 1)
+                   if n < 3 else "")
+            return self._send(
+                "<html><head><title>Series part %d</title>%s</head><body>"
+                "<main><h1>Part %d</h1><p>%s</p></main></body></html>"
+                % (n, nxt, n, ("series body paragraph %d. " % n) * 40))
+        # Two pages whose next links point at each other: the loop stop.
+        if path in ("/loop/a", "/loop/b"):
+            other = "/loop/b" if path.endswith("a") else "/loop/a"
+            return self._send(
+                '<html><head><link rel="next" href="%s"></head><body>'
+                '<p>%s</p></body></html>' % (other, "loop body " * 30))
+        # A real image document: `document.contentType` is image/png and the
+        # browser paints it, which is the escape case in its most portable
+        # form.
+        if path == "/pixel.png":
+            return self._send(PIXEL_PNG, ctype="image/png")
+        if path == "/doc.pdf":
+            return self._send(TINY_PDF, ctype="application/pdf")
+        if path == "/clipboard":
+            return self._send(CLIPBOARD_PAGE)
         if path == "/hang":
             time.sleep(120)  # never answers within any sane timeout
             return self._send("too late")

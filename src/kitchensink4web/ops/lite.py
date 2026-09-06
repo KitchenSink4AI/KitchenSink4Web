@@ -46,6 +46,7 @@ from .. import anchors
 from .. import dialogs as _dialogs
 from .. import pagedata as _pagedata
 from . import act as _act
+from . import resource as _resource
 from ..engine import lanes, session as _session
 from ..errors import (AmbiguousLocation, AuthRequired, BadParams,
                       BlockedBySite, Conflict, LaneUnsupported, ModalBlocked,
@@ -414,6 +415,15 @@ async def get_page_view(
                     url=record.page.url, lane=sess.spec.label)
     budget = max(200, int(budget_tokens * _DETAIL_SCALE[detail]))
     record.touch(record.page.url)
+    # The PDF and blob escape (research §2.4, the inverted finding). A tab
+    # holding a PDF, an image, or a blob is not a document with readable
+    # text, and scraping the viewer would return chrome and canvas labels
+    # under the same payload shape a real read uses. The refusal names the
+    # download route instead, which is what every issue in that cluster
+    # actually asked for.
+    held = await _resource.probe_page(record.page)
+    if held is not None:
+        raise _resource.read_refusal(held, "get_page_view")
     sess.counters["reads"] += 1
     root = _scope_root(sess, record, location)
     token = sess.reads.mint_token(record.handle)
@@ -740,6 +750,9 @@ async def get_text(
     _audit.annotate(session=sess.session_id, page=record.handle,
                     url=record.page.url, lane=sess.spec.label)
     record.touch(record.page.url)
+    held = await _resource.probe_page(record.page)
+    if held is not None:
+        raise _resource.read_refusal(held, "get_text")
     root = _scope_root(sess, record, location)
     got = await read_text(record.page, root=root, start_index=start_index,
                           max_chars=max_chars, include_hidden=include_hidden)
@@ -1013,9 +1026,16 @@ async def navigate(
                + ', '.join(f'{k} {v}' for k, v in
                            verdict["reference_ids"].items()) + '.'
                if verdict.get("reference_ids") else ''))
+    # A navigation that LANDED on a PDF, an image, or a blob is not an error
+    # (going to a PDF in order to save it is a normal thing to do), so this
+    # is an advisory rather than a refusal. It says what the tab holds and
+    # names the route to disk, which is the move the demand data says every
+    # caller wants next.
+    held = await _resource.probe_page(record.page)
     return {
         "session": sess.session_id, "page": record.handle,
         "lane": sess.spec.lane,
+        **({"resource": _resource.navigate_note(held)} if held else {}),
         **({"auto_session": auto_session} if auto_session else {}),
         "changed": {"effect": "navigated" if record.page.url != before
                     else "same-url", "from": before, "to": record.page.url},
@@ -2384,6 +2404,10 @@ async def manage_session(
     lane: str | None = None,
     reason: str | None = None,
     auth_state: str | None = None,
+    device: str | None = None,
+    viewport: str | dict | None = None,
+    locale: str | None = None,
+    timezone: str | None = None,
 ) -> dict:
     """Open, close, or inspect a browser session, report the current lane's
     capabilities, read the budget counters, or hand the headed window to the
@@ -2391,12 +2415,17 @@ async def manage_session(
     session upgrades it to a headed window automatically). `auth_state` on
     open loads a saved login file in the same call (gated, storage pack); on
     close, 'save' or a path writes the session's login state before closing,
-    and nothing is ever auto-saved. The capabilities action states what this
-    lane supports, degrades, and cannot do. The status action also names the
-    browsers installed on this machine and which lane suits which job, as
-    steering: nothing switches a lane on its own. Tool availability reflects
-    the extension's current settings; when settings change, the tool list
-    refreshes in this conversation.
+    and nothing is ever auto-saved. On open, `device` (a Playwright preset
+    such as 'iPhone 15'), `viewport` ('390x844'), `locale` ('ko-KR'), and
+    `timezone` ('Asia/Seoul') set what the pages in this session believe
+    about their environment; a context takes those at construction, so they
+    are set here rather than changed later, and omitting them leaves every
+    default alone. The capabilities action states what this lane supports,
+    degrades, and cannot do, and status reports any emulation in force. The
+    status action also names the browsers installed on this machine and
+    which lane suits which job, as steering: nothing switches a lane on its
+    own. Tool availability reflects the extension's current settings; when
+    settings change, the tool list refreshes in this conversation.
     """
     action = (action or "status").strip().lower()
 
@@ -2415,7 +2444,9 @@ async def manage_session(
                 summary=f"Open a session and load saved authentication "
                         f"state from {checked_state}? This restores a real "
                         f"login.")
-        sess = await MANAGER.open(**_parse_lane(lane))
+        sess = await MANAGER.open(device=device, viewport=viewport,
+                                  locale=locale, timezone=timezone,
+                                  **_parse_lane(lane))
         loaded = None
         if checked_state:
             # A failed load used to leave the browser running with no handle
@@ -2436,6 +2467,12 @@ async def manage_session(
             "session": sess.session_id, "lane": sess.spec.lane,
             "engine": sess.spec.label, "pages": _tab_list(sess),
             "focused": sess.focused,
+            **({"emulation": {**sess.emulation, "applied_at": "open",
+                              "note": ("these are the context's own options; "
+                                       "nothing was patched afterward and "
+                                       "nothing pretends to be a browser "
+                                       "this is not")}}
+               if sess.emulation else {}),
             **({"auth_state": loaded} if loaded else {}),
             "profile": (
                 "a freshly created KS4Web-owned directory. KS4Web never opens "
@@ -2646,6 +2683,10 @@ def _session_status(sess) -> dict:
         "idle_s": round(idle_for, 1),
         "parked_pages": sum(1 for p in sess.pages.values() if p.parked),
         "state": state,
+        # Stated only when something was actually set. A status that printed
+        # "emulation: none" on every session would be noise; a status that
+        # hid a phone-shaped context would be a lie.
+        **({"emulation": dict(sess.emulation)} if sess.emulation else {}),
     }
 
 

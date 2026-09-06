@@ -124,6 +124,12 @@ class Session:
     #: is what lets the close message tell the truth.
     saved_auth_at: float | None = None
     saved_auth_path: str | None = None
+    #: What the caller asked this context to look like at open (device
+    #: preset, viewport, locale, time zone). Empty means every default is
+    #: untouched, which is the common case and is worth being able to SAY:
+    #: a status that reports an emulation nobody set is as misleading as one
+    #: that hides an emulation somebody did.
+    emulation: dict = field(default_factory=dict)
 
     def record_auth_save(self, path: str) -> None:
         self.saved_auth_at = time.time()
@@ -199,14 +205,22 @@ class SessionManager:
         return self._pw
 
     async def open(self, lane: str | None = None, engine: str | None = None,
-                   channel: str | None = None, headless: bool | None = None
+                   channel: str | None = None, headless: bool | None = None,
+                   device: str | None = None, viewport=None,
+                   locale: str | None = None, timezone: str | None = None
                    ) -> Session:
         """Launch a browser on an owned profile and mint a session handle.
 
         The startup reaper runs here rather than at import: it is the first
         thing that happens before the first browser of the process starts, so
         a crash residue from a previous run is cleared before a new one is
-        created, and a server nobody asks to browse never sweeps anything."""
+        created, and a server nobody asks to browse never sweeps anything.
+
+        `device`, `viewport`, `locale`, and `timezone` are Playwright context
+        options and they belong HERE because a context takes them at
+        construction: a locale or a time zone changed afterward is a lie the
+        page's own scripts can see through. Omitting them all leaves every
+        default exactly where it was."""
         spec = lanes.resolve(lane=lane, engine=engine, channel=channel,
                              headless=headless)
         async with self._lock:
@@ -216,11 +230,14 @@ class SessionManager:
             _warm_estimator()
             pw = await self._playwright()
             lanes.ensure_installed(spec, pw)
+            emulation, emulation_report = lanes.emulation_kwargs(
+                spec, pw, device=device, viewport=viewport, locale=locale,
+                timezone=timezone)
             profile = hygiene.new_profile_dir(spec.engine[:2])
             sid = self._next_session_id()
             journal = hygiene.OwnedProcesses(sid, str(profile), spec.label)
             before = {p["pid"] for p in hygiene.snapshot_processes()}
-            kwargs = lanes.launch_kwargs(spec, str(profile))
+            kwargs = lanes.launch_kwargs(spec, str(profile), emulation)
             browser_type = getattr(pw, spec.engine)
             try:
                 context = await browser_type.launch_persistent_context(**kwargs)
@@ -228,7 +245,12 @@ class SessionManager:
                 hygiene._remove_tree(profile)
                 raise BadParams(
                     f"could not launch {spec.label}: {type(exc).__name__}: "
-                    f"{str(exc)[:300]}") from exc
+                    f"{str(exc)[:300]}"
+                    + (f". The emulation asked for was {emulation_report}; a "
+                       f"time zone the browser does not know and a device "
+                       f"preset an engine cannot honor both fail at launch "
+                       f"like this."
+                       if emulation_report else "")) from exc
             context.set_default_timeout(DEFAULT_TIMEOUT_MS)
             # THE INSTRUMENT CHANNEL, bound before any page script in any
             # document of this session runs. It carries the closed-root
@@ -249,7 +271,8 @@ class SessionManager:
                     pass            # a page mid-navigation gets it from the hook
             journal.adopt_descendants(since=before)
             session = Session(session_id=sid, spec=spec, context=context,
-                              profile_dir=str(profile), journal=journal)
+                              profile_dir=str(profile), journal=journal,
+                              emulation=emulation_report)
             for page in context.pages:
                 self._attach_page(session, page)
             if not session.pages:
