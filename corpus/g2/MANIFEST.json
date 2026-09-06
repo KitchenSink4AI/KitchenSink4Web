@@ -1,0 +1,18 @@
+{
+  "corpus": "g2",
+  "what": "The gauntlet-2 adversarial fixtures (2026-09-06), ported unchanged from the probe scratchpad into the tracked corpus so every finding in that round has a permanent repro.",
+  "served_by": "tests/browser/test_gauntlet2_fixes.py over a local 127.0.0.1 HTTP server; nothing here reaches the network.",
+  "pages": {
+    "creds.html": "Six fields: a real password, current-password on a type=text, one-time-code, a type=text that becomes type=password on focus, a cc-number payment field, and one ordinary control. Plus a password inside an open shadow root. C1, M6, and the credential-blindness held lines.",
+    "plain.html": "A 'Delete account' form with no payment field. H1: implicit form submission through Enter.",
+    "phantom.html": "One button a human sees and five it does not: transparent foreground and background, opacity 0.01, filter opacity(0), blur(40px), an opaque lid, and a visibility:visible child of a visibility:hidden parent. H2 and L2.",
+    "cloak_light.html": "Nine marked payloads across nine techniques, including a collapsed <details>, content-visibility hidden and auto, clip-path, an overlay, contain, and scale(0). H3.",
+    "shadow_cloak.html": "The same three techniques wrapped around an OPEN shadow root, plus inert. H3's shadow half.",
+    "poison.html": "Closed roots created with a pristine attachShadow lifted from a same-origin iframe, a zeroed counter, a Map subclass over the ref registry, a mint-time DOM swap, and a rename under a reused id. H4 and H5.",
+    "order.html": "Four reorderings of the same eight sentences: flex column-reverse, the order property, grid-template-areas placement, and slot order inside an open root. M3.",
+    "scope.html": "A component whose open root slots its light children into a labelled panel, plus a light child no slot ever assigns. M5 and M4's converse.",
+    "geo.html": "Elements parked off-screen, sized to zero, and coloured to match their background. M4.",
+    "ambig.html": "Five buttons whose accessible names are instruction text. M1.",
+    "blank.html": "The navigation target every form on these pages submits to."
+  }
+}

@@ -146,14 +146,37 @@ def test_deliberately_opening_a_login_page_is_not_a_wall(wall_site):
     run(go())
 
 
+async def _confirmed(call):
+    """Run a gated call the way the server's elicitation plumbing does: let
+    the first pass ASK, redeem the gate a human would have answered, deposit
+    it, and run the same call again.
+
+    Both callers below submit a real form, and since 2026-09-06 a submission
+    is a gated class on EVERY path that can cause one rather than only on a
+    click (gauntlet 2 C1/H1). These tests are about what the call DOES once
+    it is allowed to run, so they answer the gate rather than dodge it."""
+    from kitchensink4web.errors import ConfirmationRequired
+    from kitchensink4web.policy import gates
+    try:
+        return await call()
+    except ConfirmationRequired as ask:
+        grant = gates.ENGINE.redeem(ask.detail["requestState"],
+                                    {"allow": True})
+        gates.deposit_grant(grant)
+        try:
+            return await call()
+        finally:
+            gates.clear_grant()
+
+
 def test_type_text_submit_navigates_in_one_call(wall_site):
     """The submit idiom: type the query and submit, landing on the results
     page, in a single call rather than a type plus a racing Enter."""
     async def go():
         _, page = await _open(wall_site, "")
         await lite.navigate(page=page, url=f"{wall_site}/search")
-        res = await lite.type_text(page=page, location={"css": "#q"},
-                                   text="widgets", submit=True)
+        res = await _confirmed(lambda: lite.type_text(
+            page=page, location={"css": "#q"}, text="widgets", submit=True))
         assert "/results" in res["url"]
         assert res["changed"]["effect"] == "navigated"
     run(go())
@@ -168,8 +191,8 @@ def test_verify_during_navigation_never_leaks_a_raw_driver_string(wall_site):
         await lite.navigate(page=page, url=f"{wall_site}/search")
         # Focus the field, then press Enter to submit: the verify probe races
         # the navigation exactly as the field report's press_keys did.
-        res = await lite.press_keys(page=page, keys="Enter",
-                                    location={"css": "#q"})
+        res = await _confirmed(lambda: lite.press_keys(
+            page=page, keys="Enter", location={"css": "#q"}))
         blob = str(res)
         assert "Execution context was destroyed" not in blob
         assert "Traceback" not in blob

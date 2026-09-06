@@ -212,9 +212,15 @@ def test_several_matches_refuse_and_list_candidates_that_are_actable(
         assert "5 visible elements match" in text
         assert "no tool acts on first match" in text
         assert "Nothing was done" in text
-        # The candidate lines carry refs, and the refs resolve and act.
-        refs = [chunk.split(" | ")[0].split(": ")[-1].strip()
-                for chunk in text.split("Candidates: ")[1].split("; ")]
+        # The candidate lines carry refs, and the refs resolve and act. They
+        # ride INSIDE the page-data envelope since 2026-09-06 (gauntlet 2 M1):
+        # the lines quote accessible names verbatim and an accessible name is
+        # page-authored, so the fused tool wraps them the way find_elements
+        # already wrapped the identical strings.
+        assert "UNTRUSTED PAGE CONTENT" in text
+        block = text.split("KS4WEB-PAGE-DATA")[1].split(">>>")[1]
+        refs = [chunk.split(" | ")[0].strip()
+                for chunk in block.split("; ")]
         refs = [r for r in refs if r.startswith("e")]
         assert len(refs) == 5
         for ref in refs:
@@ -280,8 +286,14 @@ def test_form_submit_classification_gates_through_the_composite(corpus_site):
         assert (envelope.classify(fused.value)
                 == envelope.classify(split.value) == "CONFIRMATION_REQUIRED")
         # Same gated CLASS, read from the closed set rather than from a
-        # substring the message happens to carry.
-        submit_class = gates.GATED_CLASSES["form_submit"]
+        # substring the message happens to carry. `bigform.html` carries a
+        # `cc-number` field, and since 2026-09-06 a SUBMISSION is judged by
+        # the form rather than by the control that triggered it: the moment
+        # the card number leaves is the submission, so submitting a form that
+        # holds one is `payment_form` on every path that can cause it
+        # (gauntlet 2 C1). Writing an ordinary field in that same form is
+        # still ungated; only the submission escalates.
+        submit_class = gates.GATED_CLASSES["payment_form"]
         assert str(fused.value).startswith(submit_class)
         assert str(split.value).startswith(submit_class)
         assert session.page(page).page.url == url_before

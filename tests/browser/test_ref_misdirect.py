@@ -247,12 +247,17 @@ def test_in_page_only_ref_refuses_not_found(issue_site):
     async def go():
         _, page = await _open_issue(issue_site)
         sess, record = MANAGER.locate(page)
-        # Plant a key in the in-page map that the session never minted, the
-        # shape a leaked per-read extractor id or a model-invented ref takes.
-        await record.page.evaluate(
-            "() => { (window.__ks4web_refs = window.__ks4web_refs || "
-            "new Map()).set('e9999', "
-            "document.getElementById('global-search')); }")
+        # Plant a key in the in-page registry that the session never minted,
+        # the shape a leaked per-read extractor id or a model-invented ref
+        # takes. It goes in through the instrument channel because that is
+        # where the registry lives now; a page cannot reach it at all, which
+        # is the point of H5's fix, so this plants what a BUG could plant.
+        from kitchensink4web import projection
+        await record.page.evaluate(projection.instrument("""
+            () => {
+            // @@KS4WEB_INSTRUMENT@@
+              KS.refs.set('e9999', document.getElementById('global-search'));
+            }"""))
         await lite.type_text(page=page, location={"ref": "e9999"},
                              text="must not land")
     with pytest.raises(TargetNotFound):

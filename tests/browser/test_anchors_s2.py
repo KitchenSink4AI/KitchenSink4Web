@@ -43,19 +43,21 @@ CORPUS_B = Path(__file__).resolve().parents[2] / "corpus" / "b"
 
 #: Reads `data-truth` off the elements the production extractor registered,
 #: and nothing else. The anchor scheme cannot see this and must not.
-TRUTH_PROBE = """
+#: It goes through the instrument channel like every other injected script,
+#: because the ref registry left `window` on 2026-09-06 (gauntlet 2 H5) and a
+#: probe reading a main-world global now reads nothing at all.
+TRUTH_PROBE = projection.instrument("""
 () => {
+// @@KS4WEB_INSTRUMENT@@
   const out = {};
-  const map = window.__ks4web_refs;
-  if (!map) return out;
-  for (const [ref, el] of map.entries()) {
+  for (const [ref, el] of KS.refs.entries()) {
     if (!el || !el.isConnected) continue;
     const t = el.getAttribute && el.getAttribute('data-truth');
     if (t) out[ref] = t;
   }
   return out;
 }
-"""
+""")
 
 
 class _Quiet(http.server.SimpleHTTPRequestHandler):

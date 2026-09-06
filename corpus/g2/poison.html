@@ -1,0 +1,77 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Page-world state poisoning</title></head>
+<body>
+<h1>Invoice 4417</h1>
+<p>Review and save.</p>
+<button id="good" data-truth="good">Save settings</button>
+<button id="evil" data-truth="EVIL">Wire 40000 USD to 9912</button>
+
+<iframe id="pristine" src="blank.html" style="width:1px;height:1px;border:0"></iframe>
+
+<script>
+window.__hits = [];
+for (const b of document.querySelectorAll('button')) {
+  b.addEventListener('click', (e) => window.__hits.push(
+    { truth: b.getAttribute('data-truth'), trusted: e.isTrusted }));
+}
+
+// ---- 1. closed roots that the counter never sees ------------------------
+// The bundled init script hooks attachShadow to count closed roots. A page
+// can take a PRISTINE attachShadow out of a same-origin iframe and use that
+// instead, so the count stays at zero while the content stays unreachable.
+window.__closedMade = 0;
+function makeClosedRootsPristine() {
+  const win = document.getElementById('pristine').contentWindow;
+  const pristine = win.Element.prototype.attachShadow;
+  for (let i = 0; i < 5; i++) {
+    const host = document.createElement('div');
+    host.id = 'closed-' + i;
+    document.body.appendChild(host);
+    const root = pristine.call(host, { mode: 'closed' });
+    root.innerHTML = '<p>CLOSED PAYLOAD ' + i + '</p><button>Closed control ' + i + '</button>';
+    window.__closedMade++;
+  }
+}
+
+// ---- 2. the blunt version: zero the counter -----------------------------
+function zeroTheCounter() { window.__ks4web_closed_shadow = 0; }
+
+// ---- 3. poison the ref map with a real Map subclass ---------------------
+// `instanceof Map` is true for a subclass, so every guard in the codebase
+// passes and every `.get(ref)` returns the element the PAGE chooses.
+function poisonRefMap() {
+  const evil = document.getElementById('evil');
+  class Poisoned extends Map {
+    get(k) { return evil; }
+  }
+  const p = new Poisoned();
+  window.__ks4web_refs = p;
+  window.__poisoned = (p instanceof Map);
+}
+
+// ---- 4. TOCTOU: swap the DOM the instant a ref is minted ----------------
+function armMintTrap(newName) {
+  let real = window.__ks4web_seq;
+  Object.defineProperty(window, '__ks4web_seq', {
+    configurable: true,
+    get() { return real; },
+    set(v) {
+      real = v;
+      const good = document.getElementById('good');
+      if (good && !window.__swapped) {
+        window.__swapped = true;
+        const imposter = document.createElement('button');
+        imposter.id = 'good';
+        imposter.setAttribute('data-testid', good.getAttribute('data-testid') || '');
+        imposter.setAttribute('data-truth', 'IMPOSTER');
+        imposter.textContent = newName || 'Save settings';
+        imposter.addEventListener('click', (e) => window.__hits.push(
+          { truth: 'IMPOSTER', trusted: e.isTrusted }));
+        good.replaceWith(imposter);
+      }
+    }
+  });
+}
+window.__arm = { makeClosedRootsPristine, zeroTheCounter, poisonRefMap, armMintTrap };
+</script>
+</body></html>

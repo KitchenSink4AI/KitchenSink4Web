@@ -373,11 +373,17 @@ def test_a_shadow_free_page_pays_nothing_for_the_traversal(corpus_site):
     async def go():
         _, page = await _open(corpus_site, "a/wikipedia_versailles.html")
         result = await lite.get_page_view(page=page, budget_tokens=5000)
-        assert result["budget"]["used"] == 4431
+        # 4,431 until 2026-09-06; 4,500 since. The completeness block grew
+        # two lines that wave 3 owes the reader: the hidden-interactive
+        # ledger now names its techniques (gauntlet 2 H2), and a page whose
+        # containers render out of source order says so (M3). The RUNG is
+        # unchanged, which is the property this test exists for: the read
+        # still lands where it landed, it just accounts for more.
+        assert result["budget"]["used"] == 4500
         assert result["budget"]["rung"] == 6
         text = result["projection"]
         assert "shadow roots: 0 open (traversed=no), 0 closed" in text
-        assert "reported in source order" not in text
+        assert "shadow content is reported in source order" not in text
 
         found = await lite.find_elements(page=page, query="Fourteen Points")
         assert found["matched"] >= 1
