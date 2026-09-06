@@ -58,7 +58,8 @@ from ..policy import gates as _gates
 from ..policy import origins as _origins
 from ..policy import readonly
 from ..projection import (ENCODING_NAME as _ENCODING, RUNGS as _RUNGS,
-                          find as _find, ntok as _ntok, read_page, read_text)
+                          find as _find, instrument as _instrument,
+                          ntok as _ntok, read_page, read_text)
 from ..projection.render import VIEWS as _PROJECTION_VIEWS
 
 MANAGER = _session.MANAGER
@@ -1149,17 +1150,46 @@ async def type_text(
         "type_text", resolved,
         {"text": text, "clear_first": clear_first, "press_enter": press_enter,
          "submit": submit, "delay_ms": delay_ms}))
+    # THE CHOKE POINT, path 2 of 4. Pressing Enter after typing is a form
+    # submission and is classified as one, so this tool cannot submit a form
+    # the click path would have gated. Payment still wins over form_submit.
+    #
+    # NOTHING TOUCHES THE PAGE BEFORE THIS. Form membership rides the
+    # descriptor, so the submission class is computable without focusing
+    # anything, and the write-time re-check below (which must focus, because
+    # the type flip is a focus handler) runs AFTER the ladder has had its
+    # say. An earlier draft focused first and got the order wrong: the origin
+    # policy and the read-only grade are meant to refuse before the page sees
+    # anything at all.
+    handle = resolved["handle"]
+    submitting = bool((submit or press_enter) and desc.get("in_form", True))
     _policy.approve(_policy.ActionRequest(
         tool="type_text", kind="act", session=sess.session_id,
         page=record.handle, url=record.page.url, target=desc,
-        writes_value=True, action_class=_act.action_class_for(desc),
+        writes_value=True,
+        action_class=_act.action_class_for(desc, submitting=submitting),
         args={"location": location, "clear_first": clear_first,
               "press_enter": press_enter, "submit": submit},
         resolution=resolved["resolution"],
         summary=f'type into {desc.get("role")} "{desc.get("name")}" on '
-                f'{record.handle}'))
+                f'{record.handle}'
+                + (" and submit the form" if submitting else "")))
+    # THE WRITE-TIME RE-CHECK (M6). The element is focused here, which is the
+    # earliest moment a `type=text` field that turns into `type=password` on
+    # focus has actually turned, and the classification is re-taken against
+    # what it IS rather than what it was when the descriptor was built.
+    desc = await _act.recheck_at_write(record.page, handle, desc,
+                                       tool="type_text")
+    late = _act.action_class_for(desc, submitting=submitting)
+    if late and late != _act.action_class_for(resolved["descriptor"],
+                                              submitting=submitting):
+        _gates.ENGINE.ask(
+            late, tool="type_text", session=sess.session_id,
+            page=record.handle, target=desc,
+            summary=f'type into {desc.get("role")} "{desc.get("name")}" on '
+                    f'{record.handle}, which the page turned into a '
+                    f'{late.replace("_", " ")} target when it took focus?')
     before = await _act.observe(record.page, resolved["node_ref"])
-    handle = resolved["handle"]
     try:
         if clear_first:
             await handle.fill(text, timeout=timeout_for(delay_ms, len(text)))
@@ -1325,13 +1355,48 @@ async def fill_form(
                     for f, _loc, r in prepared],
          "submit": submit}))
 
+    # THE CHOKE POINT, path 3 of 4, and half of gauntlet 2's CRITICAL. This
+    # call used to pass `action_class=None` and ask only the credential layer,
+    # per field, mid-batch. So `fill_form([{css:'#cc', value:'4111...'}])`
+    # wrote a card number with no gate while the read printed
+    # `[payment-shaped: gated]` beside that very field, and `click` on the
+    # same form's submit control refused correctly. Classification now happens
+    # per field BEFORE anything is written, and a payment-shaped field
+    # anywhere in the batch gates the WHOLE batch: the card number is the
+    # thing being written, so gating only the submit that follows is a gate on
+    # the wrong event.
+    #
+    # The credential refusal also moved here, ahead of every write (L3). It
+    # fired mid-batch before, which was correct by the letter of the batch
+    # contract ("a failure stops the batch; completed items stay completed")
+    # and wrong by its spirit: every descriptor is already resolved at this
+    # point, so a credential refusal is knowable pre-flight, and "nothing was
+    # touched" is the one promise this class of refusal should be able to make.
+    batch_class = None
+    for f, _loc, r in prepared:
+        _credentials.refuse_secret_write(r["descriptor"], "fill_form")
+        cls = _act.action_class_for(r["descriptor"])
+        if cls == "payment_form":
+            batch_class = "payment_form"
+        elif cls and batch_class is None:
+            batch_class = cls
+    gate_target = None
+    if batch_class:
+        gate_target = next(
+            (r["descriptor"] for _f, _loc, r in prepared
+             if _act.action_class_for(r["descriptor"]) == batch_class), None)
+
     # One budget charge for the batch, plus read-only, origin, and loop
     # checks. The submit, if any, is gated separately AFTER the fills.
     _policy.approve(_policy.ActionRequest(
         tool="fill_form", kind="act", session=sess.session_id,
-        page=record.handle, url=record.page.url, action_class=None,
+        page=record.handle, url=record.page.url,
+        target=gate_target, action_class=batch_class,
         args={"fields": len(fields), "submit": submit},
-        summary=f"fill {len(fields)} field(s) on {record.handle}"))
+        summary=(f"fill {len(fields)} field(s) on {record.handle}"
+                 + (f' including the payment-shaped field '
+                    f'"{(gate_target or {}).get("name")}"'
+                    if batch_class == "payment_form" else ""))))
 
     per_item: list[dict] = []
     stopped = False
@@ -1352,10 +1417,26 @@ async def fill_form(
                 "error": str(exc)[:200]})
             stopped = True
             continue
-        desc = rr["descriptor"]
-        # A secret field refuses the whole call: a credential must not be
-        # written from the model's context, batch or not (DESIGN 5.3).
-        _credentials.refuse_secret_write(desc, "fill_form")
+        # RE-CLASSIFY THIS FIELD AT ITS OWN WRITE, with the element focused,
+        # because that is when the page's own handler can have changed what
+        # the field is. A `type=text` control that becomes `type=password` on
+        # focus took the write until 2026-09-06 (M6): the classification ran
+        # against the descriptor resolved before the action, the act then
+        # focused the element, and the keystrokes landed in a password field.
+        # A secret field refuses the whole call, batch or not (DESIGN 5.3).
+        desc = await _act.recheck_at_write(record.page, rr["handle"],
+                                           rr["descriptor"], tool="fill_form")
+        late = _act.action_class_for(desc)
+        if late and late != batch_class:
+            # A field that only reveals its class under focus still gates,
+            # and it gates BEFORE its own write rather than after it.
+            _gates.ENGINE.ask(
+                late, tool="fill_form", session=sess.session_id,
+                page=record.handle, target=desc,
+                summary=f'write into {desc.get("role")} '
+                        f'"{desc.get("name")}" on {record.handle}, which the '
+                        f'page turned into a {late.replace("_", " ")} target '
+                        f'when it took focus?')
         try:
             set_result = await _set_field(record.page, rr, f.get("value"))
         except Exception as exc:
@@ -1432,36 +1513,29 @@ async def _submit_form(record, fresh: dict | None) -> str:
     if fresh is None:
         raise BadParams("nothing was filled, so there is no form to submit.")
     handle = fresh["handle"]
-    sub_ref = await record.page.evaluate(
-        r"""(el) => {
-          const f = el.form || (el.closest ? el.closest('form') : null);
-          if (!f) return null;
-          const c = f.querySelector('button[type=submit], input[type=submit], '
-                                    + 'button:not([type])');
-          if (!c) return '';
-          const map = (window.__ks4web_refs instanceof Map)
-            ? window.__ks4web_refs : (window.__ks4web_refs = new Map());
-          const ref = 'x' + (window.__ks4web_seq =
-                             (window.__ks4web_seq || 0) + 1);
-          map.set(ref, c);
-          return ref; }""", handle)
-    if sub_ref is None:
+    # The submit control comes back as a HANDLE rather than as a key into an
+    # in-page map. There is no key to poison, no map to replace, and one round
+    # trip less: the driver already speaks element handles, and routing this
+    # through a page-visible registry was the habit gauntlet 2's H5 exploited
+    # everywhere else in the build.
+    in_form = await record.page.evaluate(
+        "(el) => !!(el.form || (el.closest ? el.closest('form') : null))",
+        handle)
+    if not in_form:
         raise BadParams(
             "the confirmed field is not inside a <form>; there is nothing "
             "to submit.")
+    btn = await record.page.evaluate_handle(
+        r"""(el) => {
+          const f = el.form || (el.closest ? el.closest('form') : null);
+          if (!f) return null;
+          return f.querySelector('button[type=submit], input[type=submit], '
+                                 + 'button:not([type])'); }""", handle)
     try:
-        if sub_ref:
-            btn = await record.page.evaluate_handle(
-                "r => window.__ks4web_refs.get(r)", sub_ref)
-            element = btn.as_element()
-            if element is not None:
-                await element.click(timeout=8000)
-                how = "clicked the form's submit control (trusted input)"
-            else:
-                await handle.evaluate(
-                    "el => { const f = el.form || el.closest('form'); "
-                    "f.requestSubmit ? f.requestSubmit() : f.submit(); }")
-                how = "requestSubmit()"
+        element = btn.as_element()
+        if element is not None:
+            await element.click(timeout=8000)
+            how = "clicked the form's submit control (trusted input)"
         else:
             await handle.evaluate(
                 "el => { const f = el.form || el.closest('form'); "
@@ -1485,6 +1559,41 @@ def _field_location(f: dict) -> dict:
             "'value', for example {'ref': 'e12', 'value': 'a@b.com'} or "
             "{'css': '#country', 'value': 'Canada'}.")
     return {k: v for k, v in f.items() if k not in ("value", "action")}
+
+
+_FOCUSED_JS = r"""
+() => {
+  const el = document.activeElement;
+  if (!el || el === document.body || el === document.documentElement) return null;
+  const f = el.form || (el.closest ? el.closest('form') : null);
+  return {
+    role: (el.tagName || '').toLowerCase(),
+    name: (el.getAttribute('aria-label') || el.getAttribute('name')
+           || el.getAttribute('placeholder') || '').slice(0, 80),
+    type: (el.type || '').toLowerCase(),
+    autocomplete: (el.getAttribute('autocomplete') || '').toLowerCase(),
+    in_form: !!f,
+    action: f ? (f.getAttribute('action') || '') : '',
+    form_payment: !!(f && f.querySelector('[autocomplete*="cc-number"],'
+      + '[autocomplete*="cc-exp"],[autocomplete*="cc-csc"],'
+      + '[autocomplete*="cc-name"]')),
+    page_key: location.origin + location.pathname + location.hash
+  };
+}
+"""
+
+
+async def _focused_descriptor(page) -> dict | None:
+    """What currently holds focus, described the way the classifier reads it.
+
+    A global `press_keys(keys='Enter')` carries no location, so without this
+    the submission classifier has nothing to classify and the call becomes
+    the bypass again one indirection later: focus a card field with one call,
+    press Enter globally with the next."""
+    try:
+        return await page.evaluate(_FOCUSED_JS)
+    except Exception:
+        return None
 
 
 def _outcome_name(exc: Exception) -> str:
@@ -1529,13 +1638,32 @@ async def press_keys(
     _audit.annotate(replay=_replay_record(
         "press_keys", resolved,
         {"keys": keys, "repeat": repeat, "delay_ms": delay_ms}))
+    # THE CHOKE POINT, path 4 of 4, and the one gauntlet 2 rode end to end.
+    # Enter inside a form is IMPLICIT FORM SUBMISSION, the oldest submit path
+    # on the web, and it was the one path in the build that computed no gate
+    # class at all: two calls filled a card number and submitted it (C1), and
+    # the same two keystrokes submitted a "Delete account" form (H1), while
+    # clicking that form's own submit control refused correctly. The class is
+    # now computed from the SAME function the click path uses, against the
+    # same descriptor, so the four write paths agree by construction.
+    #
+    # With no location the target is whatever holds focus, and that case is
+    # gated too: focus-then-global-Enter is the same submission wearing two
+    # calls instead of one.
+    if resolved is None and _act.submits_by_key(keys):
+        desc = await _focused_descriptor(record.page) or {}
+    submitting = bool(_act.submits_by_key(keys) and desc.get("in_form"))
     _policy.approve(_policy.ActionRequest(
         tool="press_keys", kind="act", session=sess.session_id,
         page=record.handle, url=record.page.url,
         target=desc or None,
+        action_class=_act.action_class_for(desc, submitting=submitting)
+        if desc else None,
         resolution=(resolved or {}).get("resolution", "ok"),
         args={"keys": keys, "repeat": repeat},
-        summary=f"press {keys!r} x{repeat} on {record.handle}"))
+        summary=f"press {keys!r} x{repeat} on {record.handle}"
+                + (" (submits the form the focused control is in)"
+                   if submitting else "")))
     before = await _act.observe(record.page, node_ref)
     try:
         if resolved is not None:
@@ -1618,8 +1746,8 @@ async def scroll(
 
 _SCROLL_JS = r"""
 (opts) => {
-  const map = window.__ks4web_refs instanceof Map ? window.__ks4web_refs : null;
-  const el = (map && opts.ref) ? map.get(opts.ref) : null;
+// @@KS4WEB_INSTRUMENT@@
+  const el = opts.ref ? KS.refs.get(opts.ref) : null;
   const vpH = window.innerHeight || 900;
   const step = Math.max(1, opts.amount) * vpH;
   if (opts.action === 'by' || opts.action === 'next') {
@@ -1659,6 +1787,7 @@ _SCROLL_JS = r"""
     at_end: (y + vpH) >= docH - 4, virtual: virtual };
 }
 """
+_SCROLL_JS = _instrument(_SCROLL_JS)
 
 
 async def wait_for(
@@ -1912,14 +2041,21 @@ async def find_and_act(
     # way, so the ambiguity decision is made on the VISIBLE count.
     visible = found["total_matches"] - found["hidden_matches"]
     if visible > 1:
-        listed = "; ".join(_match_line(m) for m in found["matches"])
+        # THE ENVELOPE, on the fused path too. `find_elements` wraps these
+        # exact strings through the same `_match_line`, and for one round
+        # this tool rendered them bare: up to twelve accessible names at 80
+        # characters each, roughly 960 bytes of page-authored prose per
+        # refusal, arriving in the server's own voice (gauntlet 2 M1).
+        listed = _pagedata.wrap_line(
+            "; ".join(_match_line(m) for m in found["matches"]),
+            url=found["url"])
         more = visible - found["returned"]
         raise AmbiguousLocation(
             f'{visible} visible elements match {query!r}'
             + (f' with role={role!r}' if role else '') + scope_bit
-            + f' and no tool acts on first match. Candidates: {listed}'
-            + (f'; and {more} more' if more > 0 else '')
-            + f'. Nothing was done. Act on one of those refs directly '
+            + f' and no tool acts on first match. Candidates:\n{listed}\n'
+            + (f'and {more} more. ' if more > 0 else '')
+            + f'Nothing was done. Act on one of those refs directly '
             f'({action if action != "type" else "type_text"}(page='
             f'{record.handle!r}, location={{"ref": "..."}})), or narrow the '
             f'search with role= or a longer query.')
@@ -1960,14 +2096,20 @@ async def find_and_act(
     result["tool"] = "find_and_act"
     result["acted"] = action
     # What the search settled on, so the caller can see WHICH element the one
-    # match was without a second read.
+    # match was without a second read. The match line quotes the accessible
+    # name verbatim and an accessible name is page-authored, so it rides the
+    # same labeled envelope `find_elements` puts its result lines in; the
+    # note also covers `target.name`, which carries the same string.
+    match_line, page_note = _pagedata.wrap(_match_line(hit), url=found["url"])
     result["found"] = {
         "query": query, "kind": found["searched"],
         "role": role, "scope": within if found.get("scope") else "whole page",
-        "match": _match_line(hit),
+        "match": match_line,
         "candidates_scanned": found["candidates_scanned"],
         "hidden_matches": found["hidden_matches"],
     }
+    page_note["covers"] = ["found.match", "target.name"]
+    result["page_data"] = page_note
     return result
 
 

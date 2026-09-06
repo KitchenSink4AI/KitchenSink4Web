@@ -46,7 +46,7 @@ from ..anchors import Outcome, ladder
 from ..errors import (AmbiguousLocation, BadParams, ModalBlocked, StaleAnchor,
                       TargetChanged, TargetNotFound, Timeout)
 from ..policy import credentials
-from ..projection import extract
+from ..projection import extract, instrument
 
 # --------------------------------------------------------------- selectors
 
@@ -138,11 +138,12 @@ def selector_of(location: dict | None) -> tuple[str, object]:
 #: resolved element is reached exactly the way a read-minted ref is.
 _RESOLVE_JS = r"""
 (opts) => {
+// @@KS4WEB_INSTRUMENT@@
+// @@KS4WEB_VISIBILITY@@
   const loc = opts.location || {};
   const squash = (s) => (typeof s === 'string' ? s : '').replace(/\s+/g, ' ').trim();
   const clip = (s, n) => { s = squash(s); return s.length <= n ? s : s.slice(0, n) + '...'; };
-  const map = (window.__ks4web_refs instanceof Map)
-    ? window.__ks4web_refs : (window.__ks4web_refs = new Map());
+  const map = KS.refs;
   // Open-shadow-root targeting (2026-09-06). Default ON, so an element the
   // page view can SEE is an element this resolver can reach; `shadow: false`
   // in the location opts out. The root list is built once and reused by every
@@ -169,33 +170,17 @@ _RESOLVE_JS = r"""
     for (const root of roots()) for (const el of root.querySelectorAll(sel)) out.push(el);
     return out;
   }
-  // THE SHADOW BOUNDARY HOP: the top child of a shadow root has
-  // `parentElement === null`, so a plain climb sees no hidden ancestor and
-  // lets content under a display:none host through the visible filter. It
-  // runs unconditionally, because a ref minted anywhere can arrive here.
-  function up(n) {
-    if (!n) return null;
-    if (n.parentElement) return n.parentElement;
-    const r = n.getRootNode && n.getRootNode();
-    return (r && r.host) ? r.host : null;
-  }
+  // The shadow-boundary hop and the whole hidden-technique set come from the
+  // ONE shared source spliced in above, so the resolver, the search, the
+  // projection, and the prose read cannot disagree about what a human sees.
+  const up = ksUp;
+  const cs = ksCS;
   function byId(el, id) {
     const r = el.getRootNode ? el.getRootNode() : document;
     if (r && typeof r.getElementById === 'function') return r.getElementById(id);
     return document.getElementById(id);
   }
-  const styleCache = new Map();
-  const cs = (el) => { let v = styleCache.get(el); if (v === undefined) { v = getComputedStyle(el); styleCache.set(el, v); } return v; };
-  function hiddenAnywhere(el) {
-    for (let n = el; n && n !== document.documentElement; n = up(n)) {
-      if (n.getAttribute && n.getAttribute('aria-hidden') === 'true') return true;
-      if (n.hasAttribute && n.hasAttribute('hidden')) return true;
-      const s = cs(n);
-      if (s.display === 'none' || s.visibility === 'hidden') return true;
-      if (parseFloat(s.opacity) === 0) return true;
-    }
-    return false;
-  }
+  function hiddenAnywhere(el) { return ksHiddenAnywhere(el) !== null; }
   const TAG_ROLE = { A: 'link', BUTTON: 'button', SELECT: 'combobox', TEXTAREA: 'textbox',
     SUMMARY: 'button', OPTION: 'option', IMG: 'img', TABLE: 'table' };
   const INPUT_ROLE = { checkbox: 'checkbox', radio: 'radio', submit: 'button', button: 'button',
@@ -234,6 +219,10 @@ _RESOLVE_JS = r"""
     catch (e) { return el.getAttribute('href'); }
   }
   const INTERACTIVE = 'a[href],button,input,select,textarea,summary,[role],[onclick],[tabindex]:not([tabindex="-1"])';
+  // A form is payment-shaped when ANY field in it is, so every control in
+  // that form -- including its submit button -- gates as one.
+  const PAYMENT_SEL = '[autocomplete*="cc-number"],[autocomplete*="cc-exp"],'
+    + '[autocomplete*="cc-csc"],[autocomplete*="cc-name"]';
 
   let cands = [], how = '';
   try {
@@ -319,8 +308,9 @@ _RESOLVE_JS = r"""
 
   if (uniq.length === 1) {
     const el = uniq[0];
-    const ref = 'x' + (window.__ks4web_seq = (window.__ks4web_seq || 0) + 1);
+    const ref = 'x' + (KS.seq = (KS.seq || 0) + 1);
     map.set(ref, el);
+    KS.refof.set(el, ref);
     const d = describe(el);
     const r = d.role;
     const formEl = el.form || el.closest('form');
@@ -375,6 +365,7 @@ _RESOLVE_JS = r"""
     return { count: 1, how: how, ref: ref, role: r, name: d.name, path: d.path,
       tag: el.tagName, type: type, autocomplete: ac, secret: (type === 'password'),
       in_form: inForm, form_action: formEl ? (formEl.getAttribute('action') || '') : '',
+      form_payment: !!(formEl && formEl.querySelector(PAYMENT_SEL)),
       page_key: pageKey,
       anchor: { page_key: pageKey, role: r, name: d.name,
         landmark: lm.kind, landmark_label: lm.label,
@@ -407,16 +398,16 @@ _RESOLVE_JS = r"""
 #: own state (value / checked / aria-expanded) catch the rest.
 _OBSERVE_JS = r"""
 (opts) => {
-  const map = window.__ks4web_refs instanceof Map ? window.__ks4web_refs : null;
-  const el = (map && opts.ref) ? map.get(opts.ref) : null;
-  window.__ks4web_act = window.__ks4web_act || {};
-  const token = 'w' + (window.__ks4web_actseq = (window.__ks4web_actseq || 0) + 1);
+// @@KS4WEB_INSTRUMENT@@
+  const map = KS.refs;
+  const el = opts.ref ? map.get(opts.ref) : null;
+  const token = 'w' + (KS.actseq = (KS.actseq || 0) + 1);
   const rec = { mutated: false };
   try {
     rec.obs = new MutationObserver(() => { rec.mutated = true; });
     rec.obs.observe(document.documentElement, { subtree: true, childList: true, attributes: true, characterData: true });
   } catch (e) {}
-  window.__ks4web_act[token] = rec;
+  KS.act[token] = rec;
   function sig(node) { if (!node || node === document.body || node === document.documentElement) return '(body)';
     const id = node.id ? '#' + node.id : ''; const nm = (node.getAttribute && node.getAttribute('aria-label')) || (node.textContent || '').slice(0, 30);
     return (node.tagName || '?') + id + '|' + (nm || '').replace(/\s+/g, ' ').trim(); }
@@ -430,11 +421,11 @@ _OBSERVE_JS = r"""
 
 _AFTER_JS = r"""
 (opts) => {
-  const store = window.__ks4web_act || {};
+// @@KS4WEB_INSTRUMENT@@
+  const store = KS.act;
   const rec = store[opts.token]; let mutated = false;
   if (rec) { mutated = !!rec.mutated; try { rec.obs && rec.obs.disconnect(); } catch (e) {} delete store[opts.token]; }
-  const map = window.__ks4web_refs instanceof Map ? window.__ks4web_refs : null;
-  const el = (map && opts.ref) ? map.get(opts.ref) : null;
+  const el = opts.ref ? KS.refs.get(opts.ref) : null;
   function sig(node) { if (!node || node === document.body || node === document.documentElement) return '(body)';
     const id = node.id ? '#' + node.id : ''; const nm = (node.getAttribute && node.getAttribute('aria-label')) || (node.textContent || '').slice(0, 30);
     return (node.tagName || '?') + id + '|' + (nm || '').replace(/\s+/g, ' ').trim(); }
@@ -450,6 +441,14 @@ _AFTER_JS = r"""
 #: reading the outcome. A React setState re-render lands async, so a same-tick
 #: read would miss it and report a false none-observed.
 _SETTLE_MS = 80
+
+#: Every injected source in this module goes through the same splice the
+#: projection's scripts do: the instrument prelude, so nothing load-bearing
+#: sits in a page-writable global, and the one hidden-detection source, so the
+#: acting path's idea of "visible" is the read's idea of "visible".
+_RESOLVE_JS = instrument(_RESOLVE_JS)
+_OBSERVE_JS = instrument(_OBSERVE_JS)
+_AFTER_JS = instrument(_AFTER_JS)
 
 
 # ----------------------------------------------------------- descriptors
@@ -506,18 +505,142 @@ def target_descriptor(unit: dict) -> dict:
         "payment": unit.get("payment"),
         "type": unit.get("type"),
         "autocomplete": unit.get("autocomplete"),
+        # Form membership travels with the descriptor because the submission
+        # classifier needs it: Enter is only a submission inside a form. The
+        # extractor spells it `form`, the live resolver spells it `in_form`,
+        # and the classifier should not have to know which path it came from.
+        "in_form": (unit.get("in_form") if unit.get("in_form") is not None
+                    else unit.get("form")),
+        # Whether the FORM this control belongs to carries a payment field
+        # anywhere in it, which is what `payment_form` has always claimed to
+        # be about.
+        "form_payment": unit.get("form_payment"),
     }
 
 
 def action_class_for(desc: dict, *, submitting: bool = False) -> str | None:
-    """The gated class for an action on this target, or None. A submit-typed
-    control and an explicit form submission are `form_submit`; a payment-shaped
-    field is `payment_form`. Everything else acts without a gate (DESIGN 5.4)."""
+    """THE SUBMISSION AND PAYMENT CLASSIFIER. One function, and every path that
+    can submit a form or write a payment-shaped field calls it.
+
+    A submit-typed control and an explicit form submission are `form_submit`;
+    a payment-shaped field is `payment_form`, and payment wins, so a card
+    field inside a batch gates the batch as payment rather than as a plain
+    submit. Everything else acts without a gate (DESIGN 5.4).
+
+    Gauntlet 2 (2026-09-06) found this reached from two of the six acting
+    tools. `fill_form` passed `action_class=None` and only asked the
+    credential layer per field, so a `cc-number` field took the write ungated
+    while the read printed `[payment-shaped: gated]` beside it (C1). And
+    `press_keys` passed no class at all, so Enter in a form -- implicit form
+    submission, the oldest submit path on the web -- submitted anything,
+    payment or account deletion, with no gate computed (H1). The gate was
+    never broken; two tools were outside it. `test_gate_parity.py` now pins
+    all four write paths to the same verdict on the same fixture, so a fifth
+    path cannot be added that quietly skips this."""
+    # WRITING a payment-shaped field is `payment_form` wherever it happens.
     if credentials.is_payment_field(desc):
         return "payment_form"
     if submitting or (desc.get("type") or "").lower() == "submit":
-        return "form_submit"
+        # And SUBMITTING is judged by the form, not by the control that
+        # triggered it, because the submission is the moment the card number
+        # leaves. Reading payment as a field-only property split the four
+        # write paths apart on one fixture: filling `#cc` classified
+        # `payment_form` while clicking that same form's Sign-in button --
+        # the call that actually sends the number -- classified the weaker
+        # `form_submit`. Escalation is scoped to submissions on purpose: a
+        # checkout page has an email field and a postcode field too, and
+        # gating every keystroke in the form because a card field shares it
+        # would make the gate the thing people route around.
+        return "payment_form" if desc.get("form_payment") else "form_submit"
     return None
+
+
+#: Keys that submit a form implicitly. Enter in a single-line control inside a
+#: form is a submission per the HTML spec; Ctrl+Enter is the near-universal
+#: convention in a textarea, where a bare Enter inserts a newline instead.
+_SUBMIT_KEYS = ("enter", "numpadenter", "return")
+
+
+def submits_by_key(keys: str | None) -> bool:
+    """Whether this key or chord is a form submission in a form context."""
+    parts = [p.strip().lower() for p in str(keys or "").split("+") if p.strip()]
+    if not parts:
+        return False
+    base = parts[-1]
+    modifiers = set(parts[:-1])
+    if base not in _SUBMIT_KEYS:
+        return False
+    # Shift+Enter is the newline convention, not a submission; Alt+Enter is a
+    # platform chord. Ctrl/Meta+Enter and a bare Enter both submit.
+    return not (modifiers & {"shift", "alt"})
+
+
+#: What the live element says about itself RIGHT NOW: the field-type flip
+#: (gauntlet 2 M6) resolves a descriptor while the field is `type=text`, then
+#: the page's own focus handler turns it into `type=password` under the
+#: keystrokes. Classification has to be re-taken against the focused element,
+#: not against the descriptor that was true a moment earlier.
+_LIVE_FIELD_JS = r"""
+(el) => ({
+  tag: el.tagName,
+  type: (el.type || '').toLowerCase(),
+  autocomplete: (el.getAttribute('autocomplete') || '').toLowerCase(),
+  name: (el.getAttribute('aria-label') || el.getAttribute('name')
+         || el.getAttribute('placeholder') || '').slice(0, 80),
+  in_form: !!(el.form || (el.closest ? el.closest('form') : null)),
+  action: (el.form && el.form.getAttribute('action')) || '',
+  form_payment: (() => {
+    const f = el.form || (el.closest ? el.closest('form') : null);
+    if (!f) return false;
+    return !!f.querySelector('[autocomplete*="cc-number"],'
+      + '[autocomplete*="cc-exp"],[autocomplete*="cc-csc"],'
+      + '[autocomplete*="cc-name"]');
+  })()
+})
+"""
+
+
+async def live_field(page, handle) -> dict:
+    """Read the target's own current type and autocomplete off the page."""
+    try:
+        return await page.evaluate(_LIVE_FIELD_JS, handle)
+    except Exception:
+        return {}
+
+
+async def recheck_at_write(page, handle, desc: dict, *, tool: str) -> dict:
+    """Re-classify the FOCUSED element immediately before a write, and refuse
+    a secret field however it got that way.
+
+    The order matters and is the whole fix for M6: focus first, because the
+    flip is a focus handler, then read the type, then decide. A field that
+    was `type=text` at resolution and is `type=password` under the cursor
+    refuses exactly like a field that declared itself honestly, and nothing
+    has been typed when it does.
+
+    CALL IT AFTER `policy.approve`, never before. Focusing an element is
+    something the page can observe, and the ladder's stated order puts the
+    read-only grade and the origin policy ahead of anything that touches the
+    page at all. Every argument this needs (form membership, whether the form
+    holds a payment field) already rides the descriptor, so the submission
+    class is computable without focusing and the two steps do not have to be
+    reordered to fit."""
+    try:
+        await handle.focus()
+    except Exception:
+        pass                        # a control that cannot focus cannot flip
+    live = await live_field(page, handle)
+    if not live:
+        return desc
+    merged = dict(desc)
+    for key in ("type", "autocomplete", "in_form", "action",
+                "form_payment"):
+        if live.get(key) not in (None, ""):
+            merged[key] = live[key]
+    merged["secret"] = None         # re-derived from the live type, not reused
+    merged["payment"] = None
+    credentials.refuse_secret_write(merged, tool)
+    return merged
 
 
 # ------------------------------------------------------------- resolution
@@ -591,6 +714,12 @@ async def _resolve_ref(sess, record, ref: str, *, tool: str,
             raise StaleAnchor(
                 f"{ref!r} resolved to an element that is no longer in the DOM. "
                 f"Re-read the page and use the ref it returns.")
+        # The live resolver filters cloaked candidates out before they can be
+        # chosen; the REF path has no such filter, so an element that was
+        # visible when the ref was minted and is invisible now gets the same
+        # answer here (gauntlet 2 H2).
+        if acting:
+            await refuse_if_cloaked(record.page, handle, tool=tool)
         rebound = None
         if verdict == Outcome.REBOUND:
             # H2 (gauntlet 2026-09-06): a stable attribute key (testid, id,
@@ -709,19 +838,69 @@ async def _resolve_live(sess, record, location: dict, *, tool: str) -> dict:
         f'nothing visible matches this selector ({found.get("how")}).{hint}')
 
 
+_HANDLE_JS = instrument(r"""
+(r) => {
+// @@KS4WEB_INSTRUMENT@@
+  const el = KS.refs.get(r);
+  return (el && el.isConnected) ? el : null;
+}
+""")
+
+
 async def _handle(page, node_ref: str):
-    # The isConnected check matters: a detached element still answers
-    # `as_element()`, and acting on it either fails late with a driver
-    # timeout or, worse, lands on nothing while reporting motion.
-    jsh = await page.evaluate_handle(
-        "r => { const el = window.__ks4web_refs && window.__ks4web_refs"
-        ".get(r); return (el && el.isConnected) ? el : null; }",
-        node_ref)
+    # THE FINAL HANDLE, and the one line gauntlet 2's H5 rode. It used to read
+    # `window.__ks4web_refs`, a main-world global any page script could
+    # replace: a `class Poisoned extends Map` returned the attacker's button
+    # for every key, the trusted click landed there, and the result still
+    # reported the name the model had asked for. The registry now lives in the
+    # instrument channel's closure, which the page can neither read nor write,
+    # so there is nothing here to poison.
+    #
+    # The isConnected check matters for the ordinary case: a detached element
+    # still answers `as_element()`, and acting on it either fails late with a
+    # driver timeout or, worse, lands on nothing while reporting motion.
+    jsh = await page.evaluate_handle(_HANDLE_JS, node_ref)
     element = jsh.as_element()
     if element is None:
         await jsh.dispose()
         return None
     return element
+
+
+#: The cloaking refusal (gauntlet 2 H2). An element that is laid out,
+#: hit-testable, and dispatches trusted input while a human cannot see it is
+#: not a target: a page that can steer the agent onto an invisible control has
+#: the agent's trusted click. Named techniques only, because geometry is a
+#: layout fact the driver scrolls to rather than a disguise.
+_CLOAK_JS = instrument(r"""
+(el) => {
+// @@KS4WEB_VISIBILITY@@
+  const r = ksCloakReason(el);
+  return r ? { reason: r, why: KS_CLOAK_TECHNIQUES[r] } : null;
+}
+""")
+
+
+async def refuse_if_cloaked(page, handle, *, tool: str) -> None:
+    """Refuse to act on an element a human cannot see, naming the technique.
+
+    The hidden route stays open: `get_text(include_hidden=True)` reports the
+    content, and the completeness block counts the control. What closes is
+    ACTING on it, which is the half a hostile page wants."""
+    try:
+        verdict = await page.evaluate(_CLOAK_JS, handle)
+    except Exception:
+        return                      # a probe that cannot run never refuses
+    if not verdict:
+        return
+    raise TargetNotFound(
+        f'{tool} will not act on this element: it is in the page and a human '
+        f'cannot see it ({verdict["why"]}). A control that is invisible and '
+        f'still clickable is how a page steers an agent onto something the '
+        f'user never saw, so nothing was done. The content is still readable '
+        f'through the labeled route, get_text(include_hidden=true), and the '
+        f'read\'s completeness block counts it as hidden interactive with the '
+        f'technique named.')
 
 
 def _candidate_text(candidates) -> str:
