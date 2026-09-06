@@ -2,7 +2,7 @@
   "manifest_version": "0.3",
   "name": "kitchensink4web-dev",
   "display_name": "KitchenSink4Web (field test)",
-  "version": "0.0.0",
+  "version": "1.0.0",
   "description": "Field-test build of the KitchenSink4Web browser MCP server: same code as the shipped bundle, different install-screen defaults",
   "long_description": "This is the field-test build. It runs exactly the same server as the shipped bundle and differs only in what the install screen starts with: the cookies-and-logins pack is already on, because saving and reloading a login is what field tests spend their time on, and there are two boxes for choosing which browser the server drives. Everything the shipped bundle refuses to do by default, this build still refuses: acting stays off until you turn it on, and the safety layer is the same one. Launching this bundle requires uv (the uvx command) on your machine; the server itself is fetched from PyPI on first launch. Use the shipped bundle for anything that is not a test.",
   "author": {
@@ -36,7 +36,7 @@
     "mcp_config": {
       "command": "uvx",
       "args": [
-        "kitchensink4web==0.0.0"
+        "kitchensink4web==1.0.0"
       ],
       "env": {
         "KS4WEB_ALLOW_ACTING": "${user_config.allow_acting}",

@@ -1,6 +1,6 @@
 [project]
 name = "kitchensink4web"
-version = "0.0.0"
+version = "1.0.0"
 description = "Kitchen-sink browser MCP server: a cheap first read of any page, durable refs, and a shipped safety layer"
 readme = "README.md"
 # DESIGN 10.3 rule 5 held the license out of every file until the decision

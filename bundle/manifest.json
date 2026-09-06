@@ -2,7 +2,7 @@
   "manifest_version": "0.3",
   "name": "kitchensink4web",
   "display_name": "KitchenSink4Web",
-  "version": "0.0.0",
+  "version": "1.0.0",
   "description": "Kitchen-sink browser MCP server: a cheap first read of any page, durable refs, and a shipped safety layer",
   "long_description": "A Model Context Protocol server for browser automation. get_page_view reads any page as a budgeted orientation with references Claude can act on; the safety layer ships on by default: server-level read-only mode, credential blindness, confirmation gates on form submits and payments, per-session budgets, and an audit trail. Capability packs (data extraction, screenshots, network, storage, downloads, diagnostics, workflows) are chosen below at install time and are fixed for the whole session. Launching this bundle requires uv (the uvx command) on your machine; the server itself is fetched from PyPI on first launch and uses its own bundled Chromium, never your browser or profile. Tip: in Claude Desktop's Tool permissions, set the Read-only tools group to Always Allow: those tools cannot change anything, and it stops most permission prompts.",
   "author": {
@@ -36,7 +36,7 @@
     "mcp_config": {
       "command": "uvx",
       "args": [
-        "kitchensink4web==0.0.0"
+        "kitchensink4web==1.0.0"
       ],
       "env": {
         "KS4WEB_ALLOW_ACTING": "${user_config.allow_acting}",

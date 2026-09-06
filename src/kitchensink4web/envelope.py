@@ -181,9 +181,16 @@ HINTS: dict[str, str] = {
         "and which lane supports it. manage_session(action='capabilities') "
         "lists the full truth table"
     ),
+    # The old hint promised "the tool that clears it". There is no dialog
+    # tool, and the driver dismisses native dialogs on its own, so the hint
+    # named a route that does not exist inside a product whose whole claim is
+    # that it returns verified outcomes. A dialog tool is next-cycle scope.
     "MODAL_BLOCKED": (
-        "a dialog or file chooser is pending and nothing else can proceed; "
-        "the message names it and the tool that clears it"
+        "a native dialog (alert, confirm, or prompt) is blocking the page, "
+        "and this build cannot answer it: the browser driver dismisses such "
+        "dialogs automatically, and a confirm() dismissed this way reads as "
+        "Cancel. If this step depends on answering the dialog, it needs a "
+        "human session for now."
     ),
     "TIMEOUT": (
         "the wait expired; the message names what was awaited and what was "

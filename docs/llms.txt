@@ -6,7 +6,7 @@
 > tools that click, type and submit are NOT REGISTERED: read-only is the
 > shipped default and it is a property of the tool list, not a runtime check.
 
-Release: not released. Version 0.0.0, pre-ship.
+Release: 1.0.0.
 Transport: stdio.
 Platform: cross-platform. The default lane drives the server's own bundled
 Chromium, downloaded by Playwright on first use, never the user's browser and
@@ -28,7 +28,7 @@ of which ship with the source.
   mid-session `enable_tools` here, by design: an absent pack is provably
   absent rather than switched off.
 - `get_page_view` is the cheap first read and the one you should reach for.
-  On the frozen Treaty of Versailles article it costs 4,426 tokens at the
+  On the frozen Treaty of Versailles article it costs 4,495 tokens at the
   default 5,000 budget. The same page dumped as visible text costs 33,073, as
   a flat role-and-name listing 64,596, as serialized DOM 691,486.
 - The budget is a hard ceiling, not a target. The read renders at the highest
@@ -165,7 +165,7 @@ human flips, which is a launch-time instruction and not an in-session route.
 
 ## 8. Test evidence
 
-598 tests, 192 of which drive a real browser. Gate batteries re-run the
+678 tests, 265 of which drive a real browser. Gate batteries re-run the
 findings of four adversarial attack rounds covering prompt injection through
 page content, hidden-text smuggling, credential-theft attempts, gate
 bypasses, workflow replay tampering, and resource abuse. A live field

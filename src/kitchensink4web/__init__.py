@@ -21,4 +21,4 @@ Package boundary (DESIGN 10.3 rule 3), enforced by a test:
     ops and engine depend on policy. policy depends on NEITHER, ever.
 """
 
-__version__ = "0.0.0"
+__version__ = "1.0.0"

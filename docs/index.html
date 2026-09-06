@@ -12,14 +12,14 @@
   flagged there for main-thread review. The six translations are the build
   agent's and are flagged for the author's optional native read.
 
-  MEASURED NUMBERS (tools/measure_readme_numbers.py, 2026-09-06 KST):
+  MEASURED NUMBERS (tools/measure_readme_numbers.py, 2026-09-06 KST, restamped after fix wave 5 and the design-pass merge):
     33,073  raw dump of the frozen Treaty of Versailles page (o200k_base,
             cheapest of three dump flavors: visible text 33,073, flat role
             listing 64,596, serialized DOM 691,486)
-    4,426   this server's first read of the same page (rung 6, budget 5,000)
+    4,495   this server's first read of the same page (rung 6, budget 5,000)
     82      delta read after one click (corpus/b/pathological.html)
     15      lite tools / ~4.1k tokens;  41 full / ~10.2k tokens
-    598     tests, 192 of them driving a real browser
+    678     tests, 265 of them driving a real browser
     16      rungs on the budget ladder
   The DEPT. 00 map panel quotes the real region rows from
   corpus/a/out/wikipedia_versailles.projection.txt. The DEPT. 00 dump panel
@@ -40,7 +40,7 @@
   STOREFRONT: https://nometalalchemist.github.io/ (do not edit it from here)
 -->
 <title>KitchenSink4Web: Everything plus the kitchen sink for the open web</title>
-<meta name="description" content="A browser MCP server that reads a whole page for the price of a paragraph. A raw dump of one Wikipedia article costs 33,073 tokens; this server's first read of it costs 4,426, and every region is priced before you open it. Starts read-only: the tools that click and type are absent until you switch them on.">
+<meta name="description" content="A browser MCP server that reads a whole page for the price of a paragraph. A raw dump of one Wikipedia article costs 33,073 tokens; this server's first read of it costs 4,495, and every region is priced before you open it. Starts read-only: the tools that click and type are absent until you switch them on.">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🪴</text></svg>">
 <link rel="llms" href="llms.txt" type="text/plain">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -502,10 +502,10 @@ footer a{color:var(--brass)}
   <p class="tagline rev d3" data-i18n="hero.tagline">Everything plus the kitchen sink for the open web: this server lets your AI browse real websites, reads whole pages for a fraction of the usual cost, and cannot click anything until you say so.</p>
   <div class="specs-strip rev d4">
     <div class="spec"><span class="n">7×</span><span class="l" data-i18n="spec.c1">cheaper page reads, measured on a real article</span></div>
-    <div class="spec"><span class="n">45 vs 6</span><span class="l" data-i18n="spec.c2">pages your AI can read before its memory fills</span></div>
+    <div class="spec"><span class="n">44 vs 6</span><span class="l" data-i18n="spec.c2">pages your AI can read before its memory fills</span></div>
     <div class="spec"><span class="n">0</span><span class="l" data-i18n="spec.c3">acting tools installed until you flip the switch</span></div>
   </div>
-  <p class="spec-fine rev d4" data-i18n="spec.fine">Measured: the same encyclopedia article costs 33,073 tokens as a raw dump and 4,426 read here, at a typical 200,000-token AI working memory.</p>
+  <p class="spec-fine rev d4" data-i18n="spec.fine">Measured: the same encyclopedia article costs 33,073 tokens as a raw dump and 4,495 read here, at a typical 200,000-token AI working memory.</p>
   <div class="rev d5">
     <a class="btn primary" href="#install" data-i18n="btn.install">Install the Sink</a>
     <a class="btn" href="https://github.com/nometalalchemist/KitchenSink4Web" data-i18n="btn.source">Read the Source</a>
@@ -534,7 +534,7 @@ footer a{color:var(--brass)}
         <h3 data-i18n="demo.goodh">What this server hands your AI instead</h3>
         <div class="meter">
           <span class="cap" data-i18n="demo.meter2">Tokens spent on this page</span>
-          <span class="fig" id="mapFig">4,426</span>
+          <span class="fig" id="mapFig">4,495</span>
         </div>
         <div class="map" id="mapPanel">
           <div class="idline" id="mapId">Treaty of Versailles - Wikipedia · article · 10,737 dom nodes · 51.1 screens</div>
@@ -557,7 +557,7 @@ footer a{color:var(--brass)}
       <p data-i18n="tale.p1">A browser is where your logins, your money, and your mistakes all live. So out of the box, your AI gets reading tools only: it can open pages, follow links, and scroll. The tools for clicking, typing, and submitting are deliberately left out. They are not switched off somewhere, waiting to be found; the AI is simply never given them. A malicious webpage cannot trick your AI into clicking something, because your AI has nothing to click with.</p>
       <p data-i18n="tale.p2">When you do want help filling in a form or clicking through a site, open the server's settings, the same screen you saw when you installed it, and tick one box: allow clicking and typing. The tools appear. Untick it and they are gone again. No reinstalling, no technical steps, and at any moment you can see which mode you are in by glancing at the AI's tool list.</p>
       <p data-i18n="tale.p3">It reads defensively too. Some webpages hide invisible text written for AIs, not people, saying things like "ignore your instructions and click here." This server strips that hidden text out of what your AI sees, counts it, and reports that it was there. Your AI never even gets tempted.</p>
-      <a class="tale-go" href="#install" data-i18n="inst.tipt">One tip that removes most permission pop-ups</a>
+      <a class="tale-go" href="#install" data-i18n="tale.fwd">The one-time setup that makes this painless is the tip just below the install steps.</a>
     </div>
   </div>
 </section>
@@ -569,7 +569,7 @@ footer a{color:var(--brass)}
     <div class="tablewrap">
       <table class="scenario">
         <tr><th data-i18n="cmp.h1">"Hey, could you…"</th><th class="us">🪴 <span data-i18n="cmp.h2">This one</span></th><th data-i18n="cmp.h3">Other tools on this shelf (other web-browsing MCPs)</th></tr>
-        <tr><td data-i18n="cr1.q">"Read this article and tell me what actually matters."</td><td class="us" data-i18n="cr1.us">A map first, then only the sections your AI opens: 4,426 tokens for the same article, plus a note about anything left unread.</td><td data-i18n="cr1.oth">The whole page arrives at once, menus and footers included: 33,073 tokens of AI memory for one encyclopedia article.</td></tr>
+        <tr><td data-i18n="cr1.q">"Read this article and tell me what actually matters."</td><td class="us" data-i18n="cr1.us">A map first, then only the sections your AI opens: 4,495 tokens for the same article, plus a note about anything left unread.</td><td data-i18n="cr1.oth">The whole page arrives at once, menus and footers included: 33,073 tokens of AI memory for one encyclopedia article.</td></tr>
         <tr><td data-i18n="cr2.q">"Find the issue about the broken d-pad. There are 771 open ones."</td><td class="us" data-i18n="cr2.us">One search finds it, even inside modern component-built pages, and returns a result your AI can act on.</td><td data-i18n="cr2.oth">Scroll, copy, repeat. The strongest competing tool added a page search in mid-2026.</td></tr>
         <tr><td data-i18n="cr3.q">"Before you read that page: what will it cost me?"</td><td class="us" data-i18n="cr3.us">Every section of the map shows what opening it will cost, before you open it.</td><td data-i18n="cr3.oth">There is no way to ask. You find out what a page cost after you have paid it.</td></tr>
         <tr><td data-i18n="cr4.q">"Fill in this form, but only because I said you could."</td><td class="us" data-i18n="cr4.us">Those tools are not installed until you turn them on, and even then, submitting a form stops and asks you first.</td><td data-i18n="cr4.oth">The clicking and typing tools are always loaded; whether they get used is up to the AI's judgment.</td></tr>
@@ -590,7 +590,7 @@ footer a{color:var(--brass)}
         <tr><th data-i18n="bill.h1">On the meter</th><th class="num" data-i18n="bill.h2">Tools</th><th class="num" data-i18n="bill.h3">Tokens</th><th data-i18n="bill.h4">When it draws</th></tr>
         <tr><td data-i18n="bill.r1">Lite core</td><td class="num">15</td><td class="num">4.1k</td><td data-i18n="bill.w1">From the first message of every session</td></tr>
         <tr><td data-i18n="bill.r2">Every pack switched on</td><td class="num">41</td><td class="num">10.2k</td><td data-i18n="bill.w2">Only when the packs are chosen at launch</td></tr>
-        <tr><td data-i18n="bill.r3">First read of one long article</td><td class="num">·</td><td class="num">4,426</td><td data-i18n="bill.w3">Once, and it never exceeds the budget you set</td></tr>
+        <tr><td data-i18n="bill.r3">First read of one long article</td><td class="num">·</td><td class="num">4,495</td><td data-i18n="bill.w3">Once, and it never exceeds the budget you set</td></tr>
         <tr class="sum"><td data-i18n="bill.r4">The same read again, after one click</td><td class="num">·</td><td class="num">82</td><td data-i18n="bill.w4">Every repeat read, priced on what changed</td></tr>
       </table>
     </div>
@@ -638,7 +638,7 @@ footer a{color:var(--brass)}
     <div class="maturity">
       <h3 data-i18n="maturity.h">Young, and raised in a hard school</h3>
       <p data-i18n="maturity.p">This is the newest product in the family, and the page will not pretend otherwise. Before release we attack our own products deliberately: hostile test rounds that try to trick the safety features, leak data, and break the guarantees, followed by fixes, followed by fresh attacks, until a round comes back empty-handed. What this server has not had yet is a long life in strangers' browsers. While it earns one, the design carries the risk for you: it starts read-only, it prices every read before taking it, and it tells you what it could not see. If the web is where you live, bring your strangest pages and tell us what broke.</p>
-      <div class="maturity-fig"><div class="spec"><span class="n">598</span><span class="l" data-i18n="spec.tests">Tests</span></div></div>
+      <div class="maturity-fig"><div class="spec"><span class="n">678</span><span class="l" data-i18n="spec.tests">Tests</span></div></div>
     </div>
     <span class="ticket" data-i18n="svc.ticket">NOW SERVING · TAKE A NUMBER · SAME DESK AS THE WORD, POWERPOINT, AND EXCEL SINKS</span>
     <div class="service-grid">
@@ -681,13 +681,13 @@ footer a{color:var(--brass)}
       <a class="counter" href="https://nometalalchemist.github.io/KitchenSink4Word/">
         <span class="icon">🚰</span>
         <h3>KitchenSink4Word</h3>
-        <p data-i18n="fam1.p">The original fixture: everything plus the kitchen sink for Microsoft Word. 219 operations across 108 tools, live editing of open documents, citations, merge-aware table surgery, tracked changes, engineered not to corrupt.</p>
+        <p data-i18n="fam1.p">Everything plus the kitchen sink for Microsoft Word: the original of the family. Tracked changes, footnotes, citations, live editing in your own Word window, and a reference list that finally matches the citations. Engineered not to corrupt.</p>
         <span class="go" data-i18n="fam1.g">Visit the plumbing aisle →</span>
       </a>
       <a class="counter" href="https://nometalalchemist.github.io/KitchenSink4PPT/">
         <span class="icon">💡</span>
         <h3>KitchenSink4PPT</h3>
-        <p data-i18n="fam2.p">The paint aisle: everything plus the kitchen sink for Microsoft PowerPoint. 138 tools, diagrams that arrive as native shapes with connectors glued to them, so the box moves and the arrows follow.</p>
+        <p data-i18n="fam2.p">Everything plus the kitchen sink for Microsoft PowerPoint: diagrams built from real shapes, so you can drag a box and the arrows follow. Same never-corrupts promise, for slides.</p>
         <span class="go" data-i18n="fam2.g">Visit the paint aisle →</span>
       </a>
       <a class="counter" href="https://nometalalchemist.github.io/KitchenSink4XL/">
@@ -699,7 +699,7 @@ footer a{color:var(--brass)}
       <a class="counter" href="https://nometalalchemist.github.io/">
         <span class="icon">🏪</span>
         <h3 data-i18n="fam4.t">The storefront</h3>
-        <p data-i18n="fam4.p">The whole hardware store on one page: every KitchenSink server, its fixture, and its counter, plus a shelf or two that are not empty by accident.</p>
+        <p data-i18n="fam4.p">The whole hardware store on one page: every KitchenSink server, what it does, and where to report what broke. Plus a shelf or two that are not empty by accident.</p>
         <span class="go" data-i18n="fam4.g">Browse the store →</span>
       </a>
     </div>
@@ -769,7 +769,7 @@ var BEDS = [
   ["r36", "Reactions",                 2812],
   ["r37", "Britain",                    678]
 ];
-var BASE = 4426;
+var BASE = 4495;
 
 var wall = document.getElementById("dumpWall");
 var mapPanel = document.getElementById("mapPanel");
@@ -874,7 +874,7 @@ en: {
 "spec.c1": "cheaper page reads, measured on a real article",
 "spec.c2": "pages your AI can read before its memory fills",
 "spec.c3": "acting tools installed until you flip the switch",
-"spec.fine": "Measured: the same encyclopedia article costs 33,073 tokens as a raw dump and 4,426 read here, at a typical 200,000-token AI working memory.",
+"spec.fine": "Measured: the same encyclopedia article costs 33,073 tokens as a raw dump and 4,495 read here, at a typical 200,000-token AI working memory.",
 "cmp.gloss": "(other web-browsing MCPs)",
 "btn.install": "Install the Sink",
 "btn.source": "Read the Source",
@@ -903,6 +903,7 @@ en: {
 "tale.p1": "A browser is where your logins, your money, and your mistakes all live. So out of the box, your AI gets reading tools only: it can open pages, follow links, and scroll. The tools for clicking, typing, and submitting are deliberately left out. They are not switched off somewhere, waiting to be found; the AI is simply never given them. A malicious webpage cannot trick your AI into clicking something, because your AI has nothing to click with.",
 "tale.p2": "When you do want help filling in a form or clicking through a site, open the server's settings, the same screen you saw when you installed it, and tick one box: allow clicking and typing. The tools appear. Untick it and they are gone again. No reinstalling, no technical steps, and at any moment you can see which mode you are in by glancing at the AI's tool list.",
 "tale.p3": "It reads defensively too. Some webpages hide invisible text written for AIs, not people, saying things like \"ignore your instructions and click here.\" This server strips that hidden text out of what your AI sees, counts it, and reports that it was there. Your AI never even gets tempted.",
+"tale.fwd": "The one-time setup that makes this painless is the tip just below the install steps.",
 "no2": "DEPT. 02",
 "h2.cmp": "Against the other tools on this shelf",
 "cmp.lead": "Instead of a feature checklist, here are six things people actually ask an AI to do in a browser, and how it usually goes:",
@@ -910,7 +911,7 @@ en: {
 "cmp.h2": "This one",
 "cmp.h3": "Other tools on this shelf (other web-browsing MCPs)",
 "cr1.q": "\"Read this article and tell me what actually matters.\"",
-"cr1.us": "A map first, then only the sections your AI opens: 4,426 tokens for the same article, plus a note about anything left unread.",
+"cr1.us": "A map first, then only the sections your AI opens: 4,495 tokens for the same article, plus a note about anything left unread.",
 "cr1.oth": "The whole page arrives at once, menus and footers included: 33,073 tokens of AI memory for one encyclopedia article.",
 "cr2.q": "\"Find the issue about the broken d-pad. There are 771 open ones.\"",
 "cr2.us": "One search finds it, even inside modern component-built pages, and returns a result your AI can act on.",
@@ -976,14 +977,14 @@ en: {
 "g.p1": "Text that a webpage hides from human eyes is stripped and reported, never obeyed. Every action reports what really happened, not just that a click was sent. The tools that can change anything exist only after you turn them on. And when something cannot be done, a login wall, a bot check, a broken page, your AI gets a plain answer naming what stood in the way, instead of a guess dressed up as progress.",
 "no6": "DEPT. 06",
 "h2.fam": "The other aisles",
-"fam1.p": "The original fixture: everything plus the kitchen sink for Microsoft Word. 219 operations across 108 tools, live editing of open documents, citations, merge-aware table surgery, tracked changes, engineered not to corrupt.",
+"fam1.p": "Everything plus the kitchen sink for Microsoft Word: the original of the family. Tracked changes, footnotes, citations, live editing in your own Word window, and a reference list that finally matches the citations. Engineered not to corrupt.",
 "fam1.g": "Visit the plumbing aisle →",
-"fam2.p": "The paint aisle: everything plus the kitchen sink for Microsoft PowerPoint. 138 tools, diagrams that arrive as native shapes with connectors glued to them, so the box moves and the arrows follow.",
+"fam2.p": "Everything plus the kitchen sink for Microsoft PowerPoint: diagrams built from real shapes, so you can drag a box and the arrows follow. Same never-corrupts promise, for slides.",
 "fam2.g": "Visit the paint aisle →",
 "fam3.p": "Everything plus the kitchen sink for Excel (.xlsx): every value labeled calculated, cached, or missing, so the AI never repeats a stale number as a fresh one. Same never-corrupts promise, now for spreadsheets.",
 "fam3.g": "Visit the electrical aisle →",
 "fam4.t": "The storefront",
-"fam4.p": "The whole hardware store on one page: every KitchenSink server, its fixture, and its counter, plus a shelf or two that are not empty by accident.",
+"fam4.p": "The whole hardware store on one page: every KitchenSink server, what it does, and where to report what broke. Plus a shelf or two that are not empty by accident.",
 "fam4.g": "Browse the store →",
 "f.left": "&copy; 2026 &middot; <b>AGPL-3.0</b>: free for individuals and personal use.<br>Companies building it into their own products need a commercial license; <a href='https://github.com/nometalalchemist/KitchenSink4Web/issues/new/choose'>open an issue</a> and we will talk it through.",
 "f.right": "<a href='https://github.com/nometalalchemist/KitchenSink4Web'>github.com/nometalalchemist/KitchenSink4Web</a> · <a href='https://github.com/nometalalchemist/KitchenSink4Web/issues/new/choose'>report a wilted read</a><br>Built on the KitchenSink4Word safety core, prototyped with Claude Code, and left out in the weather until it stopped flinching. Water before noon. 🪴",
@@ -1007,7 +1008,7 @@ ko: {
 "spec.c1": "더 싼 페이지 읽기, 실제 기사로 측정한 값",
 "spec.c2": "AI의 기억이 차기 전에 읽을 수 있는 페이지 수",
 "spec.c3": "스위치를 올리기 전까지 설치되는 행동 도구",
-"spec.fine": "측정: 같은 백과사전 기사가 통째로 쏟으면 33,073 토큰, 여기서 읽으면 4,426 토큰이며, AI의 작업 기억은 보통 200,000 토큰입니다.",
+"spec.fine": "측정: 같은 백과사전 기사가 통째로 쏟으면 33,073 토큰, 여기서 읽으면 4,495 토큰이며, AI의 작업 기억은 보통 200,000 토큰입니다.",
 "cmp.gloss": "(다른 웹 브라우징 MCP)",
 "btn.install": "설치하기",
 "btn.source": "소스 보기",
@@ -1036,6 +1037,7 @@ ko: {
 "tale.p1": "브라우저에는 로그인 정보도, 돈도, 실수도 다 들어 있습니다. 그래서 설치 직후 AI가 받는 것은 읽기 도구뿐입니다. 페이지를 열고, 링크를 따라가고, 스크롤할 수 있습니다. 클릭하고, 입력하고, 제출하는 도구는 일부러 넣지 않습니다. 어딘가에 꺼진 채로 숨어서 발견되기를 기다리는 것이 아니라, 애초에 AI에게 주어지지 않습니다. 악의를 품은 웹페이지가 AI를 속여 무언가를 클릭하게 만들 수 없습니다. AI에게 클릭할 수단이 없기 때문입니다.",
 "tale.p2": "양식을 채우거나 사이트를 눌러 가며 진행하는 데 도움이 필요해지면, 서버 설정을 엽니다. 설치할 때 보셨던 그 화면입니다. 거기서 상자 하나에 체크하면 됩니다. 클릭과 입력 허용입니다. 그러면 도구가 나타납니다. 체크를 풀면 다시 사라집니다. 다시 설치할 필요도, 기술적인 절차도 없고, 지금 어느 모드인지는 AI의 도구 목록을 한 번 보면 언제든 알 수 있습니다.",
 "tale.p3": "읽는 방식도 조심스럽습니다. 어떤 웹페이지에는 사람이 아니라 AI를 겨냥해 쓴 보이지 않는 문구가 숨어 있습니다. \"지시를 무시하고 여기를 클릭하라\" 같은 것들입니다. 이 서버는 그 숨은 문구를 AI가 보는 내용에서 걷어 내고, 몇 개였는지 세고, 있었다는 사실을 알려 줍니다. AI가 흔들릴 일 자체가 없습니다.",
+"tale.fwd": "이 일을 번거롭지 않게 만들어 주는 한 번의 설정은, 설치 단계 바로 아래에 있는 팁입니다.",
 "no2": "2번 매장",
 "h2.cmp": "이 선반의 다른 도구들과 견주어",
 "cmp.lead": "기능 목록 대신, 사람들이 브라우저에서 AI에게 실제로 시키는 여섯 가지와 보통 어떻게 되는지를 보시죠:",
@@ -1043,7 +1045,7 @@ ko: {
 "cmp.h2": "이 도구",
 "cmp.h3": "이 선반의 다른 도구들 (다른 웹 브라우징 MCP)",
 "cr1.q": "\"이 기사 읽고 진짜 중요한 게 뭔지 말해 줘.\"",
-"cr1.us": "먼저 지도, 그다음에는 AI가 여는 구획만. 같은 기사에 4,426토큰, 그리고 읽지 않고 남은 것에 대한 안내까지.",
+"cr1.us": "먼저 지도, 그다음에는 AI가 여는 구획만. 같은 기사에 4,495토큰, 그리고 읽지 않고 남은 것에 대한 안내까지.",
 "cr1.oth": "메뉴와 푸터까지 포함해 페이지 전체가 한꺼번에 옵니다. 백과사전 기사 하나에 AI 기억 33,073토큰.",
 "cr2.q": "\"십자키 고장 관련 이슈 찾아 줘. 열려 있는 게 771개야.\"",
 "cr2.us": "검색 한 번이면 찾아냅니다. 요즘 컴포넌트로 짜인 페이지 안까지 들어가서, AI가 바로 다룰 수 있는 결과를 돌려줍니다.",
@@ -1109,14 +1111,14 @@ ko: {
 "g.p1": "웹페이지가 사람 눈에서 감춘 문구는 걷어 내고 알려 줄 뿐, 절대 따르지 않습니다. 모든 동작은 클릭을 보냈다는 사실이 아니라 실제로 무슨 일이 있었는지를 보고합니다. 무언가를 바꿀 수 있는 도구는 사용자가 켠 뒤에야 존재합니다. 그리고 로그인 벽이든, 봇 검사든, 망가진 페이지든, 할 수 없는 일이 생기면 AI는 진전인 척하는 추측 대신 무엇이 가로막았는지 그대로 짚어 주는 답을 받습니다.",
 "no6": "6번 매장",
 "h2.fam": "다른 통로들",
-"fam1.p": "최초의 기구. Microsoft Word를 위해 없는 게 없는 도구 상자입니다. 108개 도구에 걸친 219개 작업, 열려 있는 문서의 실시간 편집, 인용, 병합을 이해하는 표 수술, 변경 내용 추적, 파손되지 않도록 설계했습니다.",
+"fam1.p": "Microsoft Word를 위해 없는 게 없는 도구 상자입니다. 이 가족의 원조이기도 하지요. 변경 내용 추적, 각주, 인용, 열려 있는 내 Word 창에서의 실시간 편집, 그리고 마침내 인용과 들어맞는 참고문헌 목록까지. 파손되지 않도록 설계했습니다.",
 "fam1.g": "배관 통로로 →",
-"fam2.p": "페인트 통로. Microsoft PowerPoint를 위해 없는 게 없는 도구 상자입니다. 138개 도구, 그리고 커넥터가 붙은 네이티브 도형으로 도착하는 다이어그램. 상자를 옮기면 화살표가 따라옵니다.",
+"fam2.p": "Microsoft PowerPoint를 위해 없는 게 없는 도구 상자입니다. 진짜 도형으로 만든 다이어그램이라, 상자를 끌면 화살표가 따라옵니다. 문서를 망가뜨리지 않는다는 같은 약속이, 이번에는 슬라이드에도 적용됩니다.",
 "fam2.g": "페인트 통로로 →",
 "fam3.p": "Excel(.xlsx)을 위해 없는 게 없는 도구 상자입니다. 모든 값에 계산됨, 캐시됨, 없음 표시가 붙으므로 AI가 오래된 숫자를 새 숫자인 양 되풀이하지 않습니다. 문서를 망가뜨리지 않는다는 같은 약속이, 이제 스프레드시트에도 적용됩니다.",
 "fam3.g": "전기 통로로 →",
 "fam4.t": "스토어",
-"fam4.p": "철물점 전체가 한 페이지에. 모든 KitchenSink 서버와 그 기구와 창구, 그리고 우연히 비어 있는 것이 아닌 선반 한둘까지.",
+"fam4.p": "철물점 전체가 한 페이지에. 모든 KitchenSink 서버와 그 서버가 하는 일, 그리고 고장 난 것을 알리러 갈 곳까지. 게다가 우연히 비어 있는 것이 아닌 선반이 한둘.",
 "fam4.g": "스토어 둘러보기 →",
 "f.left": "&copy; 2026 &middot; <b>AGPL-3.0</b>: 개인과 개인적 사용에는 무료입니다.<br>자사 제품에 넣는 기업은 상업용 라이선스가 필요합니다. <a href='https://github.com/nometalalchemist/KitchenSink4Web/issues/new/choose'>이슈를 열어</a> 주시면 함께 이야기하겠습니다.",
 "f.right": "<a href='https://github.com/nometalalchemist/KitchenSink4Web'>github.com/nometalalchemist/KitchenSink4Web</a> · <a href='https://github.com/nometalalchemist/KitchenSink4Web/issues/new/choose'>시든 읽기 신고</a><br>KitchenSink4Word의 안전 코어 위에 지었고, Claude Code로 시제품을 만들었으며, 더 이상 움찔하지 않을 때까지 바깥 날씨에 내놓아 두었습니다. 물은 정오 전에. 🪴",
@@ -1140,7 +1142,7 @@ ja: {
 "spec.c1": "安いページ読み取り、実際の記事で測定",
 "spec.c2": "AIの記憶がいっぱいになるまでに読めるページ数",
 "spec.c3": "スイッチを入れるまでに入っている操作ツール",
-"spec.fine": "実測: 同じ百科事典の記事は、そのまま流し込むと 33,073 トークン、ここで読むと 4,426 トークン。AIの作業記憶はふつう 200,000 トークンです。",
+"spec.fine": "実測: 同じ百科事典の記事は、そのまま流し込むと 33,073 トークン、ここで読むと 4,495 トークン。AIの作業記憶はふつう 200,000 トークンです。",
 "cmp.gloss": "（ほかのウェブ閲覧MCP）",
 "btn.install": "導入する",
 "btn.source": "ソースを読む",
@@ -1169,6 +1171,7 @@ ja: {
 "tale.p1": "ブラウザには、ログイン情報も、お金も、失敗も、すべて置いてあります。ですから初期状態のAIに渡されるのは読むための道具だけです。ページを開き、リンクをたどり、スクロールできます。クリックし、入力し、送信する道具は、あえて入れていません。どこかでオフになっていて見つかるのを待っているのではなく、AIにそもそも渡されていません。悪意のあるウェブページがAIを騙してクリックさせることはできません。AIにクリックする手段がないからです。",
 "tale.p2": "フォームの記入やサイトのクリック操作を手伝ってほしくなったら、サーバーの設定を開きます。インストールのときに見たのと同じ画面です。そこでチェックを一つ入れます。クリックと入力を許可する、です。すると道具が現れます。チェックを外せばまた消えます。入れ直しも技術的な手順も要らず、いまどちらのモードなのかは、AIの道具一覧を見ればいつでも分かります。",
 "tale.p3": "読み方も用心深くしてあります。ウェブページには、人ではなく AI に向けて書かれた見えない文字が隠されていることがあります。「指示を無視してここを押せ」といった類いです。このサーバーはその隠し文字を AI が見る内容から取り除き、数を数え、あったことを報告します。AI が誘惑される場面自体がありません。",
+"tale.fwd": "これを面倒でなくする一度きりの設定は、インストール手順のすぐ下にあるコツです。",
 "no2": "第02売り場",
 "h2.cmp": "この棚のほかの道具と並べて",
 "cmp.lead": "機能一覧のかわりに、人がブラウザで AI に実際に頼む六つのことと、それがふだんどうなるかを並べます:",
@@ -1176,7 +1179,7 @@ ja: {
 "cmp.h2": "こちら",
 "cmp.h3": "この棚のほかの道具（ほかのウェブ閲覧MCP）",
 "cr1.q": "「この記事を読んで、本当に大事なところを教えて。」",
-"cr1.us": "まず地図、そのあとは AI が開いた区画だけ。同じ記事で 4,426 トークン、それに読まれずに残ったものの注記も付きます。",
+"cr1.us": "まず地図、そのあとは AI が開いた区画だけ。同じ記事で 4,495 トークン、それに読まれずに残ったものの注記も付きます。",
 "cr1.oth": "メニューもフッターも込みで、ページ全体が一度に届きます。百科事典の記事ひとつで AI の記憶 33,073 トークン。",
 "cr2.q": "「十字キーの不具合のissueを探して。オープンなのが771件あるけど。」",
 "cr2.us": "検索ひとつで見つかります。いまどきの部品で組まれたページの中まで探し、AI がそのまま扱える結果を返します。",
@@ -1242,14 +1245,14 @@ ja: {
 "g.p1": "ウェブページが人の目から隠した文字は、取り除いて報告するだけで、従うことはありません。どの操作も、押したという事実ではなく、実際に何が起きたかを報告します。何かを変えられる道具は、あなたが入れてはじめて存在します。そしてログインの壁でも、ボット判定でも、壊れたページでも、できないことが出てきたときには、進んだふりの推測ではなく、何が立ちはだかったのかをそのまま告げる答えが AI に返ります。",
 "no6": "第06売り場",
 "h2.fam": "ほかの売り場",
-"fam1.p": "最初の器具。Microsoft Wordのために、なんでも揃った道具箱です。108ツールにわたる219の操作、開いている文書のライブ編集、引用、結合を理解する表の手術、変更履歴、壊さないように作ってあります。",
+"fam1.p": "Microsoft Wordのために、なんでも揃った道具箱です。この一族の元祖でもあります。変更履歴、脚注、引用、開いているご自身のWordウィンドウでのライブ編集、そしてようやく引用と一致する参考文献リスト。壊さないように作ってあります。",
 "fam1.g": "配管売り場へ →",
-"fam2.p": "塗料売り場。Microsoft PowerPointのために、なんでも揃った道具箱です。138ツール、そしてコネクタが接着されたネイティブ図形として届く図解。箱を動かせば矢印がついてきます。",
+"fam2.p": "Microsoft PowerPointのために、なんでも揃った道具箱です。本物の図形から組み立てた図解なので、箱をドラッグすれば矢印がついてきます。壊さないという同じ約束が、そのままスライドにも及びます。",
 "fam2.g": "塗料売り場へ →",
 "fam3.p": "Excel（.xlsx）のために、なんでも揃った道具箱です。すべての値に計算済み、キャッシュ、欠落の札がつくので、AIが古い数値を新しいものとして繰り返すことはありません。壊さないという同じ約束が、そのまま表計算にも及びます。",
 "fam3.g": "電気売り場へ →",
 "fam4.t": "ストア",
-"fam4.p": "金物店まるごと1ページに。すべてのKitchenSinkサーバーと、その器具と、その窓口。そして偶然空いているわけではない棚がひとつふたつ。",
+"fam4.p": "金物店まるごと1ページに。すべてのKitchenSinkサーバーと、それぞれが何をするのか、そして壊れたものをどこに知らせるのか。そのうえ、偶然空いているわけではない棚がひとつふたつ。",
 "fam4.g": "店内を見る →",
 "f.left": "&copy; 2026 &middot; <b>AGPL-3.0</b>: 個人および個人利用は無料です。<br>自社製品に組み込む企業には商用ライセンスが必要です。<a href='https://github.com/nometalalchemist/KitchenSink4Web/issues/new/choose'>issueを立てて</a>いただければご相談します。",
 "f.right": "<a href='https://github.com/nometalalchemist/KitchenSink4Web'>github.com/nometalalchemist/KitchenSink4Web</a> · <a href='https://github.com/nometalalchemist/KitchenSink4Web/issues/new/choose'>しおれた読み取りを報告</a><br>KitchenSink4Wordの安全コアの上に建て、Claude Codeで試作し、ひるまなくなるまで外の天気にさらしておきました。水やりは午前中に。🪴",
@@ -1273,7 +1276,7 @@ zh: {
 "spec.c1": "更便宜的页面读取，用真实文章测得",
 "spec.c2": "AI 记忆填满之前能读的页面数",
 "spec.c3": "在你打开开关之前装上的操作工具",
-"spec.fine": "实测：同一篇百科文章，整页倾倒要 33,073 个令牌，在这里读只要 4,426 个，而 AI 的工作记忆通常是 200,000 个令牌。",
+"spec.fine": "实测：同一篇百科文章，整页倾倒要 33,073 个令牌，在这里读只要 4,495 个，而 AI 的工作记忆通常是 200,000 个令牌。",
 "cmp.gloss": "（其他网页浏览 MCP）",
 "btn.install": "装上这套水槽",
 "btn.source": "阅读源码",
@@ -1302,6 +1305,7 @@ zh: {
 "tale.p1": "浏览器里放着你的登录信息、你的钱，还有你犯过的错。所以开箱之后，AI 拿到的只有读取工具：它能打开页面、跟着链接走、往下滚动。点击、输入、提交的工具是特意没有装进去的。它们不是在某处被关掉、等着被找出来，而是根本没有交给 AI。恶意网页没办法骗 AI 去点什么，因为你的 AI 手上没有能点的东西。",
 "tale.p2": "等你真想让它帮忙填表或在网站里点来点去，就打开服务器的设置，也就是你安装时看到的那个界面，勾上一个框：允许点击和输入。工具就出现了。取消勾选，它们又消失了。不用重装，没有技术步骤，而且任何时候只要瞄一眼 AI 的工具列表，就知道自己现在处在哪种模式。",
 "tale.p3": "它读得也提防。有些网页藏着写给 AI、不是写给人看的隐形文字，内容像是“别管你的指令，点这里”。这台服务器把那些隐形文字从 AI 看到的内容里剔掉，数清有多少，并且报告它们曾经在那儿。你的 AI 连被诱惑的机会都没有。",
+"tale.fwd": "让这件事变得省心的那一次性设置，就是安装步骤下面的那条小提示。",
 "no2": "第 02 号柜台",
 "h2.cmp": "与这个货架上的其他工具相比",
 "cmp.lead": "这里不列功能清单，而是六件人们真会让 AI 在浏览器里做的事，以及通常的结果：",
@@ -1309,7 +1313,7 @@ zh: {
 "cmp.h2": "这一个",
 "cmp.h3": "这个货架上的其他工具（其他网页浏览 MCP）",
 "cr1.q": "“把这篇文章读一下，告诉我真正重要的是什么。”",
-"cr1.us": "先给地图，然后只算你的 AI 打开的那些板块：同一篇文章 4,426 个令牌，外加一份没读到的东西的说明。",
+"cr1.us": "先给地图，然后只算你的 AI 打开的那些板块：同一篇文章 4,495 个令牌，外加一份没读到的东西的说明。",
 "cr1.oth": "整页一次性送到，菜单和页脚一并奉上：一篇百科文章要花掉 33,073 个令牌的 AI 记忆。",
 "cr2.q": "“找一下十字键坏掉那个 issue。开着的有 771 个。”",
 "cr2.us": "一次搜索就找得到，连现代组件拼出来的页面内部也能进去，返回的结果你的 AI 可以直接拿来用。",
@@ -1375,14 +1379,14 @@ zh: {
 "g.p1": "网页藏起来不给人看的文字，会被剔掉并如实报告，绝不照办。每个动作报告的是真正发生了什么，而不只是点击已经发出。能改动东西的工具，只有在你打开之后才存在。而当有些事做不到时，无论是登录墙、机器人验证还是页面坏了，你的 AI 得到的都是一句直说什么挡住了路的答案，而不是一个装成进展的猜测。",
 "no6": "第 06 号柜台",
 "h2.fam": "其他货道",
-"fam1.p": "最初的那件器具：为 Microsoft Word 准备的、样样俱全的工具箱。108 个工具、219 项操作，能实时编辑打开着的文档，处理引文，做懂合并的表格手术，管修订，设计上就不会把文件弄坏。",
+"fam1.p": "为 Microsoft Word 准备的、样样俱全的工具箱，也是这个家族的元祖。修订、脚注、引文、在你自己那扇 Word 窗口里实时编辑，还有一份终于对得上引文的参考文献表。设计上就不会把文件弄坏。",
 "fam1.g": "去水暖货道 →",
-"fam2.p": "油漆货道：为 Microsoft PowerPoint 准备的、样样俱全的工具箱。138 个工具，图示以原生形状送达，连接线是粘住的，方框一动箭头就跟着走。",
+"fam2.p": "为 Microsoft PowerPoint 准备的、样样俱全的工具箱。图示由真正的形状搭成，拖动方框，箭头就跟着走。同样那句不会弄坏文件的承诺，这回给的是幻灯片。",
 "fam2.g": "去油漆货道 →",
 "fam3.p": "为 Microsoft Excel（.xlsx）准备的、样样俱全的工具箱：每个值都标明是新算的、缓存的还是缺失的，AI 不会把一个过期数字当成新的再说一遍。同样的绝不损坏承诺，现在也适用于电子表格。",
 "fam3.g": "去电工货道 →",
 "fam4.t": "门店",
-"fam4.p": "整间五金店摆在一页上：每一台 KitchenSink 服务器、它的器具和它的柜台，另外还有一两个不是碰巧空着的货架。",
+"fam4.p": "整间五金店就在一页上：每一台 KitchenSink 服务器、它能做什么，以及出了问题该到哪里去报。另外还有一两个并非偶然空着的货架。",
 "fam4.g": "逛逛门店 →",
 "f.left": "&copy; 2026 &middot; <b>AGPL-3.0</b>：对个人和个人用途免费。<br>把它做进自家产品的公司需要商业许可；<a href='https://github.com/nometalalchemist/KitchenSink4Web/issues/new/choose'>开一个 issue</a>，我们慢慢谈。",
 "f.right": "<a href='https://github.com/nometalalchemist/KitchenSink4Web'>github.com/nometalalchemist/KitchenSink4Web</a> · <a href='https://github.com/nometalalchemist/KitchenSink4Web/issues/new/choose'>报告一次蔫掉的读取</a><br>建在 KitchenSink4Word 的安全内核之上，用 Claude Code 做出原型，然后一直摆在外头风吹雨打，直到它不再瑟缩。浇水要赶在正午之前。🪴",
@@ -1406,7 +1410,7 @@ de: {
 "spec.c1": "günstigere Seitenlesungen, an einem echten Artikel gemessen",
 "spec.c2": "Seiten, die Ihre KI lesen kann, bevor ihr Gedächtnis voll ist",
 "spec.c3": "handelnde Werkzeuge installiert, bis Sie den Schalter umlegen",
-"spec.fine": "Gemessen: derselbe Lexikonartikel kostet 33.073 Tokens als Rohabzug und 4.426, hier gelesen, bei einem typischen KI-Arbeitsgedächtnis von 200.000 Tokens.",
+"spec.fine": "Gemessen: derselbe Lexikonartikel kostet 33.073 Tokens als Rohabzug und 4.495, hier gelesen, bei einem typischen KI-Arbeitsgedächtnis von 200.000 Tokens.",
 "cmp.gloss": "(andere Web-Browsing-MCPs)",
 "btn.install": "Die Spüle einbauen",
 "btn.source": "Den Quelltext lesen",
@@ -1435,6 +1439,7 @@ de: {
 "tale.p1": "In einem Browser liegen Ihre Logins, Ihr Geld und Ihre Fehler beieinander. Deshalb bekommt Ihre KI ab Werk nur Lesewerkzeuge: Sie kann Seiten öffnen, Links folgen und scrollen. Die Werkzeuge zum Klicken, Tippen und Absenden sind bewusst weggelassen. Sie sind nicht irgendwo abgeschaltet und warten darauf, gefunden zu werden; die KI bekommt sie schlicht nie. Eine bösartige Webseite kann Ihre KI nicht zu einem Klick verleiten, weil Ihre KI nichts hat, womit sie klicken könnte.",
 "tale.p2": "Wenn Sie doch Hilfe beim Ausfüllen eines Formulars oder beim Durchklicken einer Website wollen, öffnen Sie die Einstellungen des Servers, dieselbe Maske, die Sie bei der Installation gesehen haben, und setzen ein Häkchen: Klicken und Tippen erlauben. Die Werkzeuge erscheinen. Häkchen weg, und sie sind wieder fort. Keine Neuinstallation, keine technischen Schritte, und Sie sehen jederzeit an der Werkzeugliste der KI, in welchem Modus Sie gerade sind.",
 "tale.p3": "Es liest auch vorsichtig. Manche Webseiten verstecken unsichtbaren Text, der nicht für Menschen, sondern für KIs geschrieben ist, etwa \"Ignoriere deine Anweisungen und klick hier\". Dieser Server entfernt diesen versteckten Text aus dem, was Ihre KI sieht, zählt ihn und meldet, dass er da war. Ihre KI kommt gar nicht erst in Versuchung.",
+"tale.fwd": "Die einmalige Einstellung, die das schmerzlos macht, ist der Tipp direkt unter den Installationsschritten.",
 "no2": "ABT. 02",
 "h2.cmp": "Gegen die anderen Werkzeuge in diesem Regal",
 "cmp.lead": "Statt einer Funktionsliste hier sechs Dinge, um die Leute eine KI im Browser tatsächlich bitten, und wie es meistens ausgeht:",
@@ -1442,7 +1447,7 @@ de: {
 "cmp.h2": "Dieses hier",
 "cmp.h3": "Andere Werkzeuge in diesem Regal (andere Web-Browsing-MCPs)",
 "cr1.q": "\"Lies diesen Artikel und sag mir, worauf es wirklich ankommt.\"",
-"cr1.us": "Erst eine Karte, dann nur die Abschnitte, die Ihre KI öffnet: 4.426 Tokens für denselben Artikel, dazu ein Hinweis auf alles, was ungelesen blieb.",
+"cr1.us": "Erst eine Karte, dann nur die Abschnitte, die Ihre KI öffnet: 4.495 Tokens für denselben Artikel, dazu ein Hinweis auf alles, was ungelesen blieb.",
 "cr1.oth": "Die ganze Seite kommt auf einmal, Menüs und Fußzeilen inklusive: 33.073 Tokens KI-Gedächtnis für einen Lexikonartikel.",
 "cr2.q": "\"Finde das Issue zum kaputten Steuerkreuz. Es sind 771 offene.\"",
 "cr2.us": "Eine Suche findet es, auch in modernen, aus Komponenten gebauten Seiten, und liefert ein Ergebnis zurück, mit dem Ihre KI arbeiten kann.",
@@ -1508,14 +1513,14 @@ de: {
 "g.p1": "Text, den eine Webseite vor menschlichen Augen verbirgt, wird entfernt und gemeldet, nie befolgt. Jede Aktion meldet, was wirklich geschehen ist, nicht nur, dass ein Klick abgeschickt wurde. Die Werkzeuge, die etwas verändern können, existieren erst, nachdem Sie sie eingeschaltet haben. Und wenn etwas nicht geht, eine Anmeldeschranke, eine Bot-Prüfung, eine kaputte Seite, bekommt Ihre KI eine klare Antwort, die benennt, was im Weg stand, statt einer als Fortschritt verkleideten Vermutung.",
 "no6": "ABT. 06",
 "h2.fam": "Die anderen Gänge",
-"fam1.p": "Das ursprüngliche Gerät: alles und die Küchenspüle dazu, für Microsoft Word. 219 Operationen über 108 Werkzeuge, Live-Bearbeitung geöffneter Dokumente, Zitate, Tabellenchirurgie mit Sinn für verbundene Zellen, Änderungsverfolgung, konstruiert, um nichts zu beschädigen.",
+"fam1.p": "Alles und die Küchenspüle dazu, für Microsoft Word: das Original der Familie. Änderungsverfolgung, Fußnoten, Zitate, Live-Bearbeitung in Ihrem eigenen Word-Fenster und ein Literaturverzeichnis, das endlich zu den Zitaten passt. Konstruiert, um nichts zu beschädigen.",
 "fam1.g": "Zum Sanitärgang →",
-"fam2.p": "Der Farbengang: alles und die Küchenspüle dazu, für Microsoft PowerPoint. 138 Werkzeuge, und Diagramme, die als native Formen mit angeklebten Verbindern ankommen, sodass der Kasten sich bewegt und die Pfeile folgen.",
+"fam2.p": "Alles und die Küchenspüle dazu, für Microsoft PowerPoint: Diagramme aus echten Formen, sodass Sie einen Kasten ziehen und die Pfeile folgen. Dasselbe Versprechen, nichts zu beschädigen, jetzt für Folien.",
 "fam2.g": "Zum Farbengang →",
 "fam3.p": "Alles und die Küchenspüle dazu, für Excel (.xlsx): jeder Wert ist als berechnet, zwischengespeichert oder fehlend gekennzeichnet, damit die KI eine veraltete Zahl nie als frische wiederholt. Dasselbe Versprechen, nichts zu beschädigen, jetzt für Tabellen.",
 "fam3.g": "Zum Elektrogang →",
 "fam4.t": "Das Ladengeschäft",
-"fam4.p": "Der ganze Baumarkt auf einer Seite: jeder KitchenSink-Server, sein Gerät und sein Tresen, dazu ein, zwei Regale, die nicht aus Versehen leer sind.",
+"fam4.p": "Der ganze Baumarkt auf einer Seite: jeder KitchenSink-Server, was er tut und wohin man meldet, was kaputtgegangen ist. Dazu ein, zwei Regale, die nicht aus Versehen leer sind.",
 "fam4.g": "Im Laden umsehen →",
 "f.left": "&copy; 2026 &middot; <b>AGPL-3.0</b>: kostenlos für Privatpersonen und private Nutzung.<br>Unternehmen, die es in eigene Produkte einbauen, brauchen eine kommerzielle Lizenz; <a href='https://github.com/nometalalchemist/KitchenSink4Web/issues/new/choose'>eröffnen Sie ein Issue</a>, und wir besprechen es.",
 "f.right": "<a href='https://github.com/nometalalchemist/KitchenSink4Web'>github.com/nometalalchemist/KitchenSink4Web</a> · <a href='https://github.com/nometalalchemist/KitchenSink4Web/issues/new/choose'>einen welken Lesevorgang melden</a><br>Auf dem Sicherheitskern von KitchenSink4Word gebaut, mit Claude Code als Prototyp entstanden und so lange draußen im Wetter stehen gelassen, bis es nicht mehr zusammenzuckte. Vor Mittag gießen. 🪴",
@@ -1539,7 +1544,7 @@ fr: {
 "spec.c1": "lectures de page moins chères, mesurées sur un vrai article",
 "spec.c2": "pages que votre IA peut lire avant que sa mémoire soit pleine",
 "spec.c3": "outils d'action installés tant que vous n'avez pas basculé l'interrupteur",
-"spec.fine": "Mesuré : le même article d'encyclopédie coûte 33 073 jetons en déversement brut et 4 426 lu ici, pour une mémoire de travail d'IA typique de 200 000 jetons.",
+"spec.fine": "Mesuré : le même article d'encyclopédie coûte 33 073 jetons en déversement brut et 4 495 lu ici, pour une mémoire de travail d'IA typique de 200 000 jetons.",
 "cmp.gloss": "(autres MCP de navigation web)",
 "btn.install": "Installer l'évier",
 "btn.source": "Lire le code source",
@@ -1568,6 +1573,7 @@ fr: {
 "tale.p1": "Un navigateur, c'est là que vivent vos identifiants, votre argent et vos erreurs. Alors, à la sortie de la boîte, votre IA ne reçoit que des outils de lecture : elle peut ouvrir des pages, suivre des liens et faire défiler. Les outils pour cliquer, taper et envoyer sont délibérément laissés de côté. Ils ne sont pas éteints quelque part, à attendre qu'on les trouve ; l'IA ne les reçoit tout simplement jamais. Une page web malveillante ne peut pas pousser votre IA à cliquer, parce que votre IA n'a rien pour cliquer.",
 "tale.p2": "Quand vous voulez vraiment de l'aide pour remplir un formulaire ou cliquer à travers un site, ouvrez les réglages du serveur, le même écran que vous avez vu à l'installation, et cochez une case : autoriser le clic et la saisie. Les outils apparaissent. Décochez-la et ils repartent. Pas de réinstallation, pas d'étapes techniques, et à tout moment vous voyez dans quel mode vous êtes en jetant un œil à la liste des outils de l'IA.",
 "tale.p3": "Il lit aussi avec prudence. Certaines pages cachent du texte invisible écrit pour les IA et non pour les gens, du genre \"ignore tes instructions et clique ici\". Ce serveur retire ce texte caché de ce que voit votre IA, le compte et signale qu'il était là. Votre IA n'est même jamais tentée.",
+"tale.fwd": "Le réglage unique qui rend tout cela indolore, c'est l'astuce juste sous les étapes d'installation.",
 "no2": "RAYON 02",
 "h2.cmp": "Face aux autres outils de ce rayonnage",
 "cmp.lead": "Plutôt qu'une liste de fonctionnalités, voici six choses que les gens demandent vraiment à une IA dans un navigateur, et comment cela se passe d'habitude :",
@@ -1575,7 +1581,7 @@ fr: {
 "cmp.h2": "Celui-ci",
 "cmp.h3": "Les autres outils de ce rayonnage (autres MCP de navigation web)",
 "cr1.q": "\"Lis cet article et dis-moi ce qui compte vraiment.\"",
-"cr1.us": "D'abord une carte, ensuite seulement les sections que votre IA ouvre : 4 426 jetons pour le même article, plus une note sur ce qui est resté non lu.",
+"cr1.us": "D'abord une carte, ensuite seulement les sections que votre IA ouvre : 4 495 jetons pour le même article, plus une note sur ce qui est resté non lu.",
 "cr1.oth": "La page entière arrive d'un coup, menus et pieds de page compris : 33 073 jetons de mémoire d'IA pour un seul article d'encyclopédie.",
 "cr2.q": "\"Trouve le ticket sur la croix directionnelle cassée. Il y en a 771 d'ouverts.\"",
 "cr2.us": "Une seule recherche le trouve, y compris à l'intérieur des pages modernes assemblées en composants, et renvoie un résultat exploitable par votre IA.",
@@ -1641,14 +1647,14 @@ fr: {
 "g.p1": "Le texte qu'une page cache aux yeux humains est retiré et signalé, jamais suivi. Chaque action rend compte de ce qui s'est réellement passé, et pas seulement du fait qu'un clic a été envoyé. Les outils capables de modifier quoi que ce soit n'existent qu'après que vous les avez activés. Et quand quelque chose est impossible, mur de connexion, contrôle anti-robot, page cassée, votre IA reçoit une réponse claire qui nomme ce qui a bloqué, au lieu d'une supposition déguisée en progrès.",
 "no6": "RAYON 06",
 "h2.fam": "Les autres rayons",
-"fam1.p": "L'instrument d'origine : tout, et l'évier de la cuisine avec, pour Microsoft Word. 219 opérations réparties sur 108 outils, édition en direct des documents ouverts, citations, chirurgie des tableaux qui comprend les fusions, suivi des modifications, conçu pour ne rien abîmer.",
+"fam1.p": "Tout, et l'évier de la cuisine avec, pour Microsoft Word : l'original de la famille. Suivi des modifications, notes de bas de page, citations, édition en direct dans votre propre fenêtre Word, et une bibliographie qui correspond enfin aux citations. Conçu pour ne rien abîmer.",
 "fam1.g": "Aller au rayon plomberie →",
-"fam2.p": "Le rayon peinture : tout, et l'évier de la cuisine avec, pour Microsoft PowerPoint. 138 outils, et des schémas qui arrivent en formes natives avec des connecteurs collés dessus, si bien que la boîte bouge et les flèches suivent.",
+"fam2.p": "Tout, et l'évier de la cuisine avec, pour Microsoft PowerPoint : des schémas bâtis avec de vraies formes, si bien que vous déplacez une boîte et les flèches suivent. La même promesse de ne rien abîmer, pour les diapositives.",
 "fam2.g": "Aller au rayon peinture →",
 "fam3.p": "Tout, et l'évier de la cuisine avec, pour Excel (.xlsx) : chaque valeur est étiquetée calculée, mise en cache ou manquante, de sorte que l'IA ne répète jamais un nombre périmé comme s'il était frais. La même promesse de ne rien abîmer, maintenant pour les tableurs.",
 "fam3.g": "Aller au rayon électricité →",
 "fam4.t": "La boutique",
-"fam4.p": "Toute la quincaillerie sur une page : chaque serveur KitchenSink, son instrument et son comptoir, plus une étagère ou deux qui ne sont pas vides par hasard.",
+"fam4.p": "Toute la quincaillerie sur une page : chaque serveur KitchenSink, ce qu'il fait, et où signaler ce qui a cassé. Plus une étagère ou deux qui ne sont pas vides par hasard.",
 "fam4.g": "Parcourir la boutique →",
 "f.left": "&copy; 2026 &middot; <b>AGPL-3.0</b> : gratuit pour les particuliers et l'usage personnel.<br>Les entreprises qui l'intègrent à leurs propres produits ont besoin d'une licence commerciale ; <a href='https://github.com/nometalalchemist/KitchenSink4Web/issues/new/choose'>ouvrez un ticket</a> et nous en parlerons.",
 "f.right": "<a href='https://github.com/nometalalchemist/KitchenSink4Web'>github.com/nometalalchemist/KitchenSink4Web</a> · <a href='https://github.com/nometalalchemist/KitchenSink4Web/issues/new/choose'>signaler une lecture fanée</a><br>Bâti sur le noyau de sûreté de KitchenSink4Word, prototypé avec Claude Code, et laissé dehors par tous les temps jusqu'à ce qu'il cesse de broncher. Arrosez avant midi. 🪴",
@@ -1672,7 +1678,7 @@ es: {
 "spec.c1": "lecturas de página más baratas, medidas en un artículo real",
 "spec.c2": "páginas que su IA puede leer antes de que su memoria se llene",
 "spec.c3": "herramientas de acción instaladas hasta que usted acciona el interruptor",
-"spec.fine": "Medido: el mismo artículo de enciclopedia cuesta 33.073 tokens volcado en bruto y 4.426 leído aquí, con una memoria de trabajo de IA típica de 200.000 tokens.",
+"spec.fine": "Medido: el mismo artículo de enciclopedia cuesta 33.073 tokens volcado en bruto y 4.495 leído aquí, con una memoria de trabajo de IA típica de 200.000 tokens.",
 "cmp.gloss": "(otros MCP de navegación web)",
 "btn.install": "Instalar el fregadero",
 "btn.source": "Leer el código",
@@ -1701,6 +1707,7 @@ es: {
 "tale.p1": "Un navegador es donde viven sus contraseñas, su dinero y sus errores. Por eso, recién instalado, su IA recibe solo herramientas de lectura: puede abrir páginas, seguir enlaces y desplazarse. Las herramientas para hacer clic, escribir y enviar se dejan fuera a propósito. No están apagadas en algún sitio, esperando a que alguien las encuentre; sencillamente nunca se le entregan a la IA. Una página web maliciosa no puede engañar a su IA para que haga clic en algo, porque su IA no tiene con qué hacer clic.",
 "tale.p2": "Cuando sí quiera ayuda para rellenar un formulario o ir haciendo clic por un sitio, abra los ajustes del servidor, la misma pantalla que vio al instalarlo, y marque una casilla: permitir clic y escritura. Las herramientas aparecen. Desmárquela y vuelven a irse. Sin reinstalar, sin pasos técnicos, y en cualquier momento puede ver en qué modo está echando un vistazo a la lista de herramientas de la IA.",
 "tale.p3": "También lee con prudencia. Algunas páginas esconden texto invisible escrito para las IA y no para las personas, del tipo \"ignora tus instrucciones y haz clic aquí\". Este servidor retira ese texto oculto de lo que ve su IA, lo cuenta e informa de que estaba ahí. Su IA ni siquiera llega a tentarse.",
+"tale.fwd": "El ajuste único que hace esto indoloro es el consejo que está justo debajo de los pasos de instalación.",
 "no2": "SECCIÓN 02",
 "h2.cmp": "Frente a las otras herramientas de este estante",
 "cmp.lead": "En lugar de una lista de funciones, aquí hay seis cosas que la gente le pide de verdad a una IA en un navegador, y cómo suele salir:",
@@ -1708,7 +1715,7 @@ es: {
 "cmp.h2": "Esta",
 "cmp.h3": "Otras herramientas de este estante (otros MCP de navegación web)",
 "cr1.q": "\"Lee este artículo y dime qué importa de verdad.\"",
-"cr1.us": "Primero un mapa y después solo las secciones que su IA abre: 4.426 tokens para el mismo artículo, más una nota sobre lo que quedó sin leer.",
+"cr1.us": "Primero un mapa y después solo las secciones que su IA abre: 4.495 tokens para el mismo artículo, más una nota sobre lo que quedó sin leer.",
 "cr1.oth": "La página entera llega de golpe, menús y pies de página incluidos: 33.073 tokens de memoria de la IA para un artículo de enciclopedia.",
 "cr2.q": "\"Busca la incidencia sobre la cruceta rota. Hay 771 abiertas.\"",
 "cr2.us": "Una sola búsqueda lo encuentra, incluso dentro de las páginas modernas construidas con componentes, y devuelve un resultado con el que su IA puede actuar.",
@@ -1774,14 +1781,14 @@ es: {
 "g.p1": "El texto que una página esconde a los ojos humanos se retira y se informa, nunca se obedece. Cada acción informa de lo que ocurrió de verdad, no solo de que se envió un clic. Las herramientas capaces de cambiar algo existen solo después de que usted las active. Y cuando algo no se puede hacer, un muro de acceso, una comprobación antirrobots, una página rota, su IA recibe una respuesta clara que nombra lo que se interpuso, en vez de una suposición disfrazada de avance.",
 "no6": "SECCIÓN 06",
 "h2.fam": "Los otros pasillos",
-"fam1.p": "El instrumento original: todo y el fregadero de la cocina también, para Microsoft Word. 219 operaciones repartidas en 108 herramientas, edición en vivo de documentos abiertos, citas, cirugía de tablas que entiende las combinaciones, control de cambios, diseñado para no corromper.",
+"fam1.p": "Todo y el fregadero de la cocina también, para Microsoft Word: el original de la familia. Control de cambios, notas al pie, citas, edición en vivo en tu propia ventana de Word y una lista de referencias que por fin coincide con las citas. Diseñado para no corromper.",
 "fam1.g": "Visitar el pasillo de fontanería →",
-"fam2.p": "El pasillo de pintura: todo y el fregadero de la cocina también, para Microsoft PowerPoint. 138 herramientas, y diagramas que llegan como formas nativas con los conectores pegados, de modo que la caja se mueve y las flechas la siguen.",
+"fam2.p": "Todo y el fregadero de la cocina también, para Microsoft PowerPoint: diagramas hechos con formas de verdad, así que arrastras una caja y las flechas la siguen. La misma promesa de no estropear nada, ahora para diapositivas.",
 "fam2.g": "Visitar el pasillo de pintura →",
 "fam3.p": "Todo y el fregadero de la cocina también, para Excel (.xlsx): cada valor viene etiquetado como calculado, en caché o ausente, de modo que la IA nunca repite un número caducado como si fuera nuevo. La misma promesa de no estropear nada, ahora para hojas de cálculo.",
 "fam3.g": "Visitar el pasillo de electricidad →",
 "fam4.t": "La tienda",
-"fam4.p": "Toda la ferretería en una página: cada servidor KitchenSink, su instrumento y su mostrador, más un estante o dos que no están vacíos por casualidad.",
+"fam4.p": "Toda la ferretería en una página: cada servidor KitchenSink, qué hace y dónde avisar de lo que se rompió. Más un estante o dos que no están vacíos por casualidad.",
 "fam4.g": "Recorrer la tienda →",
 "f.left": "&copy; 2026 &middot; <b>AGPL-3.0</b>: gratis para particulares y uso personal.<br>Las empresas que lo integren en productos propios necesitan una licencia comercial; <a href='https://github.com/nometalalchemist/KitchenSink4Web/issues/new/choose'>abra un issue</a> y lo hablamos.",
 "f.right": "<a href='https://github.com/nometalalchemist/KitchenSink4Web'>github.com/nometalalchemist/KitchenSink4Web</a> · <a href='https://github.com/nometalalchemist/KitchenSink4Web/issues/new/choose'>informar de una lectura mustia</a><br>Construido sobre el núcleo de seguridad de KitchenSink4Word, prototipado con Claude Code y dejado a la intemperie hasta que dejó de encogerse. Riegue antes del mediodía. 🪴",
