@@ -387,14 +387,125 @@ function ksHiddenAnywhere(el) {
 // choice trades a missed cloak for never stripping a real control off a real
 // page, which is the direction this whole check has to fail in.
 
-// The nearest z-index that actually applies, which is the innermost one up the
-// chain; `auto` everywhere means 0.
-function ksPaintRank(n) {
-  for (var p = n; p; p = ksUp(p)) {
-    var v = parseInt(ksCS(p).zIndex, 10);
-    if (v === v) return v;
+// ------------------------------------------------------------ PAINT ORDER
+//
+// A Z-INDEX ORDERS SIBLINGS INSIDE ONE STACKING CONTEXT AND NOTHING ELSE, and
+// re-attack 3 (R2) is why this is a tree walk rather than a number. The rule
+// this replaces returned the innermost DECLARED z-index up an element's chain
+// and compared two of them as if they sat on one scale. They do not: a button
+// declaring `z-index:9999` inside a wrapper whose own context is painted at 0
+// is entirely beneath a lid at 1, which is what the browser draws and what the
+// pixel proof reported, while the comparison said the button was on top.
+//
+// So the comparison happens where CSS says it happens: build each node's chain
+// of stacking contexts up to the root, find the context the two share, and
+// compare only the two entries that sit directly in it. Everything below that
+// point paints with its container and cannot reorder itself out of it.
+
+//: `will-change` promises a property that would establish a context, and the
+//: browser establishes one up front to keep the promise.
+var KS_CTX_WILL_CHANGE =
+  /transform|opacity|filter|perspective|isolation|mix-blend-mode|backdrop/;
+
+// Does this element start a new painting group. The list is the CSS
+// stacking-context set, plus POSITIONED-WITH-AUTO-Z, which is not formally a
+// stacking context and orders exactly like one: CSS 2.1 Appendix E paints
+// every positioned z-auto descendant as its own unit, so for the question
+// "which of these two boxes is on top" it behaves identically and leaving it
+// out puts a positioned box's children on the wrong scale.
+function ksEstablishesContext(el, s) {
+  if (!el || el === document.documentElement) return true;
+  if (s.position !== 'static') return true;
+  var op = parseFloat(s.opacity);
+  if (op === op && op < 1) return true;
+  if (s.isolation === 'isolate') return true;
+  if (s.mixBlendMode && s.mixBlendMode !== 'normal') return true;
+  if (s.transform && s.transform !== 'none') return true;
+  if (s.filter && s.filter !== 'none') return true;
+  if ((s.backdropFilter || s.webkitBackdropFilter || 'none') !== 'none') return true;
+  if (s.perspective && s.perspective !== 'none') return true;
+  if (s.clipPath && s.clipPath !== 'none') return true;
+  if (s.maskImage && s.maskImage !== 'none') return true;
+  if (s.contain && /paint|layout|strict|content/.test(s.contain)) return true;
+  if (s.willChange && KS_CTX_WILL_CHANGE.test(s.willChange)) return true;
+  // A flex or grid ITEM with a declared z-index establishes one even though
+  // it is not positioned.
+  if (s.zIndex !== 'auto') {
+    var p = ksUp(el);
+    if (p && /flex|grid/.test(ksCS(p).display)) return true;
   }
-  return 0;
+  return false;
+}
+
+// The chain from the root down to the node, one entry per painting group the
+// node sits inside. Consecutive entries are container and contained, so two
+// chains share a prefix exactly as far as the two nodes share a context.
+var ksCtxPathCache = new Map();
+function ksCtxPath(node) {
+  var hit = ksCtxPathCache.get(node);
+  if (hit) return hit;
+  var path = [], n = node, guard = 0;
+  while (n && guard++ < 64) {
+    path.push(n);
+    var c = ksUp(n);
+    while (c && !ksEstablishesContext(c, ksCS(c))) c = ksUp(c);
+    if (!c || c === n) break;
+    n = c;
+  }
+  path.reverse();
+  ksCtxPathCache.set(node, path);
+  return path;
+}
+
+// The chain for an OCCLUDER RECORD, which may be a pseudo-element. A
+// pseudo-element paints inside its generator when the generator starts a
+// group of its own, and alongside the generator when it does not, so the
+// record is appended or substituted accordingly.
+function ksEntryPath(c) {
+  if (!c.ksPseudo) return ksCtxPath(c.el);
+  var base = ksCtxPath(c.el).slice();
+  if (!ksEstablishesContext(c.el, ksCS(c.el))) base.pop();
+  base.push(c);
+  return base;
+}
+
+// WHERE IN ITS OWN GROUP A BOX PAINTS, on one scale so two siblings compare.
+// A declared z-index wins; a positioned box with `auto` paints at the level of
+// z-index 0; an in-flow box paints below both and above any negative z-index.
+function ksPaintLevel(n) {
+  var s = n.ksPseudo ? n.ps : ksCS(n);
+  var z = parseInt(s.zIndex, 10);
+  if (z === z) return z * 4 + 2;
+  return s.position !== 'static' ? 2 : 0;
+}
+
+// Document order between two entries in the same group, across shadow
+// boundaries and with a pseudo-element ordered against its own generator: a
+// `::before` paints under the generator's content and a `::after` over it.
+function ksEntryOrder(a, b) {
+  var ea = a.ksPseudo ? a.el : a, eb = b.ksPseudo ? b.el : b;
+  if (ea === eb) {
+    if (a.ksPseudo === b.ksPseudo) return 0;
+    var av = a.ksPseudo === '::after' ? 1 : (a.ksPseudo === '::before' ? -1 : 0);
+    var bv = b.ksPseudo === '::after' ? 1 : (b.ksPseudo === '::before' ? -1 : 0);
+    return av - bv;
+  }
+  var ra = ksOrderRef(ea), rb = ksOrderRef(eb);
+  if (ra === rb) return ra === ea ? -1 : 1;   // the shadow child, not the host
+  try { return (ra.compareDocumentPosition(rb) & 4) ? -1 : 1; }
+  catch (e) { return -1; }
+}
+
+// Does the candidate paint above the target. The two chains are compared at
+// the group they share; nothing deeper than that can change the answer.
+function ksPaintsAbove(cand, el) {
+  var a = ksEntryPath(cand), b = ksCtxPath(el), i = 0;
+  while (i < a.length && i < b.length && a[i] === b[i]) i++;
+  if (i >= a.length) return false;      // the candidate contains the target
+  if (i >= b.length) return true;       // the target contains the candidate
+  var la = ksPaintLevel(a[i]), lb = ksPaintLevel(b[i]);
+  if (la !== lb) return la > lb;
+  return ksEntryOrder(b[i], a[i]) < 0;
 }
 
 // THE LID DEFINITION IS "ANYTHING THAT PAINTS", and re-attack 2 is the reason
@@ -539,6 +650,137 @@ var KS_OCCLUDER_BUDGET_MS = 1000;
 //: Smaller than this in either dimension and a box cannot hide a control.
 var KS_LID_MIN_PX = 8;
 
+// A PSEUDO-ELEMENT IS PAINT WITH NO ELEMENT, which is re-attack 3's R1 and
+// the reason the walk below asks two extra questions per node. `ksDeepEach`
+// enumerates ELEMENTS; `::before` and `::after` generate boxes that paint and
+// are not elements, so `body::after{position:fixed;inset:0;background:#fff}`
+// is a full-bleed scrim in three declarations that no `getComputedStyle` call
+// in the old scan ever saw. It reported zero overlapping boxes on a page whose
+// button rendered as blank white.
+//
+// THE SCOPE IS THE POSITIONED PSEUDO-ELEMENT, and the boundary is a
+// measurement problem rather than a judgement. A pseudo-element has no
+// `getBoundingClientRect`, so its rect has to be reconstructed from computed
+// values, and Chromium resolves `left/top/width/height` to used pixels only
+// where the box is positioned. An in-flow `::before` also cannot cover a
+// control it does not generate space for -- it displaces layout instead --
+// so the class this leaves out is the one that cannot be a lid. A pseudo
+// moved over a control by a negative margin is the stated residual, and the
+// pixel arbiter on the acting path is what would catch it if it mattered.
+var KS_PSEUDOS = ['::before', '::after'];
+
+function ksPseudoRect(el, s, ps) {
+  var pos = ps.position;
+  if (pos !== 'fixed' && pos !== 'absolute') return null;
+  var w = parseFloat(ps.width), h = parseFloat(ps.height);
+  if (!(w === w) || !(h === h) || w < KS_LID_MIN_PX || h < KS_LID_MIN_PX) {
+    return null;
+  }
+  var l = parseFloat(ps.left), t = parseFloat(ps.top);
+  var bx = 0, by = 0;
+  if (pos === 'fixed') {
+    if (!(l === l)) {
+      var rr = parseFloat(ps.right);
+      l = (rr === rr) ? (window.innerWidth - rr - w) : 0;
+    }
+    if (!(t === t)) {
+      var bb = parseFloat(ps.bottom);
+      t = (bb === bb) ? (window.innerHeight - bb - h) : 0;
+    }
+  } else {
+    // The containing block is the nearest positioned ancestor, starting with
+    // the generator itself; with none, it is the initial containing block.
+    var cb = null;
+    for (var n = el; n; n = ksUp(n)) {
+      if (((n === el) ? s : ksCS(n)).position !== 'static') { cb = n; break; }
+    }
+    var base = cb ? cb.getBoundingClientRect()
+                  : { left: -window.scrollX, top: -window.scrollY };
+    bx = base.left; by = base.top;
+    if (!(l === l)) l = 0;
+    if (!(t === t)) t = 0;
+    l += bx; t += by;
+  }
+  return { left: l, top: t, right: l + w, bottom: t + h,
+           width: w, height: h };
+}
+
+// A pseudo-element's own paint, on the same 0-to-1 scale as a box's. It
+// cannot go through `ksLidAlpha`, which reads the GENERATOR's tag: a
+// `::after` on an `<img>` is not an image and paints nothing but what it
+// declares. What it does share is the generator's ancestor chain, because
+// every opacity and filter above the generator lands on the pseudo too.
+function ksPseudoAlpha(el, ps) {
+  if (ps.visibility === 'hidden' || ps.visibility === 'collapse') return 0;
+  var base = 0;
+  if (ps.backgroundImage && ps.backgroundImage !== 'none') base = 1;
+  else {
+    var c = ksParseColor(ps.backgroundColor);
+    if (c) base = c.a;
+  }
+  if (base < 1 && ksBackdropObliterates(ps)) base = 1;
+  if (base <= KS_LID_ALPHA_FLOOR) return 0;
+  var own = parseFloat(ps.opacity);
+  if (own === own) base *= own;
+  base *= ksFilterOpacity(ps);
+  return base * ksPaintOpacity(el, ksCS(el));
+}
+
+// WHICH ELEMENTS CAN GENERATE A PSEUDO-ELEMENT AT ALL, read off the page's own
+// style rules. Asking `getComputedStyle(el, '::after')` twice per node is the
+// exhaustive answer and it is the expensive one, so the scan first tries to
+// name the hosts: a pseudo-element exists only because a rule declares
+// `content` for one, an inline `style` attribute cannot create one, and the
+// selectors that do are enumerable. A stylesheet this document cannot read
+// (a cross-origin one) makes the set incomplete, and an incomplete set would
+// be a page-controlled blind spot, so the answer is `null` there and the scan
+// falls back to asking everything.
+function ksPseudoHosts(roots) {
+  var set = new Set(), scopes = [document].concat(roots), ok = true;
+  for (var i = 0; i < scopes.length && ok; i++) {
+    var scope = scopes[i];
+    var lists = [scope.styleSheets || [], scope.adoptedStyleSheets || []];
+    for (var b = 0; b < lists.length && ok; b++) {
+      for (var j = 0; j < lists[b].length && ok; j++) {
+        var rules;
+        try { rules = lists[b][j].cssRules; } catch (e) { return null; }
+        if (!rules) return null;
+        ok = ksCollectPseudoHosts(rules, set, scopes, 0);
+      }
+    }
+  }
+  return ok ? set : null;
+}
+
+function ksCollectPseudoHosts(rules, set, scopes, depth) {
+  if (depth > 4) return true;
+  for (var i = 0; i < rules.length; i++) {
+    var r = rules[i];
+    // A RULE CAN BE BOTH. Nested CSS gave every `CSSStyleRule` its own
+    // `cssRules` list, so an `if (r.cssRules) { recurse; continue; }` shape
+    // treats every ordinary rule as a grouping rule and never reads a single
+    // selector -- which is exactly how this returned an empty host set on a
+    // page whose `#deco::after` was sitting in the first stylesheet.
+    if (r.cssRules && r.cssRules.length
+        && !ksCollectPseudoHosts(r.cssRules, set, scopes, depth + 1)) {
+      return false;
+    }
+    var sel = r.selectorText;
+    if (!sel || (sel.indexOf(':before') < 0 && sel.indexOf(':after') < 0)) continue;
+    var parts = sel.split(',');
+    for (var j = 0; j < parts.length; j++) {
+      var base = parts[j].replace(/::?(before|after)\b[\s\S]*$/i, '').trim();
+      if (!base || base === ':root' || base === ':host') base = '*';
+      for (var k = 0; k < scopes.length; k++) {
+        var hit;
+        try { hit = scopes[k].querySelectorAll(base); } catch (e) { return false; }
+        for (var m = 0; m < hit.length; m++) set.add(hit[m]);
+      }
+    }
+  }
+  return true;
+}
+
 // The page's painting boxes, scanned ONCE per injected call. The geometry
 // test comes before the style read on purpose: `getBoundingClientRect` is
 // cheap after the first forced layout and `getComputedStyle` is not, so the
@@ -551,21 +793,46 @@ function ksOccluders() {
   ksOccluderTruncated = false;
   try {
     var t0 = Date.now(), seen = 0;
+    var hosts = ksPseudoHosts(ksOpenRoots(document));
     ksDeepEach(document, function (el) {
       if (((++seen) & 511) === 0 && Date.now() - t0 > KS_OCCLUDER_BUDGET_MS) {
         ksOccluderTruncated = true;
         return false;
       }
       var r = el.getBoundingClientRect();
-      if (r.width < KS_LID_MIN_PX || r.height < KS_LID_MIN_PX) return;
-      var s = ksCS(el);
-      var a = ksLidAlpha(el, s);
-      if (a <= KS_LID_ALPHA_FLOOR) return;
-      out.push({ el: el, rect: r, z: ksPaintRank(el), a: a });
+      var s = null;
+      if (r.width >= KS_LID_MIN_PX && r.height >= KS_LID_MIN_PX) {
+        s = ksCS(el);
+        var a = ksLidAlpha(el, s);
+        if (a > KS_LID_ALPHA_FLOOR) {
+          out.push({ el: el, rect: r, a: a, ksPseudo: null });
+        }
+      }
+      if (hosts && !hosts.has(el)) return;
+      for (var i = 0; i < KS_PSEUDOS.length; i++) {
+        var ps;
+        try { ps = getComputedStyle(el, KS_PSEUDOS[i]); } catch (e) { continue; }
+        if (!ps || !ps.content || ps.content === 'none' || ps.content === 'normal') continue;
+        if (ps.display === 'none') continue;
+        var pr = ksPseudoRect(el, s || (s = ksCS(el)), ps);
+        if (!pr) continue;
+        var pa = ksPseudoAlpha(el, ps);
+        if (pa <= KS_LID_ALPHA_FLOOR) continue;
+        out.push({ el: el, rect: pr, a: pa, ksPseudo: KS_PSEUDOS[i], ps: ps });
+      }
     });
   } catch (e) { out = []; }
   ksOccluderCache = out;
   return out;
+}
+
+// Drop everything the paint scan memoized. The caches are correct for one
+// layout and one style recalculation, and the acting path deliberately
+// re-takes the verdict after letting the page's own queued work run.
+function ksResetPaintCaches() {
+  ksOccluderCache = null;
+  ksStyleCache = new Map();
+  ksCtxPathCache = new Map();
 }
 
 // Document order across shadow boundaries. `compareDocumentPosition` between
@@ -581,14 +848,6 @@ function ksOrderRef(n) {
     p = r.host;
   }
   return n;
-}
-
-function ksPaintsAbove(cand, el, ze) {
-  if (cand.z !== ze) return cand.z > ze;
-  // Equal stacking level: later in document order paints later.
-  var a = ksOrderRef(el), b = ksOrderRef(cand.el);
-  if (a === b) return b !== cand.el;      // the shadow child, not the host
-  try { return !!(a.compareDocumentPosition(b) & 4); } catch (e) { return true; }
 }
 
 // COVERAGE AT A POINT: the stack composited, not one box tested. Each layer
@@ -644,17 +903,26 @@ function ksSampleRects(el, box) {
   return t.length ? t : [box];
 }
 
-function ksOccludedReason(el) {
+// The box-math pass: which boxes paint above this control, and do enough of
+// them land on it. Returns the candidates alongside the verdict, because the
+// pixel arbiter on the acting path needs to know which lids to take out of
+// the paint before it can ask the compositor whether they matter.
+function ksOcclusionScan(el) {
   if (!el || !el.getBoundingClientRect) return null;
   var r = el.getBoundingClientRect();
   if (r.width < 1 || r.height < 1) return null;   // geometry speaks for itself
-  var ze = ksPaintRank(el), over = [], all = ksOccluders();
+  var over = [], all = ksOccluders();
   for (var k = 0; k < all.length; k++) {
     var c = all[k];
-    if (c.el === el || ksContainsDeep(c.el, el) || ksContainsDeep(el, c.el)) continue;
+    // A pseudo-element is never an ancestor of anything, so the containment
+    // filter applies to its GENERATOR only in the descendant direction: a
+    // `::after` on the control itself or on something inside it is the
+    // control's own rendering, and one on an ancestor is a scrim.
+    if (!c.ksPseudo && (c.el === el || ksContainsDeep(c.el, el))) continue;
+    if (ksContainsDeep(el, c.el)) continue;
     if (c.rect.right <= r.left || c.rect.left >= r.right
         || c.rect.bottom <= r.top || c.rect.top >= r.bottom) continue;
-    if (!ksPaintsAbove(c, el, ze)) continue;
+    if (!ksPaintsAbove(c, el)) continue;
     over.push(c);
   }
   if (!over.length) return null;
@@ -672,8 +940,125 @@ function ksOccludedReason(el) {
       }
     }
   }
-  if (!centre) return null;
-  return (covered * 2 > total) ? 'occluded' : null;
+  if (!centre || covered * 2 <= total) return null;
+  return { reason: 'occluded', over: over, rect: r, boxes: boxes };
+}
+
+function ksOccludedReason(el) {
+  var scan = ksOcclusionScan(el);
+  return scan ? scan.reason : null;
+}
+
+// ------------------------------------------------------- THE PIXEL ARBITER
+//
+// BOX MATH PROPOSES, THE COMPOSITOR DISPOSES. Re-attack 3's R4 opened the one
+// direction DESIGN says this check may not fail in: seven ordinary
+// constructions -- `clip-path`, a transparent mask, a decorative full-viewport
+// `<svg>`, an undrawn `<canvas>`, a scrolled `overflow` container, a spacer
+// `<img>`, and `mix-blend-mode` -- made every acting call on the page refuse
+// while the control was fully visible. Three separate root causes, and one
+// sentence covers all three: a box's DECLARED paint is not what reaches the
+// pixel. `getBoundingClientRect` is not the painted region, a tag is not its
+// content, and compositing is not multiplication.
+//
+// Chasing those one at a time is the instance-list mistake three re-attacks in
+// a row have now named, and the browser already holds the answer. So when the
+// box math says a control is covered, the acting path CONFIRMS it against the
+// rendering: screenshot the control's own area as the page stands, hide the
+// candidate lids, screenshot it again, and compare the bytes. Identical means
+// the lids paint nothing over the control and the refusal would be a false
+// positive; different means something really is on top and the refusal stands.
+// That is the attacker's own OVERLAY-NO-OP proof, run as a gate.
+//
+// The arbiter runs ONLY on the acting path and ONLY where the box math has
+// already flagged, so an ordinary page pays nothing for it: the cheap pass is
+// still the cheap pass, and the expensive pass runs on the handful of calls
+// that were about to be refused. The read path keeps the box-math answer, on
+// the reasoning the occlusion check has always used -- reading a covered
+// control is not the harm, clicking one is.
+//
+// `visibility:hidden` is the hiding mechanism rather than `display:none`
+// because it takes the box out of the PAINT and leaves it in the LAYOUT.
+// Removing a lid from the layout would move everything under it and the
+// second screenshot would differ for a reason that has nothing to do with
+// occlusion.
+var KS_ARBITER_STYLE_ID = 'ks4web-arbiter-hide';
+var KS_ARBITER_ATTR = 'data-ks4web-lid';
+
+function ksPixelPrep(el) {
+  var scan = ksOcclusionScan(el);
+  if (!scan) return null;
+  var flags = { '': false, 'b': false, 'a': false };
+  for (var i = 0; i < scan.over.length; i++) {
+    var c = scan.over[i];
+    var kind = c.ksPseudo === '::before' ? 'b' : (c.ksPseudo === '::after' ? 'a' : '');
+    try { c.el.setAttribute(KS_ARBITER_ATTR + (kind ? '-' + kind : ''), ''); }
+    catch (e) { continue; }
+    flags[kind] = true;
+  }
+  // The area a human would be looking at: the sample rects the majority rule
+  // ran on, clipped to the viewport, which is the only region a screenshot
+  // can address.
+  var left = 1e9, top = 1e9, right = -1e9, bottom = -1e9;
+  for (var b = 0; b < scan.boxes.length; b++) {
+    var q = scan.boxes[b];
+    if (q.left < left) left = q.left;
+    if (q.top < top) top = q.top;
+    if (q.right > right) right = q.right;
+    if (q.bottom > bottom) bottom = q.bottom;
+  }
+  left = Math.max(0, Math.floor(left));
+  top = Math.max(0, Math.floor(top));
+  right = Math.min(window.innerWidth, Math.ceil(right));
+  bottom = Math.min(window.innerHeight, Math.ceil(bottom));
+  if (right - left < 1 || bottom - top < 1) { ksPixelRelease(); return null; }
+  return { x: left, y: top, width: right - left, height: bottom - top,
+           lids: scan.over.length, flags: flags };
+}
+
+//: The three attributes the prep pass writes, and the rules that take the
+//: boxes carrying them out of the paint.
+var KS_ARBITER_ATTRS = ['data-ks4web-lid', 'data-ks4web-lid-b',
+                        'data-ks4web-lid-a'];
+var KS_ARBITER_CSS =
+  '[data-ks4web-lid]{visibility:hidden!important}'
+  + '[data-ks4web-lid-b]::before{content:none!important;display:none!important}'
+  + '[data-ks4web-lid-a]::after{content:none!important;display:none!important}';
+
+// The rules go into EVERY open root as well as the document, because a
+// document stylesheet does not reach inside a shadow tree and a lid rendered
+// by a component library lives in one (re-attack 2, A3).
+function ksPixelHide() {
+  var scopes = [document].concat(ksOpenRoots(document));
+  for (var i = 0; i < scopes.length; i++) {
+    var scope = scopes[i];
+    if (scope.getElementById && scope.getElementById(KS_ARBITER_STYLE_ID)) continue;
+    var st = document.createElement('style');
+    st.id = KS_ARBITER_STYLE_ID;
+    st.textContent = KS_ARBITER_CSS;
+    var host = (scope === document)
+      ? (document.head || document.documentElement) : scope;
+    try { host.appendChild(st); } catch (e) { /* a root that refuses */ }
+  }
+  return true;
+}
+
+function ksPixelRelease() {
+  var scopes = [document].concat(ksOpenRoots(document));
+  for (var i = 0; i < scopes.length; i++) {
+    var st = scopes[i].getElementById
+      ? scopes[i].getElementById(KS_ARBITER_STYLE_ID) : null;
+    if (st && st.parentNode) st.parentNode.removeChild(st);
+  }
+  ksDeepEach(document, function (el) {
+    if (!el.removeAttribute) return;
+    for (var k = 0; k < KS_ARBITER_ATTRS.length; k++) {
+      if (el.hasAttribute(KS_ARBITER_ATTRS[k])) {
+        el.removeAttribute(KS_ARBITER_ATTRS[k]);
+      }
+    }
+  });
+  return true;
 }
 
 // The subset that means CLOAKED: the element is laid out, hit-testable, and

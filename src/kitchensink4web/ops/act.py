@@ -42,6 +42,8 @@ takes page-like handles the engine already holds.
 
 from __future__ import annotations
 
+import time
+
 from ..anchors import Outcome, ladder
 from ..errors import (AmbiguousLocation, BadParams, ModalBlocked, StaleAnchor,
                       TargetChanged, TargetNotFound, Timeout)
@@ -362,6 +364,9 @@ _RESOLVE_JS = r"""
       pan_shape: ksPanShape('value' in el ? el.value : ''),
       pan_group_size: panGroup ? panGroup.size : null,
       pan_group_digits: panGroup ? panGroup.digits : null,
+      pan_group_first: panGroup ? panGroup.first : null,
+      pan_group_min: panGroup ? panGroup.min : null,
+      pan_group_region: panGroup ? panGroup.region : null,
       // WHICH ELEMENT DOES THIS CLICK ACTIVATE (re-attack 2, C1). A label
       // forwards its activation to the control it labels, and a node with no
       // activation behaviour delegates to the nearest ancestor that has one,
@@ -526,6 +531,9 @@ def target_descriptor(unit: dict) -> dict:
         "pan_shape": unit.get("pan_shape"),
         "pan_group_size": unit.get("pan_group_size"),
         "pan_group_digits": unit.get("pan_group_digits"),
+        "pan_group_first": unit.get("pan_group_first"),
+        "pan_group_min": unit.get("pan_group_min"),
+        "pan_group_region": unit.get("pan_group_region"),
         # The element the browser ACTIVATES when this one is clicked, when it
         # is not this one. A label's control, or the button a clicked span
         # sits inside (re-attack 2, C1).
@@ -766,6 +774,9 @@ _LIVE_FIELD_JS = r"""
     pan_shape: ksPanShape('value' in el ? el.value : ''),
     pan_group_size: grp ? grp.size : null,
     pan_group_digits: grp ? grp.digits : null,
+    pan_group_first: grp ? grp.first : null,
+    pan_group_min: grp ? grp.min : null,
+    pan_group_region: grp ? grp.region : null,
     in_form: !!f,
     action: (f && f.getAttribute('action')) || '',
     payment: ksPaymentField(el),
@@ -823,7 +834,8 @@ async def recheck_at_write(page, handle, desc: dict, *, tool: str) -> dict:
     # was present at the keystroke, witnessed by the page's own listener. The
     # re-check already re-derived everything else here; occlusion was simply
     # not among the keys it merged.
-    _refuse_cloak_verdict(live.get("cloak"), tool)
+    _refuse_cloak_verdict(
+        await _arbitrate(page, handle, live.get("cloak")), tool)
     merged = dict(desc)
     for key in ("type", "autocomplete", "in_form", "action", "attr_id",
                 "attr_name", "pattern", "inputmode", "form_payment",
@@ -1089,25 +1101,170 @@ _CLOAK_JS = instrument(r"""
 """)
 
 
-#: THE ARMING PROBE (re-attack 2, A7). Focus and the cloak verdict in ONE JS
-#: turn, so a page that raises a lid when the control takes focus is caught by
-#: the very check its own handler triggered. `focus()` dispatches
-#: synchronously, so the handler has already run and appended its panel by the
-#: time `ksCloakReason` reads the page, and no round trip separates the two.
-#: `preventScroll` keeps the viewport where the verdict was taken.
+#: THE ARMING PROBE (re-attack 2 A7, widened by re-attack 3 R3). Focus, let
+#: the page's own queued work run, then take the cloak verdict, all inside one
+#: round trip and immediately before the dispatch.
 #:
-#: The residual is stated rather than papered over: a lid raised on a TIMER
-#: after focus, or by the trusted click's own mousedown, lands after any
-#: pre-dispatch check a driver can make. What this closes is the window the
-#: acting path itself opens.
+#: A7 put the focus and the verdict in ONE JS TURN, so a handler that appends
+#: a lid SYNCHRONOUSLY is caught by the very check its own handler triggered.
+#: R3 walked through the difference between a turn and a window: a
+#: `queueMicrotask` inside the focus handler runs after that turn's
+#: synchronous body and before the dispatch, so the lid was up at the click
+#: and down at the verdict, witnessed by the page's own click listener. A
+#: `requestAnimationFrame` and a `MutationObserver` callback are the same
+#: window one queue along, and it is deterministic rather than a timing race.
+#:
+#: So the probe now takes TWO verdicts. The first is A7's, unchanged, and it
+#: still refuses the synchronous lid before anything else happens. Then it
+#: yields exactly as far as the page can schedule without a timer -- one
+#: animation frame, which drains the microtask queue on the way and puts the
+#: frame's own callbacks behind it, and one task turn after that -- drops the
+#: paint caches, and asks again. Nothing the focus handler queued is still
+#: pending when the second verdict is read, and no page JS runs between that
+#: verdict and the trusted input.
+#:
+#: `preventScroll` keeps the viewport where the verdict was taken. The
+#: residual is stated rather than papered over and is now genuinely a TIMER: a
+#: lid raised on `setTimeout(…, 40)`, or by the trusted click's own mousedown,
+#: lands after any pre-dispatch check a driver can make.
+#:
+#: The frame wait is RACED against a short timeout because a page the browser
+#: has stopped animating (a background tab, a throttled renderer) never runs
+#: the callback, and a probe that hangs is worse than a probe that falls back
+#: to the task queue alone.
 _ARM_JS = instrument(r"""
-(el) => {
+async (el) => {
 // @@KS4WEB_VISIBILITY@@
   try { el.focus({ preventScroll: true }); } catch (e) {}
-  const r = ksCloakReason(el);
+  let r = ksCloakReason(el);
+  if (r) return { reason: r, why: KS_CLOAK_TECHNIQUES[r] };
+  await Promise.race([
+    new Promise(function (done) {
+      requestAnimationFrame(function () { setTimeout(done, 0); });
+    }),
+    new Promise(function (done) { setTimeout(done, 50); })
+  ]);
+  ksResetPaintCaches();
+  r = ksCloakReason(el);
   return r ? { reason: r, why: KS_CLOAK_TECHNIQUES[r] } : null;
 }
 """)
+
+
+#: THE PIXEL ARBITER's three page-side steps (re-attack 3, R4). `prep` re-runs
+#: the box math and, where it flags, tags the candidate lids and returns the
+#: screen area a human would be looking at; `hide` installs the rules that take
+#: those lids out of the paint; `release` undoes both. They are three calls
+#: rather than one because a screenshot happens between them, and a screenshot
+#: is a Python-side operation.
+_PIXEL_PREP_JS = instrument(r"""
+(el) => {
+// @@KS4WEB_VISIBILITY@@
+  const p = ksPixelPrep(el);
+  if (!p) return null;
+  p.epoch = [document.documentElement.scrollWidth,
+             document.documentElement.scrollHeight,
+             Math.round(window.scrollX), Math.round(window.scrollY),
+             document.getElementsByTagName('*').length].join(':');
+  return p;
+}
+""")
+
+_PIXEL_HIDE_JS = instrument(r"""
+() => {
+// @@KS4WEB_VISIBILITY@@
+  return ksPixelHide();
+}
+""")
+
+_PIXEL_RELEASE_JS = instrument(r"""
+() => {
+// @@KS4WEB_VISIBILITY@@
+  return ksPixelRelease();
+}
+""")
+
+#: How long the arbiter took, in milliseconds, most recent call first. The
+#: cost of confirming a refusal against the compositor is a number this build
+#: has to be able to state, so it is measured rather than estimated.
+PIXEL_ARBITER_MS: list[float] = []
+
+
+async def _pixel_confirms_occlusion(page, handle) -> bool:
+    """Ask the compositor whether the flagged lids actually conceal anything.
+
+    Returns True when the control's own area renders DIFFERENTLY with the
+    candidate lids in the paint than without them, which is what "something is
+    on top of it" means in the only vocabulary that matters. Returns False
+    when the two renders are byte-identical: the lids paint nothing over the
+    control and a refusal would strip a working interface off a real page.
+
+    A probe that cannot run CONFIRMS, because the box math has already flagged
+    and a screenshot that fails is not evidence of innocence. The one honest
+    exception is an area no screenshot can address -- a control scrolled
+    entirely out of the viewport -- and geometry answers for that case before
+    this one is reached.
+
+    Cached per LAYOUT EPOCH: within one page state, the same clip and the same
+    lid count give the same answer, and an acting call that resolves, arms,
+    and re-checks would otherwise pay for three identical comparisons.
+    """
+    start = time.perf_counter()
+    prep = None
+    try:
+        prep = await page.evaluate(_PIXEL_PREP_JS, handle)
+        if not prep:
+            return False                # the box math no longer flags
+        cache = getattr(page, "_ks4web_pixel_cache", None)
+        if cache is None:
+            cache = {}
+            try:
+                page._ks4web_pixel_cache = cache
+            except Exception:
+                pass
+        key = (prep["epoch"], prep["x"], prep["y"], prep["width"],
+               prep["height"], prep["lids"])
+        if key in cache:
+            return cache[key]
+        clip = {"x": prep["x"], "y": prep["y"],
+                "width": prep["width"], "height": prep["height"]}
+        as_is = await page.screenshot(clip=clip, animations="disabled")
+        await page.evaluate(_PIXEL_HIDE_JS)
+        without = await page.screenshot(clip=clip, animations="disabled")
+        verdict = as_is != without
+        cache[key] = verdict
+        return verdict
+    except Exception:
+        return True
+    finally:
+        if prep is not None:
+            try:
+                await page.evaluate(_PIXEL_RELEASE_JS)
+            except Exception:
+                pass
+        PIXEL_ARBITER_MS.insert(0, (time.perf_counter() - start) * 1000)
+        del PIXEL_ARBITER_MS[32:]
+
+
+async def _arbitrate(page, handle, verdict):
+    """Let the compositor rule on an `occluded` verdict before it refuses.
+
+    Every OTHER cloak technique is a property of the element itself -- its own
+    opacity, its own filter, its own colour against its own background -- and
+    the style already is the answer. `occluded` is the one verdict that is a
+    claim about OTHER boxes, computed from their declared geometry and their
+    declared alpha, and re-attack 3 showed both of those declarations diverging
+    from what the browser paints in seven ordinary constructions. So this is
+    the only verdict that gets a second opinion, and the second opinion is the
+    rendering itself."""
+    if not verdict:
+        return verdict
+    reason = verdict if isinstance(verdict, str) else verdict.get("reason")
+    if reason != "occluded":
+        return verdict
+    if await _pixel_confirms_occlusion(page, handle):
+        return verdict
+    return None
 
 
 def _refuse_cloak_verdict(verdict, tool: str) -> None:
@@ -1154,7 +1311,7 @@ async def refuse_if_cloaked(page, handle, *, tool: str) -> None:
         verdict = await page.evaluate(_CLOAK_JS, handle)
     except Exception:
         return                      # a probe that cannot run never refuses
-    _refuse_cloak_verdict(verdict, tool)
+    _refuse_cloak_verdict(await _arbitrate(page, handle, verdict), tool)
 
 
 async def arm_for_dispatch(page, handle, *, tool: str) -> None:
@@ -1173,7 +1330,7 @@ async def arm_for_dispatch(page, handle, *, tool: str) -> None:
         verdict = await page.evaluate(_ARM_JS, handle)
     except Exception:
         return                      # a probe that cannot run never refuses
-    _refuse_cloak_verdict(verdict, tool)
+    _refuse_cloak_verdict(await _arbitrate(page, handle, verdict), tool)
 
 
 def _candidate_text(candidates) -> str:
