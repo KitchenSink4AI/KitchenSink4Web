@@ -82,6 +82,22 @@ class PageHandle:
     #: renderer and the poisoned handle kept answering with a misleading
     #: BAD_PARAMS).
     crashed: str | None = None
+    #: STICKY FRAME IDS, keyed by the frame's identity rather than by its
+    #: position in the tree. Discovery order is not an identity: removing the
+    #: first of three frames renumbers the other two, and a ref carrying a
+    #: renumbered frame (`if2e5`) would then address a different document
+    #: while looking unchanged. The key is the parent's own id plus the ref
+    #: the parent minted for the `<iframe>` ELEMENT, which is monotonic per
+    #: element for the life of the document, so a frame keeps its id while it
+    #: exists and its id is never handed to another frame afterward.
+    frame_ids: dict = field(default_factory=dict)
+    frame_seq: int = 0
+
+    def frame_id(self, key: str) -> str:
+        if key not in self.frame_ids:
+            self.frame_seq += 1
+            self.frame_ids[key] = f"if{self.frame_seq}"
+        return self.frame_ids[key]
 
     def touch(self, url: str | None = None) -> None:
         self.last_used = time.time()
@@ -132,6 +148,14 @@ class Session:
         """A navigation, a page close, or a session end. Refs and read tokens
         minted on a page do not survive it, and the counts come back so the
         caller can SAY so rather than leaving a later failure to explain it."""
+        record = self.pages.get(handle)
+        if record is not None:
+            # The frame ids die with the document too. They are keyed on refs
+            # minted inside the page's own instrument state, which a
+            # navigation replaces, so carrying them across would let a new
+            # page's first frame inherit the old page's id.
+            record.frame_ids.clear()
+            record.frame_seq = 0
         return {"refs_invalidated": self.element_map.invalidate_page(handle, why),
                 "read_tokens_invalidated": self.reads.invalidate(handle, why),
                 "why": why}

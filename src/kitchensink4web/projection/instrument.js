@@ -59,7 +59,16 @@
     act: Object.create(null), // observation tokens
     actseq: 0,
     closed: 0,                // closed shadow roots, counted at creation
-    doc: 0                    // document epoch
+    doc: 0,                   // document epoch
+    // FRAME IDENTITY, in its own map on purpose. `refof` is shared by every
+    // pass and each one overwrites an element's entry with a ref in its own
+    // namespace, so an `<iframe>` that the search happened to classify would
+    // silently lose the id the frame ladder keyed on and the ladder would
+    // mint a second one for the same frame. A frame's identity has to
+    // outlive every other pass's bookkeeping, so it does not share a map
+    // with any of them.
+    frameid: new WeakMap(),
+    frameseq: 0
   };
 
   const open = function (secret) { return secret === SECRET ? state : null; };
