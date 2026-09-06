@@ -2504,3 +2504,81 @@ values. One intermittent seen and cleared:
 once inside a full run and passed in isolation and in all three subsequent
 full runs, with an adversarial gauntlet driving browsers on the same machine
 throughout. Report: `internal notes/20260906_web_phase9.md`.
+
+## 2026-09-06 09:48 KST - fix wave 3 (the final gauntlet, fixed at the root)
+
+The second adversarial round (`internal notes/20260906_web_gauntlet2.md`, 1 CRITICAL,
+5 HIGH, 6 MEDIUM, 3 LOW) came back with two architectural findings wearing fifteen
+faces, and this wave fixed the architecture rather than the faces. Its fixtures are
+now in `corpus/g2/`, byte-identical to the ones it ran, and
+`tests/browser/test_gauntlet2_fixes.py` is every finding's own repro.
+
+**ONE SUBMISSION AND PAYMENT CHOKE POINT (C1 + H1).** The gate was never broken;
+two of the acting tools were written outside it, which is the failure
+`policy/engine.py`'s own docstring predicts in as many words. `fill_form` passed
+`action_class=None`, so a `cc-number` field took the write ungated while the read
+printed `[payment-shaped: gated]` beside it, and `press_keys` passed no class at
+all, so Enter in a form -- implicit submission, the oldest submit path on the web --
+submitted anything. `type_text(submit=True)` turned out to compute no submission
+class either, which the report had not isolated. All four paths now go through
+`act.action_class_for`, `fill_form` classifies every field BEFORE the first write so
+the gate fires before the card number lands, `press_keys` with no location reads
+what holds focus, and `submits_by_key` keeps Shift+Enter a newline. The refinement
+that fell out of writing the parity test: a SUBMISSION is judged by the form and a
+WRITE by the field, because filling `#cc` classified `payment_form` while clicking
+that same form's submit button -- the call that actually sends the number --
+classified the weaker `form_submit`. Scoped to submissions on purpose: a checkout
+form has an email field too. Pinned two ways, by four-path parity on one fixture and
+by a mechanical test that reads `lite.py` and refuses an acting tool whose
+`approve()` carries no computed class.
+
+**ONE HIDDEN-DETECTION SOURCE (H2 + H3 + M4 + L2).** `hiddenReason` existed four
+times and every gap between the copies was a finding. It lives in
+`projection/visibility.js` now, spliced into `extract.js`, `find.js`, `text.js`, and
+the acting resolver at load. The technique set gained near-zero opacity accumulated
+down the chain, filter chains ending in transparency or a blur past legibility,
+alpha-aware colour invisibility, `content-visibility: hidden`, collapsed `<details>`,
+and unslotted light children. Two placement rules came with it and both are
+correctness: inherited properties are checked on the element itself, never on an
+ancestor (which is L2 exactly), and composited ones are checked up the FLATTENED
+tree. Acting on a cloaked control refuses and names the technique.
+
+**INSTRUMENTATION OUT OF THE PAGE'S REACH (H4 + H5).** Six main-world globals became
+one capability-gated closure (`projection/instrument.js`), installed as a context
+init script and reachable only with a per-process secret baked into the injected
+script sources. `instanceof` is not a guard anywhere in this build any more; a child
+frame reports its closed roots up to the top document's ledger, which kills the
+pristine-`attachShadow`-from-an-iframe spoof; `Element.prototype.attachShadow` is
+non-configurable, a stated trade against pages that legitimately patch it. There is
+no window fallback, because a fallback is a page-writable object wearing the
+channel's name. Both of the gauntlet's spoof fixtures fail against it.
+
+The six mediums and three lows are in the report per finding. `find_and_act`'s
+page-authored text rides the envelope, cookie names in auth-expiry prose are capped
+and quoted and attributed to the site, rendered-order divergence is MEASURED and
+disclosed on plain pages, region scope follows the flattened tree in both the climb
+and the candidate set, a field that becomes a password on focus refuses at write
+time, `fill_form`'s credential refusal is pre-flight, and the name classifier checks
+preferences first the way its own comment always said.
+
+**Harness.** The latency gate's control arm was `git show HEAD:extract.js`, which
+cannot see the thing it exists to see: once a regression is committed both arms carry
+it and the gate reports UNCERTIFIED on a quiet machine. The control is now the LAST
+CERTIFIED COMMIT, materialized as a detached worktree, and the 10 ms assembly bound
+got its OWN arm from that worktree instead of borrowing the extractor's over-budget
+flag as a load proxy. With no certified commit there is no control and every miss is
+charged to the code. `gates/phase1_latency.json` was seeded with `a58c575`, the
+commit whose code produced the 00:35 GREEN run it already records, and **no latency
+measurement was taken**: the box is still clock-throttled.
+
+Gate: full suite **621 green in both orders** (`pytest tests` 303.8 s,
+`pytest tests/unit tests/browser` 283.6 s), up 23 from 598. Phase 3 **12/12
+GREEN**, Phase 5 **8/8 GREEN**, Phase 4 acting arm **7/7 GREEN** (run through a
+runner that skips the latency part and writes no gate file, so
+`gates/phase4.json` stays at its last CERTIFIED values). New battery 23 green. Two pinned
+measurements moved with reasons in the tests: the Versailles read is 4,500 tokens
+rather than 4,431 at the same rung 6 (the completeness block owes the reader two more
+lines), and `bigform.html`'s submit classifies `payment_form` rather than
+`form_submit` because that form carries a card field. DESIGN Q1's license ruling is
+attributed as an orchestrator ruling under standing delegation. Report:
+`internal notes/20260906_web_fixwave3.md`.
