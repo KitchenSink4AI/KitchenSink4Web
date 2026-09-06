@@ -198,6 +198,33 @@ def test_a_live_selector_refuses_ambiguity_across_the_frame_boundary(
     run(go())
 
 
+def test_ambiguity_inside_one_frame_lists_that_frames_candidates(corpus_site):
+    """Two matches in ONE frame is a single-realm ambiguity, and the refusal
+    has to list THAT document's candidates. The sweep visits several
+    documents and the first to answer is usually one with no matches at all,
+    so a refusal that read its candidates off the first answer said "2 match"
+    and then listed none."""
+    async def go():
+        sess, page = await _open(corpus_site, "b/frames_suite.html")
+        tree = await _frames.ladder(sess.pages[page])
+        child = next(f for f in tree if f.entered and not f.is_main
+                     and "frames_sandboxed" in (f.url or ""))
+        await child.frame.evaluate(
+            "() => { const b = document.createElement('button');"
+            " b.textContent = 'Sandbox confirm';"
+            " document.body.appendChild(b); }")
+        with pytest.raises(AmbiguousLocation) as exc:
+            await lite.click(page=page,
+                             location={"role": "button",
+                                       "name": "Sandbox confirm"})
+        message = str(exc.value)
+        assert "2 visible elements match" in message
+        assert "(none)" not in message
+        assert message.count("Sandbox confirm") >= 2
+
+    run(go())
+
+
 def test_the_frame_modifier_narrows_to_one_realm(corpus_site):
     async def go():
         sess, page = await _open(corpus_site, "b/frames_suite.html")

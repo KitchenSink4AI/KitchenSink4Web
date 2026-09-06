@@ -1105,6 +1105,14 @@ async def _resolve_live(sess, record, location: dict, *, tool: str,
     count = sum(g.get("count", 0) for _, _, g in per_frame)
     hits = [(fid, target, g) for fid, target, g in per_frame
             if g.get("count", 0)]
+    fid, target = "", record.page
+    if len(hits) == 1:
+        # ONE realm answered, so it is the one every branch below speaks
+        # about. Without this rebind the single-realm ambiguity refusal below
+        # listed the candidates of whichever document answered FIRST, which on
+        # a framed page is a document with no matches at all: the count said
+        # two and the candidate list said none.
+        fid, target, found = hits[0]
     if count > 1 and len(hits) > 1:
         # Candidates from several realms. The refusal names the frame each one
         # is in, because "two buttons called Pay" reads very differently once
@@ -1121,7 +1129,6 @@ async def _resolve_live(sess, record, location: dict, *, tool: str,
             f'{_candidate_text(candidates)}. Narrow with '
             f'{{"frame": "ifN"}}, or read the page and use a ref.')
     if count == 1:
-        fid, target, found = hits[0]
         handle = await _handle(target, found["ref"])
         if handle is None:
             raise StaleAnchor(
@@ -1172,7 +1179,14 @@ async def _resolve_live(sess, record, location: dict, *, tool: str,
             f'on first match. Candidates: '
             f'{_candidate_text(found.get("candidates"))}. Narrow the selector, '
             f'or read the page and use a ref.')
-    misses = found.get("nearest") or []
+    # Nearest misses from EVERY realm swept, not only the first to answer.
+    # The whole job of the list is to turn a dead end into one more turn, and
+    # a page that put the control in a frame is exactly the case where the
+    # main document has nothing near to offer.
+    misses = []
+    for _, _, g in per_frame:
+        misses.extend(g.get("nearest") or [])
+    misses = misses[:6]
     swept = len(targets)
     hint = (" Nearest by name: " + _candidate_text(misses)) if misses else \
         (" No near misses either; the target may be inside a cross-origin "
