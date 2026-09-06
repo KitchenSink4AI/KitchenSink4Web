@@ -29,19 +29,44 @@ extraction and keeps the engine seam honest.
 
 from __future__ import annotations
 
+import secrets as _secrets
 from pathlib import Path
 
 from .meter import ENCODING_NAME, ntok
 from .render import RUNGS, Projection, project
 
-__all__ = ["EXTRACT_JS", "FIND_JS", "TEXT_JS", "CLOSED_SHADOW_HOOK",
+__all__ = ["EXTRACT_JS", "FIND_JS", "TEXT_JS", "VISIBILITY_JS",
+           "CLOSED_SHADOW_HOOK", "INSTRUMENT_KEY", "instrument",
            "Projection", "project", "extract", "find", "read_text",
            "read_page", "ntok", "ENCODING_NAME", "RUNGS"]
 
 _HERE = Path(__file__).parent
-EXTRACT_JS = (_HERE / "extract.js").read_text(encoding="utf-8")
-FIND_JS = (_HERE / "find.js").read_text(encoding="utf-8")
-TEXT_JS = (_HERE / "text.js").read_text(encoding="utf-8")
+
+#: The splice markers. A source file names where the shared block goes; the
+#: block itself exists once on disk.
+_VIS_MARK = "// @@KS4WEB_VISIBILITY@@"
+_INSTR_MARK = "// @@KS4WEB_INSTRUMENT@@"
+
+#: THE ONE HIDDEN-DETECTION SOURCE (gauntlet 2 H2/H3/M4/L2, 2026-09-06).
+#: `hiddenReason` used to exist three times, in `extract.js`, `find.js`, and
+#: `text.js`, and every gap between the copies was a finding: an element the
+#: projection counted as hidden came back from `find_elements` as an in-view
+#: match, and a payload inside a collapsed `<details>` arrived as main text
+#: while the ledger said nothing was withheld. The rule now lives in
+#: `visibility.js` and is spliced into every consumer at load, so a technique
+#: added there is added everywhere at once.
+VISIBILITY_JS = (_HERE / "visibility.js").read_text(encoding="utf-8")
+
+#: The per-process instrument secret. It is baked into the injected script
+#: SOURCES, never passed as an evaluate argument and never written into the
+#: page, because a Playwright script's source is not readable from page
+#: script while an argument travels through main-world deserialization.
+INSTRUMENT_SECRET = _secrets.token_hex(24)
+
+#: The window property the instrument channel answers on. Randomized per
+#: process so the name is not a constant to grep for, though the design does
+#: not pretend the channel's PRESENCE is undetectable.
+INSTRUMENT_KEY = "__ks4web_" + _secrets.token_hex(8)
 
 #: Installed as an init script before any page script runs. A closed shadow
 #: root is genuinely unreachable afterward, so the only honest way to report
@@ -49,17 +74,62 @@ TEXT_JS = (_HERE / "text.js").read_text(encoding="utf-8")
 #: as they are created. A blind agent named that two-layer phrasing the most
 #: useful line in the whole projection, because it separates "I did not look"
 #: from "no one can look" where most tools collapse both into a confident zero.
-CLOSED_SHADOW_HOOK = """
-(() => {
-  if (window.__ks4web_closed_shadow !== undefined) return;
-  window.__ks4web_closed_shadow = 0;
-  const original = Element.prototype.attachShadow;
-  Element.prototype.attachShadow = function (init) {
-    if (init && init.mode === 'closed') window.__ks4web_closed_shadow++;
-    return original.apply(this, arguments);
-  };
-})();
-"""
+#: Gauntlet 2 (H4) then falsified the count two ways, so the counter and every
+#: other piece of in-page state moved into the closure this script owns.
+CLOSED_SHADOW_HOOK = (
+    (_HERE / "instrument.js").read_text(encoding="utf-8")
+    .replace("__KS4WEB_KEY__", INSTRUMENT_KEY)
+    .replace("__KS4WEB_SECRET__", INSTRUMENT_SECRET))
+
+#: The prelude every injected script opens with: reach the instrument state or
+#: refuse. There is no window fallback on purpose. A fallback would be a
+#: page-writable object wearing the channel's name, which is the defect this
+#: whole mechanism exists to remove, so a document the init script never
+#: reached returns a typed error and the Python side says so.
+INSTRUMENT_PRELUDE = (
+    f'  const KS = (typeof window["{INSTRUMENT_KEY}"] === "function")\n'
+    f'    ? window["{INSTRUMENT_KEY}"]("{INSTRUMENT_SECRET}") : null;\n'
+    f"  if (!KS) return {{ error: 'INSTRUMENT_MISSING' }};\n")
+
+
+def instrument(source: str, *, visibility: str | None = None) -> str:
+    """Splice the shared blocks into one injected script source.
+
+    `visibility` overrides the shared block, which exists for exactly one
+    caller: the latency gate's control arm runs an OLDER `extract.js` in the
+    live page, and that source has to carry the visibility block IT was
+    written against while still reaching THIS process's instrument channel."""
+    if _VIS_MARK in source:
+        source = source.replace(
+            _VIS_MARK, VISIBILITY_JS if visibility is None else visibility)
+    if _INSTR_MARK in source:
+        source = source.replace(_INSTR_MARK, INSTRUMENT_PRELUDE)
+    return source
+
+
+EXTRACT_JS = instrument((_HERE / "extract.js").read_text(encoding="utf-8"))
+FIND_JS = instrument((_HERE / "find.js").read_text(encoding="utf-8"))
+TEXT_JS = instrument((_HERE / "text.js").read_text(encoding="utf-8"))
+
+
+def _checked(data: dict) -> dict:
+    """Refuse loudly when the instrument channel is not in this document.
+
+    There is deliberately no page-side fallback: a fallback would be a
+    page-writable object wearing the channel's name, which is the whole defect
+    the channel removes. A document the init script never reached is a real
+    condition (a page adopted from outside this server's context, a driver
+    that dropped the script) and it gets a typed refusal rather than a
+    silently weaker read."""
+    if isinstance(data, dict) and data.get("error") == "INSTRUMENT_MISSING":
+        from ..errors import Conflict
+        raise Conflict(
+            "this page was not instrumented by this server, so the read has "
+            "no registry to mint refs into and no honest closed-shadow-root "
+            "count to report. Open the page through manage_tabs or navigate "
+            "in this session; a document adopted from outside it cannot be "
+            "read safely.")
+    return data
 
 
 async def extract(page, root: str | None = None,
@@ -71,25 +141,26 @@ async def extract(page, root: str | None = None,
     resolve, so an element `find_elements` located past the cap is in the
     candidate list the rebind ladder searches. It widens the haystack only:
     the ladder still matches by anchor key and still refuses."""
-    return await page.evaluate(EXTRACT_JS, {"root": root, "pin": pin})
+    return _checked(await page.evaluate(
+        EXTRACT_JS, {"root": root, "pin": pin}))
 
 
 async def find(page, query: str, kind: str = "auto", limit: int = 20,
                root: str | None = None, role: str | None = None,
                shadow: bool = True) -> dict:
     """The targeted follow-up pass, uncapped in what it searches."""
-    return await page.evaluate(
+    return _checked(await page.evaluate(
         FIND_JS, {"query": query, "kind": kind, "limit": limit, "root": root,
-                  "role": role, "shadow": shadow})
+                  "role": role, "shadow": shadow}))
 
 
 async def read_text(page, root: str | None = None, start_index: int = 0,
                     max_chars: int = 20000,
                     include_hidden: bool = False) -> dict:
     """Bounded prose, with what was stripped counted rather than dropped."""
-    return await page.evaluate(TEXT_JS, {
+    return _checked(await page.evaluate(TEXT_JS, {
         "root": root, "start_index": start_index, "max_chars": max_chars,
-        "include_hidden": include_hidden})
+        "include_hidden": include_hidden}))
 
 
 async def read_page(page, meta: dict, budget: int = 5000,

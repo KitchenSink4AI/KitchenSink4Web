@@ -25,6 +25,8 @@
 // children (DESIGN 3.3a rule 2). Nothing is double counted, and the net
 // counts of all regions plus the unowned remainder sum to the document.
 (opts) => {
+// @@KS4WEB_INSTRUMENT@@
+// @@KS4WEB_VISIBILITY@@
   opts = opts || {};
   // `location=` scoping. The read is the same read, run over a subtree: the
   // same blocks, the same ladder, the same completeness discipline, over a
@@ -33,8 +35,7 @@
   // 3.3a's contract is that every printed price is executable.
   let scopeRoot = null, scopeRef = null;
   if (opts.root) {
-    const map = window.__ks4web_refs;
-    scopeRoot = map ? map.get(opts.root) : null;
+    scopeRoot = KS.refs.get(opts.root) || null;
     if (!scopeRoot) return { error: 'ROOT_GONE', asked_for: opts.root };
     scopeRef = opts.root;
   }
@@ -53,8 +54,7 @@
   // matches by anchor key, still refuses ambiguity, and still refuses a
   // fingerprint that moved. An element pinned in but no longer matching its
   // stored anchor refuses exactly as it did before.
-  const pinEl = (opts.pin && window.__ks4web_refs instanceof Map)
-    ? window.__ks4web_refs.get(opts.pin) : null;
+  const pinEl = opts.pin ? (KS.refs.get(opts.pin) || null) : null;
 
   const MAX_REGIONS = 40;       // listed regions; deeper ones fold into parents
   const MAX_REGION_DEPTH = 3;   // nesting depth that still earns its own ref
@@ -94,40 +94,19 @@
     return { text: s.slice(0, cut) + '...', truncated: true };
   }
 
-  const styleCache = new Map();
-  function cs(el) {
-    let v = styleCache.get(el);
-    if (v === undefined) { v = getComputedStyle(el); styleCache.set(el, v); }
-    return v;
-  }
-
-  function parseColor(v) {
-    const m = /rgba?\(([^)]+)\)/.exec(v || '');
-    if (!m) return null;
-    const p = m[1].split(',').map(x => parseFloat(x));
-    return { r: p[0], g: p[1], b: p[2], a: p.length > 3 ? p[3] : 1 };
-  }
-
-  function lum(c) {
-    const f = (x) => { x /= 255; return x <= 0.03928 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4); };
-    return 0.2126 * f(c.r) + 0.7152 * f(c.g) + 0.0722 * f(c.b);
-  }
-
-  // THE SHADOW BOUNDARY HOP, and it is security code rather than tidiness.
-  //
-  // The first child of a shadow root has `parentElement === null`, so a climb
-  // written with `.parentElement` STOPS at the boundary and reports "no hidden
-  // ancestor" for content sitting under a `display:none` host. The spike
-  // measured the counterfactual: three payloads (a display:none host, an
-  // opacity:0 host, and the act button under the first) rode out labelled
-  // visible on the naive climb and were correctly withheld once the climb
-  // hopped. Every ancestor walk in this file goes through `up()`.
-  function up(n) {
-    if (!n) return null;
-    if (n.parentElement) return n.parentElement;
-    const r = n.getRootNode && n.getRootNode();
-    return (r && r.host) ? r.host : null;
-  }
+  // Styles, colours, the shadow-boundary hop, and the whole hidden-technique
+  // set come from the ONE shared source spliced in above. This file held the
+  // richest of the three copies and still missed four classes a page can use
+  // today: near-zero opacity, a filter chain ending in transparency or a blur
+  // past legibility, a transparent foreground (the old contrast check ignored
+  // the alpha channel, so `color: transparent` scored as pure black), and
+  // content that is not rendered at all -- `content-visibility: hidden`, a
+  // collapsed `<details>`, an unslotted light child. Gauntlet 2's H2 walked
+  // an agent onto five invisible buttons on one fixture using four of them.
+  const cs = ksCS;
+  const up = ksUp;
+  const parseColor = ksParseColor;
+  const lum = ksLum;
   // An IDREF (aria-labelledby, aria-describedby) resolves inside the tree
   // that holds it, so a shadow-borne label must be looked up in the shadow
   // root rather than in the document, where it is not.
@@ -137,53 +116,35 @@
     return document.getElementById(id);
   }
 
-  // Hidden-content normalization. Every technique class DESIGN 5.1 names, and
-  // the result is COUNTED rather than silently dropped or silently included.
-  function hiddenReason(el, style) {
-    if (el.getAttribute && el.getAttribute('aria-hidden') === 'true') return 'aria-hidden';
-    if (el.hasAttribute && el.hasAttribute('hidden')) return 'hidden-attr';
-    const s = style || cs(el);
-    if (s.display === 'none') return 'display-none';
-    if (s.visibility === 'hidden' || s.visibility === 'collapse') return 'visibility-hidden';
-    if (parseFloat(s.opacity) === 0) return 'opacity-0';
-    const fs = parseFloat(s.fontSize);
-    if (fs === fs && fs < 2) return 'font-size-0';
-    return null;
+  // A form is payment-shaped when ANY field in it is, so every control in
+  // that form -- its submit button included -- classifies as one action
+  // class. Memoized per form: `payment_form` is asked once per affordance
+  // and a checkout page has one form with thirty controls in it.
+  const formPaymentCache = new Map();
+  const PAYMENT_SEL = '[autocomplete*="cc-number"],[autocomplete*="cc-exp"],'
+    + '[autocomplete*="cc-csc"],[autocomplete*="cc-name"]';
+  function formPayment(formEl) {
+    if (!formEl) return false;
+    let v = formPaymentCache.get(formEl);
+    if (v === undefined) {
+      v = !!formEl.querySelector(PAYMENT_SEL);
+      formPaymentCache.set(formEl, v);
+    }
+    return v;
   }
 
-  function geometryHidden(el, style) {
-    const r = el.getBoundingClientRect();
-    if (r.width === 0 && r.height === 0) return { reason: 'zero-size', rect: r };
-    const x = r.left + window.scrollX, y = r.top + window.scrollY;
-    if (x + r.width < -500 || y + r.height < -500 || x > 100000) {
-      return { reason: 'offscreen', rect: r };
-    }
-    if ((style || cs(el)).textIndent && parseFloat((style || cs(el)).textIndent) < -900) {
-      return { reason: 'offscreen', rect: r };
-    }
-    return { reason: null, rect: r };
-  }
+  const hiddenReason = ksHiddenReason;
+  const geometryHidden = ksGeometryHidden;
 
   function hiddenBetween(el, stopAt) {
     // Hidden anywhere between an element and its region ancestor counts as
     // hidden, because that is how a display:none wrapper hides a heading that
     // is itself perfectly visible in its own computed style.
-    for (let n = el; n && n !== stopAt; n = up(n)) {
-      if (hiddenReason(n, null)) return true;
-    }
-    return false;
+    return ksHiddenChain(el, stopAt) !== null;
   }
 
   function lowContrast(el, style) {
-    const fg = parseColor(style.color);
-    if (!fg) return false;
-    let node = el, bg = null;
-    for (let i = 0; node && i < 6; i++, node = up(node)) {
-      const c = parseColor(cs(node).backgroundColor);
-      if (c && c.a > 0.1) { bg = c; break; }
-    }
-    if (!bg) return false;
-    return Math.abs(lum(fg) - lum(bg)) < 0.02;
+    return ksInvisibleColor(el, style || cs(el)) !== null;
   }
 
   // ------------------------------------------------------------ roles
@@ -539,6 +500,13 @@
   const frames = [];
   const virtualContainers = [];
   const hiddenReasons = {};
+  const hiddenInteractiveReasons = {};
+  // Containers whose children RENDER in an order the source does not carry.
+  // A human reads "The bank has cleared this request. / Do not approve the
+  // transfer." and every text surface in this build reads the opposite, with
+  // no caveat unless a shadow root happened to be involved (gauntlet 2 M3).
+  const reorderReasons = {};
+  let reorderedContainers = 0;
   let hiddenInteractive = 0, hiddenNodes = 0, hiddenTextChars = 0;
   let injectionSuspects = 0, zeroWidthHits = 0;
   let openShadowRoots = 0, divTables = 0, deepestCut = 0;
@@ -551,28 +519,31 @@
   const SHADOW_ON = !(opts && opts.shadow === false);
   let shadowRootsTraversed = 0, shadowElements = 0;
 
-  // Refs resolve through a map on `window`, never through an attribute we
-  // write onto the page. KS4Web reads pages; a projection that mutated the
-  // DOM to give itself handles would be changing the thing it is reporting
-  // on, and a MutationObserver-driven app would see it.
+  // Refs resolve through the INSTRUMENT CHANNEL's registry, never through an
+  // attribute we write onto the page. KS4Web reads pages; a projection that
+  // mutated the DOM to give itself handles would be changing the thing it is
+  // reporting on, and a MutationObserver-driven app would see it.
+  //
+  // The registry used to be `window.__ks4web_refs`, and gauntlet 2's H5 is
+  // what that cost: `class Poisoned extends Map { get(){ return evil; } }`
+  // satisfied every `instanceof Map` guard in the build, the trusted click
+  // landed on the attacker's button, and the result reported the button the
+  // model had asked for. It lives in a closure the page cannot reach now.
+  //
   // Reused across reads rather than replaced. `location={"region":"r7"}`
   // resolves a ref that a PREVIOUS read minted, so a map that started empty
   // on every evaluate would make every scoped call fail with a stale ref that
   // is not in fact stale. Entries for elements that have left the document
   // are dropped here rather than accumulating.
-  const refMap = window.__ks4web_refs instanceof Map
-    ? window.__ks4web_refs : new Map();
+  const refMap = KS.refs;
   for (const [k, v] of Array.from(refMap.entries())) {
     if (!v || !v.isConnected) refMap.delete(k);
   }
-  const refOf = window.__ks4web_refof instanceof WeakMap
-    ? window.__ks4web_refof : new WeakMap();
-  window.__ks4web_refs = refMap;
-  window.__ks4web_refof = refOf;
-  // In-page ids are minted MONOTONICALLY across the whole page lifetime
-  // (the counters live on `window`, not in this closure), and an element
-  // that already holds an id of the right kind keeps it. Both halves close
-  // the same defect, found by the 2026-09-05 field misdirect investigation:
+  const refOf = KS.refof;
+  // In-page ids are minted MONOTONICALLY across the whole page lifetime (the
+  // counters live in the channel, not in this closure), and an element that
+  // already holds an id of the right kind keeps it. Both halves close the
+  // same defect, found by the 2026-09-05 field misdirect investigation:
   // a per-read counter restarting at zero re-assigned existing keys to
   // whatever the CURRENT document order put at that position, so any stale
   // key held by a caller (a scoped read's root, a leaked node id) silently
@@ -591,9 +562,9 @@
   // An id with no map registration, for units counted past their cap: the
   // id keeps the payload's cross-references unique without pretending an
   // unreturned unit is resolvable.
+  KS.counters = KS.counters || Object.create(null);
   const mintId = (prefix) => {
-    const slot = '__ks4web_ctr_' + prefix;
-    return prefix + (window[slot] = (window[slot] || 0) + 1);
+    return prefix + (KS.counters[prefix] = (KS.counters[prefix] || 0) + 1);
   };
   let affordancesUncollected = 0;
   let currentHeading = null;
@@ -741,6 +712,17 @@
     }
   }
 
+  // Only asked when a `visibility: hidden` element is actually met, so the
+  // page that never uses the override pays nothing for the question.
+  function hasVisibleDescendant(el) {
+    if (!el.querySelectorAll) return false;
+    const kids = el.querySelectorAll('*');
+    for (let i = 0; i < kids.length && i < 500; i++) {
+      if (cs(kids[i]).visibility === 'visible') return true;
+    }
+    return false;
+  }
+
   function walk(el, depth) {
     elementCount++;
     if (el.shadowRoot) openShadowRoots++;
@@ -754,7 +736,20 @@
       return;
     }
     const style = cs(el);
-    const hr = hiddenReason(el, style);
+    let hr = hiddenReason(el, style);
+    if (hr === 'visibility-hidden' && hasVisibleDescendant(el)) {
+      // `visibility` INHERITS and a descendant can turn it back on, which a
+      // human then reads and every surface in this build used to miss
+      // (gauntlet 2 L2). The subtree accounting below assumes a hidden branch
+      // is hidden all the way down, so where a descendant overrides, the walk
+      // continues and each node answers for itself. The element's own text is
+      // still withheld and still counted.
+      const own = squash(el.textContent || '');
+      hiddenNodes += 1;
+      hiddenReasons[hr] = (hiddenReasons[hr] || 0) + 1;
+      if (own.length > 20) injectionSuspects++;
+      hr = null;
+    }
     if (hr) {
       // The whole subtree is accounted for HERE and the walk stops, which is
       // what keeps the normalizer linear: counting a hidden subtree at every
@@ -765,12 +760,90 @@
       if (el.shadowRoot) countRootsUnder(el.shadowRoot);
       hiddenNodes += n;
       hiddenReasons[hr] = (hiddenReasons[hr] || 0) + n;
-      hiddenInteractive += el.querySelectorAll(INTERACTIVE_SEL).length
+      const nInteractive = el.querySelectorAll(INTERACTIVE_SEL).length
         + (isInteractive(el) ? 1 : 0);
+      hiddenInteractive += nInteractive;
+      // THE TECHNIQUE, named beside the count. "4 nodes (1 interactive)" told
+      // a caller how much was withheld and nothing about how it was hidden,
+      // and the four cloaked buttons gauntlet 2 walked an agent onto were the
+      // ones that never reached this branch at all. Now they do, and the
+      // ledger says which disguise each one wore.
+      if (nInteractive) {
+        hiddenInteractiveReasons[hr] =
+          (hiddenInteractiveReasons[hr] || 0) + nInteractive;
+      }
       const txt = squash(el.textContent || '');
       hiddenTextChars += txt.length;
       if (txt.length > 20) injectionSuspects++;
       return;
+    }
+
+    // RENDERED ORDER versus SOURCE ORDER, measured where it is decided. Four
+    // techniques reverse a page for a human without touching the DOM order
+    // every text surface in this build reports: `flex-direction: *-reverse`,
+    // the `order` property, explicit grid placement, and a component that
+    // reorders its slots. The read cannot cheaply reorder itself, so it says
+    // so instead: an unstated inversion is a page telling the agent the
+    // opposite of what it tells the user.
+    const disp = style.display;
+    if (disp === 'flex' || disp === 'inline-flex'
+        || disp === 'grid' || disp === 'inline-grid') {
+      // MEASURED, not inferred. Asking "does this container use a technique
+      // that CAN reorder" flags every named-area grid on the web, most of
+      // which place their children in source order anyway. Asking "do the
+      // boxes come out in a different sequence than the source" is the
+      // question the caveat actually answers, and it covers all four
+      // techniques with one test.
+      // Only children that are IN FLOW and carry text. An absolutely
+      // positioned child sits wherever its coordinates put it and was never
+      // in the reading sequence (a visually-hidden radio behind a styled
+      // label puts one in front of its own label on every design system on
+      // the web), and a container of icons has no reading order to invert.
+      const kids = [];
+      let textual = 0;
+      for (let c = el.firstElementChild; c && kids.length < 40;
+           c = c.nextElementSibling) {
+        const ccs = cs(c);
+        if (ccs.position === 'absolute' || ccs.position === 'fixed') continue;
+        const r = c.getBoundingClientRect();
+        if (!(r.width || r.height)) continue;
+        if (squash(c.textContent || '')) textual++;
+        kids.push({ i: kids.length, t: r.top, b: r.bottom, l: r.left });
+      }
+      if (kids.length > 1 && textual > 1) {
+        // READING ORDER, not raw top-then-left. A row of boxes with different
+        // heights has different tops, and sorting on top alone would call
+        // every `align-items: flex-end` row on the web reordered. Boxes whose
+        // vertical extents overlap are one line and are read across it.
+        const rtl = style.direction === 'rtl';
+        const byLine = kids.slice().sort((a, b) => (a.t - b.t) || (a.l - b.l));
+        const lines = [];
+        for (const k of byLine) {
+          const line = lines.length ? lines[lines.length - 1] : null;
+          if (line && k.t < line.b - 1) {
+            line.items.push(k);
+            if (k.b > line.b) line.b = k.b;
+          } else {
+            lines.push({ b: k.b, items: [k] });
+          }
+        }
+        const flat = [];
+        for (const line of lines) {
+          line.items.sort((a, b) => rtl ? (b.l - a.l) : (a.l - b.l));
+          for (const k of line.items) flat.push(k.i);
+        }
+        let inverted = false;
+        for (let i = 0; i < flat.length; i++) {
+          if (flat[i] !== i) { inverted = true; break; }
+        }
+        if (inverted) {
+          const why = /-reverse$/.test(style.flexDirection || '')
+            ? 'flex-reverse'
+            : (disp.indexOf('grid') >= 0 ? 'grid-placement' : 'order-property');
+          reorderedContainers++;
+          reorderReasons[why] = (reorderReasons[why] || 0) + 1;
+        }
+      }
     }
 
     let pushed = false;
@@ -1099,6 +1172,7 @@
                 top: Math.round(geo.rect.top + window.scrollY),
                 area: Math.round(geo.rect.width * geo.rect.height),
                 form: formEl ? true : false,
+                form_payment: formPayment(formEl),
                 heading: currentHeading ? currentHeading.ref : null
               });
             } else {
@@ -1399,7 +1473,7 @@
       // between "the app routed" and "the browser navigated". S2 measured
       // document identity as the alternative cross-page test and it is worse
       // in both directions, so this is REPORTED and not used as the test.
-      doc_epoch: (window.__ks4web_doc = window.__ks4web_doc
+      doc_epoch: (KS.doc = KS.doc
                   || String(Date.now()) + ':' + Math.random()),
       viewport: (window.innerWidth || 1280) + 'x' + vpH,
       screens: Math.max(1, Math.round((docH / vpH) * 10) / 10)
@@ -1452,10 +1526,13 @@
       open_shadow_roots: openShadowRoots,
       shadow_roots_traversed: shadowRootsTraversed,
       shadow_traversal: SHADOW_ON,
-      closed_shadow_roots: (window.__ks4web_closed_shadow || 0),
+      closed_shadow_roots: (KS.closed || 0),
       virtual: virtualContainers, canvases: canvases,
       hidden_interactive: hiddenInteractive, hidden_nodes: hiddenNodes,
       hidden_text_chars: hiddenTextChars, hidden_reasons: hiddenReasons,
+      hidden_interactive_reasons: hiddenInteractiveReasons,
+      reordered_containers: reorderedContainers,
+      reorder_reasons: reorderReasons,
       injection_suspects: injectionSuspects, zero_width_hits: zeroWidthHits,
       name_fallbacks: nameFallbacks,
       scope: scopeRef,

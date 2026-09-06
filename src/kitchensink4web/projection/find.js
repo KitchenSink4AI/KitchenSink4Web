@@ -36,6 +36,8 @@
 // gets the root as its context node AND the containment check, because an
 // absolute expression ignores a context node.
 (opts) => {
+// @@KS4WEB_INSTRUMENT@@
+// @@KS4WEB_VISIBILITY@@
   const query = opts.query || '';
   const kind = opts.kind || 'auto';
   const wantRole = (opts.role || '').toLowerCase() || null;
@@ -45,8 +47,7 @@
 
   let scopeRoot = null;
   if (opts.root) {
-    const map = window.__ks4web_refs;
-    scopeRoot = map ? map.get(opts.root) : null;
+    scopeRoot = KS.refs.get(opts.root) || null;
     // Same refusal shape the extractor and the text pass return, so one
     // Python branch covers all three.
     if (!scopeRoot || !scopeRoot.isConnected) {
@@ -107,7 +108,38 @@
     for (const root of searchedRoots) {
       for (const el of root.querySelectorAll(sel)) out.push(el);
     }
-    return out;
+    // SLOTTED CONTENT, which is inside the region for the person looking at
+    // it and outside every DOM query that builds this list. `section
+    // .querySelectorAll('*')` returns the component's own tree and the slot
+    // element, never the light children the slot renders, so scoping to a
+    // component's panel returned "0 of 0 match(es)" for a control sitting
+    // visibly inside it (gauntlet 2 M5). Membership follows the FLATTENED
+    // tree, here and in `withinScope`, because that is the tree a human sees.
+    if (scopeRoot) {
+      const slots = [];
+      try {
+        if (scopeRoot.tagName === 'SLOT') slots.push(scopeRoot);
+        for (const s of searchBase.querySelectorAll('slot')) slots.push(s);
+        for (const root of searchedRoots) {
+          for (const s of root.querySelectorAll('slot')) slots.push(s);
+        }
+      } catch (e) { /* no slots here */ }
+      for (const slot of slots) {
+        let assigned = [];
+        try { assigned = slot.assignedElements({ flatten: true }); }
+        catch (e) { assigned = []; }
+        for (const el of assigned) {
+          try { if (el.matches(sel)) out.push(el); } catch (e) { /* :has() */ }
+          for (const kid of el.querySelectorAll(sel)) out.push(kid);
+        }
+      }
+    }
+    // One element can arrive by two routes (a slot inside a searched root
+    // that also sits under the base), and a duplicate candidate would count
+    // as two matches and refuse a search as ambiguous against itself.
+    const seen = new Set(), uniq = [];
+    for (const el of out) { if (!seen.has(el)) { seen.add(el); uniq.push(el); } }
+    return uniq;
   }
 
   const squash = (s) => (typeof s === 'string' ? s : '').replace(/\s+/g, ' ').trim();
@@ -119,24 +151,16 @@
     return s.slice(0, cut) + '...';
   }
 
-  const styleCache = new Map();
-  function cs(el) {
-    let v = styleCache.get(el);
-    if (v === undefined) { v = getComputedStyle(el); styleCache.set(el, v); }
-    return v;
-  }
-  // THE SHADOW BOUNDARY HOP. The first child of a shadow root has
-  // `parentElement === null`, so a `.parentElement` climb finds no hidden
-  // ancestor for content under a `display:none` host and passes it through
-  // the visible filter. The spike measured three payloads leaking that way.
-  // This is security code, not tidiness, and it runs whether or not the
-  // search traverses: a ref minted elsewhere can still be handed to a climb.
-  function up(n) {
-    if (!n) return null;
-    if (n.parentElement) return n.parentElement;
-    const r = n.getRootNode && n.getRootNode();
-    return (r && r.host) ? r.host : null;
-  }
+  // The shadow-boundary hop, the slot hop, and every hidden technique come
+  // from the ONE shared source spliced in above. This file used to carry its
+  // own five-technique copy while the extractor's knew eleven, and gauntlet 2
+  // (M4) measured what that bought a page: `position:absolute; left:-99999px`
+  // came back as `1 of 1 match ... in-view` from here while the same read's
+  // completeness block counted the same element as offscreen hidden, and
+  // acting on it then dead-ended in a STALE_ANCHOR refusal for an element
+  // that was still in the DOM. Two detectors disagreeing is a channel.
+  const up = ksUp;
+  const cs = ksCS;
   function byId(el, id) {
     const r = el.getRootNode ? el.getRootNode() : document;
     if (r && typeof r.getElementById === 'function') return r.getElementById(id);
@@ -145,23 +169,25 @@
   // The scope guarantee, checked per candidate rather than trusted from the
   // query. `Node.contains` does not cross a shadow boundary and an absolute
   // XPath ignores its context node, so a query-side narrowing alone is two
-  // silent leaks. The climb is `up`, which hops the boundary, so an element
-  // inside a component inside the region counts as inside the region.
+  // silent leaks. The climb is the FLATTENED tree: a slotted node's light
+  // parent is the host, so the light-tree climb walked straight past the slot
+  // and every ancestor between it and the host, and scoping to a component's
+  // own panel returned "0 of 0" for a control rendering inside that panel
+  // (gauntlet 2 M5). Membership is what a human sees, so it is the rendered
+  // tree that decides it.
   function withinScope(el) {
     if (!scopeRoot) return true;
     for (let n = el; n; n = up(n)) if (n === scopeRoot) return true;
-    return false;
-  }
-  function hiddenAnywhere(el) {
-    for (let n = el; n && n !== document.documentElement; n = up(n)) {
-      if (n.getAttribute && n.getAttribute('aria-hidden') === 'true') return true;
-      if (n.hasAttribute && n.hasAttribute('hidden')) return true;
-      const s = cs(n);
-      if (s.display === 'none' || s.visibility === 'hidden') return true;
-      if (parseFloat(s.opacity) === 0) return true;
+    // A scope root that is a shadow HOST owns the panel its slotted children
+    // render into, so its own root counts as inside it.
+    if (scopeRoot.shadowRoot) {
+      for (let n = el; n; n = up(n)) {
+        if (n.getRootNode && n.getRootNode() === scopeRoot.shadowRoot) return true;
+      }
     }
     return false;
   }
+  function hiddenAnywhere(el) { return ksHiddenAnywhere(el) !== null; }
 
   const TAG_ROLE = {
     A: 'link', BUTTON: 'button', SELECT: 'combobox', TEXTAREA: 'textbox',
@@ -321,9 +347,9 @@
     total++;
     if (hiddenAnywhere(el)) { hiddenMatches++; continue; }
     if (matches.length >= limit) continue;
-    const ref = 'x' + (window.__ks4web_seq = (window.__ks4web_seq || 0) + 1);
-    if (!window.__ks4web_refs) window.__ks4web_refs = new Map();
-    window.__ks4web_refs.set(ref, el);
+    const ref = 'x' + (KS.seq = (KS.seq || 0) + 1);
+    KS.refs.set(ref, el);
+    KS.refof.set(el, ref);
     let path = null;
     if (el.tagName === 'A') {
       try {
@@ -338,7 +364,11 @@
       role: role, name: clip(name, 80), path: path,
       state: [el.disabled ? 'disabled' : '', el.checked ? 'checked' : '',
               el.required ? 'required' : ''].filter(Boolean).join(','),
-      in_viewport: rect.top < window.innerHeight && rect.bottom > 0,
+      // BOTH axes. The vertical-only test printed "in-view" for a control
+      // parked 99,999 pixels to the left, which is the one word in a result
+      // line a caller uses to decide whether an element needs scrolling to.
+      in_viewport: rect.top < window.innerHeight && rect.bottom > 0
+        && rect.left < window.innerWidth && rect.right > 0,
       top: Math.round(rect.top + window.scrollY)
     });
   }
@@ -364,7 +394,7 @@
     near.length = Math.min(near.length, 6);
   }
 
-  const closedShadow = window.__ks4web_closed_shadow || 0;
+  const closedShadow = KS.closed || 0;
   // What the search actually covered, so the result line can say it. The
   // whole-page case stays null and the sentence stays what it always was.
   let scope = null;

@@ -16,77 +16,36 @@
 // text and a prose read that does not. Two tools disagreeing about what is on
 // the page is worse than either answer on its own.
 (opts) => {
+// @@KS4WEB_INSTRUMENT@@
+// @@KS4WEB_VISIBILITY@@
   const startIndex = Math.max(0, opts.start_index || 0);
   const maxChars = Math.max(200, Math.min(200000, opts.max_chars || 20000));
   const includeHidden = !!opts.include_hidden;
   const SHADOW_ON = !(opts && opts.shadow === false);
 
   const squash = (s) => (typeof s === 'string' ? s : '').replace(/\s+/g, ' ').trim();
-  // The shadow boundary hop, for the same reason the extractor has one: the
-  // top child of a shadow root has no parentElement, so a climb written on
-  // parentElement alone stops at the boundary and reads the wrong background.
-  function up(n) {
-    if (!n) return null;
-    if (n.parentElement) return n.parentElement;
-    const r = n.getRootNode && n.getRootNode();
-    return (r && r.host) ? r.host : null;
-  }
-  const styleCache = new Map();
-  function cs(el) {
-    let v = styleCache.get(el);
-    if (v === undefined) { v = getComputedStyle(el); styleCache.set(el, v); }
-    return v;
-  }
-  // The FULL technique set (DESIGN 5.1), matching the extractor's hygiene
-  // layer. Phase 3's corpus C gate caught the divergence that used to live
-  // here: this function had no contrast, geometry, or text-indent check, so
-  // a white-on-white injection stripped from the page view rode out of
-  // get_text as content. The two detectors now share every rule.
-  function parseColor(v) {
-    const m = /rgba?\(([^)]+)\)/.exec(v || '');
-    if (!m) return null;
-    const p = m[1].split(',').map(x => parseFloat(x));
-    return { r: p[0], g: p[1], b: p[2], a: p.length > 3 ? p[3] : 1 };
-  }
-  function lum(c) {
-    const f = (x) => { x /= 255; return x <= 0.03928 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4); };
-    return 0.2126 * f(c.r) + 0.7152 * f(c.g) + 0.0722 * f(c.b);
-  }
-  function lowContrast(el, s) {
-    const fg = parseColor(s.color);
-    if (!fg) return false;
-    let node = el, bg = null;
-    for (let i = 0; node && i < 6; i++, node = up(node)) {
-      const c = parseColor(cs(node).backgroundColor);
-      if (c && c.a > 0.1) { bg = c; break; }
-    }
-    if (!bg) return false;
-    return Math.abs(lum(fg) - lum(bg)) < 0.02;
-  }
+  const up = ksUp;
+  const cs = ksCS;
+  // The FULL technique set comes from the ONE shared source spliced in above
+  // (DESIGN 5.1). Phase 3's corpus C gate caught the first divergence that
+  // lived here: no contrast, geometry, or text-indent check, so a
+  // white-on-white injection stripped from the page view rode out of get_text
+  // as content. Gauntlet 2 caught the second (H3): a payload inside a
+  // collapsed `<details>` or under `content-visibility: hidden` reached the
+  // main text while the ledger said three blocks were withheld and named
+  // neither. Copies drift; there is one copy now.
   function hiddenReason(el) {
-    if (el.getAttribute && el.getAttribute('aria-hidden') === 'true') return 'aria-hidden';
-    if (el.hasAttribute && el.hasAttribute('hidden')) return 'hidden-attr';
-    const s = cs(el);
-    if (s.display === 'none') return 'display-none';
-    if (s.visibility === 'hidden' || s.visibility === 'collapse') return 'visibility-hidden';
-    if (parseFloat(s.opacity) === 0) return 'opacity-0';
-    const fs = parseFloat(s.fontSize);
-    if (fs === fs && fs < 2) return 'font-size-0';
-    if (s.textIndent && parseFloat(s.textIndent) < -900) return 'offscreen';
-    if (el.getBoundingClientRect) {
-      const r = el.getBoundingClientRect();
-      if (r.width === 0 && r.height === 0 && el.tagName !== 'BODY') return 'zero-size';
-      const x = r.left + window.scrollX, y = r.top + window.scrollY;
-      if (x + r.width < -500 || y + r.height < -500 || x > 100000) return 'offscreen';
-    }
-    if (lowContrast(el, s)) return 'low-contrast';
-    return null;
+    const r = ksHiddenReason(el, null);
+    if (r) return r;
+    // Geometry is measured rather than computed, and BODY is exempt because a
+    // body with no laid-out box is a page state, not a hiding technique.
+    if (el.tagName === 'BODY' || !el.getBoundingClientRect) return null;
+    return ksGeometryHidden(el, null).reason;
   }
 
   let root = null, rootWas = 'document';
   if (opts.root) {
-    const map = window.__ks4web_refs;
-    root = map ? map.get(opts.root) : null;
+    root = KS.refs.get(opts.root) || null;
     if (!root) {
       return { error: 'ROOT_GONE', asked_for: opts.root };
     }
@@ -140,9 +99,50 @@
   const HIDDEN_TOTAL_CAP = 20000;       // per read
   let hiddenCollected = 0;
 
+  // A `visibility: hidden` block whose descendant sets `visibility: visible`
+  // renders that descendant, and until 2026-09-06 this walk returned at the
+  // hidden ancestor and never reached it (gauntlet 2 L2). The direction was
+  // the safe one, and it still handed a page a reliable way to show a human
+  // something no tool would ever read. The scan runs only when a
+  // visibility-hidden element is actually met, so the common page pays
+  // nothing for it.
+  function hasVisibleDescendant(el) {
+    if (!el.querySelectorAll) return false;
+    const kids = el.querySelectorAll('*');
+    for (let i = 0; i < kids.length && i < 500; i++) {
+      if (ksCS(kids[i]).visibility === 'visible') return true;
+    }
+    return false;
+  }
+
   (function walk(el) {
     if (SKIP.has(el.tagName)) return;
     const reason = hiddenReason(el);
+    if (reason === 'visibility-hidden' && hasVisibleDescendant(el)) {
+      // Count this element's OWN inline run as withheld, then keep going:
+      // the recursion re-asks the same question of every child, so a child
+      // that inherits `hidden` is counted in its turn and one that overrides
+      // it is read.
+      const ownParts = [];
+      inlineText(el, ownParts);
+      const ownText = squash(ownParts.join(''));
+      if (ownText) {
+        hiddenBlocks++;
+        hiddenChars += ownText.length;
+        hiddenReasons[reason] = (hiddenReasons[reason] || 0) + 1;
+        if (ownText.length > 20) injectionSuspects++;
+        if (includeHidden && hiddenCollected < HIDDEN_TOTAL_CAP) {
+          const clipped = ownText.slice(0, HIDDEN_SECTION_CAP);
+          hiddenCollected += clipped.length;
+          hiddenSections.push({ reason: reason, truncated: false,
+                                text: clipped });
+        }
+      }
+      for (let child = el.firstElementChild; child; child = child.nextElementSibling) {
+        walk(child);
+      }
+      return;
+    }
     if (reason) {
       const text = squash(el.textContent || '');
       if (text) {
@@ -178,7 +178,7 @@
       if (text) {
         blocks.push({
           tag: el.tagName.toLowerCase(),
-          ref: (window.__ks4web_refof && window.__ks4web_refof.get(el)) || null,
+          ref: KS.refof.get(el) || null,
           text: text
         });
       }
@@ -218,7 +218,7 @@
     returned_chars: slice.length,
     blocks: blocks.length,
     shadow_roots_read: shadowRootsRead,
-    closed_shadow_roots: (window.__ks4web_closed_shadow || 0),
+    closed_shadow_roots: (KS.closed || 0),
     hidden: {
       blocks: hiddenBlocks, chars: hiddenChars, reasons: hiddenReasons,
       injection_suspects: injectionSuspects, zero_width_blocks: zeroWidth,

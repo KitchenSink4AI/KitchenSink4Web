@@ -565,12 +565,36 @@ class Renderer:
         reasons = ", ".join(
             f"{k}={v}" for k, v in sorted(c["hidden_reasons"].items(),
                                           key=lambda kv: -kv[1])[:6])
+        # The INTERACTIVE half of the ledger names its techniques separately.
+        # "4 nodes (1 interactive)" says how much was withheld and nothing
+        # about how it was hidden, and a control a page cloaked is the half a
+        # reader most needs to see named (gauntlet 2 H2).
+        hi_reasons = ", ".join(
+            f"{k}={v}" for k, v in sorted(
+                (c.get("hidden_interactive_reasons") or {}).items(),
+                key=lambda kv: -kv[1])[:6])
         lines.append(
             f'hidden content stripped: {_num(c["hidden_nodes"])} nodes '
             f'({c["hidden_interactive"]} interactive, '
             f'{_num(c["hidden_text_chars"])} chars of text) [{reasons or "none"}]'
+            + (f'; hidden interactive by technique: {hi_reasons}'
+               if hi_reasons else "")
             + (f'; {c["injection_suspects"]} hidden regions carried more than '
                f'20 characters of text' if c["injection_suspects"] else ""))
+        # RENDERED ORDER, said on the page that does it rather than only where
+        # a shadow root happens to be involved. Three of the four techniques
+        # need no shadow DOM at all, so the shadow-only caveat below used to
+        # imply that source-order divergence was a components problem.
+        if c.get("reordered_containers"):
+            how = ", ".join(
+                f"{k}={v}" for k, v in sorted(
+                    (c.get("reorder_reasons") or {}).items(),
+                    key=lambda kv: -kv[1]))
+            lines.append(
+                f'reading order: {c["reordered_containers"]} container(s) '
+                f'render their children in an order the source does not carry '
+                f'[{how}]; everything above is reported in SOURCE order, so on '
+                f'those containers it is not the order a person reads')
         if c["zero_width_hits"]:
             lines.append(
                 f'zero-width characters found in {c["zero_width_hits"]} text '

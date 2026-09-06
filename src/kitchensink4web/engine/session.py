@@ -229,9 +229,23 @@ class SessionManager:
                     f"could not launch {spec.label}: {type(exc).__name__}: "
                     f"{str(exc)[:300]}") from exc
             context.set_default_timeout(DEFAULT_TIMEOUT_MS)
-            # Counted as they are created, because a closed shadow root is
-            # unreachable afterward and a guess is not a completeness figure.
+            # THE INSTRUMENT CHANNEL, bound before any page script in any
+            # document of this session runs. It carries the closed-root
+            # counter (counted as roots are created, because a closed root is
+            # unreachable afterward and a guess is not a completeness figure)
+            # and the ref registry, both of which used to be page-writable
+            # globals: gauntlet 2 rewrote one and subclassed the other to
+            # redirect a trusted click.
             await context.add_init_script(CLOSED_SHADOW_HOOK)
+            # The launch page already has a document, so the init script has
+            # not run in it. Every read would answer INSTRUMENT_MISSING until
+            # the first navigation; installing it directly costs one evaluate
+            # on an about:blank page with no scripts in it.
+            for page in context.pages:
+                try:
+                    await page.evaluate(CLOSED_SHADOW_HOOK)
+                except Exception:
+                    pass            # a page mid-navigation gets it from the hook
             journal.adopt_descendants(since=before)
             session = Session(session_id=sid, spec=spec, context=context,
                               profile_dir=str(profile), journal=journal)
