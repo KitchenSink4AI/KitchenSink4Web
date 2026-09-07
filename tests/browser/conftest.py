@@ -110,11 +110,17 @@ def session_factory():
     assert not MANAGER.sessions, (
         f"sessions survived the test: {sorted(MANAGER.sessions)}. Every test "
         f"here must close what it opens inside its own loop.")
-    leaked = [pid for session in opened for pid in session.journal.pids
-              if hygiene.alive(pid)]
+    # EVERY jar, not just the focused one. A session can hold more than one
+    # cookie jar and therefore more than one browser process, and a
+    # teardown check that only asked the focused jar would miss exactly the
+    # leak this fixture exists to catch.
+    leaked = [pid for session in opened
+              for jar in session.contexts.values()
+              for pid in jar.journal.pids if hygiene.alive(pid)]
     for pid in leaked:                      # never leave the machine dirty
         hygiene.kill(pid)
     assert not leaked, f"orphaned browser processes after teardown: {leaked}"
     for session in opened:
-        assert not Path(session.profile_dir).exists(), (
-            f"profile directory survived: {session.profile_dir}")
+        for jar in session.contexts.values():
+            assert not Path(jar.profile_dir).exists(), (
+                f"profile directory survived: {jar.profile_dir}")

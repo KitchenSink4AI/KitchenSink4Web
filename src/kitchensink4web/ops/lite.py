@@ -50,7 +50,7 @@ from .. import pagedata as _pagedata
 from . import act as _act
 from . import common as _common
 from . import resource as _resource
-from ..engine import frames, lanes, session as _session
+from ..engine import frames, handles as _handles, lanes, session as _session
 from ..errors import (AmbiguousLocation, AuthRequired, BadParams,
                       BlockedBySite, Conflict, LaneUnsupported, ModalBlocked,
                       NavigationFailed, NotImplementedYet, PageUnreachable,
@@ -120,7 +120,7 @@ def _identity(record, status=None, load_state=None) -> dict:
             "status": status, "load_state": load_state}
 
 
-async def _robots_advisory(sess, url: str) -> dict:
+async def _robots_advisory(sess, url: str, context: str = "c1") -> dict:
     """robots.txt surfaced as an ADVISORY, per the honest-tool posture.
 
     KS4Web does not evade access controls and does not claim compliance with
@@ -136,7 +136,7 @@ async def _robots_advisory(sess, url: str) -> dict:
         if cache is None:
             cache = sess._robots = {}
         if origin not in cache:
-            res = await sess.context.request.get(
+            res = await sess.jar(context).context.request.get(
                 origin + "/robots.txt", timeout=5000)
             cache[origin] = await res.text() if res.ok else ""
         body = cache[origin]
@@ -447,7 +447,7 @@ async def get_page_view(
     held = await _resource.probe_page(record.page)
     if held is not None:
         raise _resource.read_refusal(held, "get_page_view")
-    sess.counters["reads"] += 1
+    sess.bump("reads", page=record.handle)
     root = _scope_root(sess, record, location)
     token = sess.reads.mint_token(record.handle)
     ts = time.strftime("%Y-%m-%dT%H:%M:%S")
@@ -1299,7 +1299,7 @@ async def navigate(
             _raise_if_unreachable(exc, f"navigate(goto, {url})", record)
             raise
         status = response.status if response else None
-        sess.counters["navigations"] += 1
+        sess.bump("navigations", page=record.handle)
         note_origin(sess, record.page.url)
     else:
         raise BadParams(
@@ -1371,7 +1371,8 @@ async def navigate(
         "url": record.page.url, "status": status,
         "title": await record.page.title(),
         "load_state": wait_until,
-        "robots": await _robots_advisory(sess, record.page.url),
+        "robots": await _robots_advisory(sess, record.page.url,
+                                         record.context),
         "verdict": verdict,
         "history_depth": len(record.history),
         "invalidated": invalidated or "nothing; the URL did not change, so "
@@ -1439,7 +1440,6 @@ def note_origin(sess, url: str | None) -> None:
     if not host:
         return
     sess.origins.add(host)
-    sess.counters["origins"] = len(sess.origins)
 
 
 def reported_counters(sess) -> dict:
@@ -3516,13 +3516,16 @@ async def manage_tabs(
     action: str = "list",
     page: str | None = None,
     url: str | None = None,
+    context: str | None = None,
 ) -> dict:
     """List, open, select, or close tabs, report which is focused, and
     capture pages a click opened in a popup. Mints and returns the explicit
     page handles every other tool accepts, which is how browser state
     survives across calls without relying on protocol sessions. Closing a
     page invalidates its refs and its delta read tokens, and the result says
-    so rather than leaving a later failure to explain it.
+    so rather than leaving a later failure to explain it. On a session with
+    more than one cookie jar, `context` says which jar a new tab opens in
+    and every listed page says which jar it belongs to.
     """
     sess = MANAGER.session(session)
     _audit.annotate(session=sess.session_id, lane=sess.spec.label)
@@ -3548,8 +3551,10 @@ async def manage_tabs(
                 session=sess.session_id, url=url,
                 args={"action": "open", "url": url},
                 summary=f"manage_tabs opens a tab at {url}."))
-        new_page = await sess.context.new_page()
-        record = MANAGER._attach_page(sess, new_page)
+        jar = sess.jar(context)
+        new_page = await jar.context.new_page()
+        record = MANAGER._attach_page(sess, new_page,
+                                      context_label=jar.label)
         # THE HANDLE THIS CALL MINTED, held in a local across every await
         # below (concurrency C-1). The op used to return only `focused`,
         # which is session-global and which every concurrent open
@@ -3571,7 +3576,7 @@ async def manage_tabs(
                 _raise_if_unreachable(exc, f"manage_tabs(open, {url})", record)
                 raise
             record.touch(new_page.url)
-            sess.counters["navigations"] += 1
+            sess.bump("navigations", page=record.handle)
             # Endurance F2: same omission as the read_pages hop. A run that
             # opened every page as a tab finished with navigations: 550 and
             # origins: 0.
@@ -3652,6 +3657,11 @@ def _tab_list(sess) -> list[dict]:
         row = {"page": record.handle, "url": url,
                "focused": record.handle == sess.focused,
                "parked": record.parked}
+        if len(sess.contexts) > 1:
+            # Stated only when it can matter. A single-jar session printing
+            # "context: c1" on every row would be noise; a two-jar session
+            # hiding which jar a page belongs to would be a lie.
+            row["context"] = getattr(record, "context", "c1")
         if browser_dead:
             row["dead"] = ("the browser this session owns has exited; every "
                            "page in it is gone")
@@ -3671,6 +3681,11 @@ async def manage_session(
     viewport: str | dict | None = None,
     locale: str | None = None,
     timezone: str | None = None,
+    token: str | None = None,
+    note: str | None = None,
+    expires_minutes: int = _handles.DEFAULT_TTL_MIN,
+    contexts: int = 1,
+    context: str | None = None,
 ) -> dict:
     """Open, close, or inspect a browser session, report the current lane's
     capabilities, read the budget counters, or hand the headed window to the
@@ -3687,51 +3702,107 @@ async def manage_session(
     degrades, and cannot do, and status reports any emulation in force. The
     status action also names the browsers installed on this machine and
     which lane suits which job, as steering: nothing switches a lane on its
-    own. Tool availability reflects the packs this server was started with.
+    own. 'export_handle' mints a single-use token plus a receipt of what a
+    session holds, and 'import_handle' redeems it in another conversation
+    and reports per page what is still the same document; the transfer
+    works only inside this running server on this machine, and a session
+    that is gone is refused with the reason it ended rather than a bare
+    'not found'. `contexts=2` on open gives one session two independent
+    cookie jars, so two logins to the same site can run side by side; each
+    jar is its own browser process on its own profile, the action budget is
+    shared across them, and any call that acts on one jar takes
+    `context='c1'` and refuses rather than guessing when there is more than
+    one. Closing with `context=...` closes that jar alone. Tool
+    availability reflects the packs this server was started with.
     """
     action = _common.enum_arg(
         action, ("open", "close", "status", "capabilities", "budget",
-                 "reset_budgets", "handoff"), default="status",
+                 "reset_budgets", "handoff", "export_handle",
+                 "import_handle"), default="status",
         tool="manage_session")
 
     if action == "open":
-        checked_state = None
-        if auth_state:
-            checked_state = _auth_state_precheck(
-                "manage_session(action='open', auth_state=...)", auth_state)
-            # The same gate load_auth_state carries, asked BEFORE the open
-            # so a fail-closed answer does not strand a half-built session:
-            # loading real credentials is consequential whichever call
-            # spells it.
+        if session:
+            # ADDING A JAR TO A LIVE SESSION. The "compare an admin against
+            # a regular user" flow discovers it needs a second identity
+            # after it is already logged in as the first, and opening a
+            # whole new session there throws that login away.
+            existing = MANAGER.session(session)
+            how_many = contexts if isinstance(contexts, int) else 1
+            if how_many != 1:
+                raise BadParams(
+                    f"contexts must be 1 when adding to an existing "
+                    f"session; {contexts!r} was asked for. Call this once "
+                    f"per jar so each new label comes back named.")
+            added = await MANAGER.add_context(existing)
+            return {
+                "session": existing.session_id,
+                "added_context": added.label,
+                "contexts": sorted(existing.contexts),
+                "lane": existing.spec.lane, "engine": existing.spec.label,
+                "pages": _tab_list(existing),
+                "focused_context": existing.focused_context,
+                "note": ("this jar starts empty: separate cookies, separate "
+                         "storage, separate browser process. It shares the "
+                         "session's lane and emulation, and it shares the "
+                         "session's action budget."),
+            }
+        state_map = _context_auth_map(auth_state, contexts)
+        checked_states = {}
+        for label, raw in state_map.items():
+            checked_states[label] = _auth_state_precheck(
+                "manage_session(action='open', auth_state=...)", raw)
+        if checked_states:
+            # The same gate load_auth_state carries, asked ONCE for every
+            # file BEFORE any context is launched, so a fail-closed answer
+            # does not strand two half-built browsers.
             _gates.ENGINE.ask(
                 "storage_load", tool="manage_session", session=None,
                 page=None, target=None,
                 summary=f"Open a session and load saved authentication "
-                        f"state from {checked_state}? This restores a real "
-                        f"login.")
+                        f"state from "
+                        f"{sorted(set(checked_states.values()))}? This "
+                        f"restores {len(set(checked_states.values()))} real "
+                        f"login(s).")
         sess = await MANAGER.open(device=device, viewport=viewport,
                                   locale=locale, timezone=timezone,
+                                  contexts=contexts if isinstance(contexts,
+                                                                  int) else 1,
                                   **_parse_lane(lane))
         loaded = None
-        if checked_state:
-            # A failed load used to leave the browser running with no handle
-            # ever returned: the ship-route test (2026-09-06) watched eleven
-            # Firefox processes outlive a rejected state file. The gate
-            # being asked early covers a DECLINED gate, not a bad file, so
-            # the load owns its own teardown. Close first, then re-raise, so
-            # the caller gets the real refusal and no session to clean up.
+        if checked_states:
+            loaded = {}
             try:
-                loaded = await _load_auth_into(sess, checked_state)
+                for label, checked in checked_states.items():
+                    loaded[label] = await _load_auth_into(sess, checked,
+                                                          context=label)
             except Exception:
                 try:
                     await MANAGER.close(sess.session_id)
                 except Exception:
                     pass
                 raise
+            if len(loaded) == 1 and len(sess.contexts) == 1:
+                loaded = next(iter(loaded.values()))
+        # A failed load must not leave a browser running with no handle ever
+        # returned: the ship-route test (2026-09-06) watched eleven Firefox
+        # processes outlive a rejected state file, and with two contexts the
+        # teardown has to close EVERY jar opened so far rather than the last
+        # one. `MANAGER.close` does that.
         return {
             "session": sess.session_id, "lane": sess.spec.lane,
             "engine": sess.spec.label, "pages": _tab_list(sess),
             "focused": sess.focused,
+            **({"contexts": sorted(sess.contexts),
+                "focused_context": sess.focused_context,
+                "contexts_note": (
+                    f"this session holds {len(sess.contexts)} independent "
+                    f"cookie jars, each its own browser process on its own "
+                    f"profile directory, which is real memory on this "
+                    f"machine. Name one with context=... on any call that "
+                    f"acts on a single jar. The action budget is shared "
+                    f"across them.")}
+               if len(sess.contexts) > 1 else {}),
             **({"emulation": {**sess.emulation, "applied_at": "open",
                               "note": ("these are the context's own options; "
                                        "nothing was patched afterward and "
@@ -3750,13 +3821,23 @@ async def manage_session(
         }
     if action == "close":
         sess = MANAGER.session(session)
-        n_cookies = 0
-        try:
-            n_cookies = len(await sess.context.cookies())
-        except Exception:
-            pass
-        saved = None
-        saved_earlier = sess.saved_auth_path
+        if context is not None:
+            # ONE JAR. Closing the last one refuses and names the call that
+            # means what the caller meant.
+            return await MANAGER.close_context(sess, context)
+        # THE THREE-BRANCH AUTH HONESTY RUNS PER CONTEXT (field finding 41,
+        # in its multi-jar shape). A session-level "none were saved" while
+        # c2 was in fact saved is the same wrong answer wearing a new coat.
+        jars = {}
+        for label, handle in sess.contexts.items():
+            cookies = 0
+            try:
+                cookies = len(await handle.context.cookies())
+            except Exception:
+                cookies = 0
+            jars[label] = {"cookies": cookies,
+                           "saved_earlier": handle.saved_auth_path,
+                           "saved_now": None}
         if auth_state:
             _auth_state_precheck(
                 "manage_session(action='close', auth_state=...)", None)
@@ -3764,46 +3845,21 @@ async def manage_session(
             path = None if auth_state.strip().lower() in ("save", "true",
                                                           "yes") \
                 else auth_state
-            saved = await _storage.save_auth_state(
-                session=sess.session_id, path=path)
+            for label in jars:
+                jars[label]["saved_now"] = await _storage.save_auth_state(
+                    session=sess.session_id, context=label, path=path)
         result = await MANAGER.close(sess.session_id)
-        if saved:
-            # The expiry line rides the close save too (field finding U10).
-            # A login saved at the end of a run is the one most likely to be
-            # loaded next week, so the moment it is written is the right
-            # moment to say it will not last that long.
-            result["auth_state"] = {
-                "saved_to": saved["saved_to"],
-                "cookies_saved": saved["cookies_saved"],
-                "auth_expiry": saved.get("auth_expiry"),
-                **({"warnings": saved["warnings"]}
-                   if saved.get("warnings") else {}),
-                "note": saved["note"]}
-        elif saved_earlier:
-            # Field finding 41 (2026-09-05): this branch used to say "none
-            # were saved" minutes after an explicit save_auth_state,
-            # because it consulted only this call's own arguments. The
-            # session remembers its save history now, and a security
-            # message that contradicts what the caller just did is the one
-            # place a wrong word costs the most trust.
-            result["auth_state"] = (
-                f"this session held {n_cookies} cookie(s), and its auth "
-                f"state was saved earlier this session to {saved_earlier}. "
-                f"Anything that changed after that save is not in the file; "
-                f"closing with auth_state='save' writes a fresh one. Reuse "
-                f"it with manage_session(action='open', auth_state=...) or "
-                f"load_auth_state.")
-        elif n_cookies:
-            # The OFFER, after the fact and never silent in either
-            # direction: an authenticated session was closed and its login
-            # was NOT saved, and the caller learns the route that keeps the
-            # next one.
-            result["auth_state"] = (
-                f"this session held {n_cookies} cookie(s), which is the "
-                f"shape of a signed-in state, and none were saved on close "
-                f"(nothing is ever auto-saved). To keep a login for reuse, "
-                f"close with auth_state='save' (or a path), or call "
-                f"save_auth_state before closing (storage pack).")
+        rows = {row["context"]: row for row in result.get("contexts", [])}
+        for label, state in jars.items():
+            row = rows.get(label)
+            line = _close_auth_line(state)
+            if row is not None and line is not None:
+                row["auth_state"] = line
+        if len(jars) == 1:
+            line = _close_auth_line(next(iter(jars.values())))
+            if line is not None:
+                result["auth_state"] = line
+            result.pop("contexts", None)
         return result
     if action == "capabilities":
         sess = MANAGER.session(session)
@@ -3840,9 +3896,14 @@ async def manage_session(
             # localStorage does not carry, which the note states.
             old = sess
             spec = old.spec
+            # ONE JAR'S LOGIN moves into the headed window, and a session
+            # holding several names the one it means: silently carrying
+            # only the focused jar would hand the human the wrong identity
+            # to sign in as.
+            old_jar = old.jar(context)
             state = None
             try:
-                state = await old.context.storage_state()
+                state = await old_jar.context.storage_state()
             except Exception:
                 state = None
             current_url = None
@@ -3856,7 +3917,8 @@ async def manage_session(
                                       channel=spec.channel, headless=False)
             if state and state.get("cookies"):
                 try:
-                    await sess.context.add_cookies(state["cookies"])
+                    await sess.jar_handle.context.add_cookies(
+                        state["cookies"])
                 except Exception:
                     pass
             if current_url:
@@ -3886,6 +3948,121 @@ async def manage_session(
                 "again", "reason": reason,
                 **({"upgraded": upgraded} if upgraded else {}),
                 "pages": _tab_list(sess)}
+    if action == "export_handle":
+        sess = MANAGER.session(session)
+        if getattr(sess, "role", "user") != "user":
+            raise BadParams(
+                f"session {sess.session_id} is a monitor session and belongs "
+                f"to the monitor scheduler, which navigates its pages on a "
+                f"timer. It cannot be transferred to a conversation: the two "
+                f"would fight over the same page. monitor(action='list') is "
+                f"what inspects monitors. Nothing was minted.")
+        asked = expires_minutes
+        ttl = _handles.DEFAULT_TTL_MIN if not isinstance(asked, int) \
+            else max(_handles.TTL_MIN_MIN, min(_handles.TTL_MAX_MIN, asked))
+        receipt = await _transfer_receipt(sess)
+        minted = _handles.STORE.mint(sess.session_id, receipt, note, ttl)
+        record = minted["record"]
+        return {
+            "session": sess.session_id,
+            "token": minted["token"],
+            "expires": record["expires"],
+            "expires_minutes": ttl,
+            "single_use": True,
+            "receipt": receipt,
+            **({"note": note} if note else {}),
+            **({"clamped": (
+                f"expires_minutes was clamped from {asked} to {ttl}; the "
+                f"range is {_handles.TTL_MIN_MIN} to "
+                f"{_handles.TTL_MAX_MIN} minutes.")}
+               if isinstance(asked, int) and asked != ttl else {}),
+            "how_to_use": (
+                f"in the other conversation, call "
+                f"manage_session(action='import_handle', token=...) with "
+                f"this token. It works once, it expires at "
+                f"{record['expires']}, and it works only in this running "
+                f"KS4Web process on this machine."),
+            "security": (
+                "this token is not an access control. Any conversation "
+                "talking to this KS4Web can already list and use every open "
+                "session through manage_session(action='status'). What the "
+                "token adds is that the transfer is deliberate and that "
+                "import reports what state is actually being picked up."),
+        }
+
+    if action == "import_handle":
+        # 1. SHAPE. A malformed token is an argument fault; a well-shaped
+        #    token that was never minted is a lookup miss, and the two get
+        #    different answers because they have different recoveries.
+        if not _handles.valid_shape(token):
+            raise BadParams(
+                f"that is not a KS4Web session handle token. A token is "
+                f"minted by manage_session(action='export_handle') and is "
+                f"the prefix {_handles.TOKEN_PREFIX!r} followed by "
+                f"{_handles.TOKEN_BODY_LEN} url-safe characters. Nothing "
+                f"was changed.")
+        _handles.STORE.prune()
+        record = _handles.STORE.find(token)
+        if record is None:
+            raise TargetNotFound(
+                "no handle token like that was minted by this KS4Web, or it "
+                "was minted long enough ago that its record has been "
+                "discarded. Export again from the conversation that holds "
+                "the session with manage_session(action='export_handle'). "
+                "Nothing was changed.")
+        # 2. CONSUMED, then EXPIRED. Both are lookup misses with a specific
+        #    cause, which is why consumed and expired records are kept for
+        #    a grace window instead of being deleted at once.
+        if record.get("consumed_at"):
+            raise TargetNotFound(
+                f"that token was already used at "
+                f"{record.get('consumed', 'an earlier time')}. A handle "
+                f"token works once. Export again from either conversation "
+                f"to get a fresh one. Nothing was changed.")
+        if _handles.time.time() > float(record["expires_at"]):
+            raise TargetNotFound(
+                f"that token expired at {record['expires']}. Export again "
+                f"with manage_session(action='export_handle') from the "
+                f"conversation that holds the session. Nothing was changed.")
+        # 3. PROCESS IDENTITY. The one refusal that has to be specific:
+        #    "unknown token" here would hide the real answer, which is that
+        #    the browser died with the server that owned it.
+        if record.get("minted_by_pid") != _handles.os.getpid():
+            raise Conflict(
+                f"that token was minted by KS4Web process "
+                f"{record.get('minted_by_pid')} and this is process "
+                f"{_handles.os.getpid()}. A session handle transfer works "
+                f"only inside one running server. The browser that session "
+                f"held was closed when that process ended, because KS4Web "
+                f"ties the browser's life to its own rather than leaving "
+                f"orphaned browser processes behind. Open a fresh session "
+                f"with manage_session(action='open').")
+        sid = record["session"]
+        # 4. LIVENESS, and the tombstone is what makes the answer specific.
+        if sid not in MANAGER.sessions:
+            stone = MANAGER.tombstone(sid)
+            if stone:
+                raise Conflict(
+                    f"session {sid} is no longer open."
+                    + _session.tombstone_line(stone)
+                    + " Open a fresh session with "
+                      "manage_session(action='open').")
+            raise Conflict(
+                f"session {sid} is not open in this process and KS4Web has "
+                f"no record of how it ended, which is itself the answer "
+                f"worth having: it did not end by any route that leaves a "
+                f"record. Open a fresh session with "
+                f"manage_session(action='open').")
+        sess = MANAGER.sessions[sid]
+        # 5. HEALTH, QUOTED. The status surface owns the liveness verdict
+        #    and this feature must never compute a second opinion, or the
+        #    two answers eventually disagree about the same browser.
+        verdict = _session_status(sess)
+        if verdict.get("health"):
+            raise SessionDead(verdict["health"])
+        _handles.STORE.consume(record)
+        return await _transfer_report(sess, record)
+
     if action == "status":
         # The 14-day update check: one calm line, only when a newer release
         # is confirmed on PyPI, never an install, and a silent skip on any
@@ -3902,6 +4079,25 @@ async def manage_session(
         stale = [s for s in listed if s["state"] != "active"]
         return {
             "sessions": listed,
+            # THE SHARED-PROCESS DISCLOSURE (2026-09-08 model field test).
+            # One KS4Web process serves every conversation that reaches it,
+            # and sessions are process-global rather than conversation-
+            # scoped, so a call that names no session can legitimately land
+            # on a browser some other conversation opened. That is the
+            # design, and it stops being a trap the moment it is said out
+            # loud beside the list it applies to.
+            **({"shared_state": (
+                "sessions belong to this KS4Web process, not to a "
+                "conversation. Every session above is reachable from any "
+                "conversation talking to this server, including ones "
+                "another conversation opened, and a call that names no "
+                "session uses the single open one whatever opened it. The "
+                "open_pages of each session above are what it is actually "
+                "showing. To work in isolation, open your own with "
+                "manage_session(action='open') and pass its handle "
+                "explicitly; to pick up an existing one deliberately, use "
+                "manage_session(action='export_handle') in the "
+                "conversation that holds it.")} if listed else {}),
             # Field log 2 item U1's cheap half. A conversation that timed out
             # leaves its browser running, and the status call is where that
             # becomes visible: every session carries how long it has been
@@ -3937,8 +4133,126 @@ async def manage_session(
         }
     raise BadParams(
         f"unknown manage_session action {action!r}: the actions are 'open', "
-        f"'close', 'status', 'capabilities', 'budget', 'reset_budgets', and "
-        f"'handoff'.")
+        f"'close', 'status', 'capabilities', 'budget', 'reset_budgets', "
+        f"'handoff', 'export_handle', and 'import_handle'.")
+
+
+def _live_refs(sess, handle: str) -> int:
+    """How many refs minted on one page are still usable. This is the
+    number that makes the later loss report mean something: "0 of 12" is a
+    fact a caller can act on, "your refs may be stale" is not."""
+    return sum(1 for entry in sess.element_map.entries.values()
+               if entry.handle == handle and not entry.gone)
+
+
+async def _session_cookie_count(sess) -> int:
+    total = 0
+    for handle in sess.contexts.values():
+        try:
+            total += len(await handle.context.cookies())
+        except Exception:
+            pass
+    return total
+
+
+async def _transfer_receipt(sess) -> dict:
+    """What the session holds at the moment of export, so import can
+    compare it against reality rather than asserting nothing changed."""
+    # EVERY jar, because the receipt describes the whole session and a
+    # count from the focused jar alone would understate a session holding
+    # two identities.
+    cookies = await _session_cookie_count(sess)
+    pages = []
+    for record in sess.pages.values():
+        pages.append({
+            "page": record.handle,
+            "url": _page_url(record),
+            "focused": record.handle == sess.focused,
+            "parked": record.parked,
+            "live_refs": _live_refs(sess, record.handle),
+        })
+    return {
+        "lane": sess.spec.label,
+        "opened": time.strftime("%Y-%m-%dT%H:%M:%S",
+                                time.localtime(sess.opened)),
+        "pages": pages,
+        "cookies": cookies,
+        "auth_state_saved_to": sess.saved_auth_path,
+        "emulation": dict(sess.emulation) if sess.emulation else None,
+        "budget": _budgets.BOOK.snapshot(sess.session_id)["counters"],
+    }
+
+
+async def _transfer_report(sess, record: dict) -> dict:
+    """The payload that makes the import worth making.
+
+    Nothing is copied and nothing moves: this is the same live session, so
+    the honest report is a per-page comparison against the receipt plus the
+    conditions a conversation arriving mid-flight would otherwise discover
+    one refusal at a time (a page that navigated, a page whose renderer
+    died, a held dialog, and a budget somebody else already spent)."""
+    receipt = record.get("receipt") or {}
+    was = {p["page"]: p for p in receipt.get("pages", [])}
+    desk = _dialogs.desk(sess)
+    rows = []
+    for handle, page_record in sess.pages.items():
+        before = was.get(handle)
+        url_now = _page_url(page_record)
+        same = bool(before) and before.get("url") == url_now \
+            and page_record.last_nav_url in (None, url_now)
+        row = {
+            "page": handle,
+            "url_now": url_now,
+            "same_document_as_export": same,
+            "parked": page_record.parked,
+            "live_refs": _live_refs(sess, handle),
+        }
+        if before is None:
+            row["opened_after_export"] = True
+        elif not same:
+            row["url_at_export"] = before.get("url")
+            row["refs"] = (
+                f"{_live_refs(sess, handle)} of {before.get('live_refs', 0)} "
+                f"ref(s) minted on {handle} survive: the page navigated "
+                f"after the export and refs do not survive a navigation. "
+                f"Re-read with get_page_view(page={handle!r}).")
+        else:
+            row["refs"] = (
+                f"{_live_refs(sess, handle)} of {before.get('live_refs', 0)} "
+                f"ref(s) minted on {handle} are still live and usable.")
+        if page_record.crashed:
+            row["dead"] = page_record.crashed
+        held = desk.pending_for(handle)
+        if held is not None:
+            row["dialog_held"] = (
+                f"a native dialog is open on {handle} and it stops the "
+                f"page's script until it is answered. handle_dialog is the "
+                f"route.")
+        rows.append(row)
+    cookies_now = await _session_cookie_count(sess)
+    elapsed = time.time() - float(record.get("minted_at", time.time()))
+    return {
+        "imported": sess.session_id,
+        "lane": sess.spec.label,
+        "elapsed_since_export": _common.human_span(elapsed),
+        "pages": rows,
+        "cookies": f"{receipt.get('cookies', 0)} at export, "
+                   f"{cookies_now} now",
+        **({"note": record["note"]} if record.get("note") else {}),
+        "carried": ["pages", "page handles", "cookies and site storage",
+                    "the audit trail", "the budget ledger and its spend",
+                    "saved auth-state history"],
+        "not_carried": (
+            "nothing was copied. This is the same live session in the same "
+            "server process, so nothing needed copying."),
+        "budget": {
+            **_budgets.BOOK.snapshot(sess.session_id)["counters"],
+            "note": ("this session's budget carries over with it, including "
+                     "what the other conversation already spent."),
+        },
+        "next": (f"manage_tabs(session={sess.session_id!r}, action='list') "
+                 f"to see the tabs, get_page_view(page=...) to re-read."),
+    }
 
 
 def _session_status(sess) -> dict:
@@ -3965,23 +4279,49 @@ def _session_status(sess) -> dict:
         state = "active"
     if alive is False:
         state = "dead"
-    live_pids = sess.journal.survivors()
+    verdict = sess.health()
+    live_pids = sorted({pid for c in sess.contexts.values()
+                        for pid in c.journal.survivors()})
     row = {
         "session": sess.session_id, "lane": sess.spec.label,
         "pages": len(sess.pages), "focused": sess.focused,
         "profile_dir": sess.profile_dir,
-        "owned_pids": sorted(sess.journal.pids),
+        "owned_pids": sorted({pid for c in sess.contexts.values()
+                              for pid in c.journal.pids}),
         # The journal is populated once, at open, so it names the processes
         # that existed at launch and never grows (endurance p9_journal).
         # Reporting which of THOSE are still running is the honest half.
         "owned_pids_alive": live_pids,
-        "browser": ("alive" if alive else
-                    "dead" if alive is False else "unknown"),
+        # THE AGGREGATE IS HONEST ABOUT PARTIAL DEATH. One context's
+        # browser can die while the other lives, and reporting the session
+        # as alive because one of them is would be the
+        # completeness-over-omissions failure the doctrine names.
+        "browser": verdict["health"],
         "counters": reported_counters(sess),
         "age_s": round(now - sess.opened, 1),
         "idle_s": round(idle_for, 1),
         "parked_pages": sum(1 for p in sess.pages.values() if p.parked),
         "state": state,
+        # WHAT EACH PAGE IS ACTUALLY SHOWING. The status row used to carry
+        # a page COUNT and nothing else, so a conversation that inherited
+        # the process-wide default session read its own orientation call
+        # and still had no way to see that p1 was sitting on a URL it had
+        # never navigated to (2026-09-08 model field test: an agent's first
+        # dozen calls landed on a session another agent had opened, and it
+        # only worked this out from the page CONTENT). Sessions are
+        # process-global by design; the fix for a surprise is disclosure.
+        "open_pages": _tab_list(sess),
+        **({"contexts": verdict["contexts"],
+            "contexts_note": (
+                f"this session holds {len(sess.contexts)} independent "
+                f"cookie jars, one browser process each. Name one with "
+                f"context=... on any call that acts on a single jar.")}
+           if len(sess.contexts) > 1 else {}),
+        # A session the scheduler owns is not a session a conversation may
+        # use, and a browser process the user did not open must never be
+        # invisible here.
+        **({"role": sess.role} if getattr(sess, "role", "user") != "user"
+           else {}),
         # Stated only when something was actually set. A status that printed
         # "emulation: none" on every session would be noise; a status that
         # hid a phone-shaped context would be a lie.
@@ -3993,10 +4333,25 @@ def _session_status(sess) -> dict:
             "session can work and no re-read recovers it: close it with "
             f"manage_session(session={sess.session_id!r}, action='close') "
             "and open a new one.")
+    elif verdict["health"] == "degraded":
+        dead = [c["context"] for c in verdict["contexts"]
+                if c["health"] == "dead"]
+        row["health"] = (
+            f"context(s) {dead} of this session have lost their browser "
+            f"while the rest are still working. Pages in a dead context "
+            f"are gone with it; close it with manage_session("
+            f"action='close', session={sess.session_id!r}, context=...) "
+            f"and open another if you still need it.")
     if dead_pages:
         # C-03: the tab list and the crash mark disagreed, and the tab list
         # is the one that reads as authoritative.
         row["dead_pages"] = dead_pages
+    outstanding = _handles.STORE.outstanding(sess.session_id)
+    if outstanding:
+        # An unconsumed export token is a pending intent somebody may have
+        # forgotten. The COUNT and the soonest expiry, never a token and
+        # never a hash.
+        row["export_tokens"] = outstanding
     return row
 
 
@@ -4010,6 +4365,86 @@ def _idle_summary(stale: list[dict]) -> str:
             f'{human_span(worst["idle_s"])}, and each is holding a browser '
             f'process. Close the ones you are done with: {calls}'
             + ("; and more above" if len(stale) > 4 else ""))
+
+
+def _context_auth_map(auth_state, contexts) -> dict:
+    """Which saved login goes into which cookie jar.
+
+    A single path string with more than one jar REFUSES: loading one
+    identity into two jars defeats the point of asking for two, and
+    guessing which jar gets it is worse than refusing. A dict is keyed by
+    label; a list is matched positionally."""
+    if not auth_state:
+        return {}
+    count = contexts if isinstance(contexts, int) and contexts > 0 else 1
+    labels = [f"c{i + 1}" for i in range(count)]
+    if isinstance(auth_state, str):
+        if count == 1:
+            return {"c1": auth_state}
+        raise BadParams(
+            f"one auth_state path was given for {count} cookie jars "
+            f"({labels}). Loading one identity into every jar defeats the "
+            f"point of opening more than one, and picking a jar for you "
+            f"would be a guess. Pass a mapping such as "
+            f"{{'c1': 'admin.json', 'c2': 'user.json'}}, or a list in the "
+            f"same order. Nothing was opened.")
+    if isinstance(auth_state, (list, tuple)):
+        if len(auth_state) > count:
+            raise BadParams(
+                f"{len(auth_state)} auth_state paths were given for {count} "
+                f"cookie jar(s) ({labels}). Nothing was opened.")
+        return {labels[i]: value for i, value in enumerate(auth_state)
+                if value}
+    if isinstance(auth_state, dict):
+        unknown = [k for k in auth_state if k not in labels]
+        if unknown:
+            raise BadParams(
+                f"auth_state names {sorted(unknown)}, and the contexts this "
+                f"call will open are {labels}. Context labels are minted in "
+                f"order at open. Nothing was opened.")
+        return {k: v for k, v in auth_state.items() if v}
+    raise BadParams(
+        f"auth_state must be a path, a list of paths, or a mapping of "
+        f"context label to path; {type(auth_state).__name__} is none of "
+        f"those. Nothing was opened.")
+
+
+def _close_auth_line(state: dict):
+    """One cookie jar's auth honesty at close, in three branches.
+
+    Field finding 41 (2026-09-05): the "none were saved" branch used to
+    fire minutes after an explicit save_auth_state, because it consulted
+    only the close call's own arguments. The save history now lives on the
+    jar that did the saving, which is the only place it can be right when a
+    session holds more than one."""
+    saved = state.get("saved_now")
+    if saved:
+        # The expiry line rides the close save too (field finding U10). A
+        # login saved at the end of a run is the one most likely to be
+        # loaded next week.
+        return {"saved_to": saved["saved_to"],
+                "cookies_saved": saved["cookies_saved"],
+                "auth_expiry": saved.get("auth_expiry"),
+                **({"warnings": saved["warnings"]}
+                   if saved.get("warnings") else {}),
+                "note": saved["note"]}
+    earlier = state.get("saved_earlier")
+    cookies = state.get("cookies", 0)
+    if earlier:
+        return (f"this context held {cookies} cookie(s), and its auth state "
+                f"was saved earlier this session to {earlier}. Anything "
+                f"that changed after that save is not in the file; closing "
+                f"with auth_state='save' writes a fresh one. Reuse it with "
+                f"manage_session(action='open', auth_state=...) or "
+                f"load_auth_state.")
+    if cookies:
+        # The OFFER, after the fact and never silent in either direction.
+        return (f"this context held {cookies} cookie(s), which is the shape "
+                f"of a signed-in state, and none were saved on close "
+                f"(nothing is ever auto-saved). To keep a login for reuse, "
+                f"close with auth_state='save' (or a path), or call "
+                f"save_auth_state before closing (storage pack).")
+    return None
 
 
 def _auth_state_precheck(what: str, path: str | None) -> str | None:
@@ -4040,7 +4475,8 @@ def _auth_state_precheck(what: str, path: str | None) -> str | None:
     return None
 
 
-async def _load_auth_into(sess, checked: str) -> dict:
+async def _load_auth_into(sess, checked: str,
+                          context: str | None = None) -> dict:
     """Load a saved storage_state file's cookies into a just-opened
     session. Mirrors load_auth_state's mechanics: values go through the
     credential vault so they can never surface in a payload, and per-origin
@@ -4053,10 +4489,11 @@ async def _load_auth_into(sess, checked: str) -> dict:
         raise BadParams(
             f"could not read the state file {checked}: "
             f"{type(exc).__name__}.") from exc
+    jar = sess.jar(context)
     cookies = data.get("cookies", [])
     if cookies:
         try:
-            await sess.context.add_cookies(cookies)
+            await jar.context.add_cookies(cookies)
         except Exception as exc:
             from . import common as _common
             raise _common.auth_file_refusal(checked, cookies, exc) from exc
@@ -4065,7 +4502,8 @@ async def _load_auth_into(sess, checked: str) -> dict:
     from . import common as _common
     expiry = _common.auth_expiry(cookies)
     warning = _common.expiry_note(expiry)
-    return {"loaded_from": checked, "cookies_loaded": len(cookies),
+    return {"loaded_from": checked, "context": jar.label,
+            "cookies_loaded": len(cookies),
             "origins_pending": len(data.get("origins", [])),
             **({"warnings": [warning]} if warning else {}),
             "note": ("cookies are active now; per-origin localStorage "
@@ -4276,6 +4714,29 @@ async def get_workflows(topic: str | None = None) -> dict:
             "of those refuses with the reason and the next call, and the "
             "refusal is cheaper to read than the retry is to run.",
         ],
+        "session-transfer": [
+            "manage_session(action='export_handle', session='s1') in the "
+            "conversation that holds the session. It returns a token once, "
+            "plus a receipt of what the session holds right now.",
+            "manage_session(action='import_handle', token=...) in the other "
+            "conversation. It reports, per page, whether the page is still "
+            "on the document it was on at export and what happened to the "
+            "refs minted there.",
+            "The limits, stated up front: a token works once, expires in an "
+            "hour by default, and works only inside this running KS4Web "
+            "process on this machine. It does not survive a server restart, "
+            "and Claude Desktop's chat panel and its Code panel run "
+            "separate copies of the server, so a token does not cross "
+            "between them.",
+            "Nothing is copied. It is the same live browser, so if the "
+            "other conversation navigates a page your refs to that page are "
+            "gone, and the budget the other conversation spent is spent.",
+            "A token is not a lock. Any conversation talking to this KS4Web "
+            "can already see and use its sessions through "
+            "manage_session(action='status'). The token makes a transfer "
+            "deliberate and lets KS4Web report what state is being picked "
+            "up.",
+        ],
         "packs": packs.menu(),
         "packs-are-launch-time": (
             "There is no runtime enable call. The tool set is fixed when the "
@@ -4466,6 +4927,12 @@ async def handle_dialog(
 
 #: The lite roster, in the order DESIGN 2.1 lists it. `server.py` registers
 #: exactly this and nothing else in Phase 0.
+# Imported HERE rather than at the top of the module: `ops/monitor.py`
+# reaches back into this one for the URL validator and the driver-error
+# ladder, so a module-scope import in either direction is a cycle. Every
+# lite tool still ships from one roster.
+from . import monitor as _monitor_ops  # noqa: E402
+
 LITE_TOOLS = (
     get_page_view,
     find_elements,
@@ -4483,4 +4950,5 @@ LITE_TOOLS = (
     manage_session,
     get_audit,
     get_workflows,
+    _monitor_ops.monitor,
 )

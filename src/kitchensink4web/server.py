@@ -270,6 +270,18 @@ def _wrap(fn):
 
     @functools.wraps(fn)
     async def inner(*args, **kwargs):
+        # THE MONITOR TICK STARTS HERE AND NOWHERE EARLIER. The first tool
+        # call of the process is the first moment a client is genuinely
+        # attached and the first moment a human has asked this server for
+        # anything; a Desktop that launches five MCP servers at login must
+        # not have one of them loading web pages before that. It is a
+        # no-op when no monitor is defined, so a server nobody asks to
+        # watch anything never starts a loop at all.
+        try:
+            from .ops import monitor as _monitor_ops
+            _monitor_ops.ensure_scheduler()
+        except Exception:
+            pass        # a scheduler that cannot start must not break a call
         try:
             try:
                 result = await _bounded(fn, args, kwargs)

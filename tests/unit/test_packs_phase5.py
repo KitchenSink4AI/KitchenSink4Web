@@ -44,15 +44,16 @@ def test_every_module_roster_matches_the_design_table():
             f"{sorted(designed)}")
 
 
-def test_full_surface_is_forty_five_tools(launch):
+def test_full_surface_is_forty_six_tools(launch):
     """Forty until 2026-09-06, when find_and_act joined the lite core;
     forty-two later the same day, when handle_dialog did;
-    forty-three when get_article joined the extract pack; and
+    forty-three when get_article joined the extract pack;
     forty-five after the small-parts wave added read_pages to
-    extract and manage_clipboard to files."""
+    extract and manage_clipboard to files; and forty-six on 2026-09-08,
+    when `monitor` joined the lite core."""
     state = launch(cli_packs=packs.pack_names(), read_only=False)
-    assert len(state["registered"]) == 45
-    assert len(set(state["registered"])) == 45
+    assert len(state["registered"]) == 46
+    assert len(set(state["registered"])) == 46
 
 
 def test_full_surface_under_read_only_hides_every_mutating_pack_tool(launch):

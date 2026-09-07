@@ -115,14 +115,26 @@ def _record(sess, request) -> None:
         log["evicted"] += 1
 
 
-def _attach_recorder(session) -> None:
-    """The session-open hook. Loaded-pack-guarded, per the seam contract."""
+def _attach_recorder(session, contexts=None) -> None:
+    """The session-open hook. Loaded-pack-guarded, per the seam contract.
+
+    ATTACHES PER CONTEXT (dream-specs observation 5). Bound to
+    `session.context` once, a request made from the second cookie jar was
+    never recorded and `list_requests` answered with an empty list rather
+    than an error, which is the silent-loss shape this build refuses."""
     from .. import packs
     if not packs.is_pack_loaded("network"):
         return
-    if getattr(session, "_netlog_attached", False):
+    handles = (list(contexts) if contexts is not None
+               else list(session.contexts.values()))
+    attached = getattr(session, "_netlog_attached", None)
+    if attached is None:
+        attached = session._netlog_attached = set()
+    handles = [h for h in handles if h.label not in attached]
+    if not handles:
         return
-    session._netlog_attached = True
+    for handle in handles:
+        attached.add(handle.label)
 
     def on_request(request):
         try:
@@ -148,9 +160,10 @@ def _attach_recorder(session) -> None:
         except Exception:
             pass
 
-    session.context.on("request", on_request)
-    session.context.on("response", on_response)
-    session.context.on("requestfailed", on_failed)
+    for handle in handles:
+        handle.context.on("request", on_request)
+        handle.context.on("response", on_response)
+        handle.context.on("requestfailed", on_failed)
 
 
 _session.SESSION_OPEN_HOOKS.append(_attach_recorder)
@@ -413,6 +426,7 @@ async def set_routing(
     offline: bool | None = None,
     headers: dict | None = None,
     preset: str | None = None,
+    context: str | None = None,
 ) -> dict:
     """Shape the session's network: block URL patterns, block the curated
     ad and analytics list, mock a pattern with a canned response, go
@@ -436,6 +450,10 @@ async def set_routing(
             f"unknown set_routing action {action!r}: the actions are "
             f"{list(actions)}.")
     sess = common.session_of(session)
+    # ROUTING IS PER COOKIE JAR: a block list, an offline switch, and an
+    # extra header belong to one browser context, so a session with several
+    # names the one it means rather than letting the server pick.
+    jar = sess.jar(context) if action != "status" else sess.jar_handle
     state = _routing(sess)
     if action == "status":
         return {"session": sess.session_id, "routing": _state_view(state)}
@@ -486,7 +504,7 @@ async def set_routing(
         for pattern in patterns:
             async def _abort(route):
                 await route.abort()
-            await sess.context.route(pattern, _abort)
+            await jar.context.route(pattern, _abort)
             state["routes"].append({"kind": "block", "pattern": pattern,
                                     "_handler": _abort})
     elif action == "block_ads":
@@ -495,7 +513,7 @@ async def set_routing(
 
         async def _abort_ad(route):
             await route.abort()
-        await sess.context.route(_is_ad, _abort_ad)
+        await jar.context.route(_is_ad, _abort_ad)
         state["routes"].append({"kind": "block_ads",
                                 "pattern": "(curated ad/analytics list)",
                                 "_matcher": _is_ad, "_handler": _abort_ad})
@@ -525,20 +543,20 @@ async def set_routing(
         async def _fulfill(route):
             await route.fulfill(status=int(status),
                                 content_type=content_type, body=body)
-        await sess.context.route(pattern, _fulfill)
+        await jar.context.route(pattern, _fulfill)
         state["routes"].append({"kind": "mock", "pattern": pattern,
                                 "status": int(status),
                                 "_handler": _fulfill})
     elif action == "offline":
         if offline is None:
             raise BadParams("offline takes offline=true or offline=false.")
-        await sess.context.set_offline(bool(offline))
+        await jar.context.set_offline(bool(offline))
         state["offline"] = bool(offline)
     elif action == "headers":
         if not isinstance(headers, dict) or not headers:
             raise BadParams(
                 "headers takes a non-empty dict of extra request headers.")
-        await sess.context.set_extra_http_headers(
+        await jar.context.set_extra_http_headers(
             {str(k): str(v) for k, v in headers.items()})
         state["extra_headers"] = {str(k): str(v)
                                   for k, v in headers.items()}
@@ -561,7 +579,11 @@ async def set_routing(
                 f"throttle takes preset= one of {sorted(presets)}.")
         conditions = presets[preset]
         for record in sess.pages.values():
-            cdp = await sess.context.new_cdp_session(record.page)
+            # THE PAGE'S OWN JAR, which is the right one under multiple
+            # contexts: a CDP session has to come from the context that
+            # owns the page it is being attached to.
+            cdp = await sess.jar(record.context).context.new_cdp_session(
+                record.page)
             if conditions is None:
                 await cdp.send("Network.emulateNetworkConditions",
                                {"offline": False, "latency": 0,
@@ -575,17 +597,17 @@ async def set_routing(
     elif action == "clear":
         for route in state["routes"]:
             try:
-                await sess.context.unroute(
+                await jar.context.unroute(
                     route.get("_matcher") or route["pattern"],
                     route["_handler"])
             except Exception:
                 pass
         state["routes"] = []
         if state["offline"]:
-            await sess.context.set_offline(False)
+            await jar.context.set_offline(False)
             state["offline"] = False
         if state["extra_headers"]:
-            await sess.context.set_extra_http_headers({})
+            await jar.context.set_extra_http_headers({})
             state["extra_headers"] = {}
     return {"session": sess.session_id, "action": action,
             "routing": _state_view(state)}

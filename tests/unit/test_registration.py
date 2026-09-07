@@ -33,6 +33,12 @@ LITE_ROSTER = {
     #: wherever the condition is. It is MUTATING, so a read-only launch still
     #: does not have it and the driver's dismissal stands there.
     "handle_dialog",
+    #: monitor joined on 2026-09-08 with feature #8. It is lite because it
+    #: is session and lifecycle management, the same family as
+    #: manage_session and manage_tabs, and because it has to be present
+    #: under the shipped read-only default: a monitor navigates and reads
+    #: and does nothing else.
+    "monitor",
 }
 
 
@@ -41,7 +47,7 @@ def test_lite_roster_is_exactly_the_design(launch):
     (DEFAULT_GRADE is 'browse' since the 2026-09-05 field-test ruling)."""
     state = launch(read_only=False)
     assert set(state["registered"]) == LITE_ROSTER
-    assert len(LITE_ROSTER) == 16
+    assert len(LITE_ROSTER) == 17
 
 
 def test_bare_launch_defaults_to_browse_read_only(launch, monkeypatch):
