@@ -4355,6 +4355,29 @@ async def get_workflows(topic: str | None = None) -> dict:
             "are named. They never merge, because a merged claim is one no "
             "profile's author made and nobody can correct.",
         ],
+        "accessibility": [
+            "get_accessibility(page='p1') is the cheap first read: one line "
+            "per violated WCAG rule with its id, impact, success-criterion "
+            "mapping, affected-node count, and up to three example nodes.",
+            "get_accessibility(page='p1', rule='image-alt') is the targeted "
+            "follow-up: every affected node for one rule, paginated, each "
+            "carrying a ref where the element is in the anchor registry.",
+            "Checks the engine RAN and could not decide come back as "
+            "needs_review. They are never counted as passes, never as "
+            "failures, and never appear in a denominator. There is no "
+            "score, because every 0-to-100 accessibility number is "
+            "somebody's weighting rather than a measurement.",
+            "The result states the viewport it was measured at, because an "
+            "element outside the window cannot be contrast-checked and the "
+            "same page at another size returns different counts.",
+            "The engine is axe-core, an optional dependency: pip install "
+            "kitchensink4web[accessibility]. The pack loads with "
+            "--packs accessibility or KS4WEB_PACK_ACCESSIBILITY=true.",
+            "Automated testing finds a minority of accessibility problems, "
+            "and the audit runs inside the page's own JavaScript, so a page "
+            "that wants to influence the result can. Both facts are in "
+            "every payload rather than in documentation.",
+        ],
         "packs-are-launch-time": (
             "There is no runtime enable call. The tool set is fixed when the "
             "server starts, which is what MCP 2026-07-28 requires, so a "

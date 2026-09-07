@@ -158,6 +158,15 @@ NON_MUTATING: frozenset[str] = frozenset({
     "read_image_text",
     "list_requests", "get_request", "export_har",
     "list_console", "get_page_errors", "list_workflows",
+    # get_accessibility injects and runs the audit engine in the page, so
+    # whether it mutates was MEASURED rather than assumed: a digest of
+    # document.documentElement.outerHTML, of the computed styles of the
+    # first 200 elements, of the total attribute count, and of the node
+    # count, taken immediately before and immediately after a run, on a
+    # clean page, a page full of violations, a page with an iframe, and a
+    # page under a strict Content-Security-Policy. All four digests were
+    # identical on all four pages (axe-core 4.12.1). It reads.
+    "get_accessibility",
     # read_pages NAVIGATES, following the page's own next-page links, and it
     # sits here for exactly the reason `navigate` does: going to a URL is
     # ambiguous rather than mutating, so it is permitted under `browse` and
@@ -195,6 +204,9 @@ GENUINELY_READ_ONLY: frozenset[str] = frozenset({
     "get_article",
     "list_requests", "get_request", "list_console", "get_page_errors",
     "list_workflows",
+    # It writes no file, opens no connection, and leaves the DOM
+    # byte-identical, which is what the hint means.
+    "get_accessibility",
 })
 
 

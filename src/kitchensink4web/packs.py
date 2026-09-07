@@ -89,6 +89,16 @@ PACK_SUMMARIES: dict[str, str] = {
         "named replayable flows recorded from the audit log, with a "
         "mandatory dry run that re-resolves every anchor before executing"
     ),
+    # NOT folded into `diagnostics`, which is thematically right and
+    # practically wrong: that pack carries `evaluate_script`, and packs are
+    # fixed at launch, so putting the audit there would make every user who
+    # wants an accessibility check run a process with the RCE-equivalent
+    # tool registered. That is a bad trade for a one-tool convenience.
+    "accessibility": (
+        "a WCAG audit through axe-core (an optional pip dependency), "
+        "aggregated by rule with a per-rule drilldown, checks the engine "
+        "could not decide reported separately, and no score"
+    ),
 }
 
 #: The DESIGNED pack rosters (DESIGN 2.2). Phase 5 built every row except
@@ -109,6 +119,7 @@ PLANNED_MEMBERS: dict[str, tuple[str, ...]] = {
                 "load_auth_state"),
     "files": ("download", "upload_file", "manage_clipboard"),
     "workflows": ("save_workflow", "run_workflow", "list_workflows"),
+    "accessibility": ("get_accessibility",),
 }
 
 #: Membership only: pack -> set of registered tool NAMES. Deliberately not the

@@ -362,6 +362,7 @@ _PACK_MODULES: dict[str, str] = {
     "files": ".ops.files",
     "diagnostics": ".ops.diag",
     "workflows": ".ops.workflows",
+    "accessibility": ".ops.a11y",
 }
 
 

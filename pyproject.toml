@@ -57,6 +57,13 @@ ocr = [
     "winrt-Windows.Storage.Streams==3.2.1; sys_platform == 'win32'",
     "winrt-Windows.Globalization==3.2.1; sys_platform == 'win32'",
 ]
+# The accessibility engine, as a PINNED DEPENDENCY rather than a vendored
+# file (author ruling 2026-09-07). axe-core arrives inside this MIT wrapper
+# from its own publisher, under its own name, with its own license files;
+# this project redistributes none of it. Pinned exactly, because a vendored
+# asset has no resolver to argue with and a bumped engine changes what a
+# result MEANS. `get_accessibility` reports the version it actually ran.
+accessibility = ["axe-playwright-python==0.1.8"]
 
 [project.scripts]
 # Q11, RULED by the author 2026-09-04.
