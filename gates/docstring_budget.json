@@ -251,9 +251,9 @@
       "over_reference_caps": false
     },
     "set_routing": {
-      "description_tokens": 194,
-      "schema_tokens": 180,
-      "total_tokens": 374,
+      "description_tokens": 306,
+      "schema_tokens": 286,
+      "total_tokens": 592,
       "over_reference_caps": true
     },
     "take_screenshot": {
