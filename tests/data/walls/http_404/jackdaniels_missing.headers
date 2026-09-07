@@ -1,0 +1,25 @@
+HTTP/1.1 404 Not Found
+Connection: keep-alive
+Content-Length: 144446
+cache-control: s-maxage=60
+content-type: text/html; charset=utf-8
+etag: "800d09w2iy33fn"
+is-node: true
+pantheon-router-instance-id: tenant-router-611854891653.us-central1.run.app
+set-cookie: STYXKEY_AGE_GATE_DESTINATION=%2Fthis-page-does-not-exist-zzz9; Path=/
+x-cache-debug: no-stale-header
+x-cloud-trace-context: be8c49ad1fad4457affe0818585bab0f
+x-nextjs-cache: HIT
+x-powered-by: Next.js
+server: Google Frontend
+Age: 0
+Accept-Ranges: bytes
+Via: 1.1 Caddy, 1.1 google, 1.1 varnish, 1.1 varnish, 1.1 varnish, 1.1 varnish
+Strict-Transport-Security: max-age=300; includeSubDomains;
+Date: Mon, 07 Sep 2026 11:47:15 GMT
+X-Served-By: cache-chi-kigq8000118-CHI, cache-icn1450064-ICN, cache-icn1450079-ICN, cache-icn1450079-ICN
+X-Cache: MISS, MISS, MISS, MISS
+X-Cache-Hits: 0, 0, 0, 0
+X-Timer: S1788781631.139612,VS0,VE3974
+Vary: Accept-Encoding, Cookie, Cookie
+

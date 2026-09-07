@@ -1,0 +1,136 @@
+# robots.txt
+
+# Sitemaps
+
+Sitemap: https://www.economist.com/sitemap.xml
+Sitemap: https://www.economist.com/googlenews.xml
+
+# ==========================================
+# USER-FACING LLM BOTS
+# Allowed to fetch on behalf of a user
+# ==========================================
+
+User-agent: ChatGPT-User
+Allow: /pro$
+Allow: /pro/
+Allow: /syndication$
+Allow: /syndication/
+Disallow: /
+
+User-agent: Claude-SearchBot
+Allow: /pro$
+Allow: /pro/
+Allow: /syndication$
+Allow: /syndication/
+Disallow: /
+
+User-agent: Claude-User
+Allow: /pro$
+Allow: /pro/
+Allow: /syndication$
+Allow: /syndication/
+Disallow: /
+
+User-agent: Claude-Web
+Allow: /pro$
+Allow: /pro/
+Allow: /syndication$
+Allow: /syndication/
+Disallow: /
+
+User-agent: PerplexityBot
+Allow: /pro$
+Allow: /pro/
+Allow: /syndication$
+Allow: /syndication/
+Disallow: /
+
+User-agent: Perplexity-User
+Allow: /pro$
+Allow: /pro/
+Allow: /syndication$
+Allow: /syndication/
+Disallow: /
+
+# I have added OAI-SearchBot (OpenAI's live search agent) 
+# as it behaves the same way as ChatGPT-User.
+User-agent: OAI-SearchBot
+Allow: /pro$
+Allow: /pro/
+Allow: /syndication$
+Allow: /syndication/
+Disallow: /
+
+# ==========================================
+# TRAINING BOTS & MASS SCRAPERS
+# Completely blocked from the entire site
+# ==========================================
+
+User-agent: GPTBot
+Disallow: /
+
+# Google-Extended is used by the Gemini app for searches on
+# behalf of the user but it also used for training
+User-agent: Google-Extended
+Allow: /pro$
+Allow: /pro/
+Allow: /syndication$
+Allow: /syndication/
+Disallow: /
+
+User-agent: anthropic-ai
+Disallow: /
+
+User-agent: Applebot-Extended
+Disallow: /
+
+User-Agent: Bytespider
+Disallow: /
+
+User-agent: CCBot
+Disallow: /
+
+User-agent: ClaudeBot
+Disallow: /
+
+# ==========================================
+# OTHER MISCELLANEOUS BOTS
+# Completely blocked
+# ==========================================
+
+User-agent: PiplBot
+Disallow: /
+
+User-agent: TurnitinBot
+Disallow: /
+
+User-agent: PetalBot
+Disallow: /
+
+User-agent: MoodleBot
+Disallow: /
+
+User-agent: magpie-crawler
+Disallow: /
+
+User-agent: ia_archiver
+Disallow: /
+
+User-Agent: Mozilla/5.0 (compatible; parse.ly scraper/0.16; +http://parsely.com)
+Disallow: /checkout
+
+# ==========================================
+# GENERAL CRAWLERS (e.g., Googlebot, Bingbot)
+# Allowed by default, but blocked from select paths
+# ==========================================
+User-agent: *
+Disallow: /5605/
+Disallow: /pubads.g.doubleclick.net/
+Disallow: /assets/infographic/
+Disallow: /search/
+Disallow: /search?q=
+Disallow: /graphql
+Disallow: /subscribe/getstarted/
+Disallow: /checkout
+Disallow: /switch*
+Disallow: /audio-edition-podcast/*/index.xml

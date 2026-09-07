@@ -1,0 +1,160 @@
+# NOTICE: Collection of content and other data on https://www.wsj.com/ through
+# automated means is prohibited unless you have express written
+# permission from Dow Jones & Company, Inc. and may only be conducted for the
+# limited purpose contained in said permission.
+#
+# Dow Jones & Company, Inc. Terms of Use may be found at
+# https://www.dowjones.com/terms-of-use/
+#
+# If you would like to apply for permission to license the
+# intellectual property and/or other materials of Dow Jones & Company, Inc.’s
+# brands, please contact us via email at copyright@dowjones.com.
+
+User-agent: *
+Disallow: /
+
+User-agent: googlebot
+User-agent: googlebot-image
+User-agent: GoogleOther
+User-agent: Googlebot-Video
+User-agent: Google-InspectionTool
+User-agent: AdsBot-Google
+User-agent: AdsBot-Google-Mobile
+User-agent: AdsBot-Google-Mobile-Apps
+User-agent: Storebot-Google
+User-agent: google-read-aloud
+User-agent: bingbot
+User-agent: msnbot
+User-agent: bingpreview
+User-agent: slurp
+User-agent: yahoo
+User-agent: baiduspider
+User-agent: Pinterestbot
+User-agent: Yeti
+User-agent: MojeekBot
+User-agent: 360Spider
+User-agent: google-cloudvertexbot
+User-agent: duckduckbot
+User-agent: Applebot
+User-agent: flipboard
+User-agent: qwantbot
+User-agent: SeznamBot
+
+
+
+User-agent: proximic
+User-agent: admantx
+User-agent: thetradedesk
+User-agent: outbrain
+User-agent: ias_crawler
+User-agent: AmazonAdBot
+User-agent: pubmatic
+User-agent: smartologybot
+User-agent: parselybot
+User-agent: BomboraBot
+User-agent: IllumaBot/1.0
+User-agent: Publication-Access-for-Facebook
+User-agent: Wallie
+
+
+User-agent: Screaming Frog SEO Spider
+User-agent: AhrefsBot
+User-agent: SemrushBot
+User-agent: SimilarWebBot
+User-agent: SISTRIX
+User-agent: botify
+User-agent: Chrome-Lighthouse
+
+
+
+User-agent: ChatGPT-User
+User-agent: GPTBot
+User-agent: OAI-SearchBot
+
+
+User-agent: facebookexternalhit
+User-agent: facebot
+User-agent: twitterbot
+User-agent: linkedinbot
+User-agent: snapchat
+User-agent: sentry
+User-agent: Iframely
+User-agent: Vocabtracker
+User-agent: EpvzCrawl6194680250
+User-agent: Citoid
+User-agent: ZoteroTranslationServer
+
+
+
+Allow: /
+Disallow: /article_email/*
+Disallow: /user/*
+Disallow: /pdf/documents/*
+Disallow: /login/*
+Disallow: /acct/*
+Disallow: /msgcenter/*
+Disallow: /setup/*
+Disallow: /marketing/*
+Disallow: /public/article/*
+Disallow: /public/resources/documents/*
+Disallow: /public/search/
+Disallow: /public/search*
+Disallow: /search*
+Disallow: /public/page/wsj-x-marketing.html
+Disallow: /public/page/news-media-marketing.html
+Disallow: /public/page/0_0_WP_RT_MARKETING.html
+Disallow: /news/articles/SB2*
+Disallow: /news/articles/SB3*
+Disallow: /news/articles/SB4*
+Disallow: /articles/SB2*
+Disallow: /articles/SB3*
+Disallow: /articles/SB4*
+Disallow: /article/AP*
+Disallow: /article/BT-CO*
+Disallow: /article/DN-CO*
+Disallow: /article/PR-CO*
+Disallow: /article/HUG*
+Disallow: /video/search/*
+Disallow: /articles/BT-CO*
+Disallow: /articles/DN-CO*
+Disallow: /articles/PR-CO*
+Disallow: /news/articles/BT-CO*
+Disallow: /news/articles/DN-CO*
+Disallow: /news/articles/PR-CO*
+Disallow: /catchup/*
+Disallow: /articles/the-meaning-behind-juneteenth-11592413234
+Disallow: /emailservice/*
+Disallow: /emailsignup/*
+Disallow: /insetsrv/v1/*
+Disallow: /user/fpd/api/*
+Disallow: /Date(*
+Disallow: /auth/sso/proxy-login*
+Disallow: /client/
+
+# For Buyside Search Results
+Disallow: /buyside/search-results?*term=*
+# Don't crawl non-indexable sites
+Disallow: /*?type=mdc_*&id=*
+Disallow: /*?id=*&type=mdc_*
+Disallow: /market-data/quotes/*/options/*
+Disallow: /subscribe/?inttrackingCode=*
+Disallow: /subscribe/?template=*
+
+User-agent: mediapartners-google
+Disallow: /
+Allow: /watchlist
+
+Sitemap: https://www.wsj.com/sitemap.xml
+Sitemap: https://www.wsj.com/wsjsitemaps/wsj_google_news.xml
+Sitemap: https://www.wsj.com/wsj_video_recent.xml
+Sitemap: https://www.wsj.com/sitemap_topics.xml
+Sitemap: https://www.wsj.com/sitemaps/web/wsj/en/sitemap_wsj_en_index.xml
+Sitemap: https://www.wsj.com/live_news_sitemap.xml
+Sitemap: https://www.wsj.com/authors_sitemap.xml
+Sitemap: https://www.wsj.com/sitemaps/web/video/en/sitemap_video_en_index.xml
+Sitemap: https://www.wsj.com/buyside/sitemap.xml
+Sitemap: https://www.wsj.com/wsj_quote_index_sitemap.xml
+Sitemap: https://www.wsj.com/wsjsitemaps/wsj_recipes.xml
+Sitemap: https://www.wsj.com/sitemap_topic_collections.xml
+
+

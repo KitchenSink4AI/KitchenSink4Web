@@ -1,0 +1,76 @@
+HTTP/1.1 302 Found
+Content-Type: text/html; charset=utf-8
+Location: /login?cont=%2Fhome
+Pragma: no-cache
+Referrer-Policy: strict-origin-when-cross-origin
+Set-Cookie: gvc=Mjc3MjU0ODE2NjQwNjk3NzQwNTIwNjc5NzQ0MzgyOTIyMDkxNjg4; Path=/; Expires=Sat, 06 Sep 2031 11:41:38 GMT; HttpOnly; Secure; SameSite=None
+Set-Cookie: t=0JYqmwV3om4O3ARCpGA7c-si; Path=/; Domain=dropbox.com; Expires=Tue, 07 Sep 2027 11:41:38 GMT; HttpOnly; Secure; SameSite=None
+Set-Cookie: __Host-js_csrf=0JYqmwV3om4O3ARCpGA7c-si; Path=/; Expires=Tue, 07 Sep 2027 11:41:38 GMT; Secure; SameSite=None
+Set-Cookie: __Host-ss=vzhW_WjpHI; Path=/; Expires=Tue, 07 Sep 2027 11:41:38 GMT; HttpOnly; Secure; SameSite=Strict
+Set-Cookie: bjar=; Path=/; Domain=dropbox.com; HttpOnly; Secure; SameSite=None
+Set-Cookie: blid=; Path=/; Domain=dropbox.com; HttpOnly; Secure; SameSite=None
+Set-Cookie: lid=; Path=/; Domain=www.dropbox.com; HttpOnly; Secure; SameSite=None
+Set-Cookie: jar=; Path=/; Domain=www.dropbox.com; HttpOnly; Secure; SameSite=None
+Set-Cookie: slid=; Path=/; Domain=www.dropbox.com; HttpOnly; Secure; SameSite=None
+Set-Cookie: sjar=; Path=/; Domain=www.dropbox.com; HttpOnly; Secure; SameSite=None
+Set-Cookie: sjar-exists=; Path=/; Domain=www.dropbox.com; Secure; SameSite=Strict
+Set-Cookie: sid=; Path=/; Domain=www.dropbox.com; HttpOnly; Secure; SameSite=Strict
+Set-Cookie: sidd=; Path=/; Domain=www.dropbox.com; HttpOnly; Secure; SameSite=None
+Set-Cookie: sidds=; Path=/; Domain=www.dropbox.com; HttpOnly; Secure; SameSite=Strict
+Set-Cookie: sid-exists=; Path=/; Domain=www.dropbox.com; Secure; SameSite=Strict
+Set-Cookie: refresh=; Path=/; Domain=www.dropbox.com; HttpOnly; Secure; SameSite=Strict
+Set-Cookie: oscar=; Path=/; Domain=www.dropbox.com; HttpOnly; Secure; SameSite=None
+Set-Cookie: grouch=; Path=/; Domain=www.dropbox.com; HttpOnly; Secure; SameSite=None
+Set-Cookie: baklawa=; Path=/; Domain=dropbox.com; HttpOnly; Secure; SameSite=None
+Set-Cookie: malabi=; Path=/; Domain=dropbox.com; HttpOnly; Secure; SameSite=None
+Set-Cookie: __Secure-reseller_session=; Path=/; Domain=dropbox.com; HttpOnly; Secure; SameSite=None
+Set-Cookie: sm_auth=; Path=/; Domain=dropbox.com; HttpOnly; Secure; SameSite=None
+Set-Cookie: rl_auth=; Path=/; Domain=dropbox.com; HttpOnly; Secure; SameSite=None
+Set-Cookie: toaster=; Path=/; Domain=www.dropbox.com; HttpOnly; Secure; SameSite=None
+Set-Cookie: giraffe=; Path=/; Domain=www.dropbox.com; HttpOnly; Secure; SameSite=None
+Set-Cookie: db-help-center-uid=; Path=/; Domain=dropbox.com; HttpOnly; Secure; SameSite=None
+Set-Cookie: __Host-logged-out-session=; Path=/; HttpOnly; Secure; SameSite=None
+Set-Cookie: __Secure-untrusted_session=; Path=/; Domain=dropbox.com; HttpOnly; Secure; SameSite=None
+Set-Cookie: preauth=; Path=/; Domain=www.dropbox.com; HttpOnly; Secure; SameSite=None
+Set-Cookie: toast=1:er%3APlease%20sign%20in%20or%20register%20to%20access%20this%20page.:mr5wHSynrCJWn5q7eZ5S9xkGGn2dLwp%2BxpDhFG5xF6s%3D; Path=/; Domain=dropbox.com; Secure; SameSite=None
+X-Content-Type-Options: nosniff
+X-Permitted-Cross-Domain-Policies: none
+X-Robots-Tag: noindex, nofollow, noimageindex
+X-Xss-Protection: 1; mode=block
+Content-Length: 42
+Date: Mon, 07 Sep 2026 11:41:38 GMT
+Strict-Transport-Security: max-age=31536000; includeSubDomains
+Server: envoy
+Cache-Control: no-cache, no-store
+Alt-Svc: h3=":443"; ma=86400, h3-29=":443"; ma=86400
+X-Dropbox-Response-Origin: far_remote
+X-Dropbox-Request-Id: 8fbd9e2ae3484976abfa553c6a9ea2f2
+
+HTTP/1.1 200 OK
+Content-Security-Policy: base-uri 'self'; child-src https://www.dropbox.com/static/serviceworker/ blob:; connect-src https://* ws://127.0.0.1:*/ws blob: wss://dsimports.dropbox.com/; default-src 'none'; font-src 'self' data: https://*; form-action 'self' https://www.dropbox.com/ https://dl-web.dropbox.com/ https://photos.dropbox.com/ https://paper.dropbox.com/ https://showcase.dropbox.com/ https://www.hellofax.com/ https://app.hellofax.com/ https://www.hellosign.com/ https://app.hellosign.com/ https://docsend.com/ https://www.docsend.com/ https://help.dropbox.com/ https://navi.dropbox.jp/ https://a.sprig.com/ https://selfguidedlearning.dropboxbusiness.com/ https://instructorledlearning.dropboxbusiness.com/ https://sales.dropboxbusiness.com/ https://accounts.google.com/ https://api.login.yahoo.com/ https://login.yahoo.com/ https://experience.dropbox.com/ https://pal-test.adyen.com https://2e83413d8036243b-Dropbox-pal-live.adyenpayments.com/ https://onedrive.live.com/picker https://*.sharepoint.com/; frame-ancestors 'self'; frame-src https://* dbapi-6: dbapi-7: dbapi-8: dropbox-client: itms-apps: itms-appss: blob:; img-src https://* data: blob:; media-src https://* blob:; object-src 'self' https://cfl.dropboxstatic.com/static/ https://www.dropboxstatic.com/static/ https://edge-live.dropboxstatic.com/static/; report-to csp-metaserver-whitelist; report-uri https://www.dropbox.com/csp_log?policy_name=metaserver-whitelist; script-src 'unsafe-eval' 'inline-speculation-rules' https://www.dropbox.com/static/api/ https://www.dropbox.com/pithos/ https://cfl.dropboxstatic.com/static/ https://www.dropboxstatic.com/static/ https://edge-live.dropboxstatic.com/static/ https://accounts.google.com/gsi/client https://reveal.clearbit.com/v1/companies/reveal https://www.paypal.com/sdk/js https://applepay.cdn-apple.com https://snippet.meticulous.ai/record/ https://edge.cofra.me/cf-static-97646a4fe3e6.js https://edge.cofra.me/cf-static-4d85f2a0ba2d.js 'nonce-c9ycqLD2G1Lz4InUv5+rJU82UxI='; style-src https://* 'unsafe-inline' 'unsafe-eval'; worker-src https://www.dropbox.com/static/serviceworker/ https://www.dropbox.com/encrypted_folder_download/service_worker.js https://www.dropbox.com/service_worker.js blob:
+Content-Security-Policy: report-to csp-metaserver-dynamic; report-uri https://www.dropbox.com/csp_log?policy_name=metaserver-dynamic; script-src 'unsafe-eval' 'strict-dynamic' 'nonce-c9ycqLD2G1Lz4InUv5+rJU82UxI=' 'nonce-aIh8nvXnqDQYqKLqmOKYm5bIQW4='
+Content-Type: text/html; charset=utf-8
+Cross-Origin-Opener-Policy: same-origin-allow-popups
+Pragma: no-cache
+Referrer-Policy: strict-origin-when-cross-origin
+Reporting-Endpoints: coop-dws2="https://www.dropbox.com/csp_log?policy_name=coop-dws2", max_age=10886400, csp-metaserver-whitelist="https://www.dropbox.com/csp_log?policy_name=metaserver-whitelist", max_age=10886400, csp-metaserver-dynamic="https://www.dropbox.com/csp_log?policy_name=metaserver-dynamic", max_age=10886400
+Set-Cookie: gvc=Mjg3NTU2MTg4NzE5OTA5NTIzNTI4NTk0NTMzNzI4NzEwOTgwOTc2; Path=/; Expires=Sat, 06 Sep 2031 11:41:38 GMT; HttpOnly; Secure; SameSite=None
+Set-Cookie: t=VpJvfPJMuKc8t4zgNi1bF0Hc; Path=/; Domain=dropbox.com; Expires=Tue, 07 Sep 2027 11:41:38 GMT; HttpOnly; Secure; SameSite=None
+Set-Cookie: __Host-js_csrf=VpJvfPJMuKc8t4zgNi1bF0Hc; Path=/; Expires=Tue, 07 Sep 2027 11:41:38 GMT; Secure; SameSite=None
+Set-Cookie: __Host-ss=bfyv-rBKNU; Path=/; Expires=Tue, 07 Sep 2027 11:41:38 GMT; HttpOnly; Secure; SameSite=Strict
+Set-Cookie: locale=en; Path=/; Domain=dropbox.com; Expires=Sat, 06 Sep 2031 11:41:38 GMT
+X-Content-Type-Options: nosniff
+X-Frame-Options: SAMEORIGIN
+X-Permitted-Cross-Domain-Policies: none
+X-Xss-Protection: 1; mode=block
+Date: Mon, 07 Sep 2026 11:41:38 GMT
+Strict-Transport-Security: max-age=31536000; includeSubDomains
+Server: envoy
+Cache-Control: no-cache, no-store
+Alt-Svc: h3=":443"; ma=86400, h3-29=":443"; ma=86400
+Content-Encoding: gzip
+Vary: Accept-Encoding
+X-Dropbox-Response-Origin: far_remote
+X-Dropbox-Request-Id: 5da525b913e142e0bf2e186b6a9ea2f2
+Transfer-Encoding: chunked
+

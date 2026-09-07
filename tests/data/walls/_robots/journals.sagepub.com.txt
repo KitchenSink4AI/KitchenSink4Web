@@ -1,0 +1,60 @@
+Sitemap: https://journals.sagepub.com/sitemap-index-1.xml
+User-agent: *
+Disallow: /action
+Disallow: /help
+Disallow: /search
+Disallow: /feedback
+Disallow: /rss
+Disallow: /page/account-confirmation-thanks
+Disallow: /media
+Disallow: /medical-research
+Disallow: /servlet/linkout
+Disallow: /na101/
+Disallow: /na101v1/
+Disallow: /na102/
+Disallow: /doi/mlt/
+Disallow: /topic
+Disallow: /author/
+Disallow: /doi/metrics/
+Disallow: /authored-by/
+Disallow: /history/
+Allow: /action/showJournal
+Allow: /action/showPublications
+Allow: /action/showXml
+Allow: /action/showTopic
+Allow: /action/showBook
+Allow: /action/showCoverImage
+Allow: /topic/collection
+Allow: /topic/section
+Allow: /topic/sgo-subjects/
+Allow: /.well-known/*
+Crawl-delay: 1
+
+User-agent: facebookexternalhit
+User-agent: LinkedInBot
+User-agent: Twitterbot
+Allow: /
+Crawl-delay: 1
+
+User-agent: Baiduspider
+Disallow: /
+Allow: /na101/*cover*.png$
+Allow: /na101/*cover*.jpg$
+Allow: /na101v1/*cover*.png$
+Allow: /na101v1/*cover*.jpg$
+Allow: /na102/*cover*.png$
+Allow: /na102/*cover*.jpg$
+Crawl-delay: 1
+
+User-agent: GPTBot
+Disallow: /
+Crawl-delay: 1
+
+User-agent: CCBot
+Disallow: /
+Crawl-delay: 1
+
+User-agent: Google-Extended
+Disallow: /
+Crawl-delay: 1
+

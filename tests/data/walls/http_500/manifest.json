@@ -1,0 +1,63 @@
+[
+  {
+    "url": "https://httpbin.org/status/500",
+    "fetched_utc": "2026-09-07T11:45:28Z",
+    "fetched_kst": "2026-09-07T20:45:28+09:00",
+    "category": "http_500",
+    "http_status": 500,
+    "status_chain": [
+      "500"
+    ],
+    "final_url": "https://httpbin.org/status/500",
+    "content_length": 0,
+    "robots_allowed": true,
+    "markers": [
+      "500"
+    ],
+    "distinguishing_from": "SYNTHETIC, zero-byte body. Only the status line carries information.",
+    "body_text_chars": 0,
+    "status": "collected",
+    "files": {
+      "html": "httpbin_500.html",
+      "headers": "httpbin_500.headers"
+    },
+    "notes": "Pairs with mockhttpstatus_500 to show that 500 bodies range from nothing at all to a one-line string.",
+    "synthetic_endpoint": true
+  },
+  {
+    "url": "https://mock.httpstatus.io/500",
+    "fetched_utc": "2026-09-07T11:46:04Z",
+    "fetched_kst": "2026-09-07T20:46:04+09:00",
+    "category": "http_500",
+    "http_status": 500,
+    "status_chain": [
+      "500"
+    ],
+    "final_url": "https://mock.httpstatus.io/500",
+    "content_length": 25,
+    "robots_allowed": true,
+    "markers": [
+      "500 Internal Server Error"
+    ],
+    "distinguishing_from": "SYNTHETIC. 25-byte body containing only the status text, no HTML tags at all, so an HTML parser yields nothing to match on.",
+    "body_text_chars": 25,
+    "status": "collected",
+    "files": {
+      "html": "mockhttpstatus_500.html",
+      "headers": "mockhttpstatus_500.headers"
+    },
+    "notes": "Smallest fixture in the corpus. Useful for testing that the classifier does not crash on non-HTML bodies.",
+    "synthetic_endpoint": true
+  },
+  {
+    "slug": "real_500",
+    "status": "not_collected",
+    "url": "n/a",
+    "category": "http_500",
+    "robots_allowed": "not_checked",
+    "markers": [],
+    "http_status": null,
+    "distinguishing_from": "n/a",
+    "notes": "No genuine 5xx occurred across ~37 fetches to 25 hosts, which is itself a finding: real server errors are rare enough on major sites that they cannot be scheduled. Collect opportunistically from production traffic."
+  }
+]

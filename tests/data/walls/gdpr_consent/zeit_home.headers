@@ -1,0 +1,17 @@
+HTTP/1.1 200 
+Connection: keep-alive
+accept-ranges: none
+set-cookie: creid=1875673333366842929; expires=Thu, 31-Dec-37 23:55:55 GMT; domain=.zeit.de; path=/; SameSite=Lax; Secure
+traceparent: 00-badcfe32b73c943436c4cab8a7861b9d-403a2775ba8a07b8-01 00-badcfe32b73c943436c4cab8a7861b9d-7dea3ae539eb9ebb-01
+date: Mon, 07 Sep 2026 11:43:29 GMT
+content-type: text/html; charset=UTF-8
+expires: Mon, 07 Sep 2026 11:43:25 GMT
+last-modified: Mon, 07 Sep 2026 11:43:25 GMT
+pragma: no-cache
+cache-control: max-age=0, must-revalidate, no-cache, no-store
+vary: accept-encoding, user-agent
+content-security-policy: upgrade-insecure-requests;
+x-served-by: cache-icn1450041-ICN
+content-encoding: br
+transfer-encoding: chunked
+

@@ -1,0 +1,110 @@
+[
+  {
+    "url": "https://github.com/settings/profile",
+    "fetched_utc": "2026-09-07T11:42:49Z",
+    "fetched_kst": "2026-09-07T20:42:49+09:00",
+    "category": "login_required",
+    "http_status": 200,
+    "status_chain": [
+      "302",
+      "200"
+    ],
+    "final_url": "https://github.com/login?return_to=https%3A%2F%2Fgithub.com%2Fsettings%2Fprofile",
+    "content_length": 46791,
+    "robots_allowed": true,
+    "markers": [
+      "return_to",
+      "Sign in to GitHub",
+      "login_field",
+      "password"
+    ],
+    "distinguishing_from": "CANONICAL login wall: the request URL and the final URL differ, and the final URL contains a return parameter pointing back at the original. That redirect-with-return-param shape is the single most reliable login signal in this corpus.",
+    "body_text_chars": 614,
+    "status": "collected",
+    "files": {
+      "html": "github_settings.html",
+      "headers": "github_settings.headers"
+    },
+    "notes": "HTTP 200 at the END of the chain. Status code is useless; the redirect chain is everything."
+  },
+  {
+    "url": "https://www.dropbox.com/home",
+    "fetched_utc": "2026-09-07T11:41:38Z",
+    "fetched_kst": "2026-09-07T20:41:38+09:00",
+    "category": "login_required",
+    "http_status": 200,
+    "status_chain": [
+      "302",
+      "200"
+    ],
+    "final_url": "https://www.dropbox.com/login?cont=%2Fhome",
+    "content_length": 88465,
+    "robots_allowed": true,
+    "markers": [
+      "<title>Login or Sign Up for a Dropbox Account</title>",
+      "Location: /login?cont=%2Fhome"
+    ],
+    "distinguishing_from": "Same shape as github_settings (302 to /login with a continuation param). body_text_chars is 38, near zero, because the login UI is client-rendered, so an emptiness heuristic would confuse this with a broken page.",
+    "body_text_chars": 38,
+    "status": "collected",
+    "files": {
+      "html": "dropbox_home.html",
+      "headers": "dropbox_home.headers"
+    },
+    "notes": "Best example of a login wall whose HTML carries almost no text. Classify from the Location header and the title, not the body."
+  },
+  {
+    "url": "https://journals.sagepub.com/doi/10.1177/00000000000000000",
+    "fetched_utc": "2026-09-07T11:46:16Z",
+    "fetched_kst": "2026-09-07T20:46:16+09:00",
+    "category": "login_required",
+    "http_status": 200,
+    "status_chain": [
+      "302",
+      "302",
+      "200"
+    ],
+    "final_url": "https://journals.sagepub.com/action/cookieAbsent",
+    "content_length": 56348,
+    "robots_allowed": true,
+    "markers": [
+      "cookieAbsent",
+      "Sage Journals"
+    ],
+    "distinguishing_from": "vs http_404: a nonexistent DOI was requested, and instead of 404 the site redirected twice to a SESSION-COOKIE interstitial and returned 200. Neither the requested resource's absence nor a login requirement is stated anywhere.",
+    "body_text_chars": 3146,
+    "status": "collected",
+    "files": {
+      "html": "sagepub_cookie_absent.html",
+      "headers": "sagepub_cookie_absent.headers"
+    },
+    "notes": "IMPORTANT EDGE CASE. The same host returned a normal 200 article for a valid DOI in this same run, so /action/cookieAbsent is not a blanket wall. Demonstrates that one host can serve several wall types depending on path validity and cookie state."
+  },
+  {
+    "url": "https://app.slack.com/client",
+    "fetched_utc": "2026-09-07T11:41:35Z",
+    "fetched_kst": "2026-09-07T20:41:35+09:00",
+    "category": "login_required",
+    "http_status": 200,
+    "status_chain": [
+      "200"
+    ],
+    "final_url": "https://app.slack.com/client",
+    "content_length": 38579,
+    "robots_allowed": true,
+    "markers": [
+      "Please update your browser",
+      "Find your workspace",
+      "Sign in",
+      "Create a new workspace"
+    ],
+    "distinguishing_from": "WEAK SAMPLE, kept deliberately. This is a browser-capability interstitial that also offers sign-in, not a true auth redirect. A classifier keying on 'Sign in' alone will call this login_required; keying on a redirect-with-return-param will correctly not.",
+    "body_text_chars": 912,
+    "status": "collected",
+    "files": {
+      "html": "slack_app_client.html",
+      "headers": "slack_app_client.headers"
+    },
+    "notes": "HTTP 200, no redirect, 912 visible-text chars. Use as a hard case rather than a clean positive."
+  }
+]

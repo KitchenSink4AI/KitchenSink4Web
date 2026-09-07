@@ -1,0 +1,70 @@
+User-agent: PiplBot
+Disallow: /
+
+# AI data scrapers from Known Agents:
+# https://knownagents.com/agents?agent_type_url_slug=ai-data-scraper
+User-agent: AI2Bot
+User-agent: Ai2Bot-Dolma
+User-agent: Amazonbot
+User-agent: Applebot-Extended
+User-agent: bedrockbot
+User-agent: Bytespider
+User-agent: CCBot
+User-agent: ChatGLM-Spider
+User-agent: ClaudeBot
+User-agent: CloudVertexBot
+User-agent: cohere-training-data-crawler
+User-agent: CohereBot
+User-agent: Cotoyogi
+User-agent: Datenbank Crawler
+User-agent: DeepSeekBot
+User-agent: Doubaobot
+User-agent: ERNIEBot
+User-agent: FacebookBot
+User-agent: Google-Extended
+User-agent: GoogleOther
+User-agent: GPTBot
+User-agent: ICC-Crawler
+User-agent: imageSpider
+User-agent: Kangaroo Bot
+User-agent: KimiBot
+User-agent: KimiCrawler
+User-agent: laion-huggingface-processor
+User-agent: LCC
+User-agent: meta-externalagent
+User-agent: micro-crawl
+User-agent: MistralBot
+User-agent: MoonshotBot
+User-agent: MoonSpider
+User-agent: netEstate Imprint Crawler
+User-agent: omgili
+User-agent: PanguBot
+User-agent: QwenBot
+User-agent: SalamandraVLM
+User-agent: SBIntuitionsBot
+User-agent: Spider
+User-agent: Timpibot
+User-agent: VelenPublicWebCrawler
+User-agent: webzio-extended
+Disallow: /
+
+User-agent: bingbot
+User-agent: deepcrawl
+User-agent: Googlebot
+Disallow: /api/v1/playback/
+Disallow: /api/v1/event/
+Disallow: /api/v1/action/
+Sitemap: https://www.pandora.com/sitemap-index.xml
+Sitemap: https://web-cdn.pandora.com/pandora-sitemap/sitemap-index.xml
+Allow: /api/v1/auth/anonymousLogin
+Disallow: /restricted
+Disallow: /content/
+Disallow: /backstage/
+
+User-agent: *
+Sitemap: https://www.pandora.com/sitemap-index.xml
+Sitemap: https://web-cdn.pandora.com/pandora-sitemap/sitemap-index.xml
+Disallow: /restricted
+Disallow: /content/
+Disallow: /backstage/
+Disallow: /api/

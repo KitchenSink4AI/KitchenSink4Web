@@ -1,0 +1,113 @@
+# Google / Bing Search Engine Robots
+# ==================================
+# Shared group so Googlebot and Bingbot always get the same rules.
+User-agent: Googlebot
+User-agent: Bingbot
+
+Allow: /*?s=
+Allow: /*?t=
+Allow: /*?ref_src=
+Allow: /hashtag/*?src=
+Allow: /search?q=%23
+Allow: /i/api/
+# Same length as the /*/likes and /*/media rules; RFC 9309 breaks the tie in
+# favor of Allow, so /i/api/ fetches stay crawlable.
+Allow: /i/api/*
+Disallow: /*?lang=en-ss
+Allow: /*?lang=
+Disallow: /search/realtime
+Disallow: /search/users
+Disallow: /search/*/grid
+
+Disallow: /*/analytics
+Disallow: /*/followers
+Disallow: /*/following
+Disallow: /*/verified_followers
+
+Disallow: /account/deactivated
+Disallow: /settings/deactivated
+
+# Only `*` and `$` are metacharacters here (RFC 9309); regex classes match
+# literally. /photo is anchored so /status/*/photo/1 media pages stay open.
+Disallow: /*/likes
+Disallow: /*/likes?
+Disallow: /*/retweets
+Disallow: /*/retweets?
+Disallow: /*/media
+Disallow: /*/media?
+Disallow: /*/photo$
+Disallow: /*/photo?
+Allow: /*?
+
+User-agent: facebookexternalhit
+
+Allow: /*?lang=
+Allow: /*?s=
+Allow: /*?t=
+Allow: /*?ref_src=
+Allow: /hashtag/*?src=
+Allow: /search?*cashtagRestId=
+Allow: /i/api/
+Allow: /i/api/*
+Disallow: /search?q=
+Disallow: /search/realtime
+Disallow: /search/users
+Disallow: /search/*/grid
+
+Disallow: /*?
+Disallow: /*/followers
+Disallow: /*/following
+Disallow: /*/verified_followers
+
+Disallow: /account/deactivated
+Disallow: /settings/deactivated
+
+Disallow: /*/likes
+Disallow: /*/likes?
+Disallow: /*/retweets
+Disallow: /*/retweets?
+Disallow: /*/media
+Disallow: /*/media?
+Disallow: /*/photo$
+Disallow: /*/photo?
+
+User-Agent: Google-Extended
+Disallow: *
+
+User-Agent: FacebookBot
+Disallow: *
+
+User-agent: Discordbot
+Disallow: *
+
+# Meta AI / product crawlers (product tokens; versions like /1.1 are ignored
+# under RFC 9309 token matching).
+User-agent: meta-webindexer
+Disallow: *
+
+User-agent: meta-externalagent
+Disallow: *
+
+User-agent: meta-externalads
+Disallow: *
+
+User-agent: meta-externalfetcher
+Disallow: *
+
+# Every bot that might possibly read and respect this file
+# ========================================================
+User-agent: *
+Disallow: /
+
+
+# WHAT-4882 - Keep notification-email links (/i/u) out of search results.
+# Named crawlers stay un-blocked on purpose: they must crawl /i/u to see its
+# X-Robots-Tag noindex (the robots.txt Noindex directive died in 2019).
+Disallow: /i/u
+
+# Wait 1 second between successive requests. See ONBOARD-2698 for details.
+Crawl-delay: 1
+
+# Independent of user agent. Links in the sitemap are full URLs using https://
+# and need to match the protocol of the sitemap.
+Sitemap: https://x.com/sitemap.xml

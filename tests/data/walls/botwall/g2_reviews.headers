@@ -1,0 +1,25 @@
+HTTP/1.1 403 Forbidden
+Date: Mon, 07 Sep 2026 11:44:49 GMT
+Content-Type: text/html;charset=utf-8
+Transfer-Encoding: chunked
+Connection: keep-alive
+Access-Control-Allow-Origin: *
+Cache-Control: max-age=0, private, no-cache, no-store, must-revalidate
+Vary: accept-encoding
+Pragma: no-cache
+Accept-CH: Sec-CH-UA,Sec-CH-UA-Mobile,Sec-CH-UA-Platform,Sec-CH-UA-Arch,Sec-CH-UA-Full-Version-List,Sec-CH-UA-Model,Sec-CH-Device-Memory
+Access-Control-Allow-Credentials: true
+Access-Control-Expose-Headers: x-dd-b, x-set-cookie
+Charset: utf-8
+X-DD-B: 259
+X-DataDome: protected
+X-DataDome-CID: AHrlqAAAAAMAukf54n5b91MA0_hS5A==
+Strict-Transport-Security: max-age=15552000; includeSubDomains; preload
+X-Content-Type-Options: nosniff
+Set-Cookie: datadome=D_xY05fPR~ol~_7bTElYMzB4b8K7eNPQBCi5knD0Fqvhrv861DDtZ9URruzsXUGXCy81IJM98r20SBBH9eA6dcmXrtTUR1O6tt7uXvwGAIjZHinuEGf58GUitVs_S6b1; Max-Age=31536000; Domain=.g2.com; Path=/; Secure; SameSite=None
+set-cookie: __cf_bm=tn0hz_.eyigSs6y.t_MAiUBOOnKWe61SC0y57E_R6tc-1788781489.9018548-1.0.1.1-ZAF2rbDJKpOkQwiANK8l0e5SMIy_6Vzl3oP9RpBeE0TNNi.24BIJXpManw0KVScbKvdH1HB_Ok4urJAikoYsSPz8KabhWB89rA.VUi8oTFIZDjU66g4WikKrXlZxg7_x; HttpOnly; SameSite=None; Secure; Path=/; Domain=g2.com; Expires=Mon, 07 Sep 2026 12:14:49 GMT
+Content-Encoding: br
+Server: cloudflare
+CF-RAY: a37576b7edd6de6f-ICN
+alt-svc: h3=":443"; ma=86400
+

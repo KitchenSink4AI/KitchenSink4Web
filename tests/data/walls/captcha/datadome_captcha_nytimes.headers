@@ -1,0 +1,46 @@
+HTTP/1.1 403 Forbidden
+Connection: close
+Content-Length: 771
+content-type: text/html;charset=utf-8
+x-datadome-cid: AHrlqAAAAAMAgV4Byd_lJ-AA0_hS5A==
+server: DataDome
+charset: utf-8
+pragma: no-cache
+cache-control: max-age=0, private, no-cache, no-store, must-revalidate
+accept-ranges: bytes
+x-datadome: protected
+set-cookie: datadome=TSHVPzld7V_EKHIu130rEsG0IeqpiN3BRP26uvRQ7yQQGtURiuHQCj~n80MnZrdxBaMv4AX4LH9FwGx5PdSCmPceOw_rKZxFcqmCFXgPlG2xExqL2ej6sjzIyFo9M5F2; Max-Age=31536000; Domain=www.nytimes.com; Path=/; Secure; SameSite=Lax
+x-timer: S1788781162.693039,VS0,VE8
+accept-ch: Sec-CH-UA,Sec-CH-UA-Mobile,Sec-CH-UA-Platform,Sec-CH-UA-Arch,Sec-CH-UA-Full-Version-List,Sec-CH-UA-Model,Sec-CH-Device-Memory
+x-dd-b: 1
+x-datadome-riskscore: 0.874769287384864
+x-datadome-timer: S1788781162.683453,VS0,VE37
+X-Origin-Time: 2026-09-07 11:39:21 UTC
+Date: Mon, 07 Sep 2026 11:39:21 GMT
+X-Served-By: cache-icn1450089-ICN, cache-icn1450089-ICN, cache-icn1450035-ICN
+X-Cache: MISS, MISS
+X-Cache-Hits: 0, 0
+Vary: Fastly-SSL
+Set-Cookie: nyt-a=pX8xXzuJf1nbgB0oUvUCpW; Expires=Tue, 07 Sep 2027 11:39:21 GMT; Path=/; Domain=.nytimes.com; SameSite=none; Secure
+Set-Cookie: nyt-gdpr=0; Expires=Mon, 07 Sep 2026 17:39:21 GMT; Path=/; Domain=.nytimes.com
+x-gdpr: 0
+Set-Cookie: nyt-purr=cfhhcfhhhukfhufshgas2fdndd; Expires=Tue, 07 Sep 2027 11:39:21 GMT; Path=/; Domain=.nytimes.com; SameSite=Lax; Secure
+Permissions-Policy: browsing-topics=()
+Set-Cookie: nyt-us=0; Expires=Mon, 07 Sep 2026 17:39:21 GMT; Path=/; Domain=.nytimes.com
+Set-Cookie: nyt-geo=KR; Expires=Mon, 07 Sep 2026 17:39:21 GMT; Path=/; Domain=.nytimes.com
+X-Frame-Options: DENY
+Set-Cookie: nyt.et.dd=iv=B1843098440C424B8D89EB2ADF3BA445&val=xOQ2zsrcCw2IQuxS5C4k47PJQyAdr2JwNPARrthPq5Fp0JIjf/kbqXKHTuU679Uz1fmfmwyXszi06FGRKntnU4CMp3cHbInv8VWfrsDezJ4f9YVP+bBD93HDK06E5IieV3c/RDQ1yixyaHVmKn62PEaZuQV0cirGZdg69nEJUXtX55VmdRU995tGeeejaDOsAWxA3m8pUUJoGaBlaZ+esUzYiM/IvyohyL120MkOnwcub/7cZCCcLQcnc+e44HJg7LumgVBwOzoPCZ9npWz6OdTfkMuL+vVejA1eLzI1lTIQImEPJyAhBLI4Nzf4eAp7+PpuHEM0FF2oKGj6HXjHDP63S+eey/4b4SlQ9KT+2EENfoAwVdQs/RqiN5qASDuB/2YkTauSnCBWcxlN3raYmw==; Max-Age=60; Path=/; Domain=.nytimes.com; SameSite=none; Secure
+Set-Cookie: datadome=0; Domain=.nytimes.com; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax; Secure
+Set-Cookie: nyt-s-present=0; Path=/; Domain=.nytimes.com; Expires=Mon, 07 Sep 2026 11:39:24 GMT
+X-API-Version: F-X
+x-nyt-route: vi-story
+Content-Security-Policy: upgrade-insecure-requests; default-src data: 'unsafe-inline' 'unsafe-eval' https: nytresource:; script-src data: 'unsafe-inline' 'unsafe-eval' https: blob: nytresource:; style-src data: 'unsafe-inline' https: nytresource:; img-src data: https: blob: android-webview-video-poster: nytresource:; font-src data: https: nytresource:; connect-src data: https: wss: blob: nytresource:; media-src data: https: blob: nytresource:; object-src https:; child-src https: data: blob: nytresource:; form-action https: nytimes: nytcooking: nytxwd:; report-uri https://csp.nytimes.com/report;
+Strict-Transport-Security: max-age=63072000; includeSubDomains; preload
+Access-Control-Expose-Headers: X-Nyt-Mktg-Group
+x-nyt-mktg-group: group6
+Set-Cookie: nyt-traceid=000000000000000064731806bc3b3444; Path=/; Domain=.nytimes.com; SameSite=none; Secure
+x-nyt-edge-cache: MISS
+x-nyt-app-webview: 0
+x-nyt-app-map: webview=false,preloaded=false,service-worker-enabled=false
+Access-Control-Allow-Headers: traceparent, tracestate, X-B3-Sampled, X-B3-SpanId, X-B3-TraceId, x-datadog-origin, x-datadog-parent-id, x-datadog-sampling-priority, x-datadog-trace-id, x-nyt-entitlements, x-nyt-internal-meter-override
+

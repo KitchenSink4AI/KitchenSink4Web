@@ -1,0 +1,68 @@
+# This is the robots.txt file for thetimes.co.uk 
+# The Times does not permit the unlicensed use of our content for large language models. Contact enquiries@newslicensing.co.uk for assistance.
+
+
+User-agent: *
+Disallow: /
+
+
+User-agent: Googlebot
+User-agent: Googlebot-Image
+User-agent: Googlebot-Video
+User-agent: Googlebot-News
+User-agent: Google-InspectionTool
+User-agent: GoogleOther
+User-agent: APIs-Google
+User-agent: Mediapartners-Google
+User-agent: DuckDuckBot
+User-agent: Slurp
+User-agent: Twitterbot
+User-agent: Bingbot
+User-agent: adidxbot
+User-agent: MicrosoftPreview
+User-agent: Applebot
+User-agent: AdsBot-Google
+User-agent: AmazonAdBot
+User-agent: facebookexternalhit
+User-agent: Yahoo Ad Monitoring
+User-agent: parse.ly scraper
+User-agent: Screaming Frog SEO Spider
+User-agent: SemrushBot
+User-agent: Botify
+User-agent: OnCrawl
+User-agent: Chrome-Lighthouse
+User-agent: Slackbot-LinkExpanding
+User-agent: Slack-ImgProxy
+User-agent: Slackbot
+User-agent: Snap URL Preview Service
+User-agent: proximic
+User-agent: GumGum-Bot
+User-agent: TTD-Content
+User-agent: Pubmatic 
+User-agent: ias_crawler
+User-agent: outbrain
+User-agent: Leikibot
+User-agent: weborama-fetcher
+User-agent: AHC/2.1
+User-agent: SirdataBot
+User-agent: peer39_crawler/1.0
+User-agent: EchoboxBot/1.0
+User-agent: CriteoBot/0.1
+User-agent: AdDefend Site Context Crawler/1.0
+User-agent: SmartologyBot
+User-agent: Dianomi
+User-agent: ChatGPT-User
+User-agent: GPTBot
+User-agent: OAI-SearchBot
+
+
+Allow: /
+
+Disallow: /api/
+Disallow: /archive/page/
+Disallow: /archive/article/
+Disallow: /archive/find/
+Disallow: /tto/archive/article/
+Disallow: /tto/archive/find/
+Disallow: /tto/archive/frame/article/
+Disallow: /tto/archive/page/

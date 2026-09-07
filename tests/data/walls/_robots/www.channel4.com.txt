@@ -1,0 +1,114 @@
+Sitemap: https://www.channel4.com/news/sitemap.xml
+Sitemap: https://www.channel4.com/sitemap.xml
+
+User-agent: *
+Disallow: /news/?*
+Disallow: /news/*/?*
+Disallow: /press/unregistered-image-search?*
+Disallow: /press/content-search?*
+
+User-agent: AdsBot-Google
+Allow: /
+
+User-agent: Googlebot
+Allow: /
+
+User-agent: TurnitinBot
+Disallow: /
+
+User-agent: CCBot
+Disallow: /
+Allow: /press/
+
+User-agent: ClaudeBot
+Disallow: /
+Allow: /press/
+
+User-agent: Claude-Web
+Disallow: /
+Allow: /press/
+
+User-agent: anthropic-ai
+Disallow: /
+Allow: /press/
+
+User-agent: cohere-ai
+Disallow: /
+Allow: /press/
+
+User-agent: Bytespider
+Disallow: /
+Allow: /press/
+
+User-agent: PetalBot
+Disallow: /
+Allow: /press/
+
+User-agent: Applebot-Extended
+Disallow: /
+Allow: /press/
+
+User-agent: GPTBot
+Disallow: /
+Allow: /press/
+
+User-Agent: omgili
+Disallow: /
+Allow: /press/
+
+User-agent: ChatGPT-User
+Disallow: /
+Allow: /press/
+
+User-agent: Google-Extended
+Disallow: /
+Allow: /press/
+
+User-Agent: PerplexityBot
+Disallow: /
+Allow: /press/
+
+User-agent: Google-CloudVertexBot
+Disallow: /
+Allow: /press/
+
+User-agent: meta-externalagent
+Disallow: /
+Allow: /press/
+
+User-agent: OAI-SearchBot
+Disallow: /
+Allow: /press/
+
+User-agent: YandexAdditional
+Disallow: /
+Allow: /press/
+
+User-agent: YandexAdditionalBot
+Disallow: /
+Allow: /press/
+
+User-agent: DuckAssistBot
+Disallow: /
+Allow: /press/
+
+User-agent: Amzn-SearchBot
+Disallow: /
+Allow: /press/
+
+User-agent: Amzn-User
+Disallow: /
+Allow: /press/
+
+User-agent: ProRataInc
+Disallow: /
+Allow: /press/
+
+User-agent: CloudflareBrowserRenderingCrawler
+Disallow: /
+Allow: /press/
+
+User-agent: AhrefsBot
+Disallow: /
+Allow: /press/
+

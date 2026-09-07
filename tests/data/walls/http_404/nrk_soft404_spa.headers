@@ -1,0 +1,20 @@
+HTTP/1.1 400 Bad Request
+Content-Type: text/html; charset=utf-8
+Content-Length: 46290
+Cache-Control: public, max-age=60, stale-while-revalidate=1200, stale-if-error=3600
+Content-Security-Policy: frame-ancestors https://*.nrk.no https://*.nrk.cloud
+x-content-type-options: nosniff
+referrer-policy: strict-origin-when-cross-origin
+Permissions-Policy: autoplay=(self)
+Date: Mon, 07 Sep 2026 11:46:12 GMT
+Connection: keep-alive
+Set-Cookie: AKA_A2=A; expires=Mon, 07-Sep-2026 12:46:12 GMT; path=/; domain=nrk.no; secure; HttpOnly
+Server-Timing: cdn-cache; desc=MISS
+Server-Timing: edge; dur=238
+Server-Timing: origin; dur=21
+Alt-Svc: h3=":443"; ma=93600
+Link: <https://static.nrk.no/nrk-sans/2.2.0/NRKSans_Variable.woff2>;rel="preload";as="font";type="font/woff2";crossorigin
+Link: <https://browser.sentry-cdn.com>;rel="preconnect"
+Strict-Transport-Security: max-age=15768000
+Server-Timing: ak_p; desc="1788781571776_389183878_658723288_25773_353134_13_29_-";dur=1
+

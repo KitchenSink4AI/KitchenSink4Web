@@ -1,0 +1,63 @@
+# Robots parsers use the most-specific matching User-agent group and do not
+# merge that group with User-agent: *. Repeat shared Allow rules in explicit
+# bot groups when those bots need the same render dependencies as standard crawlers.
+
+# ===== Standard crawlers (unchanged from today) =====
+User-agent: *
+Allow: /v4/md/applications/crunchbase
+Allow: /*.js$
+Disallow: /login
+Disallow: /register
+Disallow: /account
+Disallow: /reset-password
+Disallow: /subscriptions
+Disallow: /contribute
+Disallow: /add-new
+Disallow: /edit
+Disallow: /buy
+Allow: /buy/select-product
+Disallow: /account-setup
+Disallow: /verify
+Disallow: /admin
+Disallow: /v4
+Disallow: /home
+Disallow: /search
+Disallow: /discover
+Disallow: /textsearch
+
+# ===== TIER 1: AI answer/search agents - ALLOW all paths =====
+# They cite us -> citations + funnel. This group can crawl all paths on www.
+User-agent: OAI-SearchBot
+User-agent: ChatGPT-User
+User-agent: Claude-SearchBot
+User-agent: Claude-User
+User-agent: PerplexityBot
+User-agent: Perplexity-User
+User-agent: Meta-ExternalFetcher
+# + xAI/Grok answer agent once its UA token is published (verify)
+# Note: Applebot (Siri/Spotlight) & bingbot (Copilot) are search engines already
+# governed by the default `User-agent: *` group - no explicit entry needed.
+Allow: /
+
+# ===== TIER 2: AI training / bulk crawlers - BLOCKED (license to access) =====
+User-agent: GPTBot
+User-agent: Google-Extended
+User-agent: ClaudeBot
+User-agent: anthropic-ai
+User-agent: Claude-Web
+User-agent: cohere-ai
+User-agent: cohere-training-data-crawler
+User-agent: CCBot
+User-agent: AI2Bot
+User-agent: Meta-ExternalAgent
+User-agent: Applebot-Extended
+User-agent: PanguBot
+User-agent: Bytespider
+User-agent: Diffbot
+User-agent: Omgilibot
+User-agent: Omgili
+User-agent: FacebookBot
+User-agent: ImagesiftBot
+Disallow: /
+
+Sitemap: https://www.crunchbase.com/www-sitemaps/sitemap-index.xml

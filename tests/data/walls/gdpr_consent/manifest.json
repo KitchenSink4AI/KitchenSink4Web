@@ -1,0 +1,79 @@
+[
+  {
+    "url": "https://www.zeit.de/index",
+    "fetched_utc": "2026-09-07T11:43:29Z",
+    "fetched_kst": "2026-09-07T20:43:29+09:00",
+    "category": "gdpr_consent",
+    "http_status": 200,
+    "status_chain": [
+      "200"
+    ],
+    "final_url": "https://www.zeit.de/index",
+    "content_length": 1393356,
+    "robots_allowed": true,
+    "markers": [
+      "__tcfapi",
+      "sourcepoint",
+      "Zustimmung"
+    ],
+    "distinguishing_from": "STRONGEST consent signal in the corpus: __tcfapi appears 7 times and the Sourcepoint CMP is loaded by name 17 times. The IAB TCF v2 API surface is what separates a consent wall from any other interstitial.",
+    "body_text_chars": 74031,
+    "status": "collected",
+    "files": {
+      "html": "zeit_home.html",
+      "headers": "zeit_home.headers"
+    },
+    "notes": "Served in full to a Korean (non-EU) IP, so the CMP fires unconditionally rather than by geography. HTTP 200, 1.39MB decompressed."
+  },
+  {
+    "url": "https://www.spiegel.de/",
+    "fetched_utc": "2026-09-07T11:43:19Z",
+    "fetched_kst": "2026-09-07T20:43:19+09:00",
+    "category": "gdpr_consent",
+    "http_status": 200,
+    "status_chain": [
+      "200"
+    ],
+    "final_url": "https://www.spiegel.de/",
+    "content_length": 3977320,
+    "robots_allowed": true,
+    "markers": [
+      "__tcfapi",
+      "Zustimmung",
+      "SPIEGEL+"
+    ],
+    "distinguishing_from": "vs zeit_home: same category, far weaker evidence. __tcfapi appears only twice and no CMP vendor is named in the served HTML. A threshold tuned on zeit_home may not fire here.",
+    "body_text_chars": 54799,
+    "status": "collected",
+    "files": {
+      "html": "spiegel_home.html",
+      "headers": "spiegel_home.headers"
+    },
+    "notes": "3.98MB (decompressed) homepage that ALSO advertises the SPIEGEL+ subscription product, so consent and paywall markers coexist without this page itself being paywalled."
+  },
+  {
+    "url": "https://www.lemonde.fr/economie/article/2026/09/07/en-coree-du-sud-l-ia-s-impose-au-c-ur-des-evolutions-economiques-et-societales_6767934_3234.html",
+    "fetched_utc": "2026-09-07T11:39:33Z",
+    "fetched_kst": "2026-09-07T20:39:33+09:00",
+    "category": "gdpr_consent",
+    "http_status": 200,
+    "status_chain": [
+      "200"
+    ],
+    "final_url": "https://www.lemonde.fr/economie/article/2026/09/07/en-coree-du-sud-l-ia-s-impose-au-c-ur-des-evolutions-economiques-et-societales_6767934_3234.html",
+    "content_length": 321954,
+    "robots_allowed": true,
+    "markers": [
+      "__tcfapi",
+      "edi_medium=paywall"
+    ],
+    "distinguishing_from": "DUAL-CATEGORY: the same document is the paywall_news sample. __tcfapi marks the consent layer, edi_medium=paywall marks the subscription layer, and both are true simultaneously.",
+    "body_text_chars": 11190,
+    "status": "collected",
+    "files": {
+      "html": "lemonde_article.html",
+      "headers": "lemonde_article.headers"
+    },
+    "notes": "Identical file to paywall_news/lemonde_article.html (one fetch, copied). The canonical argument for multi-label classification."
+  }
+]

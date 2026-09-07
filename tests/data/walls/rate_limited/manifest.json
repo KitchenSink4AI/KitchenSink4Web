@@ -1,0 +1,38 @@
+[
+  {
+    "url": "https://httpbin.org/status/429",
+    "fetched_utc": "2026-09-07T11:45:32Z",
+    "fetched_kst": "2026-09-07T20:45:32+09:00",
+    "category": "rate_limited",
+    "http_status": 429,
+    "status_chain": [
+      "429"
+    ],
+    "final_url": "https://httpbin.org/status/429",
+    "content_length": 0,
+    "robots_allowed": true,
+    "markers": [
+      "429"
+    ],
+    "distinguishing_from": "SYNTHETIC. Status only; body is 0 bytes and there is NO Retry-After header, which is exactly what a real rate-limit response would carry.",
+    "body_text_chars": 0,
+    "status": "collected",
+    "files": {
+      "html": "httpbin_429.html",
+      "headers": "httpbin_429.headers"
+    },
+    "notes": "Documents the shape but not the evidence. A production 429 fixture should be kept for the Retry-After, X-RateLimit-Remaining and X-RateLimit-Reset headers, which are the actual discriminators.",
+    "synthetic_endpoint": true
+  },
+  {
+    "slug": "real_rate_limit",
+    "status": "not_collected",
+    "url": "n/a",
+    "category": "rate_limited",
+    "robots_allowed": "not_checked",
+    "markers": [],
+    "http_status": null,
+    "distinguishing_from": "n/a",
+    "notes": "DELIBERATELY NOT COLLECTED. Inducing a real 429 means hammering a third-party server, which the collection rules forbid. Harvest these from your own production traffic instead, where they occur naturally, and keep the full header block."
+  }
+]

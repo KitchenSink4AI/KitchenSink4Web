@@ -1,0 +1,22 @@
+HTTP/1.1 403 Forbidden
+Date: Mon, 07 Sep 2026 11:46:55 GMT
+Content-Type: text/html; charset=UTF-8
+Transfer-Encoding: chunked
+Connection: close
+Accept-Ch: Sec-CH-UA-Bitness, Sec-CH-UA-Arch, Sec-CH-UA-Full-Version, Sec-CH-UA-Mobile, Sec-CH-UA-Model, Sec-CH-UA-Platform-Version, Sec-CH-UA-Full-Version-List, Sec-CH-UA-Platform, Sec-CH-UA, UA-Bitness, UA-Arch, UA-Full-Version, UA-Mobile, UA-Model, UA-Platform-Version, UA-Platform, UA
+Cf-Mitigated: challenge
+X-Frame-Options: SAMEORIGIN
+Server: cloudflare
+Critical-Ch: Sec-CH-UA-Bitness, Sec-CH-UA-Arch, Sec-CH-UA-Full-Version, Sec-CH-UA-Mobile, Sec-CH-UA-Model, Sec-CH-UA-Platform-Version, Sec-CH-UA-Full-Version-List, Sec-CH-UA-Platform, Sec-CH-UA, UA-Bitness, UA-Arch, UA-Full-Version, UA-Mobile, UA-Model, UA-Platform-Version, UA-Platform, UA
+Cross-Origin-Embedder-Policy: require-corp
+Cross-Origin-Opener-Policy: same-origin
+Cross-Origin-Resource-Policy: same-origin
+Origin-Agent-Cluster: ?1
+Permissions-Policy: accelerometer=(),camera=(),clipboard-read=(),clipboard-write=(),geolocation=(),gyroscope=(),hid=(),magnetometer=(),microphone=(),payment=(),publickey-credentials-get=(),screen-wake-lock=(),serial=(),sync-xhr=(),usb=(),xr-spatial-tracking=*
+Referrer-Policy: same-origin
+Server-Timing: chlray;desc="a37579cb7db6a76e"
+X-Content-Type-Options: nosniff
+set-cookie: __cf_bm=ieVaZw9QKyXZYT9pHZ5jbFn69B.NebCuql8yoNLdOms-1788781615.9188676-1.0.1.1-WYeydFe0DM2CGYyQ4CwH8MZABMnlMGGE8Sa3mUYEOe5dxVx_fvaBm0NrDbALCL063OWbkT3zAGf5pXKN95tmV788sfXGd_31PXu_C5aWYMZUU710DfKUi1jaeRqdi99u; HttpOnly; SameSite=None; Secure; Path=/; Domain=crunchbase.com; Expires=Mon, 07 Sep 2026 12:16:55 GMT
+Content-Encoding: br
+CF-RAY: a37579cb7db6a76e-ICN
+

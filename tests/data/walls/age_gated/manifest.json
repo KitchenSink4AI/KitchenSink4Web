@@ -1,0 +1,83 @@
+[
+  {
+    "url": "https://www.budweiser.com/",
+    "fetched_utc": "2026-09-07T11:49:02Z",
+    "fetched_kst": "2026-09-07T20:49:02+09:00",
+    "category": "age_gated",
+    "http_status": 200,
+    "status_chain": [
+      "301",
+      "200"
+    ],
+    "final_url": "https://www.budweiser.com/en",
+    "content_length": 299237,
+    "robots_allowed": true,
+    "markers": [
+      "YOU MUST BE OF LEGAL DRINKING AGE TO ENTER THIS SITE.",
+      "age-gate",
+      "Change country"
+    ],
+    "distinguishing_from": "vs gdpr_consent: both are full-page interstitials with an accept action, but the age gate asks about the VISITOR'S AGE or birth date and offers a country selector, while a consent wall asks about data processing and carries __tcfapi or a named CMP vendor script.",
+    "body_text_chars": 5025,
+    "status": "collected",
+    "files": {
+      "html": "budweiser_home.html",
+      "headers": "budweiser_home.headers"
+    },
+    "notes": "Cleanest age gate collected: the requirement is stated in plain server-rendered text, not just in class names."
+  },
+  {
+    "url": "https://store.steampowered.com/agecheck/app/1174180/",
+    "fetched_utc": "2026-09-07T11:42:56Z",
+    "fetched_kst": "2026-09-07T20:42:56+09:00",
+    "category": "age_gated",
+    "http_status": 200,
+    "status_chain": [
+      "200"
+    ],
+    "final_url": "https://store.steampowered.com/agecheck/app/1174180/",
+    "content_length": 34734,
+    "robots_allowed": true,
+    "markers": [
+      "agecheck",
+      "agegate",
+      "mature_content",
+      "This game may contain content",
+      "view_product_page_btn"
+    ],
+    "distinguishing_from": "vs http_404: HTTP 200 and the title is the real product title (Save 75% on Red Dead Redemption 2 on Steam), so a title-based heuristic sees a normal product page. The gate lives in the URL path and the form ids.",
+    "body_text_chars": 1533,
+    "status": "collected",
+    "files": {
+      "html": "steam_agecheck.html",
+      "headers": "steam_agecheck.headers"
+    },
+    "notes": "Content-maturity gate rather than a legal-purchase gate. The path segment /agecheck/ is itself the strongest signal."
+  },
+  {
+    "url": "https://www.jackdaniels.com/",
+    "fetched_utc": "2026-09-07T11:43:00Z",
+    "fetched_kst": "2026-09-07T20:43:00+09:00",
+    "category": "age_gated",
+    "http_status": 200,
+    "status_chain": [
+      "200"
+    ],
+    "final_url": "https://www.jackdaniels.com/",
+    "content_length": 399515,
+    "robots_allowed": true,
+    "markers": [
+      "ageGate",
+      "legal drinking age",
+      "birthdate"
+    ],
+    "distinguishing_from": "HARD CASE: the full marketing homepage is served (5779 visible-text chars) and the gate is applied client-side. Markup for the gate is present, but the page does not LOOK gated to a text-only reader.",
+    "body_text_chars": 5779,
+    "status": "collected",
+    "files": {
+      "html": "jackdaniels_home.html",
+      "headers": "jackdaniels_home.headers"
+    },
+    "notes": "Markers appear once each inside component config, not in rendered copy. Shows why age_gated needs markup and class-name matching, not visible-text matching."
+  }
+]
