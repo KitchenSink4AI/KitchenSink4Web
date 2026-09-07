@@ -57,6 +57,7 @@ from ..errors import (AmbiguousLocation, AuthRequired, BadParams,
                       ReadOnlyMode, SessionDead, StaleAnchor, TargetNotFound,
                       Timeout, ValidationFailed)
 from ..policy import audit as _audit
+from ..policy import classify as _classify
 from ..policy import budgets as _budgets
 from ..policy import credentials as _credentials
 from ..policy import engine as _policy
@@ -173,6 +174,13 @@ _WALL_MARKERS = (
     # Observed on a live Cloudflare interstitial during the 2026-09-06 spike,
     # on a challenge that had painted its text but not its title.
     "performing security verification",
+    # Cloudflare's challenge title is not one string. Taylor and Francis
+    # answered "Just a moment..." and Crunchbase answered "One moment,
+    # please…", with a different ellipsis character, from the same vendor on
+    # the same day. The marker list carried only the first, so it missed one
+    # of two samples; this is also the general warning that vendor title
+    # matching corroborates and never gates.
+    "one moment, please",
 )
 
 
@@ -219,15 +227,146 @@ _AUTH_MARKERS = (
 
 #: A landed path that looks like a login page. Only consulted when the
 #: navigation REDIRECTED (the landed URL differs from the requested one), so
-#: deliberately opening a login page is never classified as a wall.
-_LOGIN_PATH = re.compile(
-    r"/(login|log-in|signin|sign-in|sign_in|sessions?(/new)?|auth(orize)?)"
-    r"(/|$|\?)", re.IGNORECASE)
+#: deliberately opening a login page is never classified as a wall. The
+#: pattern itself now lives in `policy/classify.py`, which needs it for the
+#: continuation-parameter rule and may not import an ops module; this is the
+#: alias, so every call site here is unchanged.
+_LOGIN_PATH = _classify.LOGIN_PATH
+
+
+#: ONE EVALUATE, and that is the whole cost story for the taxonomy.
+#:
+#: The verdict path has always spent exactly one round trip on the page
+#: (`document.body.innerText`, capped at 4,000 characters) plus a second one
+#: for the HTML source, and only once the status already said refused. The
+#: classifier needs structural facts as well, and the obvious way to get
+#: them, a second probe, would put a round trip on every ordinary page for
+#: the benefit of the small minority that are walls. So the structural work
+#: rides INSIDE the read that already happens, and what it returns is
+#: booleans, counts, and a list of the server's own needles that matched,
+#: never a byte of page text beyond the slice that was already coming back.
+#:
+#: WHY NEEDLE MATCHING HAPPENS IN THE PAGE. A Science paywall carries 32,248
+#: visible characters and puts its access barrier well past a 4,000-character
+#: slice. Widening the slice costs bytes on every page; matching our own
+#: constants against the whole document and returning which ones matched
+#: costs nothing extra and reads all of it.
+#:
+#: WHY THE SOURCE IS NOT SERIALIZED. `documentElement.outerHTML` on a large
+#: page is a real cost, which is why the existing source fetch is gated on a
+#: refusing status and stays that way. Every structural fact here comes from
+#: targeted queries instead: the citation meta tags, the script hosts, one
+#: combined attribute selector, and the ld+json blocks.
+_PAGE_PROBE_JS = r"""
+(needles) => {
+  const d = document;
+  const out = {text: '', visible_chars: 0, document_chars: 0,
+               text_hits: [], source_hits: [], jsonld: [],
+               has_password_field: false, paywall_container: false,
+               dob_form: false, consent_container: null,
+               has_main_content: false,
+               blocking_overlay: {present: false, coverage_ratio: 0}};
+  const b = d.body;
+  const full = b ? (b.innerText || '') : '';
+  out.text = full.slice(0, 4000);
+  out.visible_chars = full.length;
+  try { out.document_chars = d.documentElement.innerHTML.length; } catch (e) {}
+  const low = full.toLowerCase();
+  for (const n of needles.text) { if (low.indexOf(n) !== -1) out.text_hits.push(n); }
+  const has = (sel) => { try { return !!d.querySelector(sel); } catch (e) { return false; } };
+  out.has_password_field = has('input[type="password"]');
+  out.has_main_content = has('main, article, [role="main"]');
+  out.paywall_container = has(
+    '[data-paywall], [data-paywall-trigger], [data-paywall-type], ' +
+    '.paywall, #paywall, [class*="paywall"], [id*="paywall"]');
+  // The source-needle answers, from targeted queries rather than from a
+  // serialization of the whole document.
+  const hit = (n) => { if (needles.source.indexOf(n) !== -1) out.source_hits.push(n); };
+  try {
+    for (const m of d.querySelectorAll('meta[name^="citation_"]')) {
+      hit((m.getAttribute('name') || '').toLowerCase());
+    }
+  } catch (e) {}
+  const hosts = [];
+  try {
+    for (const s of d.querySelectorAll('script[src], link[href]')) {
+      hosts.push(((s.src || s.href) || '').toLowerCase());
+    }
+  } catch (e) {}
+  const blob = hosts.join(' ') + ' ' + (location.href || '').toLowerCase();
+  for (const n of needles.source) {
+    if (out.source_hits.indexOf(n) === -1 && blob.indexOf(n) !== -1) out.source_hits.push(n);
+  }
+  const attrs = ['data-paywall', 'data-paywall-trigger', 'data-paywall-type',
+                 'age-gate', 'agegate', 'age_gate', 'agecheck', 'birthdate',
+                 'date_of_birth', 'dateofbirth', 'ageverification'];
+  for (const a of attrs) {
+    if (needles.source.indexOf(a) === -1) continue;
+    if (out.source_hits.indexOf(a) !== -1) continue;
+    if (has('[' + a + '], [class*="' + a + '"], [id*="' + a + '"], [name*="' + a + '"]')) {
+      out.source_hits.push(a);
+    }
+  }
+  if (out.has_password_field && needles.source.indexOf('type="password"') !== -1) {
+    out.source_hits.push('type="password"');
+  }
+  try {
+    for (const s of Array.from(d.querySelectorAll(
+        'script[type="application/ld+json"]')).slice(0, 5)) {
+      out.jsonld.push((s.textContent || '').slice(0, 20000));
+    }
+  } catch (e) {}
+  // THE BLOCKING GATE. An overlay that answers elementFromPoint at the
+  // centre of the page IS blocking, by the only definition that matters, and
+  // no amount of offscreen text can fake it. Shadow roots are descended, the
+  // same way the occlusion refusal already does it.
+  const vw = Math.max(1, window.innerWidth || 0);
+  const vh = Math.max(1, window.innerHeight || 0);
+  const points = [[0.5, 0.5], [0.25, 0.25], [0.75, 0.25],
+                  [0.25, 0.75], [0.75, 0.75]];
+  const deepest = (x, y) => {
+    let el = d.elementFromPoint(x, y);
+    for (let i = 0; i < 8 && el && el.shadowRoot; i++) {
+      const inner = el.shadowRoot.elementFromPoint(x, y);
+      if (!inner || inner === el) break;
+      el = inner;
+    }
+    return el;
+  };
+  let blocked = 0, best = 0, container = null;
+  for (const [fx, fy] of points) {
+    let el = null;
+    try { el = deepest(vw * fx, vh * fy); } catch (e) { continue; }
+    for (let node = el, depth = 0; node && depth < 12; node = node.parentElement, depth++) {
+      let style;
+      try { style = getComputedStyle(node); } catch (e) { break; }
+      if (style.position !== 'fixed' && style.position !== 'sticky') continue;
+      const r = node.getBoundingClientRect();
+      const ratio = (r.width * r.height) / (vw * vh);
+      if (ratio < 0.5) continue;
+      blocked++;
+      if (ratio > best) { best = ratio; container = node.id || node.className || null; }
+      break;
+    }
+  }
+  if (blocked >= 3) {
+    out.blocking_overlay = {present: true, coverage_ratio: Math.min(1, best)};
+    out.consent_container = (typeof container === 'string'
+                             ? container.slice(0, 64) : null);
+  }
+  // A date-of-birth form is only a gate when it is what is on screen.
+  out.dob_form = out.blocking_overlay.present && has(
+    'select[name*="birth"], select[name*="year"], input[name*="birth"], ' +
+    'input[type="date"][name*="age"], [class*="age-gate"], [id*="age-gate"]');
+  return out;
+}
+"""
 
 
 async def _wall_verdict(page, status: int | None,
                         requested: str | None = None,
-                        headers: dict | None = None) -> dict:
+                        headers: dict | None = None,
+                        redirect_chain: list | None = None) -> dict:
     """Detect a bot wall, a CAPTCHA interstitial, or an auth wall and say so.
 
     Cloudflare interstitials, CAPTCHAs, rate limits, and expired sessions all
@@ -254,12 +393,25 @@ async def _wall_verdict(page, status: int | None,
     except Exception:
         title = ""
     body = ""
+    structural: dict = {}
     try:
-        body = (await page.evaluate(
-            "() => (document.body ? document.body.innerText : '')"
-            ".slice(0, 4000)") or "").lower()
+        probe = await page.evaluate(_PAGE_PROBE_JS, {
+            "text": list(_classify.TEXT_NEEDLES),
+            "source": list(_classify.SOURCE_NEEDLES)})
+        if isinstance(probe, dict):
+            structural = probe
+            body = (probe.get("text") or "").lower()
     except Exception:
-        pass
+        # A PROBE THAT FAILS COSTS SIGNALS, NEVER THE NAVIGATION. The fall
+        # back is the read this function has always done, so a page that
+        # refuses the structural evaluate still gets the vendor verdict it
+        # got before the taxonomy existed.
+        try:
+            body = (await page.evaluate(
+                "() => (document.body ? document.body.innerText : '')"
+                ".slice(0, 4000)") or "").lower()
+        except Exception:
+            pass
     # TEXT SIGNALS ARE STATUS-GATED (gauntlet 3, F1). Title and innerText are
     # page-controlled, and innerText includes offscreen text, so an ungated
     # needle both refused ordinary 200 pages whole ("press & hold" is any
@@ -301,6 +453,7 @@ async def _wall_verdict(page, status: int | None,
     # which innerText does not expose, so they need the HTML source. Fetching
     # source is only worth it once the status already says refused, which
     # keeps an ordinary page from ever paying for it.
+    source = ""
     source_hit = None
     if (header_hit is None and text_hit is None and not marker
             and status in _walls.REFUSING_STATUSES):
@@ -312,11 +465,12 @@ async def _wall_verdict(page, status: int | None,
             # substring is how a hostile 50 MB error page becomes our
             # problem. Every vendor signature sits in the head or the first
             # scripts, so the cap costs nothing real.
-            source_hit = _walls.source_block(await page.evaluate(
+            source = await page.evaluate(
                 "() => (document.documentElement "
-                "? document.documentElement.outerHTML : '').slice(0, 20000)"))
+                "? document.documentElement.outerHTML : '').slice(0, 20000)")
+            source_hit = _walls.source_block(source)
         except Exception:
-            source_hit = None
+            source, source_hit = "", None
     if header_hit:
         verdict["wall"], verdict["marker"] = header_hit
     elif text_hit or source_hit:
@@ -360,6 +514,48 @@ async def _wall_verdict(page, status: int | None,
     elif auth_marker or status == 401:
         verdict["wall"] = "auth-wall"
         verdict["marker"] = auth_marker or "HTTP 401"
+    if verdict["wall"] is None:
+        # THE SOFT-BLOCK RUNG, and it is the field's finding rather than a
+        # design idea. Two model runs on 2026-09-08 hit the same defect from
+        # opposite directions: Reddit answered a "You've been blocked by
+        # network security" page and JSTOR answered an Akamai "Client
+        # Challenge" CAPTCHA, and both came back `ok: true, status: 200,
+        # wall: null`, because neither vendor was in the tables above. A
+        # false success is worse than a refusal, since nothing downstream
+        # thinks to look twice at it.
+        #
+        # The rung needs BOTH halves: a challenge signal, and a document with
+        # no readable prose. `walls.soft_block` carries the argument for why
+        # that pair keeps the F1 cloaking property intact. Reddit is caught
+        # by the challenge parameter the site's own redirect put on the URL,
+        # which is why the landed URL is passed rather than only the text.
+        soft = _walls.soft_block(
+            status, title=title, body=body, landed_url=landed,
+            visible_chars=structural.get("visible_chars"))
+        if soft:
+            soft_vendor, soft_evidence = soft
+            verdict["wall"] = "bot-wall-or-captcha"
+            verdict["marker"] = (
+                f"{soft_vendor} wall: {soft_evidence}" if soft_vendor
+                else f"an unnamed block or challenge page: {soft_evidence}")
+    # THE TAXONOMY RIDES ON THE VERDICT AND NEVER OVERRULES IT. Everything
+    # above keeps its exact behavior; `classification` is additive, and the
+    # `wall` key keeps its existing vocabulary, so nothing that used to load
+    # starts raising unless a BLOCK-ONLY signal fired (`classify.wall_for`
+    # only maps a category at `confirmed`).
+    try:
+        classification = _classify.classify(
+            status, headers, title=title, body=body, source=source,
+            structural=structural, redirect_chain=redirect_chain,
+            landed_url=landed, requested_url=requested)
+        verdict["classification"] = classification
+        if verdict["wall"] is None:
+            mapped = _classify.wall_for(classification)
+            if mapped:
+                verdict["wall"], verdict["marker"] = mapped
+    except Exception:
+        pass          # a classifier that can fail a navigation is worse than
+        # no classifier (DESIGN: the verdict machinery never raises)
     if verdict["wall"]:
         # The practical half of an honest refusal. A user who wants to be
         # unblocked gets asked for exactly these identifiers, and "the page
@@ -566,6 +762,17 @@ async def get_page_view(
                    "margin_held": result.meter.margin, "rung": result.rung,
                    "rungs": len(_RUNGS), "estimator": _ENCODING},
     }
+    # THE CHEAP FIRST READ SAYS WHAT IT IS LOOKING AT. A paywall, a consent
+    # wall, an age gate, a region notice and a 404 all deliver a real
+    # document, so none of them refuses and the caller would otherwise spend
+    # a budget on the interactive surface of a page it cannot use. This costs
+    # nothing: the classification was computed at navigation time and is only
+    # used here when it still describes the document on screen, the same rule
+    # `nav_record` follows about a recorded status.
+    parked = getattr(record, "last_classification", None)
+    if parked and getattr(record, "last_classification_url", None) == \
+            record.page.url and parked.get("category"):
+        payload["classification"] = parked
     if baseline is not None:
         # A delta is the WHOLE answer when one is asked for. Returning both a
         # full projection and a delta would charge the caller twice for the
@@ -1349,9 +1556,11 @@ async def navigate(
         response_headers = None
     verdict = await _wall_verdict(
         record.page, status, requested=url if action == "goto" else None,
-        headers=response_headers)
+        headers=response_headers,
+        redirect_chain=getattr(record, "last_nav_chain", None))
+    _remember_classification(record, verdict)
     if verdict["wall"] == "auth-wall":
-        raise _auth_refusal(record.page.url, verdict.get("marker"))
+        raise _auth_refusal(record.page.url, verdict.get("marker"), verdict)
     if verdict["wall"]:
         raise _blocked_refusal(sess, record.page.url, status, verdict,
                                retry_after_s)
@@ -1570,14 +1779,33 @@ AUTH_RECIPE = (
     "the next open with manage_session(action='open', auth_state=...).")
 
 
-def _auth_refusal(url: str, marker: str | None = None):
+def _classification_line(verdict: dict | None) -> str:
+    """The classification, as the sentence a REFUSAL carries.
+
+    A classification that only appears in a payload the caller never sees is
+    a classification that does not exist, and the refusal is exactly where a
+    blocked caller most needs the category and the way in. The access path is
+    a server-authored constant from a closed table, never assembled from the
+    page: a page that could write its own recommended access path could tell
+    an agent to go somewhere else."""
+    found = (verdict or {}).get("classification") or {}
+    category = found.get("category")
+    if not category:
+        return ""
+    return (f' Classified {category} ({found.get("confidence")}). '
+            f'{found.get("access_path") or ""}')
+
+
+def _auth_refusal(url: str, marker: str | None = None,
+                  verdict: dict | None = None):
     what = ("an expired session" if marker and "expired" in marker
             else "a signed-in session")
     return AuthRequired(
         f"{url} needs {what} "
         f"(evidence: {marker or 'HTTP 401'}). Load a saved state with the "
         f"storage pack (--packs storage, load_auth_state), or let a human "
-        f"log in outside the model's context. {AUTH_RECIPE}")
+        f"log in outside the model's context. {AUTH_RECIPE}"
+        + _classification_line(verdict))
 
 
 def _reraise_driver(exc: Exception, *, what: str, timeout_ms: int,
@@ -1759,7 +1987,28 @@ def _blocked_refusal(sess, url: str, status: int | None, verdict: dict,
         + (' Quote this to the site owner when asking for access: '
            + ', '.join(f'{k} {v}' for k, v in
                        verdict["reference_ids"].items()) + '.'
-           if verdict.get("reference_ids") else ''))
+           if verdict.get("reference_ids") else '')
+        + _classification_line(verdict))
+
+
+def _remember_classification(record, verdict: dict) -> None:
+    """Park the classification on the page record, keyed by the URL it
+    describes.
+
+    THE READ SURFACES DO NOT RECOMPUTE IT. `get_page_view` on an ordinary 200
+    page has to cost the same evaluates it costs today, and widening
+    `_recorded_wall_possible` to let 200 responses through to a fresh DOM
+    probe is exactly the cost that gate was built to avoid. A verdict is
+    evidence about ONE document, so the URL is stored with it and a read
+    compares before using it, the same rule `nav_record` follows."""
+    found = verdict.get("classification")
+    if not found:
+        return
+    try:
+        record.last_classification = found
+        record.last_classification_url = record.page.url
+    except Exception:
+        pass
 
 
 def _recorded_wall_possible(sess, record) -> dict | None:
@@ -1828,12 +2077,14 @@ async def _recorded_wall_refusal(sess, record) -> None:
     if got is None:
         _refuse_unrecorded_popup(sess, record)
         return
-    verdict = await _wall_verdict(record.page, got["status"],
-                                 headers=got["headers"])
+    verdict = await _wall_verdict(
+        record.page, got["status"], headers=got["headers"],
+        redirect_chain=getattr(record, "last_nav_chain", None))
+    _remember_classification(record, verdict)
     if not verdict.get("wall"):
         return
     if verdict["wall"] == "auth-wall":
-        raise _auth_refusal(record.page.url, verdict.get("marker"))
+        raise _auth_refusal(record.page.url, verdict.get("marker"), verdict)
     raise _blocked_refusal(sess, record.page.url, got["status"], verdict)
 
 
@@ -2040,7 +2291,9 @@ async def _post_navigation_wall(record, outcome: dict) -> dict | None:
         return None
     verdict = await _wall_verdict(
         record.page, getattr(record, "last_nav_status", None),
-        headers=getattr(record, "last_nav_headers", None))
+        headers=getattr(record, "last_nav_headers", None),
+        redirect_chain=getattr(record, "last_nav_chain", None))
+    _remember_classification(record, verdict)
     return verdict if verdict.get("wall") else None
 
 
@@ -3584,7 +3837,9 @@ async def manage_tabs(
             # deserves to know what it holds without losing the handle.
             verdict = await _wall_verdict(
                 record.page, getattr(record, "last_nav_status", None),
-                headers=getattr(record, "last_nav_headers", None))
+                headers=getattr(record, "last_nav_headers", None),
+                redirect_chain=getattr(record, "last_nav_chain", None))
+            _remember_classification(record, verdict)
             if verdict.get("wall"):
                 return {"session": sess.session_id, "page": opened_handle,
                         "focused": sess.focused,

@@ -144,6 +144,21 @@ class PageHandle:
     last_nav_url: str | None = None
     last_nav_status: int | None = None
     last_nav_headers: dict | None = None
+    #: THE REDIRECT CHAIN that produced the current document, root first,
+    #: capped at 10 hops. A redirect on its own means nothing (Nature runs a
+    #: four-hop identity chain on a fully open-access article), so what the
+    #: classifier reads out of this is the SHAPE: whether a content path
+    #: landed on a login path carrying a continuation parameter, or on a
+    #: pricing path, or on a region-notice path. Recorded inside the listener
+    #: that was already running, so it costs a list append per navigation.
+    last_nav_chain: list = field(default_factory=list)
+    #: THE CLASSIFICATION for the document that is on screen, and the URL it
+    #: was computed for. `get_page_view` surfaces it from here rather than
+    #: recomputing, which is what keeps the cheap read cheap: an ordinary
+    #: page must cost the same evaluates it costs today, so no read may probe
+    #: a 200 response on its own account.
+    last_classification: dict | None = None
+    last_classification_url: str | None = None
     frame_nav: dict = field(default_factory=dict)
     #: THE URL THE ORIGIN POLICY LAST RULED ON for this page (gauntlet 4,
     #: G4-04 / G4-05 / G4-06). A page can arrive at a URL no tool asked for:
@@ -619,6 +634,23 @@ class SessionManager:
                     record.last_nav_url = response.url
                     record.last_nav_status = response.status
                     record.last_nav_headers = dict(response.headers)
+                    # The chain, walked from this request back to the one the
+                    # caller made, then reversed so it reads root first. The
+                    # hop cap is what keeps a redirect loop from growing this
+                    # without bound.
+                    # Each hop's own STATUS is deliberately not read here: it
+                    # is an awaitable in the async driver and this listener is
+                    # synchronous by design (a recorder must never turn a
+                    # working navigation into an error). The URLs are what the
+                    # classifier reads anyway; the shape is the signal.
+                    chain, hop = [], request.redirected_from
+                    while hop is not None and len(chain) < 10:
+                        chain.append({"url": hop.url, "status": None})
+                        hop = hop.redirected_from
+                    chain.reverse()
+                    chain.append({"url": response.url,
+                                  "status": response.status})
+                    record.last_nav_chain = chain
                 else:
                     record.frame_nav[frame] = {
                         "status": response.status,

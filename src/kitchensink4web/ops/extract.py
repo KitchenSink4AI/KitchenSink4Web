@@ -1349,8 +1349,10 @@ async def read_pages(
             headers = dict(response.headers) if response is not None else None
         except Exception:
             headers = None
-        verdict = await _lite._wall_verdict(record.page, status,
-                                            headers=headers)
+        verdict = await _lite._wall_verdict(
+            record.page, status, headers=headers,
+            redirect_chain=getattr(record, "last_nav_chain", None))
+        _lite._remember_classification(record, verdict)
         if verdict.get("wall"):
             stop = {"reason": "wall",
                     "detail": f'{record.page.url} answered with a '
