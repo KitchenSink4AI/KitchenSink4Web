@@ -66,7 +66,8 @@ from ..policy import origins as _origins
 from ..policy import readonly
 from ..policy import walls as _walls
 from ..projection import (ENCODING_NAME as _ENCODING, RUNGS as _RUNGS,
-                          find as _find, instrument as _instrument,
+                          extract as _extract, find as _find,
+                          instrument as _instrument,
                           ntok as _ntok, read_page, read_text)
 from ..projection.render import VIEWS as _PROJECTION_VIEWS
 
@@ -4173,6 +4174,511 @@ def _batch_code(exc: Exception) -> str:
     return getattr(exc, "code", None) or _envelope.classify(exc)
 
 
+# --------------------------------------------------------- do (#6)
+#
+# ALL PROSE BELOW IS PLACEHOLDER COPY, as in the batch above.
+#
+# THE BOUNDARY, because without it this tool is a wrapper with a
+# hallucination surface. A calling model can turn a goal into a label, so
+# "find the thing that says Submit" is not what this is for. What a model
+# cannot do is answer WHICH ELEMENT, WHEN ACTIVATED, SUBMITS THIS FORM. HTML
+# has three submit states and a delegation rule, and a model that looks for
+# the word Submit misses `<input type=image>` (the 2026-09-06 re-attack R1:
+# clicking one submitted a checkout form carrying a live card number), misses
+# a typeless `<button>` inside a form, and clicks a `<label>` instead of the
+# control the label forwards its activation to. Those facts live in
+# `act.is_native_submitter` and `act.activation_delegate`, and this tool asks
+# them rather than guessing.
+
+#: Verb families, CLOSED. An intent whose verb is outside this lexicon
+#: refuses; it never defaults to click.
+_DO_VERBS: dict[str, str] = {
+    "submit": "click", "send": "click", "save": "click", "confirm": "click",
+    "click": "click", "tap": "click", "choose": "click", "select": "click",
+    "accept": "click", "reject": "click", "decline": "click",
+    "dismiss": "click", "close": "click", "activate": "click",
+    "push": "click", "log": "click", "login": "click", "signin": "click",
+    "sign": "click", "next": "click", "previous": "click", "prev": "click",
+    "go": "click", "open": "click", "search": "click",
+    "type": "type", "fill": "type", "write": "type", "input": "type",
+    "enter": "type",
+    "press": "press", "hit": "press",
+    "scroll": "scroll_to", "show": "scroll_to", "reveal": "scroll_to",
+}
+
+#: The keys a press-shaped intent may name. `do` takes no `keys` argument,
+#: so the key comes out of the intent or the call refuses. The set is CLOSED
+#: on purpose: recognizing a key NAME is not the same act as inventing a
+#: value out of prose, which is why `text` is never parsed from an intent.
+_DO_KEYS: tuple[str, ...] = (
+    "Enter", "Escape", "Tab", "Space", "Backspace", "Delete", "Home", "End",
+    "PageUp", "PageDown", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight")
+
+#: Words that join two goals. A marker alone is not a refusal: a control
+#: genuinely named "Save and Exit" is one goal, so what refuses is a VERB
+#: arriving after one of these.
+_DO_CONJUNCTIONS = (" and then ", " then ", ";", " after that ", " and ")
+
+#: Politeness and filler, skipped before the first word is read as the verb.
+_DO_FILLER = ("please", "now", "just", "kindly", "can", "you")
+
+#: The accept and reject halves of a consent banner, kept apart because
+#: answering a consent banner is a legal act by a person and the two answers
+#: are not interchangeable.
+_DO_CONSENT_ACCEPT = ("accept", "accept all", "allow", "allow all", "agree",
+                      "i agree", "ok", "got it", "understood")
+_DO_CONSENT_REJECT = ("reject", "reject all", "decline", "refuse", "deny",
+                      "only necessary", "necessary only", "essential only")
+_DO_CONSENT_WORDS = ("cookie", "cookies", "consent", "privacy", "gdpr",
+                     "tracking")
+_DO_CLOSE_NAMES = ("close", "close dialog", "dismiss", "x", "×",
+                   "✕", "✖")
+
+#: Pointer, not a copy. `read_pages` ranks the same links.
+_DO_NEXT_LABEL = _common.NEXT_LABEL
+_DO_PREV_LABEL = _common.PREV_LABEL
+
+
+def _do_words(intent: str) -> list[str]:
+    return [w for w in re.split(r"[^a-z0-9]+", intent.lower()) if w]
+
+
+def _do_classify(intent: str, text: str | None) -> dict:
+    """STAGE 1, the verb, and the multi-goal check. Deterministic, closed,
+    and it refuses rather than defaulting."""
+    raw = (intent or "").strip()
+    if not raw:
+        raise BadParams(
+            "do needs a goal to resolve, for example intent='submit the "
+            "login form' or intent='go to the next page'. It works out which "
+            "element performs that goal and acts on it. When you already "
+            "know the label of the control you want, find_and_act is the "
+            "tool: it searches for what you name and acts on it.")
+    low = f" {raw.lower()} "
+    words = [w for w in _do_words(raw) if w not in _DO_FILLER]
+    # THE VERB IS THE INTENT'S OWN FIRST WORD, not any verb-shaped token
+    # anywhere in it. "the login form" and "ponder the login form" both name
+    # a thing rather than an act, and a tool that read a verb out of the
+    # middle of either one would be defaulting to click while claiming not
+    # to. It also keeps a noun that doubles as a verb ("the search box")
+    # from being read as a second goal.
+    family = _DO_VERBS.get(words[0]) if words else None
+    keys = None
+    if family == "press":
+        keys = next((k for k in _DO_KEYS if k.lower() in words), None)
+        if not keys and not any(w in ("key", "keys", "keyboard", "chord")
+                                or "+" in w for w in _do_words(raw)):
+            # 'press the Save button' is a click by any reading, and reading
+            # it as one is what the page means by it.
+            family = "click"
+    # A SECOND GOAL AFTER A CONJUNCTION. `do` performs one goal per call, so
+    # the check is for a verb that arrives after a joining word rather than
+    # for a joining word alone: a control genuinely named "Save and Exit" is
+    # one goal.
+    for marker in _DO_CONJUNCTIONS:
+        head, sep, tail = low.partition(marker)
+        if not sep:
+            continue
+        rest = [w for w in _do_words(tail) if w not in _DO_FILLER]
+        if any(w in _DO_VERBS and not (keys and w == keys.lower())
+               for w in rest):
+            raise BadParams(
+                f"do performs ONE goal per call and {intent!r} carries more "
+                f"than one. Issue them in sequence, one call each, so every "
+                f"one of them resolves against the page as it is by then. "
+                f"Nothing was done.")
+    families = [family] if family else []
+    if not families:
+        raise BadParams(
+            f"do reads the goal's verb from the START of the intent and "
+            f"{words[0]!r} is not one it knows, so nothing was done and it "
+            f"did not default to clicking. The verb families are: click "
+            f"(submit, send, save, confirm, click, tap, choose, select, "
+            f"accept, dismiss, close, log in, next page), type (type, fill, "
+            f"write, enter), press (press or hit, plus a key name from "
+            f"{list(_DO_KEYS)}), and scroll_to (scroll, show, reveal). "
+            f"Nothing was done.")
+    verb = families[0]
+    if verb == "type" and text is None:
+        raise BadParams(
+            "do(intent=<a typing goal>) needs the value in `text`. Nothing "
+            "is ever read out of the intent itself, including a quoted "
+            "string: a value the tool invented from prose is a value you "
+            "never approved. Pass real newline characters for a multi-line "
+            "value; a single-line field refuses one rather than pressing "
+            "Enter behind your back.")
+    if verb == "press" and not keys:
+        raise BadParams(
+            f"a press-shaped goal names the key it presses, and do takes no "
+            f"`keys` argument, so the key has to come from the intent. The "
+            f"keys it recognizes are {list(_DO_KEYS)}; for a chord or any "
+            f"other key, call press_keys(keys='Control+A') directly.")
+    return {"verb": verb, "keys": keys, "goal": _do_goal(low, verb)}
+
+
+def _do_goal(low: str, verb: str) -> str | None:
+    """STAGE 2, the goal shape. A CLOSED set, and its size is the tool's
+    honesty budget: a small set that refuses everything else beats a large
+    fuzzy one. An intent matching none of these does not fall through to a
+    text search silently; it reaches the describe selector and the payload
+    says that it did."""
+    has = low.__contains__
+    if any(has(f" {w} ") for w in ("cookie", "cookies", "consent")) \
+            and any(has(f" {w} ") for w in
+                    ("accept", "reject", "allow", "decline", "dismiss",
+                     "agree", "refuse")):
+        return "consent"
+    if (has(" log in ") or has(" login ") or has(" sign in ")
+            or has(" signin ")):
+        return "log-in"
+    if any(has(f" {w} ") for w in ("dialog", "modal", "popup", "overlay")) \
+            and (has(" close ") or has(" dismiss ")):
+        return "close-dialog"
+    if has(" next ") or has(" older "):
+        return "next-page"
+    if has(" previous ") or has(" prev ") or has(" newer ") or has(" back "):
+        return "previous-page"
+    if has(" search "):
+        return "search"
+    if any(has(f" {w} ") for w in ("submit", "send", "save", "confirm")):
+        return "submit-form"
+    return None
+
+
+def _do_scope(sess, record, within: dict | None) -> tuple[str | None, str]:
+    """The `within` grammar, narrowed to what a mechanism search can honor:
+    one form or one region, both addressed by a ref from a read."""
+    if not within:
+        return None, "whole page"
+    key = next((k for k in ("form", "region") if within.get(k)), None)
+    if key is None:
+        raise BadParams(
+            "do scopes to one form or one region from a read: "
+            "within={'form': 'f2'} or within={'region': 'r7'}. To act on an "
+            "element you have already located, call click or type_text with "
+            "location={'ref': 'e12'}.")
+    ref = within[key]
+    entry = sess.element_map.entries.get(ref)
+    if entry is None or entry.handle != record.handle:
+        raise TargetNotFound(
+            f"{ref!r} is not a ref this page minted, so there is nothing to "
+            f"scope to. Read {record.handle!r} and use the refs it returns.")
+    return ref, key
+
+
+def _do_in_scope(data: dict, units: list[dict], scope_ref: str | None,
+                 scope_kind: str) -> list[dict]:
+    if not scope_ref:
+        return units
+    if scope_kind == "region":
+        return [u for u in units if u.get("region") == scope_ref]
+    form = next((f for f in data.get("forms") or []
+                 if f.get("ref") == scope_ref), None)
+    return _do_units_of_form(data, form) if form else []
+
+
+def _do_units_of_form(data: dict, form: dict | None) -> list[dict]:
+    """Every interactive element INSIDE one form.
+
+    By region, not by the form's own `fields` list, and the difference is
+    load-bearing: `fields` carries the form's data controls, so a `<button>`
+    submitter is not in it while an `<input type=submit>` is. A membership
+    test that missed exactly the elements this tool resolves would be the
+    wrong test. The fields list is the fallback for a form the extractor
+    gave no region."""
+    if not form:
+        return []
+    region = form.get("region")
+    units = data.get("affordances") or []
+    if region:
+        return [u for u in units if u.get("region") == region]
+    inside = {f.get("ref") for f in form.get("fields") or []}
+    return [u for u in units if u.get("ref") in inside]
+
+
+def _do_submitters(units: list[dict]) -> list[dict]:
+    """Every control that NATIVELY submits the form it is in. One question,
+    asked of the one function that answers it."""
+    return [u for u in units if _act.is_native_submitter(u)]
+
+
+def _do_password_forms(data: dict) -> list[dict]:
+    return [f for f in data.get("forms") or []
+            if any(fld.get("secret") for fld in f.get("fields") or [])]
+
+
+def _do_mechanism(data: dict, goal: str | None, low: str,
+                  units: list[dict], scope_ref: str | None,
+                  scope_kind: str) -> tuple[list[dict], str] | None:
+    """STAGE 2's other half: the goal shape's MECHANISM, as candidates.
+
+    Returns `(candidates, what was looked for)`, or None when the goal shape
+    is not one this stage answers, in which case the ladder falls to the
+    describe selector and says so."""
+    if goal in ("submit-form", "log-in"):
+        if goal == "log-in":
+            forms = _do_password_forms(data)
+            if scope_ref and scope_kind == "form":
+                forms = [f for f in forms if f.get("ref") == scope_ref]
+            pool = [u for f in forms for u in _do_units_of_form(data, f)]
+            looked = ("the submitter of the form that carries a password "
+                      "field")
+        else:
+            pool = units
+            looked = ("the form's native submit control (input type=submit, "
+                      "input type=image, or a button with no type attribute "
+                      "inside a form)")
+        return _do_submitters(pool), looked
+    if goal in ("next-page", "previous-page"):
+        # rel FIRST, then the label lexicon, which is the ranking read_pages
+        # walks with and is one shared constant rather than a second copy.
+        # The rel probe is a css resolve and happens in `_do_resolve`; this
+        # is the lexicon half.
+        pattern = (_DO_NEXT_LABEL if goal == "next-page"
+                   else _DO_PREV_LABEL)
+        rel = "next" if goal == "next-page" else "prev"
+        return ([u for u in units
+                 if u.get("role") == "link"
+                 and pattern.match((u.get("name") or "").strip())],
+                f"a link carrying rel={rel!r}, and failing that a link whose "
+                f"accessible name is one this build recognizes as a "
+                f"{'next' if rel == 'next' else 'previous'}-page control, "
+                f"which is the ranking read_pages walks with")
+    if goal == "search":
+        return ([u for u in units if u.get("role") == "searchbox"
+                 or (u.get("tag") == "INPUT"
+                     and (u.get("type") or "") == "search")],
+                "a control whose role is searchbox, or an input of type "
+                "search")
+    if goal == "consent":
+        # THE TWO ANSWERS ARE NOT INTERCHANGEABLE. Consent is a legal act by
+        # a person, so this resolves the control the caller NAMED and never
+        # widens an "accept" goal into any button on the banner.
+        rejecting = any(f" {w} " in low for w in
+                        ("reject", "decline", "refuse", "deny", "necessary"))
+        wanted = _DO_CONSENT_REJECT if rejecting else _DO_CONSENT_ACCEPT
+        regions = {r.get("ref") for r in data.get("regions") or []
+                   if any(w in (r.get("label") or "").lower()
+                          for w in _DO_CONSENT_WORDS)}
+        pool = [u for u in units
+                if u.get("region") in regions] if regions else units
+        return ([u for u in pool
+                 if (u.get("name") or "").strip().lower() in wanted],
+                f"a control inside a consent-shaped region whose accessible "
+                f"name is one of {list(wanted)}")
+    if goal == "close-dialog":
+        modal = data.get("modal") or {}
+        region = modal.get("region") if isinstance(modal, dict) else None
+        pool = [u for u in units if u.get("region") == region] if region \
+            else []
+        return ([u for u in pool
+                 if (u.get("name") or "").strip().lower()
+                 in _DO_CLOSE_NAMES],
+                "the close control of the topmost dialog on the page")
+    return None
+
+
+async def _do_rel_link(sess, record, rel: str) -> dict | None:
+    """The page's own rel=next / rel=prev link, if it has exactly one.
+
+    Ambiguity is NOT swallowed here: two of them raise the ordinary
+    ambiguity refusal from the resolver, which is the right answer. Only an
+    absence falls through to the label lexicon."""
+    try:
+        resolved = await _act.resolve(
+            sess, record, {"css": f'a[rel~="{rel}" i]'}, tool="do",
+            acting=False)
+    except (TargetNotFound, StaleAnchor, BadParams):
+        return None
+    unit = resolved.get("unit") or {}
+    return {"ref": resolved.get("session_ref") or resolved.get("node_ref"),
+            "role": unit.get("role"), "name": unit.get("name"),
+            "type": unit.get("type")}
+
+
+async def _do_resolve(sess, record, *, intent: str, verb: str,
+                      goal: str | None, within: dict | None) -> dict:
+    """STAGES 2 to 3. Every stage is deterministic and every stage can
+    refuse. Nothing here calls a language model: a version that asked one
+    which element to click would make the answer unreproducible and put a
+    guess behind a trusted click."""
+    scope_ref, scope_kind = _do_scope(sess, record, within)
+    stage = "describe"
+    looked = ""
+    candidates: list[dict] = []
+    scanned = 0
+    if goal:
+        data = await _extract(record.page)
+        sess.element_map.absorb(
+            data, record.handle, sess.reads.mint_token(record.handle),
+            ts=time.strftime("%Y-%m-%dT%H:%M:%S"), scope="do")
+        units = _do_in_scope(data, data.get("affordances") or [],
+                             scope_ref, scope_kind)
+        scanned = len(units)
+        if goal in ("next-page", "previous-page"):
+            rel = "next" if goal == "next-page" else "prev"
+            probe = await _do_rel_link(sess, record, rel)
+            if probe is not None:
+                line, note = _pagedata.wrap(
+                    _do_match_line(probe), url=record.page.url)
+                return {"stage": f"goal-pattern:{goal}",
+                        "mechanism": f"the page's own rel={rel!r} link, "
+                                     f"which is the first rung of the "
+                                     f"ranking read_pages walks with",
+                        "ref": probe["ref"], "match": line, "page_note": note,
+                        "candidates_scanned": scanned,
+                        "scope": within or "whole page"}
+        got = _do_mechanism(data, goal, f" {intent.lower()} ", units,
+                            scope_ref, scope_kind)
+        if got is not None:
+            candidates, looked = got
+            stage = f"goal-pattern:{goal}"
+            if len(candidates) == 1:
+                hit = candidates[0]
+                line, note = _pagedata.wrap(
+                    _do_match_line(hit), url=record.page.url)
+                return {"stage": stage, "mechanism": _do_mechanism_note(hit,
+                                                                       looked),
+                        "ref": hit["ref"], "match": line, "page_note": note,
+                        "candidates_scanned": scanned,
+                        "scope": within or "whole page"}
+            if len(candidates) > 1:
+                listed = _pagedata.wrap_line(
+                    "; ".join(_do_match_line(c) for c in candidates[:12]),
+                    url=record.page.url)
+                raise AmbiguousLocation(
+                    f"{len(candidates)} elements on this page answer to "
+                    f"{intent!r}, and no tool acts on first match. What was "
+                    f"looked for: {looked}. Candidates:\n{listed}\n"
+                    f"Nothing was done. Act on one of those refs directly "
+                    f"(click(page={record.handle!r}, "
+                    f"location={{\"ref\": \"...\"}})), or narrow the goal "
+                    f"with within={{'form': 'fN'}} or "
+                    f"within={{'region': 'rN'}}.")
+            raise TargetNotFound(
+                f"the goal {intent!r} matched the {goal!r} shape and the "
+                f"page does not carry its mechanism. What was looked for: "
+                f"{looked}. {scanned} interactive element(s) were examined"
+                + (f" inside {scope_kind} {scope_ref}" if scope_ref else
+                   " on the whole page")
+                + (f"; the page reports {data.get('affordance_total')} in "
+                   f"total, so some were not returned by this read"
+                   if (data.get("affordance_total") or 0) > scanned else "")
+                + ". Nothing was done. find_elements(page="
+                f"{record.handle!r}, query=...) lists what the page actually "
+                f"has.")
+    # STAGE 3. The existing describe selector, reused rather than rewritten.
+    location = {"describe": intent}
+    if verb == "click":
+        location["prefer"] = "button"
+    elif verb == "type":
+        location["prefer"] = "textbox"
+    resolved = await _act.resolve(sess, record, location, tool="do")
+    unit = resolved.get("unit") or {}
+    line, note = _pagedata.wrap(
+        f'{unit.get("role")} "{unit.get("name")}"', url=record.page.url)
+    return {"stage": "describe",
+            "mechanism": ("word overlap against every interactive element's "
+                          "accessible name, role, placeholder, and title, "
+                          "with ties refused rather than picked"),
+            "ref": resolved.get("session_ref") or resolved.get("node_ref"),
+            "match": line, "page_note": note,
+            "candidates_scanned": scanned,
+            "scope": within or "whole page"}
+
+
+def _do_match_line(unit: dict) -> str:
+    bits = [str(unit.get("ref")), str(unit.get("role")),
+            f'"{unit.get("name") or "(unnamed)"}"']
+    if unit.get("type"):
+        bits.append(f'type={unit["type"]}')
+    return " | ".join(bits)
+
+
+def _do_mechanism_note(unit: dict, looked: str) -> str:
+    kind = (unit.get("type") or "").lower()
+    if kind in _act.SUBMIT_TYPES:
+        return (f"{looked}; this one is a "
+                + ("<button> with no type attribute, which the HTML spec "
+                   "makes a submit button inside a form"
+                   if unit.get("tag") == "BUTTON" and kind == "submit"
+                   else f"<{(unit.get('tag') or '').lower()} type={kind}>"))
+    return looked
+
+
+async def _do_dispatch(page: str, verb: str, ref: str, text: str | None,
+                       keys: str | None, timeout_ms: int) -> dict:
+    """THE HANDOFF, the same one `find_and_act` makes: mint the ref, then
+    call the tool the two-call path calls. Every gate (the choke point, the
+    submit classification and its confirmation, the TOCTOU re-validation,
+    the cloak refusal, the credential blindness, the budget charge, the
+    verified outcome) is inherited by construction rather than
+    reimplemented."""
+    location = {"ref": ref}
+    if verb == "click":
+        return await click(page=page, location=location,
+                           timeout_ms=timeout_ms)
+    if verb == "type":
+        return await type_text(page=page, location=location, text=text or "")
+    if verb == "press":
+        return await press_keys(page=page, keys=keys or "", location=location)
+    return await scroll(page=page, action="to", location=location,
+                        timeout_ms=timeout_ms)
+
+
+async def do(
+    page: str,
+    intent: str,
+    text: str | None = None,
+    within: dict | None = None,
+    timeout_ms: int = 15000,
+) -> dict:
+    """Act on a GOAL rather than on a label: do(intent='submit the login
+    form') works out which element performs that goal and acts on it, in one
+    call, resolving at execution time so nothing acts on a ref that has been
+    sitting in a transcript. The difference from find_and_act is the
+    difference between naming a control and naming an outcome, and it
+    matters most where HTML and a reader disagree. Submitting a form is not
+    a search for the word Submit: the control may be an input of type image,
+    which is a submit button with a picture on it, or a button with no type
+    attribute at all, which the HTML spec makes a submit button inside a
+    form, and a label sitting next to the button forwards its activation to
+    the button rather than doing anything itself. This asks the document
+    which element the browser would activate instead of guessing from the
+    words on the page. The verb comes from the intent (submit, click,
+    choose, type, press a named key, scroll to); a typing goal takes its
+    value in `text` and never from the intent itself. One goal per call: an
+    intent carrying two of them refuses rather than deciding what order you
+    meant. When more than one element answers the goal, this refuses and
+    lists every candidate with a ref you can act on, because two submit
+    buttons on a page is not a thing to pick between. It returns the same
+    verified outcome the direct tool returns, plus a resolution block that
+    names which stage settled the goal, the mechanism it asked for, and the
+    element it settled on, so you can read back why this element and not
+    another. Every gate the direct tools fire, this fires, because it hands
+    off to them.
+    """
+    plan = _do_classify(intent, text)
+    sess, record = MANAGER.locate(page)
+    _audit.annotate(session=sess.session_id, page=record.handle,
+                    url=record.page.url, lane=sess.spec.label)
+    record.touch(record.page.url)
+    resolution = await _do_resolve(sess, record, intent=intent,
+                                   verb=plan["verb"], goal=plan["goal"],
+                                   within=within)
+    result = await _do_dispatch(page, plan["verb"], resolution["ref"], text,
+                                plan["keys"], timeout_ms)
+    result["tool"] = "do"
+    result["acted"] = plan["verb"]
+    result["intent"] = intent
+    note = resolution.pop("page_note")
+    result["resolution"] = {k: v for k, v in resolution.items()
+                            if k != "ref"}
+    note["covers"] = ["resolution.match", "target.name"]
+    result["page_data"] = note
+    return result
+
+
 def _batch_error_text(exc: Exception) -> str:
     """A step's refusal, carried into the report WITHOUT breaking an
     envelope.
@@ -5159,6 +5665,7 @@ LITE_TOOLS = (
     fill_form,
     find_and_act,
     batch,
+    do,
     press_keys,
     scroll,
     handle_dialog,

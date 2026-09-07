@@ -84,7 +84,12 @@ from ..projection import extract, instrument
 _LADDER_KEYS = ("ref", "region", "form", "table")
 _LIVE_KEYS = ("css", "xpath", "testid", "coordinate", "nth", "describe",
               "text", "anchor")
-_MODIFIERS = ("shadow", "exact", "frame")
+#: `prefer` is a scoring hint for the `describe` selector and nothing else: a
+#: role name that breaks a TIE in word overlap, so a click-shaped goal
+#: settles on the button rather than on a link whose href text happens to
+#: carry the same word. It never selects an element on its own, and a tie
+#: that survives it is still a refusal.
+_MODIFIERS = ("shadow", "exact", "frame", "prefer")
 
 
 def selector_of(location: dict | None) -> tuple[str, object]:
@@ -207,6 +212,10 @@ _RESOLVE_JS = r"""
     if (el.tagName === 'INPUT') {
       const type = (el.type || '').toLowerCase();
       if ((type === 'submit' || type === 'button' || type === 'reset') && typeof el.value === 'string') return squash(el.value);
+      // `<input type=image>` names itself from alt (HTML-AAM), the same rung
+      // the extractor and find.js were missing. Three copies of nameOf is a
+      // pre-existing condition; three copies DISAGREEING would be a new one.
+      if (type === 'image') { const alt = squash(el.getAttribute('alt')); if (alt) return alt; }
       const ph = el.getAttribute('placeholder'); if (squash(ph)) return squash(ph);
       return '';
     }
@@ -276,12 +285,16 @@ _RESOLVE_JS = r"""
     }
     else if (loc.describe) {
       const words = String(loc.describe).toLowerCase().split(/\s+/).filter(Boolean);
+      // A word hit counts double so the ROLE preference can only break a
+      // tie, never outweigh a real overlap: a link that matches one more
+      // word still beats a button that matches one fewer.
+      const prefer = loc.prefer ? String(loc.prefer).toLowerCase() : '';
       const scored = [];
       for (const el of queryAll(INTERACTIVE)) {
         const r = roleOf(el);
         const hay = (nameOf(el, r) + ' ' + r + ' ' + (el.getAttribute('placeholder') || '') + ' ' + (el.getAttribute('title') || '')).toLowerCase();
         let sc = 0; for (const w of words) if (hay.indexOf(w) >= 0) sc++;
-        if (sc) scored.push([sc, el]);
+        if (sc) scored.push([sc * 2 + (prefer && r === prefer ? 1 : 0), el]);
       }
       const best = scored.length ? Math.max.apply(null, scored.map(s => s[0])) : 0;
       cands = scored.filter(s => s[0] === best).map(s => s[1]);

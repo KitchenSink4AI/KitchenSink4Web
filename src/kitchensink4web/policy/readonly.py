@@ -117,8 +117,9 @@ MUTATING: frozenset[str] = frozenset({
     # that nothing in it can click.
     "click", "type_text", "fill_form", "find_and_act", "press_keys",
     # `batch` clicks, and the argument that put find_and_act here applies
-    # with more force: it clicks N times per call.
-    "batch",
+    # with more force: it clicks N times per call. `do` clicks too, and its
+    # whole job is resolving WHICH element performs a goal.
+    "batch", "do",
     # handle_dialog answers a native dialog, and answering one is acting: an
     # OK on a confirm() is the click the page was waiting for. Under read-only
     # the tool is absent and the driver's dismissal stands, so a dialog raised

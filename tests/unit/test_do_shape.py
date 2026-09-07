@@ -64,12 +64,14 @@ def test_a_type_intent_without_text_refuses():
 
 
 def test_a_press_intent_needs_a_key_from_the_closed_set():
-    """`do` takes no `keys` argument, so a press-shaped intent names its key
-    or it refuses. The set is closed on purpose: recognizing 'Enter' is not
-    the same thing as inventing a value out of prose."""
+    """`do` takes no `keys` argument, so a keyboard-shaped intent names its
+    key or it refuses. The set is closed on purpose: recognizing 'Enter' is
+    not the same act as inventing a value out of prose, which is why `text`
+    is never read from an intent at all."""
     with pytest.raises(BadParams) as exc:
-        call(page="p1", intent="press the thing")
-    assert "Enter" in str(exc.value)
+        call(page="p1", intent="press the ctrl+a key")
+    text = str(exc.value)
+    assert "Enter" in text and "press_keys" in text
 
 
 def test_action_is_not_a_parameter():
@@ -96,9 +98,12 @@ def test_the_next_page_lexicon_is_shared_with_read_pages():
     """Pin 12. `read_pages` already ranks next-page links and `do` must not
     grow a second, drifting copy of that ranking."""
     from kitchensink4web.ops import common, extract
-    assert common.NEXT_LABEL_RE
+    # An identity check, not a string comparison: `do` holds the compiled
+    # object common authored, and read_pages splices the JS literal from the
+    # same alternation.
+    assert lite._DO_NEXT_LABEL is common.NEXT_LABEL
     assert common.NEXT_LABEL_RE in extract._NEXT_JS
-    assert common.NEXT_LABEL_RE in lite._DO_NEXT_JS_LEXICON
+    assert common.NEXT_LABEL_ALTERNATION in common.NEXT_LABEL.pattern
 
 
 def test_nothing_in_do_calls_a_language_model():

@@ -237,6 +237,13 @@
       const type = (el.type || '').toLowerCase();
       if ((type === 'submit' || type === 'button' || type === 'reset')
           && typeof el.value === 'string') return squash(el.value);
+      // `<input type=image>` names itself from alt (HTML-AAM). The same
+      // rung the extractor was missing, missing here too, so a search for
+      // the word on the button could not find the button.
+      if (type === 'image') {
+        const alt = squash(el.getAttribute('alt') || '');
+        if (alt) return alt;
+      }
       const ph = el.getAttribute('placeholder');
       if (squash(ph)) return squash(ph);
       return '';

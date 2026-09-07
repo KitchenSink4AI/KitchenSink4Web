@@ -33,7 +33,8 @@ from kitchensink4web.errors import (AmbiguousLocation, BadParams,
                                     ConfirmationRequired, CredentialRefused,
                                     TargetNotFound)
 from kitchensink4web.ops import lite
-from kitchensink4web.policy import audit, budgets, credentials, readonly
+from kitchensink4web.policy import (audit, budgets, credentials, gates,
+                                    readonly)
 
 pytestmark = pytest.mark.browser
 
@@ -83,6 +84,22 @@ async def _open(site, variant):
     return session, page
 
 
+async def _gated(fn, **kwargs):
+    """One call through the gate, the way `server._wrap` redeems it: a
+    single action re-runs safely, which is exactly the property a composite
+    does NOT have and why `batch` confirms per step instead."""
+    try:
+        return await fn(**kwargs)
+    except ConfirmationRequired as exc:
+        token = (getattr(exc, "detail", {}) or {}).get("requestState")
+        grant = gates.ENGINE.redeem(token, {"allow": True})
+        gates.deposit_grant(grant)
+        try:
+            return await fn(**kwargs)
+        finally:
+            gates.clear_grant()
+
+
 async def _submits(page):
     _sess, record = MANAGER.locate(page)
     return await record.page.evaluate("() => window.__submits")
@@ -97,7 +114,7 @@ def test_do_submit_resolves_input_type_image(site):
     word Submit does not see it."""
     async def go():
         _, page = await _open(site, "image")
-        out = await lite.do(page=page, intent="submit the form")
+        out = await _gated(lite.do, page=page, intent="submit the form")
         assert out["tool"] == "do"
         assert out["acted"] == "click"
         assert out["resolution"]["stage"] == "goal-pattern:submit-form"
@@ -112,7 +129,7 @@ def test_do_submit_resolves_typeless_button(site):
     per the HTML spec; only 'button' and 'reset' opt out."""
     async def go():
         _, page = await _open(site, "typeless")
-        out = await lite.do(page=page, intent="submit the form")
+        out = await _gated(lite.do, page=page, intent="submit the form")
         assert out["resolution"]["stage"] == "goal-pattern:submit-form"
         assert (await _submits(page)).get("typeless") == 1
 
@@ -124,7 +141,7 @@ def test_do_submit_does_not_click_the_label(site):
     its activation to the control. The control is what gets resolved."""
     async def go():
         _, page = await _open(site, "label")
-        out = await lite.do(page=page, intent="submit the form")
+        out = await _gated(lite.do, page=page, intent="submit the form")
         assert out["target"]["role"] != "label"
         assert out["target"]["name"] != "Send it", out["target"]
         assert (await _submits(page)).get("label") == 1
@@ -137,7 +154,7 @@ def test_do_login_resolves_the_password_form(site):
     form that carries a password field."""
     async def go():
         _, page = await _open(site, "password")
-        out = await lite.do(page=page, intent="log in")
+        out = await _gated(lite.do, page=page, intent="log in")
         assert out["resolution"]["stage"] == "goal-pattern:log-in"
         assert (await _submits(page)).get("login") == 1
 
@@ -169,9 +186,9 @@ def test_do_scoped_within_resolves(site):
     async def go():
         _, page = await _open(site, "two")
         view = await lite.get_page_view(page=page)
-        assert "f2" in view["view"], view["view"]
-        out = await lite.do(page=page, intent="submit the form",
-                            within={"form": "f2"})
+        assert "f2" in view["projection"], view["projection"]
+        out = await _gated(lite.do, page=page, intent="submit the form",
+                           within={"form": "f2"})
         assert out["resolution"]["scope"] == {"form": "f2"}
         assert (await _submits(page)).get("second") == 1
 
@@ -275,9 +292,12 @@ def test_do_charges_exactly_one_action(site):
     """Resolution is a read, and a read that resolves nothing must not spend
     an action budget."""
     async def go():
-        session, page = await _open(site, "typeless")
+        # A NON-GATED goal, deliberately: a gated one re-runs through the
+        # confirmation and the retry is the wrapper's business, not this
+        # tool's arithmetic.
+        session, page = await _open(site, "none")
         before = budgets.BOOK.snapshot(session.session_id)["counters"]
-        await lite.do(page=page, intent="submit the form")
+        await lite.do(page=page, intent="click Do nothing")
         after = budgets.BOOK.snapshot(session.session_id)["counters"]
         assert after["actions"] - before["actions"] == 1
 
@@ -317,5 +337,21 @@ def test_do_falls_through_to_describe_and_says_so(site):
         out = await lite.do(page=page, intent="click Do nothing")
         assert out["resolution"]["stage"] == "describe"
         assert out["acted"] == "click"
+
+    run(go())
+
+
+def test_the_image_submitter_is_named_by_its_alt_text(site):
+    """The accname gap this feature found. `<input type=image>` takes its
+    accessible name from `alt` (HTML-AAM) and no rung read it, so the one
+    submit control this build calls out by name read as unnamed. An unnamed
+    control anchors turn-local, so the ref minted for it did not survive its
+    own re-resolution and the click refused."""
+    async def go():
+        _, page = await _open(site, "image")
+        found = await lite.find_elements(page=page, query="Send it")
+        assert "Send it" in found["results"]
+        out = await _gated(lite.do, page=page, intent="submit the form")
+        assert "Send it" in out["resolution"]["match"]
 
     run(go())

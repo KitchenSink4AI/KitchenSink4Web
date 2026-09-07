@@ -49,11 +49,11 @@ def test_full_surface_is_forty_six_tools(launch):
     forty-two later the same day, when handle_dialog did;
     forty-three when get_article joined the extract pack;
     forty-five after the small-parts wave added read_pages to
-    extract and manage_clipboard to files; and forty-six on 2026-09-07,
-    when batch joined the lite core."""
+    extract and manage_clipboard to files; and forty-seven on 2026-09-07,
+    when batch and do joined the lite core."""
     state = launch(cli_packs=packs.pack_names(), read_only=False)
-    assert len(state["registered"]) == 46
-    assert len(set(state["registered"])) == 46
+    assert len(state["registered"]) == 47
+    assert len(set(state["registered"])) == 47
 
 
 def test_full_surface_under_read_only_hides_every_mutating_pack_tool(launch):
