@@ -34,8 +34,8 @@ from urllib.parse import urlparse
 
 from .. import envelope as _envelope
 from .. import pagedata as _pagedata
-from ..errors import (AmbiguousLocation, BadParams, BudgetExhausted, Conflict,
-                      LoopDetected, RangeOutOfBounds, TargetNotFound)
+from ..errors import (AmbiguousLocation, BadParams, RangeOutOfBounds,
+                      TargetNotFound)
 from ..policy import budgets as _budgets
 from ..policy import credentials as _credentials
 from ..policy import engine as _policy
@@ -1495,9 +1495,22 @@ def _aggregate_preflight(urls, max_urls) -> tuple[list[str], int]:
     for i, url in enumerate(urls):
         text = str(url or "").strip()
         try:
-            cleaned.append(_lite._validated_url(text))
+            checked = _lite._validated_url(text)
         except Exception as exc:
             bad.append(f"[{i}] {text!r}: {str(exc)[:120]}")
+            continue
+        # THE SCHEME CHECK IS PRE-FLIGHT HERE, and not because `approve()`
+        # would miss it: the origin policy denies a non-web scheme at the
+        # choke point and would put NAVIGATION_BLOCKED in that URL's slot. A
+        # `file:///` in a list of product pages is an argument mistake rather
+        # than a site condition, though, and the whole point of validating the
+        # list first is that the caller learns about all of them at once
+        # instead of finding a fifth typo on the fifth call.
+        if urlparse(checked).scheme.lower() not in ("http", "https"):
+            bad.append(f"[{i}] {text!r}: aggregate visits http(s) URLs only, "
+                       f"and this names another scheme")
+            continue
+        cleaned.append(checked)
     if bad:
         raise BadParams(
             f"{len(bad)} of {len(urls)} URL(s) are not navigable and the "
@@ -1515,6 +1528,31 @@ def _aggregate_preflight(urls, max_urls) -> tuple[list[str], int]:
     return cleaned, cap
 
 
+#: The one driver string that means NO REQUEST WAS MADE. A failed hop leaves
+#: Chromium committing `chrome-error://chromewebdata` asynchronously, and the
+#: next `goto` issued while that commit is in flight is refused before it
+#: touches the network. Retrying it once is the same hop rather than a second
+#: one, which is why it is not charged again and why the retry is bounded to a
+#: single attempt on this exact string.
+_INTERRUPTED = "interrupted by another navigation"
+
+
+async def _goto_once(record, url, timeout_ms):
+    """One hop, with the dead-neighbour retry and nothing else."""
+    try:
+        return await record.page.goto(
+            url, wait_until="load", timeout=timeout_ms)
+    except Exception as exc:
+        if _INTERRUPTED not in str(exc).lower():
+            raise
+        try:
+            await record.page.wait_for_load_state("load", timeout=2000)
+        except Exception:                               # noqa: BLE001
+            pass
+        return await record.page.goto(
+            url, wait_until="load", timeout=timeout_ms)
+
+
 async def _aggregate_one(sess, record, url, schema, tiers, wait,
                          per_url_timeout_ms) -> dict:
     """One URL, in the order that IS the contract. Raises on its own failures;
@@ -1530,8 +1568,7 @@ async def _aggregate_one(sess, record, url, schema, tiers, wait,
     before = record.page.url
     started = time.monotonic()
     try:
-        response = await record.page.goto(
-            url, wait_until="load", timeout=per_url_timeout_ms)
+        response = await _goto_once(record, url, per_url_timeout_ms)
     except Exception as exc:
         _lite._raise_if_unreachable(exc, "aggregate", record)
         raise
@@ -1669,37 +1706,51 @@ async def aggregate(
             f"runs until the budget refuses, and that refusal carries every "
             f"row collected up to it.")
     results, stopped = [], None
-    try:
-        for url in cleaned:
-            try:
-                results.append(await _aggregate_one(
-                    sess, record, url, schema, tiers, wait,
-                    per_url_timeout_ms))
-            except (BudgetExhausted, LoopDetected, Conflict):
+    for url in cleaned:
+        try:
+            results.append(await _aggregate_one(
+                sess, record, url, schema, tiers, wait, per_url_timeout_ms))
+            continue
+        except Exception as exc:                        # noqa: BLE001
+            code = getattr(exc, "code", None) or _envelope.classify(exc)
+            if code not in _PER_URL_CODES:
+                # LOSING TWELVE SUCCESSFUL EXTRACTIONS BECAUSE THE THIRTEENTH
+                # URL exhausted a budget is the failure mode this clause
+                # exists to prevent. `envelope.refusal` reads `detail` off the
+                # exception, so the partial dataset rides out WITH the refusal
+                # instead of being discarded. Every batch-stopping raise gets
+                # it, not only the budget one: whatever ended the walk, the
+                # rows already collected belong to the caller.
+                try:
+                    exc.detail = {
+                        "partial_results": results,
+                        "requested": len(cleaned),
+                        "completed": len(results),
+                        "stopped_on": url,
+                        "note": ("the batch stopped here and the rows already "
+                                 "collected are attached and complete. They "
+                                 "cover only the URLs listed in them."),
+                    }
+                except Exception:       # an exception with no attribute dict
+                    pass
                 raise
-            except _envelope.CATCHABLE as exc:
-                code = getattr(exc, "code", None) or _envelope.classify(exc)
-                if code not in _PER_URL_CODES:
-                    raise
-                # THE PER-URL ERROR IS THE TOP-LEVEL ERROR'S SHAPE, built by
-                # the same function, so the caller has ONE parsing path for a
-                # refusal wherever it happened.
-                results.append({"url": url, "ok": False,
-                                "error": _envelope.refusal(exc)["error"]})
-    except (BudgetExhausted, LoopDetected, Conflict) as exc:
-        # LOSING TWELVE SUCCESSFUL EXTRACTIONS BECAUSE THE THIRTEENTH URL
-        # exhausted a budget is the failure mode this clause exists to prevent.
-        # `envelope.refusal` reads `detail` off the exception, so the partial
-        # dataset rides out with the refusal instead of being discarded.
-        exc.detail = {
-            "partial_results": results,
-            "requested": len(cleaned),
-            "completed": len(results),
-            "note": ("the batch stopped here and the rows already collected "
-                     "are attached and complete. They cover only the URLs "
-                     "listed in them."),
-        }
-        raise
+            # THE PER-URL ERROR IS THE TOP-LEVEL ERROR'S SHAPE, built by the
+            # same function, so the caller has ONE parsing path for a refusal
+            # wherever it happened.
+            slot = {"url": url, "ok": False,
+                    "error": _envelope.refusal(exc)["error"]}
+        # A FAILED HOP LEAVES A PAGE MID-FAILURE, and the driver then refuses
+        # the NEXT hop with "navigation is interrupted by another navigation
+        # to chrome-error://chromewebdata". One dead URL taking the two after
+        # it down is the batch-sinking this whole tool is built not to do, so
+        # the page is parked to a known document before the walk continues.
+        try:
+            await _lite._park_to_blank(
+                sess, record,
+                f"aggregate parked the page after {url} failed")
+        except Exception:                               # noqa: BLE001
+            pass
+        results.append(slot)
     succeeded = sum(1 for slot in results if slot.get("ok"))
     failed = len(results) - succeeded
     wrapped, note = _pagedata.wrap(

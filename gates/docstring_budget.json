@@ -10,6 +10,12 @@
     "schema": 250
   },
   "tools": {
+    "aggregate": {
+      "description_tokens": 220,
+      "schema_tokens": 153,
+      "total_tokens": 373,
+      "over_reference_caps": true
+    },
     "click": {
       "description_tokens": 100,
       "schema_tokens": 112,
@@ -56,6 +62,12 @@
       "description_tokens": 165,
       "schema_tokens": 58,
       "total_tokens": 223,
+      "over_reference_caps": true
+    },
+    "extract_page": {
+      "description_tokens": 263,
+      "schema_tokens": 97,
+      "total_tokens": 360,
       "over_reference_caps": true
     },
     "fill_form": {
