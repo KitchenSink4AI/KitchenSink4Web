@@ -1183,7 +1183,7 @@ _NEXT_JS = r"""
   if (head) push(head.getAttribute('href'), 'link rel=next', 'rel=next');
   const relA = document.querySelector('a[rel~="next" i][href]');
   if (relA) push(relA.getAttribute('href'), 'a rel=next', relA.textContent);
-  const word = /^(next|next page|next ›|older|older posts|older entries|more|show more|load more|›|»|→|next\s*[›»→])$/i;
+  const word = @@NEXT_LABEL_RE@@;
   for (const a of document.querySelectorAll('a[href]')) {
     const label = (a.getAttribute('aria-label') || a.textContent || '')
       .replace(/\s+/g, ' ').trim();
@@ -1191,7 +1191,7 @@ _NEXT_JS = r"""
   }
   return out;
 }
-"""
+""".replace("@@NEXT_LABEL_RE@@", common.NEXT_LABEL_RE)
 
 
 async def read_pages(

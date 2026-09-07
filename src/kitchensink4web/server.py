@@ -231,13 +231,17 @@ TOOL_CEILING_SLACK_MS = 15000
 #: Tools whose work is legitimately N times one operation. A page walk is N
 #: navigations and a workflow replay is N actions, so one bound for both
 #: shapes would be either useless or wrong.
-_CEILING_MULTIPLIER = {"read_pages": 12, "run_workflow": 12,
+_CEILING_MULTIPLIER = {"read_pages": 12, "run_workflow": 12, "batch": 12,
                        "export_har": 3, "export_pdf": 3}
 
 
 def _ceiling_ms(fn, kwargs: dict) -> int:
     ceiling = TOOL_CEILING_MS * _CEILING_MULTIPLIER.get(fn.__name__, 1)
-    for key in ("timeout_ms", "budget_ms"):
+    # `max_total_ms` is `batch`'s own whole-call bound, and it is answered by
+    # the tool that owns it: the batch names the bound, marks the running
+    # step TIMEOUT, and reports what completed. This ceiling stays the
+    # backstop for when that bound is not honored.
+    for key in ("timeout_ms", "budget_ms", "max_total_ms"):
         asked = kwargs.get(key)
         if isinstance(asked, (int, float)) and asked > 0:
             ceiling = max(ceiling, int(asked) + TOOL_CEILING_SLACK_MS)

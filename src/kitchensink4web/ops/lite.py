@@ -54,7 +54,8 @@ from . import wellknown as _wellknown
 from ..engine import (frames, handles as _handles, lanedb as _lanedb, lanes,
                       session as _session)
 from ..errors import (AmbiguousLocation, AuthRequired, BadParams,
-                      BlockedBySite, Conflict, LaneUnsupported, ModalBlocked,
+                      BlockedBySite, Conflict, ConfirmationRequired,
+                      LaneUnsupported, ModalBlocked,
                       NavigationFailed, NotImplementedYet, PageUnreachable,
                       ReadOnlyMode, SessionDead, StaleAnchor, TargetNotFound,
                       Timeout, ValidationFailed)
@@ -69,7 +70,8 @@ from ..policy import origins as _origins
 from ..policy import readonly
 from ..policy import walls as _walls
 from ..projection import (ENCODING_NAME as _ENCODING, RUNGS as _RUNGS,
-                          find as _find, instrument as _instrument,
+                          extract as _extract, find as _find,
+                          instrument as _instrument,
                           ntok as _ntok, read_page, read_text)
 from ..projection.render import VIEWS as _PROJECTION_VIEWS
 
@@ -3844,6 +3846,62 @@ async def find_and_act(
     _audit.annotate(session=sess.session_id, page=record.handle,
                     url=record.page.url, lane=sess.spec.label)
     record.touch(record.page.url)
+    settled = await _search_one(sess, record, query=query, role=role,
+                                kind=kind, within=within, action=action)
+    hit, found = settled["hit"], settled["found"]
+    target = {"ref": hit["ref"]}
+    # THE HANDOFF. Same function, same choke point, same ladder, same
+    # verified outcome. The ref is one this call minted a moment ago, so the
+    # rebind ladder re-resolves it against the page as it is at execution
+    # time and refuses if the page moved in between.
+    if action == "click":
+        result = await click(page=page, location=target, button=button,
+                             timeout_ms=timeout_ms)
+    elif action == "type":
+        result = await type_text(page=page, location=target, text=text,
+                                 clear_first=clear_first, submit=submit)
+    elif action == "press":
+        result = await press_keys(page=page, keys=keys, location=target)
+    else:
+        result = await scroll(page=page, action="to", location=target,
+                              timeout_ms=timeout_ms)
+    result["tool"] = "find_and_act"
+    result["acted"] = action
+    # What the search settled on, so the caller can see WHICH element the one
+    # match was without a second read. The match line quotes the accessible
+    # name verbatim and an accessible name is page-authored, so it rides the
+    # same labeled envelope `find_elements` puts its result lines in; the
+    # note also covers `target.name`, which carries the same string.
+    page_note = settled["page_note"]
+    result["found"] = {
+        "query": query, "kind": found["searched"],
+        "role": role, "scope": within if found.get("scope") else "whole page",
+        "match": settled["match_line"],
+        "candidates_scanned": found["candidates_scanned"],
+        "hidden_matches": found["hidden_matches"],
+    }
+    page_note["covers"] = ["found.match", "target.name"]
+    result["page_data"] = page_note
+    return result
+
+
+async def _search_one(sess, record, *, query: str, role: str | None,
+                      kind: str, within: dict | None, action: str,
+                      probe: bool = False, suffix: str = "") -> dict:
+    """THE SEARCH HALF, shared by every composite that resolves one target.
+
+    Extracted from `find_and_act` when `batch` arrived, for the reason
+    `find_and_act` gives for handing off its ACTING half: there is no second
+    implementation to keep in step with the first, so the frame walk, the
+    visible-count arithmetic, the ambiguity refusal, and the nearest-miss
+    refusal cannot diverge between the composites by construction rather
+    than by test.
+
+    Two knobs, both for the batch. `suffix` is appended to either refusal,
+    which is how a batch says that nothing in it ran. `probe` turns the two
+    refusals into VERDICTS instead: a pre-flight pass over a step that is
+    not the first one reports what it found and refuses nothing, because a
+    later step's target may not exist until an earlier step creates it."""
     root = _scope_root(sess, record, within)
     pierce = (within or {}).get("shadow", True) is not False
     # 12 is the ambiguity listing width, not a cap on what was counted:
@@ -3923,6 +3981,19 @@ async def find_and_act(
     # a target: the live resolver filters them and this filters them the same
     # way, so the ambiguity decision is made on the VISIBLE count.
     visible = found["total_matches"] - found["hidden_matches"]
+    if probe and visible > 1:
+        return {"verdict": "ambiguous-now", "count": visible,
+                "detail": (f'{visible} visible elements match {query!r}'
+                           + (f' with role={role!r}' if role else '')
+                           + '; advisory only, and this step re-resolves at '
+                             'its own turn')}
+    if probe and not visible:
+        return {"verdict": "not-found-now",
+                "detail": (f'nothing visible matches {query!r}'
+                           + (f' with role={role!r}' if role else '')
+                           + f' on the page as it is now '
+                             f'({found["candidates_scanned"]:,} candidates '
+                             f'scanned)')}
     if visible > 1:
         # THE ENVELOPE, on the fused path too. `find_elements` wraps these
         # exact strings through the same `_match_line`, and for one round
@@ -3941,7 +4012,7 @@ async def find_and_act(
             + f'Nothing was done. Act on one of those refs directly '
             f'({action if action != "type" else "type_text"}(page='
             f'{record.handle!r}, location={{"ref": "..."}})), or narrow the '
-            f'search with role= or a longer query.')
+            f'search with role= or a longer query.' + suffix)
     if not visible:
         # THE SAME ENVELOPE THE BRANCH TWELVE LINES ABOVE USES (gauntlet 4,
         # G4-08). The asymmetry was inside one function: the ambiguity arm
@@ -3964,43 +4035,1192 @@ async def find_and_act(
             + hint
             + (f' {found["hidden_matches"]} match(es) are in hidden content '
                f'and were counted rather than returned.'
-               if found["hidden_matches"] else ''))
+               if found["hidden_matches"] else '') + suffix)
 
     hit = found["matches"][0]
-    target = {"ref": hit["ref"]}
-    # THE HANDOFF. Same function, same choke point, same ladder, same
-    # verified outcome. The ref is one this call minted a moment ago, so the
-    # rebind ladder re-resolves it against the page as it is at execution
-    # time and refuses if the page moved in between.
-    if action == "click":
-        result = await click(page=page, location=target, button=button,
-                             timeout_ms=timeout_ms)
-    elif action == "type":
-        result = await type_text(page=page, location=target, text=text,
-                                 clear_first=clear_first, submit=submit)
-    elif action == "press":
-        result = await press_keys(page=page, keys=keys, location=target)
-    else:
-        result = await scroll(page=page, action="to", location=target,
-                              timeout_ms=timeout_ms)
-    result["tool"] = "find_and_act"
-    result["acted"] = action
-    # What the search settled on, so the caller can see WHICH element the one
-    # match was without a second read. The match line quotes the accessible
-    # name verbatim and an accessible name is page-authored, so it rides the
-    # same labeled envelope `find_elements` puts its result lines in; the
-    # note also covers `target.name`, which carries the same string.
     match_line, page_note = _pagedata.wrap(_match_line(hit), url=found["url"])
-    result["found"] = {
-        "query": query, "kind": found["searched"],
-        "role": role, "scope": within if found.get("scope") else "whole page",
-        "match": match_line,
-        "candidates_scanned": found["candidates_scanned"],
-        "hidden_matches": found["hidden_matches"],
+    return {"verdict": "resolves", "hit": hit, "found": found,
+            "match_line": match_line, "page_note": page_note,
+            "detail": match_line}
+
+
+# ------------------------------------------------------- the batch (#2)
+#
+# ALL PROSE BELOW IS PLACEHOLDER COPY. Every refusal and every docstring
+# sentence carries the FACTS the message must convey and none of the voice;
+# the final English is written by the main thread from the FACTS TO CONVEY
+# list in the build report, never by this module's author.
+
+#: The step vocabulary. CLOSED for the reason `workflows.REPLAYABLE` is
+#: closed: an open step vocabulary is an arbitrary-execution tool wearing a
+#: batch's clothes. One discriminating key per step, and the key names the
+#: kind.
+_BATCH_STEP_KINDS = ("find", "location", "wait", "assert", "navigate")
+
+#: How much pre-flight resolution runs before the first step executes. Only
+#: `strict` lets a step after the first one refuse the batch.
+_BATCH_PREFLIGHT_MODES = ("minimal", "advisory", "strict")
+
+#: `wait_for`'s own closed condition set, reused rather than re-expressed.
+_BATCH_WAIT_CONDITIONS = ("text", "text_gone", "url", "visible", "hidden",
+                          "js", "load")
+
+#: What a `find` step may carry, which is exactly what `find_and_act`
+#: accepts. Anything wider is the `location` form's business, and the
+#: refusal says so rather than widening `find_and_act`'s signature.
+_FIND_STEP_KEYS = frozenset({
+    "action", "text", "keys", "clear_first", "submit", "button",
+    "timeout_ms"})
+
+#: What a `location` step may carry: every argument the split tools take,
+#: because a location step reaches them directly.
+_LOCATION_STEP_KEYS = frozenset({
+    "action", "text", "keys", "clear_first", "submit", "press_enter",
+    "button", "click_count", "modifiers", "delay_ms", "repeat",
+    "timeout_ms"})
+
+_BATCH_KIND_LABEL = {"find": "find+act", "location": "location+act",
+                     "wait": "wait", "assert": "assert",
+                     "navigate": "navigate"}
+
+
+def _batch_line(step: dict) -> str:
+    """One caller-authored line per step. Built from what the CALLER asked
+    for, never from what the page answered, so the line is safe before the
+    step has run; the page's own words arrive later in `target.name`."""
+    kind, spec = step["kind"], step["spec"]
+    if kind == "navigate":
+        return f'navigate {spec.get("url", "")}'
+    if kind in ("wait", "assert"):
+        value = spec.get("value")
+        return (f'{kind} {spec.get("condition", "")}'
+                + (f' {value!r}' if value is not None else ''))
+    verb = step["action"]
+    if kind == "find":
+        target = repr(spec.get("query") or "")
+        if spec.get("role"):
+            target += f' role={spec["role"]!r}'
+    elif isinstance(spec, dict) and spec:
+        key = next(iter(spec))
+        target = f'{key}={spec[key]!r}'
+    else:
+        target = "no target (a global press)"
+    return f'{verb} -> {target}'
+
+
+def _batch_step_error(index: int, detail: str) -> str:
+    return f"batch step {index}: {detail}"
+
+
+def _batch_normalize(steps, *, timeout_ms: int, max_total_ms: int,
+                     preflight: str) -> list[dict]:
+    """Shape and cross-step structure, all of it free and none of it DOM.
+
+    This runs BEFORE the page is located, which is the property the shape
+    pins assert: a malformed step list refuses without opening, touching, or
+    moving anything."""
+    mode = (preflight or "advisory").strip().lower()
+    if mode not in _BATCH_PREFLIGHT_MODES:
+        raise BadParams(
+            f"unknown preflight mode {preflight!r}: the modes are "
+            f"{list(_BATCH_PREFLIGHT_MODES)}. 'minimal' resolves step 0 "
+            f"only, 'advisory' (the default) resolves what it can and "
+            f"refuses on step 0 only, 'strict' refuses on any step whose "
+            f"target is ambiguous or missing right now.")
+    if not steps or not isinstance(steps, list):
+        raise BadParams(
+            "batch needs a non-empty list of steps, each carrying exactly "
+            "one of "
+            f"{list(_BATCH_STEP_KINDS)} as its key: "
+            '{"find": {"query": "Add a comment"}, "action": "click"}. '
+            "The selector lives inside `find` or `location` and the typed "
+            "value sits at the step's top level as `text`, so the two "
+            "cannot collide.")
+    out: list[dict] = []
+    total = 0
+    for i, raw in enumerate(steps):
+        if not isinstance(raw, dict):
+            raise BadParams(_batch_step_error(
+                i, f"a step is an object, not a {type(raw).__name__}. The "
+                   f"step kinds are {list(_BATCH_STEP_KINDS)}."))
+        present = [k for k in _BATCH_STEP_KINDS if k in raw]
+        if "fields" in raw:
+            raise BadParams(_batch_step_error(
+                i, "there is no fill_form step. fill_form is already the "
+                   "batch for a form, and nesting a batch inside a batch "
+                   "doubles every reporting and gate question for no new "
+                   "capability. Call fill_form directly, or give this batch "
+                   "one `find` or `location` step per field."))
+        if len(present) != 1:
+            raise BadParams(_batch_step_error(
+                i, f"a step carries exactly one of {list(_BATCH_STEP_KINDS)} "
+                   f"as its discriminating key; this one carries "
+                   f"{present or 'none of them'} "
+                   f"(keys seen: {sorted(raw)})."))
+        kind = present[0]
+        spec = raw[kind]
+        step: dict = {"index": i, "kind": kind, "spec": spec,
+                      "timeout_ms": int(raw.get("timeout_ms")
+                                        or (spec or {}).get("timeout_ms")
+                                        or timeout_ms)}
+        if kind in ("wait", "assert"):
+            if not isinstance(spec, dict):
+                raise BadParams(_batch_step_error(
+                    i, f"a {kind} step carries a condition object, for "
+                       f'example {{"{kind}": {{"condition": "text", '
+                       f'"value": "Signed in as"}}}}.'))
+            cond = (spec.get("condition") or "").strip().lower()
+            if cond not in _BATCH_WAIT_CONDITIONS:
+                raise BadParams(_batch_step_error(
+                    i, f"unknown condition {spec.get('condition')!r}: the "
+                       f"conditions are {list(_BATCH_WAIT_CONDITIONS)}, "
+                       f"which is wait_for's own set."))
+            if kind == "assert" and cond == "js":
+                # NO SECOND DOOR ONTO THE EVALUATOR. A `wait` step delegates
+                # to `wait_for`, which gates a js predicate as
+                # `evaluate_script` (union wave, IG-01). An `assert` step
+                # evaluates the condition ONCE, here, through the precheck,
+                # and a precheck reached from this module would run the
+                # predicate with none of the seven ladder checks: not the
+                # read-only grade, not the origin policy, not the budget,
+                # not the confirmation gate. A one-shot evaluation is the
+                # same capability as a repeated one, so the assert kind does
+                # not carry it.
+                raise BadParams(_batch_step_error(
+                    i, "an assert step does not take the 'js' condition. "
+                       "A JavaScript predicate is script evaluation whatever "
+                       "it is called, and it is gated on that: use a wait "
+                       "step, which delegates to wait_for and asks the gate, "
+                       "or evaluate_script, which names the capability."))
+            spec["condition"] = cond
+        elif kind == "navigate":
+            if not isinstance(spec, dict) or not spec.get("url"):
+                raise BadParams(_batch_step_error(
+                    i, 'a navigate step carries a url, for example '
+                       '{"navigate": {"url": "https://example.com/new"}}.'))
+        else:
+            _batch_normalize_action(step, raw)
+        step["line"] = _batch_line(step)
+        total += step["timeout_ms"]
+        out.append(step)
+
+    if total > max_total_ms:
+        raise ValidationFailed(
+            f"the per-step timeouts sum to {total} ms and max_total_ms is "
+            f"{max_total_ms} ms, so this batch cannot finish inside its own "
+            f"bound. Nothing was executed. Raise max_total_ms or lower the "
+            f"per-step timeouts.")
+
+    # THE CROSS-STEP CHECK ONLY A BATCH CAN MAKE, and the argument for
+    # having a batch at all. A ref does not survive a navigation
+    # (`Session.invalidate_page` drops every ref and read token minted on
+    # the page), so a batch that navigates and then acts on a ref minted
+    # beforehand cannot possibly work, and saying so costs nothing.
+    first_nav = next((s["index"] for s in out if s["kind"] == "navigate"),
+                     None)
+    if first_nav is not None:
+        for step in out:
+            if step["kind"] != "location" or step["index"] < first_nav:
+                continue
+            ref = (step["spec"] or {}).get("ref")
+            if ref:
+                raise ValidationFailed(
+                    f"step {step['index']} acts on ref {ref!r} and step "
+                    f"{first_nav} navigates; refs minted before a navigation "
+                    f"do not survive it, so this batch cannot work as "
+                    f"written. Nothing was executed. Give the later step a "
+                    f"`find` instead, so it resolves its target after the "
+                    f"navigation.")
+    return out
+
+
+def _batch_normalize_action(step: dict, raw: dict) -> None:
+    """The action verb and its arguments, for a `find` or `location` step."""
+    i, kind, spec = step["index"], step["kind"], step["spec"]
+    action = (raw.get("action") or "click").strip().lower()
+    action = {"type_text": "type", "fill": "type", "press_keys": "press",
+              "scroll": "scroll_to", "scroll_into_view": "scroll_to"}.get(
+                  action, action)
+    if action not in _COMPOSITE_ACTIONS:
+        raise BadParams(_batch_step_error(
+            i, f"unknown action {raw.get('action')!r}: the actions are "
+               f"{list(_COMPOSITE_ACTIONS)}. 'type' needs `text`, 'press' "
+               f"needs `keys`; the rest need neither."))
+    if action == "type" and raw.get("text") is None:
+        raise BadParams(_batch_step_error(
+            i, "an action of 'type' needs `text` at the step's top level. "
+               "Pass real newline characters for a multi-line value; a "
+               "single-line field refuses one rather than pressing Enter "
+               "behind your back."))
+    if action == "press" and not (raw.get("keys") or "").strip():
+        raise BadParams(_batch_step_error(
+            i, "an action of 'press' needs `keys`, for example "
+               "keys='Enter' or keys='Control+A'."))
+    allowed = _FIND_STEP_KEYS if kind == "find" else _LOCATION_STEP_KEYS
+    extra = sorted(set(raw) - allowed - {kind})
+    if extra:
+        route = ("; a location step reaches the split tools directly and "
+                 "takes every argument they do, so pass a ref or selector "
+                 "as {\"location\": ...} instead" if kind == "find" else "")
+        raise BadParams(_batch_step_error(
+            i, f"a {kind} step does not take {extra}. It takes "
+               f"{sorted(allowed)}{route}."))
+    if kind == "find":
+        if not isinstance(spec, dict):
+            raise BadParams(_batch_step_error(
+                i, 'a find step carries a search object, for example '
+                   '{"find": {"query": "Add a comment", "role": "button"}}.'))
+        if not (spec.get("query") or "").strip() \
+                and spec.get("kind") not in ("css", "xpath") \
+                and not (spec.get("role") or "").strip():
+            raise BadParams(_batch_step_error(
+                i, "a find step needs a query, a role filter, or a css or "
+                   "xpath kind to find its target with. To act on a ref you "
+                   "already hold, use a location step."))
+    elif not isinstance(spec, (dict, type(None))):
+        raise BadParams(_batch_step_error(
+            i, 'a location step carries a selector object, for example '
+               '{"location": {"ref": "e12"}}, or null for a global press.'))
+    step["action"] = action
+    step["args"] = {k: raw[k] for k in raw if k in allowed and k != "action"}
+
+
+async def _assert_now(page: str, spec: dict, index: int) -> dict:
+    """A checkpoint that does not wait. Same condition vocabulary as a wait,
+    evaluated once, because the failure REPORT is the difference and the
+    difference is the whole value: a zero-timeout wait would report a
+    timeout and send the caller off tuning a number that was never the
+    problem."""
+    sess, record = MANAGER.locate(page)
+    cond = spec["condition"]
+    resolved = None
+    if cond in ("visible", "hidden"):
+        if not spec.get("location"):
+            raise BadParams(_batch_step_error(
+                index, f"an assert on {cond!r} needs a `location` naming the "
+                       f"element to check."))
+        try:
+            resolved = await _act.resolve(sess, record, spec["location"],
+                                          tool="batch", acting=False)
+        except (TargetNotFound, StaleAnchor):
+            resolved = None
+    held = await _wait_precheck(record.page, cond, spec.get("value"),
+                                resolved)
+    if cond == "hidden" and resolved is None:
+        held = True
+    if not held:
+        raise ValidationFailed(
+            f"the page was not in the expected state at step {index}: the "
+            f"assert on {cond!r}"
+            + (f" ({spec.get('value')!r})" if spec.get("value") is not None
+               else "")
+            + " does not hold right now. An assert checks once and does not "
+              "wait, so this is a state mismatch rather than a timeout; use "
+              "a wait step if the condition is expected to arrive later.")
+    return {"asserted": cond, "value": spec.get("value"), "held": True,
+            "url": record.page.url}
+
+
+async def _dispatch_step(page: str, step: dict) -> dict:
+    """One step through the REAL tool, so the policy choke point, the submit
+    classification, the TOCTOU re-validation, the rebind refusal, the
+    credential blindness, the budget charge, and the verified outcome all
+    apply exactly as they would to a direct call.
+
+    This is `find_and_act`'s parity argument one level up, and it is why
+    nothing here reaches the driver: there is no second implementation of
+    clicking to keep in step with the first."""
+    kind, spec, args = step["kind"], step["spec"], step.get("args") or {}
+    if kind == "navigate":
+        return await navigate(page=page, action="goto", url=spec.get("url"),
+                              wait_until=spec.get("wait_until", "load"),
+                              timeout_ms=step["timeout_ms"])
+    if kind == "wait":
+        return await wait_for(page=page, condition=spec["condition"],
+                              value=spec.get("value"),
+                              location=spec.get("location"),
+                              timeout_ms=step["timeout_ms"])
+    if kind == "assert":
+        return await _assert_now(page, spec, step["index"])
+    if kind == "find":
+        return await find_and_act(
+            page=page, query=spec.get("query") or "", action=step["action"],
+            text=args.get("text"), keys=args.get("keys"),
+            role=spec.get("role"), kind=spec.get("kind", "auto"),
+            within=spec.get("within"),
+            clear_first=bool(args.get("clear_first")),
+            submit=bool(args.get("submit")),
+            button=args.get("button", "left"),
+            timeout_ms=step["timeout_ms"])
+    action = step["action"]
+    if action == "click":
+        return await click(page=page, location=spec,
+                           button=args.get("button", "left"),
+                           click_count=int(args.get("click_count") or 1),
+                           modifiers=args.get("modifiers") or None,
+                           timeout_ms=step["timeout_ms"])
+    if action == "type":
+        return await type_text(page=page, location=spec,
+                               text=args.get("text") or "",
+                               clear_first=bool(args.get("clear_first")),
+                               press_enter=bool(args.get("press_enter")),
+                               submit=bool(args.get("submit")),
+                               delay_ms=int(args.get("delay_ms") or 0))
+    if action == "press":
+        return await press_keys(page=page, keys=args.get("keys") or "",
+                                location=spec,
+                                repeat=int(args.get("repeat") or 1),
+                                delay_ms=int(args.get("delay_ms") or 0))
+    return await scroll(page=page, action="to", location=spec,
+                        timeout_ms=step["timeout_ms"])
+
+
+async def _batch_preflight(sess, record, steps: list[dict],
+                           mode: str) -> dict:
+    """What CAN be validated before anything runs, and nothing more.
+
+    `fill_form` resolves every target upfront because they all live on one
+    static form. A batch's defining case is a target an earlier step
+    CREATES, so full pre-resolution is impossible by construction rather
+    than merely expensive. Only step 0's target is guaranteed resolvable
+    against the document the caller is looking at, so only step 0 can refuse
+    the batch."""
+    report = []
+    checked = 0
+    for step in steps:
+        i, kind = step["index"], step["kind"]
+        line = {"step": i, "verdict": "deferred-to-execution"}
+        first = i == 0
+        if kind in ("wait", "assert"):
+            line.update(verdict="not-checkable",
+                        detail=f"a {kind} step has no target to resolve")
+        elif kind == "navigate":
+            line.update(verdict="would-navigate", detail=step["spec"]["url"])
+        elif mode == "minimal" and not first:
+            line.update(verdict="deferred-to-execution",
+                        detail="preflight='minimal' resolves step 0 only")
+        elif kind == "find":
+            checked += 1
+            probe = not first and mode != "strict"
+            try:
+                settled = await _search_one(
+                    sess, record, query=step["spec"].get("query") or "",
+                    role=step["spec"].get("role"),
+                    kind=step["spec"].get("kind", "auto"),
+                    within=step["spec"].get("within"), action=step["action"],
+                    probe=probe,
+                    suffix=(" Nothing in this batch was executed."
+                            if first else ""))
+            except (AmbiguousLocation, TargetNotFound) as exc:
+                # STEP 0 KEEPS ITS OWN CODE, because its target is the one
+                # the caller is looking at and the ordinary refusal is the
+                # honest one. A later step under `strict` failed a check the
+                # caller ASKED for, which is a different fact and gets a
+                # different code.
+                if first:
+                    raise
+                raise ValidationFailed(
+                    f"preflight='strict' resolves every target before the "
+                    f"batch starts and step {i}'s does not resolve on the "
+                    f"page as it is now. Nothing in this batch was executed. "
+                    f"A later step's target often does not exist until an "
+                    f"earlier step creates it, which is what "
+                    f"preflight='advisory' (the default) reports instead of "
+                    f"refusing. {exc}") from exc
+            line.update(verdict=settled["verdict"],
+                        detail=settled.get("detail"))
+            if settled.get("count"):
+                line["count"] = settled["count"]
+        else:
+            checked += 1
+            try:
+                resolved = await _act.resolve(sess, record, step["spec"],
+                                              tool="batch", acting=False)
+                line.update(
+                    verdict=("resolves-rebound" if resolved["resolution"]
+                             == "rebound" else "resolves"),
+                    detail=f'{resolved["descriptor"].get("role")}')
+            except AmbiguousLocation as exc:
+                if first or mode == "strict":
+                    raise AmbiguousLocation(
+                        str(exc) + " Nothing in this batch was executed.") \
+                        from exc
+                line.update(verdict="ambiguous-now", detail=str(exc)[:160])
+            except (TargetNotFound, StaleAnchor) as exc:
+                if first or mode == "strict":
+                    raise ValidationFailed(
+                        f"step {i}'s target does not resolve on the page as "
+                        f"it is now and preflight={mode!r} refuses on any "
+                        f"step. Nothing in this batch was executed. "
+                        f"{str(exc)[:200]}") from exc
+                line.update(verdict="not-found-now", detail=str(exc)[:160])
+        if line["verdict"] in ("ambiguous-now", "not-found-now") \
+                and mode == "strict" and not first:
+            raise ValidationFailed(
+                f"preflight='strict' refuses when any step's target is not "
+                f"uniquely resolvable right now, and step {i} is "
+                f"{line['verdict']}. Nothing in this batch was executed. "
+                f"{line.get('detail') or ''}")
+        report.append(line)
+    return {
+        "mode": mode, "checked": checked, "steps": report,
+        "note": ("only step 0 can refuse a batch before execution: a later "
+                 "step's target may not exist until an earlier step creates "
+                 "it, so each step re-resolves at its own turn"),
     }
-    page_note["covers"] = ["found.match", "target.name"]
-    result["page_data"] = page_note
+
+
+async def batch(
+    page: str,
+    steps: list[dict],
+    preflight: str = "advisory",
+    timeout_ms: int = 15000,
+    max_total_ms: int = 180000,
+) -> dict:
+    """Run several actions on one page in a single call, each one resolving
+    its own target at its own turn. This is the general form of what
+    find_and_act did for one action and fill_form did for one form: a
+    four-step comment flow that cost sixteen calls costs one. A step is
+    {"find": {...}, "action": "click"} to search and act, {"location":
+    {"ref": "e12"}, "action": "type", "text": "hi"} to act on a ref you
+    already hold, {"wait": {...}} or {"assert": {...}} for a checkpoint, or
+    {"navigate": {"url": ...}}. The selector lives inside find or location
+    and the typed value sits at the step's top level as text, so the two can
+    never collide. Unlike fill_form, a batch cannot resolve every target
+    before it starts, because the button a batch exists to click often does
+    not exist until an earlier step creates it: what CAN be checked upfront
+    is checked, and only the first step's ambiguity or absence refuses the
+    whole batch. A failure stops the batch and returns a report rather than
+    raising: completed steps stay completed (browser actions do not roll
+    back), the failing step carries its own refusal, and the rest report
+    not_attempted. Each step charges its own budget through the real tool it
+    calls, so a batch of six clicks spends six actions: batching saves calls
+    and tokens, never budget.
+    """
+    normalized = _batch_normalize(steps, timeout_ms=timeout_ms,
+                                  max_total_ms=max_total_ms,
+                                  preflight=preflight)
+    mode = (preflight or "advisory").strip().lower()
+    sess, record = MANAGER.locate(page)
+    _audit.annotate(session=sess.session_id, page=record.handle,
+                    url=record.page.url, lane=sess.spec.label)
+    record.touch(record.page.url)
+
+    # A ref minted on another page refuses NOW rather than at step 4.
+    for step in normalized:
+        ref = (step["spec"] or {}).get("ref") if step["kind"] == "location" \
+            else None
+        entry = sess.element_map.entries.get(ref) if ref else None
+        if ref and (entry is None or entry.handle != record.handle):
+            raise TargetNotFound(
+                f"step {step['index']} acts on ref {ref!r}, which is not on "
+                f"{record.handle}: it was minted on another page, or the "
+                f"page it was minted on has since navigated. Nothing was "
+                f"executed. Read this page and use the refs it returns.")
+
+    started = time.monotonic()
+    preflight_report = await _batch_preflight(sess, record, normalized, mode)
+    before = _budgets.BOOK.snapshot(sess.session_id)["counters"]
+
+    # THE PAGE IS HELD FOR THE WHOLE BATCH (the fix wave's per-page write
+    # lock, made re-entrant per task for exactly this). Step N+1 acts on the
+    # state step N produced, so a call interleaved from elsewhere would turn
+    # the per-step re-resolution from a correctness property into a race
+    # that merely usually wins. The delegated tools take the same lock and
+    # re-enter it, because the owner is this task.
+    async with record.write_lock():
+        per_step, stopped = await _batch_run(page, normalized, started,
+                                             max_total_ms)
+
+    after = _budgets.BOOK.snapshot(sess.session_id)
+    completed = sum(1 for r in per_step if r["status"] == "completed")
+    lines = [f'{r["step"]}: {r["line"]}' for r in per_step]
+    _audit.annotate(batch={"steps": len(normalized), "completed": completed,
+                           "stopped_at": stopped, "lines": lines})
+    # The per-step `replay` annotations were taken as each step ran, so the
+    # batch's own record cannot carry the LAST step's block as though it
+    # were the whole call (see _batch_run).
+    _audit.take_annotation("replay")
+
+    payload = {
+        "session": sess.session_id, "page": record.handle, "tool": "batch",
+        "outcome": "partial" if stopped is not None else "complete",
+        "url": record.page.url,
+        "preflight": preflight_report,
+        "steps": per_step,
+        "completed": completed,
+        "stopped_at": stopped,
+        "not_attempted": [r["step"] for r in per_step
+                          if r["status"] == "not_attempted"],
+        "spend": {
+            "actions": after["counters"]["actions"] - before.get("actions", 0),
+            "navigations": (after["counters"]["navigations"]
+                            - before.get("navigations", 0)),
+            "remaining": {k: after["limits"][k] - after["counters"][k]
+                          for k in ("actions", "navigations")},
+        },
+        "rollback": "none. Browser actions do not roll back; the steps "
+                    "listed as completed HAVE happened.",
+        "page_data": _pagedata.wrap("", url=record.page.url)[1],
+    }
+    if stopped is not None:
+        failed = per_step[stopped]
+        payload["stopped"] = {"step": stopped,
+                              "code": failed.get("outcome"),
+                              "message": failed.get("error")}
+    payload["page_data"]["covers"] = ["steps[].target.name", "steps[].line",
+                                      "stopped.message"]
+    # `outcome` is the second key so it cannot be missed, and `stopped` sits
+    # beside it rather than at the end of a long step list.
+    ordered = {"session": payload["session"], "page": payload["page"],
+               "tool": "batch", "outcome": payload["outcome"]}
+    if "stopped" in payload:
+        ordered["stopped"] = payload["stopped"]
+    ordered.update({k: v for k, v in payload.items() if k not in ordered})
+    return ordered
+
+
+async def _batch_run(page: str, steps: list[dict], started: float,
+                     max_total_ms: int) -> tuple[list[dict], int | None]:
+    """The loop: per-step dispatch, per-step confirmation, stop and mark the
+    tail. Shaped after `run_workflow._execute` with `fill_form`'s
+    stop-and-mark semantics."""
+    per_step: list[dict] = []
+    replay_steps: list[dict] = []
+    stopped: int | None = None
+    for step in steps:
+        i = step["index"]
+        base = {"step": i, "kind": _BATCH_KIND_LABEL[step["kind"]],
+                "line": step["line"]}
+        if stopped is not None:
+            per_step.append({**base, "status": "not_attempted"})
+            continue
+        left_ms = max_total_ms - int((time.monotonic() - started) * 1000)
+        if left_ms <= 0:
+            per_step.append({**base, "status": "failed", "outcome": "TIMEOUT",
+                             "error": _batch_timeout_note(max_total_ms, i)})
+            stopped = i
+            continue
+        # Anything a PREVIOUS step left in the annotation buffer has already
+        # been taken; clear again so a step that raises cannot donate its
+        # neighbour's replay block to the batch record.
+        _audit.take_annotation("replay")
+        try:
+            result = await _batch_step_call(page, step, left_ms)
+        except ConfirmationRequired as exc:
+            # THE GATE, PER STEP. `server._wrap` redeems a gate and re-runs
+            # the WHOLE tool call, which for a batch would re-execute every
+            # completed step. `run_workflow` already works around this the
+            # same way and for the same reason: the elicitation happens HERE
+            # and only this step retries on an accept.
+            from .. import confirm
+            grant = await confirm.attempt(exc)
+            if grant is None:
+                per_step.append({
+                    **base, "status": "failed",
+                    "outcome": "CONFIRMATION_REQUIRED",
+                    "error": ("the step is a gated class and no human "
+                              "accepted the confirmation; it FAILS CLOSED. "
+                              + _batch_error_text(exc))})
+                stopped = i
+                continue
+            _gates.deposit_grant(grant)
+            try:
+                result = await _batch_step_call(page, step, left_ms)
+            except Exception as exc2:  # noqa: BLE001 - reported per step
+                per_step.append({**base, "status": "failed",
+                                 "outcome": _batch_code(exc2),
+                                 "error": _batch_error_text(exc2)})
+                stopped = i
+                continue
+            finally:
+                _gates.clear_grant()
+        except _envelope.CATCHABLE as exc:
+            per_step.append({**base, "status": "failed",
+                             "outcome": _batch_code(exc),
+                             "error": _batch_error_text(exc)})
+            stopped = i
+            continue
+        entry = {**base, "status": "completed"}
+        if isinstance(result, dict):
+            if result.get("target"):
+                entry["target"] = result["target"]
+            changed = result.get("changed")
+            if changed:
+                entry["effect"] = changed.get("effect")
+            if result.get("warnings"):
+                entry["warnings"] = result["warnings"]
+        # THE REPLAY TRAIL, PER STEP. `_drain_annotations` merges every
+        # annotation into one dict, so leaving the delegated tools' own
+        # `replay` blocks in place would record a five-step batch as ONE
+        # step and `save_workflow` would save the last one silently. A wait
+        # on a js predicate annotates nothing, which is `wait_for`'s
+        # existing choice and is preserved by taking whatever it left rather
+        # than by rebuilding a record here.
+        taken = _audit.take_annotation("replay")
+        if isinstance(taken, dict):
+            replay_steps.append(taken)
+        per_step.append(entry)
+    if replay_steps:
+        _audit.annotate(replay_steps=replay_steps)
+    return per_step, stopped
+
+
+def _batch_timeout_note(max_total_ms: int, index: int) -> str:
+    return (f"the whole-batch bound of {max_total_ms} ms expired at step "
+            f"{index}, which is max_total_ms rather than this step's own "
+            f"timeout_ms; raising the step's timeout would not help.")
+
+
+async def _batch_step_call(page: str, step: dict, left_ms: int):
+    """One dispatch, bounded by what is left of the whole-batch budget, so
+    the page is never held for longer than the caller's own bound."""
+    try:
+        return await asyncio.wait_for(_dispatch_step(page, step),
+                                      timeout=max(0.25, left_ms / 1000))
+    except asyncio.TimeoutError as exc:
+        raise Timeout(_batch_timeout_note(left_ms, step["index"])) from exc
+
+
+def _batch_code(exc: Exception) -> str:
+    return getattr(exc, "code", None) or _envelope.classify(exc)
+
+
+# --------------------------------------------------------- do (#6)
+#
+# ALL PROSE BELOW IS PLACEHOLDER COPY, as in the batch above.
+#
+# THE BOUNDARY, because without it this tool is a wrapper with a
+# hallucination surface. A calling model can turn a goal into a label, so
+# "find the thing that says Submit" is not what this is for. What a model
+# cannot do is answer WHICH ELEMENT, WHEN ACTIVATED, SUBMITS THIS FORM. HTML
+# has three submit states and a delegation rule, and a model that looks for
+# the word Submit misses `<input type=image>` (the 2026-09-06 re-attack R1:
+# clicking one submitted a checkout form carrying a live card number), misses
+# a typeless `<button>` inside a form, and clicks a `<label>` instead of the
+# control the label forwards its activation to. Those facts live in
+# `act.is_native_submitter` and `act.activation_delegate`, and this tool asks
+# them rather than guessing.
+
+#: Verb families, CLOSED. An intent whose verb is outside this lexicon
+#: refuses; it never defaults to click.
+_DO_VERBS: dict[str, str] = {
+    "submit": "click", "send": "click", "save": "click", "confirm": "click",
+    "click": "click", "tap": "click", "choose": "click", "select": "click",
+    "accept": "click", "reject": "click", "decline": "click",
+    "dismiss": "click", "close": "click", "activate": "click",
+    "push": "click", "log": "click", "login": "click", "signin": "click",
+    "sign": "click", "next": "click", "previous": "click", "prev": "click",
+    "go": "click", "open": "click", "search": "click",
+    "type": "type", "fill": "type", "write": "type", "input": "type",
+    "enter": "type",
+    "press": "press", "hit": "press",
+    "scroll": "scroll_to", "show": "scroll_to", "reveal": "scroll_to",
+}
+
+#: The keys a press-shaped intent may name. `do` takes no `keys` argument,
+#: so the key comes out of the intent or the call refuses. The set is CLOSED
+#: on purpose: recognizing a key NAME is not the same act as inventing a
+#: value out of prose, which is why `text` is never parsed from an intent.
+_DO_KEYS: tuple[str, ...] = (
+    "Enter", "Escape", "Tab", "Space", "Backspace", "Delete", "Home", "End",
+    "PageUp", "PageDown", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight")
+
+#: Words that join two goals. A marker alone is not a refusal: a control
+#: genuinely named "Save and Exit" is one goal, so what refuses is a VERB
+#: arriving after one of these.
+_DO_CONJUNCTIONS = (" and then ", " then ", ";", " after that ", " and ")
+
+#: Politeness and filler, skipped before the first word is read as the verb.
+_DO_FILLER = ("please", "now", "just", "kindly", "can", "you")
+
+#: The accept and reject halves of a consent banner, kept apart because
+#: answering a consent banner is a legal act by a person and the two answers
+#: are not interchangeable.
+_DO_CONSENT_ACCEPT = ("accept", "accept all", "allow", "allow all", "agree",
+                      "i agree", "ok", "got it", "understood")
+_DO_CONSENT_REJECT = ("reject", "reject all", "decline", "refuse", "deny",
+                      "only necessary", "necessary only", "essential only")
+_DO_CONSENT_WORDS = ("cookie", "cookies", "consent", "privacy", "gdpr",
+                     "tracking")
+_DO_CLOSE_NAMES = ("close", "close dialog", "dismiss", "x", "×",
+                   "✕", "✖")
+
+#: Pointer, not a copy. `read_pages` ranks the same links.
+_DO_NEXT_LABEL = _common.NEXT_LABEL
+_DO_PREV_LABEL = _common.PREV_LABEL
+
+
+def _do_words(intent: str) -> list[str]:
+    return [w for w in re.split(r"[^a-z0-9]+", intent.lower()) if w]
+
+
+def _do_classify(intent: str, text: str | None) -> dict:
+    """STAGE 1, the verb, and the multi-goal check. Deterministic, closed,
+    and it refuses rather than defaulting."""
+    raw = (intent or "").strip()
+    if not raw:
+        raise BadParams(
+            "do needs a goal to resolve, for example intent='submit the "
+            "login form' or intent='go to the next page'. It works out which "
+            "element performs that goal and acts on it. When you already "
+            "know the label of the control you want, find_and_act is the "
+            "tool: it searches for what you name and acts on it.")
+    low = f" {raw.lower()} "
+    words = [w for w in _do_words(raw) if w not in _DO_FILLER]
+    # THE VERB IS THE INTENT'S OWN FIRST WORD, not any verb-shaped token
+    # anywhere in it. "the login form" and "ponder the login form" both name
+    # a thing rather than an act, and a tool that read a verb out of the
+    # middle of either one would be defaulting to click while claiming not
+    # to. It also keeps a noun that doubles as a verb ("the search box")
+    # from being read as a second goal.
+    family = _DO_VERBS.get(words[0]) if words else None
+    keys = None
+    if family == "press":
+        keys = next((k for k in _DO_KEYS if k.lower() in words), None)
+        if not keys and not any(w in ("key", "keys", "keyboard", "chord")
+                                or "+" in w for w in _do_words(raw)):
+            # 'press the Save button' is a click by any reading, and reading
+            # it as one is what the page means by it.
+            family = "click"
+    # A SECOND GOAL AFTER A CONJUNCTION. `do` performs one goal per call, so
+    # the check is for a verb that arrives after a joining word rather than
+    # for a joining word alone: a control genuinely named "Save and Exit" is
+    # one goal.
+    for marker in _DO_CONJUNCTIONS:
+        head, sep, tail = low.partition(marker)
+        if not sep:
+            continue
+        rest = [w for w in _do_words(tail) if w not in _DO_FILLER]
+        if any(w in _DO_VERBS and not (keys and w == keys.lower())
+               for w in rest):
+            raise BadParams(
+                f"do performs ONE goal per call and {intent!r} carries more "
+                f"than one. Issue them in sequence, one call each, so every "
+                f"one of them resolves against the page as it is by then. "
+                f"Nothing was done.")
+    families = [family] if family else []
+    if not families:
+        raise BadParams(
+            f"do reads the goal's verb from the START of the intent and "
+            f"{words[0]!r} is not one it knows, so nothing was done and it "
+            f"did not default to clicking. The verb families are: click "
+            f"(submit, send, save, confirm, click, tap, choose, select, "
+            f"accept, dismiss, close, log in, next page), type (type, fill, "
+            f"write, enter), press (press or hit, plus a key name from "
+            f"{list(_DO_KEYS)}), and scroll_to (scroll, show, reveal). "
+            f"Nothing was done.")
+    verb = families[0]
+    if verb == "type" and text is None:
+        raise BadParams(
+            "do(intent=<a typing goal>) needs the value in `text`. Nothing "
+            "is ever read out of the intent itself, including a quoted "
+            "string: a value the tool invented from prose is a value you "
+            "never approved. Pass real newline characters for a multi-line "
+            "value; a single-line field refuses one rather than pressing "
+            "Enter behind your back.")
+    if verb == "press" and not keys:
+        raise BadParams(
+            f"a press-shaped goal names the key it presses, and do takes no "
+            f"`keys` argument, so the key has to come from the intent. The "
+            f"keys it recognizes are {list(_DO_KEYS)}; for a chord or any "
+            f"other key, call press_keys(keys='Control+A') directly.")
+    return {"verb": verb, "keys": keys, "goal": _do_goal(low, verb)}
+
+
+def _do_goal(low: str, verb: str) -> str | None:
+    """STAGE 2, the goal shape. A CLOSED set, and its size is the tool's
+    honesty budget: a small set that refuses everything else beats a large
+    fuzzy one. An intent matching none of these does not fall through to a
+    text search silently; it reaches the describe selector and the payload
+    says that it did."""
+    has = low.__contains__
+    if any(has(f" {w} ") for w in ("cookie", "cookies", "consent")) \
+            and any(has(f" {w} ") for w in
+                    ("accept", "reject", "allow", "decline", "dismiss",
+                     "agree", "refuse")):
+        return "consent"
+    if (has(" log in ") or has(" login ") or has(" sign in ")
+            or has(" signin ")):
+        return "log-in"
+    if any(has(f" {w} ") for w in ("dialog", "modal", "popup", "overlay")) \
+            and (has(" close ") or has(" dismiss ")):
+        return "close-dialog"
+    if has(" next ") or has(" older "):
+        return "next-page"
+    if has(" previous ") or has(" prev ") or has(" newer ") or has(" back "):
+        return "previous-page"
+    if has(" search "):
+        return "search"
+    if any(has(f" {w} ") for w in ("submit", "send", "save", "confirm")):
+        return "submit-form"
+    return None
+
+
+def _do_scope(sess, record, within: dict | None) -> tuple[str | None, str]:
+    """The `within` grammar, narrowed to what a mechanism search can honor:
+    one form or one region, both addressed by a ref from a read."""
+    if not within:
+        return None, "whole page"
+    key = next((k for k in ("form", "region") if within.get(k)), None)
+    if key is None:
+        raise BadParams(
+            "do scopes to one form or one region from a read: "
+            "within={'form': 'f2'} or within={'region': 'r7'}. To act on an "
+            "element you have already located, call click or type_text with "
+            "location={'ref': 'e12'}.")
+    ref = within[key]
+    entry = sess.element_map.entries.get(ref)
+    if entry is None or entry.handle != record.handle:
+        raise TargetNotFound(
+            f"{ref!r} is not a ref this page minted, so there is nothing to "
+            f"scope to. Read {record.handle!r} and use the refs it returns.")
+    return ref, key
+
+
+def _do_in_scope(data: dict, units: list[dict], scope_ref: str | None,
+                 scope_kind: str) -> list[dict]:
+    if not scope_ref:
+        return units
+    if scope_kind == "region":
+        return [u for u in units if u.get("region") == scope_ref]
+    form = next((f for f in data.get("forms") or []
+                 if f.get("ref") == scope_ref), None)
+    return _do_units_of_form(data, form) if form else []
+
+
+def _do_units_of_form(data: dict, form: dict | None) -> list[dict]:
+    """Every interactive element INSIDE one form.
+
+    By region, not by the form's own `fields` list, and the difference is
+    load-bearing: `fields` carries the form's data controls, so a `<button>`
+    submitter is not in it while an `<input type=submit>` is. A membership
+    test that missed exactly the elements this tool resolves would be the
+    wrong test. The fields list is the fallback for a form the extractor
+    gave no region."""
+    if not form:
+        return []
+    region = form.get("region")
+    units = data.get("affordances") or []
+    if region:
+        return [u for u in units if u.get("region") == region]
+    inside = {f.get("ref") for f in form.get("fields") or []}
+    return [u for u in units if u.get("ref") in inside]
+
+
+def _do_submitters(units: list[dict]) -> list[dict]:
+    """Every control that NATIVELY submits the form it is in. One question,
+    asked of the one function that answers it."""
+    return [u for u in units if _act.is_native_submitter(u)]
+
+
+def _do_password_forms(data: dict) -> list[dict]:
+    return [f for f in data.get("forms") or []
+            if any(fld.get("secret") for fld in f.get("fields") or [])]
+
+
+def _do_mechanism(data: dict, goal: str | None, low: str,
+                  units: list[dict], scope_ref: str | None,
+                  scope_kind: str) -> tuple[list[dict], str] | None:
+    """STAGE 2's other half: the goal shape's MECHANISM, as candidates.
+
+    Returns `(candidates, what was looked for)`, or None when the goal shape
+    is not one this stage answers, in which case the ladder falls to the
+    describe selector and says so."""
+    if goal in ("submit-form", "log-in"):
+        if goal == "log-in":
+            forms = _do_password_forms(data)
+            if scope_ref and scope_kind == "form":
+                forms = [f for f in forms if f.get("ref") == scope_ref]
+            pool = [u for f in forms for u in _do_units_of_form(data, f)]
+            looked = ("the submitter of the form that carries a password "
+                      "field")
+        else:
+            pool = units
+            looked = ("the form's native submit control (input type=submit, "
+                      "input type=image, or a button with no type attribute "
+                      "inside a form)")
+        return _do_submitters(pool), looked
+    if goal in ("next-page", "previous-page"):
+        # rel FIRST, then the label lexicon, which is the ranking read_pages
+        # walks with and is one shared constant rather than a second copy.
+        # The rel probe is a css resolve and happens in `_do_resolve`; this
+        # is the lexicon half.
+        pattern = (_DO_NEXT_LABEL if goal == "next-page"
+                   else _DO_PREV_LABEL)
+        rel = "next" if goal == "next-page" else "prev"
+        return ([u for u in units
+                 if u.get("role") == "link"
+                 and pattern.match((u.get("name") or "").strip())],
+                f"a link carrying rel={rel!r}, and failing that a link whose "
+                f"accessible name is one this build recognizes as a "
+                f"{'next' if rel == 'next' else 'previous'}-page control, "
+                f"which is the ranking read_pages walks with")
+    if goal == "search":
+        return ([u for u in units if u.get("role") == "searchbox"
+                 or (u.get("tag") == "INPUT"
+                     and (u.get("type") or "") == "search")],
+                "a control whose role is searchbox, or an input of type "
+                "search")
+    if goal == "consent":
+        # THE TWO ANSWERS ARE NOT INTERCHANGEABLE. Consent is a legal act by
+        # a person, so this resolves the control the caller NAMED and never
+        # widens an "accept" goal into any button on the banner.
+        rejecting = any(f" {w} " in low for w in
+                        ("reject", "decline", "refuse", "deny", "necessary"))
+        wanted = _DO_CONSENT_REJECT if rejecting else _DO_CONSENT_ACCEPT
+        regions = {r.get("ref") for r in data.get("regions") or []
+                   if any(w in (r.get("label") or "").lower()
+                          for w in _DO_CONSENT_WORDS)}
+        pool = [u for u in units
+                if u.get("region") in regions] if regions else units
+        return ([u for u in pool
+                 if (u.get("name") or "").strip().lower() in wanted],
+                f"a control inside a consent-shaped region whose accessible "
+                f"name is one of {list(wanted)}")
+    if goal == "close-dialog":
+        modal = data.get("modal") or {}
+        region = modal.get("region") if isinstance(modal, dict) else None
+        pool = [u for u in units if u.get("region") == region] if region \
+            else []
+        return ([u for u in pool
+                 if (u.get("name") or "").strip().lower()
+                 in _DO_CLOSE_NAMES],
+                "the close control of the topmost dialog on the page")
+    return None
+
+
+async def _do_rel_link(sess, record, rel: str) -> dict | None:
+    """The page's own rel=next / rel=prev link, if it has exactly one.
+
+    Ambiguity is NOT swallowed here: two of them raise the ordinary
+    ambiguity refusal from the resolver, which is the right answer. Only an
+    absence falls through to the label lexicon."""
+    try:
+        resolved = await _act.resolve(
+            sess, record, {"css": f'a[rel~="{rel}" i]'}, tool="do",
+            acting=False)
+    except (TargetNotFound, StaleAnchor, BadParams):
+        return None
+    unit = resolved.get("unit") or {}
+    return {"ref": resolved.get("session_ref") or resolved.get("node_ref"),
+            "role": unit.get("role"), "name": unit.get("name"),
+            "type": unit.get("type")}
+
+
+async def _do_resolve(sess, record, *, intent: str, verb: str,
+                      goal: str | None, within: dict | None) -> dict:
+    """STAGES 2 to 3. Every stage is deterministic and every stage can
+    refuse. Nothing here calls a language model: a version that asked one
+    which element to click would make the answer unreproducible and put a
+    guess behind a trusted click."""
+    scope_ref, scope_kind = _do_scope(sess, record, within)
+    stage = "describe"
+    looked = ""
+    candidates: list[dict] = []
+    scanned = 0
+    if goal:
+        data = await _extract(record.page)
+        sess.element_map.absorb(
+            data, record.handle, sess.reads.mint_token(record.handle),
+            ts=time.strftime("%Y-%m-%dT%H:%M:%S"), scope="do")
+        units = _do_in_scope(data, data.get("affordances") or [],
+                             scope_ref, scope_kind)
+        scanned = len(units)
+        if goal in ("next-page", "previous-page"):
+            rel = "next" if goal == "next-page" else "prev"
+            probe = await _do_rel_link(sess, record, rel)
+            if probe is not None:
+                line, note = _pagedata.wrap(
+                    _do_match_line(probe), url=record.page.url)
+                return {"stage": f"goal-pattern:{goal}",
+                        "mechanism": f"the page's own rel={rel!r} link, "
+                                     f"which is the first rung of the "
+                                     f"ranking read_pages walks with",
+                        "ref": probe["ref"], "match": line, "page_note": note,
+                        "candidates_scanned": scanned,
+                        "scope": within or "whole page"}
+        got = _do_mechanism(data, goal, f" {intent.lower()} ", units,
+                            scope_ref, scope_kind)
+        if got is not None:
+            candidates, looked = got
+            stage = f"goal-pattern:{goal}"
+            if len(candidates) == 1:
+                hit = candidates[0]
+                line, note = _pagedata.wrap(
+                    _do_match_line(hit), url=record.page.url)
+                return {"stage": stage, "mechanism": _do_mechanism_note(hit,
+                                                                       looked),
+                        "ref": hit["ref"], "match": line, "page_note": note,
+                        "candidates_scanned": scanned,
+                        "scope": within or "whole page"}
+            if len(candidates) > 1:
+                listed = _pagedata.wrap_line(
+                    "; ".join(_do_match_line(c) for c in candidates[:12]),
+                    url=record.page.url)
+                raise AmbiguousLocation(
+                    f"{len(candidates)} elements on this page answer to "
+                    f"{intent!r}, and no tool acts on first match. What was "
+                    f"looked for: {looked}. Candidates:\n{listed}\n"
+                    f"Nothing was done. Act on one of those refs directly "
+                    f"(click(page={record.handle!r}, "
+                    f"location={{\"ref\": \"...\"}})), or narrow the goal "
+                    f"with within={{'form': 'fN'}} or "
+                    f"within={{'region': 'rN'}}.")
+            raise TargetNotFound(
+                f"the goal {intent!r} matched the {goal!r} shape and the "
+                f"page does not carry its mechanism. What was looked for: "
+                f"{looked}. {scanned} interactive element(s) were examined"
+                + (f" inside {scope_kind} {scope_ref}" if scope_ref else
+                   " on the whole page")
+                + (f"; the page reports {data.get('affordance_total')} in "
+                   f"total, so some were not returned by this read"
+                   if (data.get("affordance_total") or 0) > scanned else "")
+                + ". Nothing was done. find_elements(page="
+                f"{record.handle!r}, query=...) lists what the page actually "
+                f"has.")
+    # STAGE 3. The existing describe selector, reused rather than rewritten.
+    if within:
+        # A SCOPE THAT COULD NOT BE HONORED IS A REFUSAL, never a silent
+        # widening. `within` narrows the MECHANISM search, and this intent
+        # matched no goal shape, so the ladder reached the describe selector,
+        # which searches the whole page.
+        raise BadParams(
+            f"within= narrows the search for a goal's mechanism, and "
+            f"{intent!r} matched none of the goal shapes this build "
+            f"recognizes, so the search fell through to word overlap over "
+            f"the whole page and the scope could not be honored. Nothing was "
+            f"done. Either name a goal it knows (submitting a form, logging "
+            f"in, the next or previous page, a search box, a consent banner, "
+            f"closing a dialog), or use find_and_act(query=..., within=...), "
+            f"which scopes a label search.")
+    location = {"describe": intent}
+    if verb == "click":
+        location["prefer"] = "button"
+    elif verb == "type":
+        location["prefer"] = "textbox"
+    resolved = await _act.resolve(sess, record, location, tool="do")
+    unit = resolved.get("unit") or {}
+    line, note = _pagedata.wrap(
+        f'{unit.get("role")} "{unit.get("name")}"', url=record.page.url)
+    return {"stage": "describe",
+            "mechanism": ("word overlap against every interactive element's "
+                          "accessible name, role, placeholder, and title, "
+                          "with ties refused rather than picked"),
+            "ref": resolved.get("session_ref") or resolved.get("node_ref"),
+            "match": line, "page_note": note,
+            "candidates_scanned": scanned,
+            "scope": within or "whole page"}
+
+
+def _do_match_line(unit: dict) -> str:
+    bits = [str(unit.get("ref")), str(unit.get("role")),
+            f'"{unit.get("name") or "(unnamed)"}"']
+    if unit.get("type"):
+        bits.append(f'type={unit["type"]}')
+    return " | ".join(bits)
+
+
+def _do_mechanism_note(unit: dict, looked: str) -> str:
+    kind = (unit.get("type") or "").lower()
+    if kind in _act.SUBMIT_TYPES:
+        return (f"{looked}; this one is a "
+                + ("<button> with no type attribute, which the HTML spec "
+                   "makes a submit button inside a form"
+                   if unit.get("tag") == "BUTTON" and kind == "submit"
+                   else f"<{(unit.get('tag') or '').lower()} type={kind}>"))
+    return looked
+
+
+async def _do_dispatch(page: str, verb: str, ref: str, text: str | None,
+                       keys: str | None, timeout_ms: int) -> dict:
+    """THE HANDOFF, the same one `find_and_act` makes: mint the ref, then
+    call the tool the two-call path calls. Every gate (the choke point, the
+    submit classification and its confirmation, the TOCTOU re-validation,
+    the cloak refusal, the credential blindness, the budget charge, the
+    verified outcome) is inherited by construction rather than
+    reimplemented."""
+    location = {"ref": ref}
+    if verb == "click":
+        return await click(page=page, location=location,
+                           timeout_ms=timeout_ms)
+    if verb == "type":
+        return await type_text(page=page, location=location, text=text or "")
+    if verb == "press":
+        return await press_keys(page=page, keys=keys or "", location=location)
+    return await scroll(page=page, action="to", location=location,
+                        timeout_ms=timeout_ms)
+
+
+async def do(
+    page: str,
+    intent: str,
+    text: str | None = None,
+    within: dict | None = None,
+    timeout_ms: int = 15000,
+) -> dict:
+    """Act on a GOAL rather than on a label: do(intent='submit the login
+    form') works out which element performs that goal and acts on it, in one
+    call, resolving at execution time so nothing acts on a ref that has been
+    sitting in a transcript. The difference from find_and_act is the
+    difference between naming a control and naming an outcome, and it
+    matters most where HTML and a reader disagree. Submitting a form is not
+    a search for the word Submit: the control may be an input of type image,
+    which is a submit button with a picture on it, or a button with no type
+    attribute at all, which the HTML spec makes a submit button inside a
+    form, and a label sitting next to the button forwards its activation to
+    the button rather than doing anything itself. This asks the document
+    which element the browser would activate instead of guessing from the
+    words on the page. The verb comes from the intent (submit, click,
+    choose, type, press a named key, scroll to); a typing goal takes its
+    value in `text` and never from the intent itself. One goal per call: an
+    intent carrying two of them refuses rather than deciding what order you
+    meant. When more than one element answers the goal, this refuses and
+    lists every candidate with a ref you can act on, because two submit
+    buttons on a page is not a thing to pick between. It returns the same
+    verified outcome the direct tool returns, plus a resolution block that
+    names which stage settled the goal, the mechanism it asked for, and the
+    element it settled on, so you can read back why this element and not
+    another. Every gate the direct tools fire, this fires, because it hands
+    off to them.
+    """
+    plan = _do_classify(intent, text)
+    sess, record = MANAGER.locate(page)
+    _audit.annotate(session=sess.session_id, page=record.handle,
+                    url=record.page.url, lane=sess.spec.label)
+    record.touch(record.page.url)
+    resolution = await _do_resolve(sess, record, intent=intent,
+                                   verb=plan["verb"], goal=plan["goal"],
+                                   within=within)
+    result = await _do_dispatch(page, plan["verb"], resolution["ref"], text,
+                                plan["keys"], timeout_ms)
+    result["tool"] = "do"
+    result["acted"] = plan["verb"]
+    result["intent"] = intent
+    note = resolution.pop("page_note")
+    result["resolution"] = {k: v for k, v in resolution.items()
+                            if k != "ref"}
+    note["covers"] = ["resolution.match", "target.name"]
+    result["page_data"] = note
     return result
+
+
+def _batch_error_text(exc: Exception) -> str:
+    """A step's refusal, carried into the report WITHOUT breaking an
+    envelope.
+
+    A per-step error is clipped, because a step report is a summary. But an
+    ambiguity refusal quotes page-authored candidate names inside a labeled
+    nonce envelope, and clipping that at 200 characters cuts the block open:
+    the opening delimiter and the label survive, the closing delimiter does
+    not, and page-authored text then runs to the end of the payload with
+    nothing marking where it stops. A message carrying an envelope is
+    carried whole; it is already bounded by the twelve-candidate listing
+    width."""
+    text = str(exc)
+    if _pagedata._STEM in text:
+        return text
+    return text[:200]
 
 
 # ------------------------------------------------------------ the plumbing
@@ -5592,6 +6812,8 @@ LITE_TOOLS = (
     type_text,
     fill_form,
     find_and_act,
+    batch,
+    do,
     press_keys,
     scroll,
     handle_dialog,

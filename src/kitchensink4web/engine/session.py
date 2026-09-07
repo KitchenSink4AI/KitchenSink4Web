@@ -139,6 +139,35 @@ def _max_contexts() -> int:
 MAX_CONTEXTS = _max_contexts()
 
 
+
+class _ReentrantHold:
+    """One `async with record.write_lock()`, re-entrant for the task that
+    already owns the page's lock."""
+
+    __slots__ = ("_record",)
+
+    def __init__(self, record) -> None:
+        self._record = record
+
+    async def __aenter__(self):
+        rec = self._record
+        if rec._writes_owner is not asyncio.current_task():
+            await rec._writes.acquire()
+            rec._writes_owner = asyncio.current_task()
+            rec._writes_depth = 0
+        rec._writes_depth += 1
+        return rec._writes
+
+    async def __aexit__(self, *_exc) -> bool:
+        rec = self._record
+        rec._writes_depth -= 1
+        if rec._writes_depth <= 0:
+            rec._writes_owner = None
+            rec._writes_depth = 0
+            rec._writes.release()
+        return False
+
+
 @dataclass
 class PageHandle:
     """One page, its handle, and the history KS4Web tracks itself."""
@@ -243,11 +272,34 @@ class PageHandle:
     #: a time, concurrent live calls queue"); here there was no queue.
     #: Created on first use, because a Lock binds to the running loop.
     _writes: Any = None
+    #: The task that currently holds the write lock, so the lock can be
+    #: re-entered by its own owner. See `write_lock`.
+    _writes_owner: Any = None
+    _writes_depth: int = 0
 
     def write_lock(self):
+        """The per-page write lock, RE-ENTRANT PER TASK (batch, 2026-09-07).
+
+        The cross-task guarantee is the one the union wave added and it is
+        unchanged: a write from another call waits its turn. What is new is
+        that the task already holding the lock may take it again, which a
+        composite needs and a plain `asyncio.Lock` cannot give it. `batch`
+        holds the page for the whole batch, because step N+1 acts on the
+        state step N produced and a call interleaved from elsewhere would
+        turn the per-step re-resolution from a correctness property into a
+        race that merely usually wins. Every step then delegates to the real
+        tool, and `type_text` and `fill_form` take this same lock at their
+        own write; without re-entry the batch would deadlock on its own
+        hold.
+
+        Re-entry is granted to the OWNING TASK only, never to another
+        caller, so nothing that was serialized before is serialized less
+        now. Created on first use, because a Lock binds to the running
+        loop."""
         if self._writes is None:
             self._writes = asyncio.Lock()
-        return self._writes
+        return _ReentrantHold(self)
+
 
     def frame_id(self, key: str) -> str:
         if key not in self.frame_ids:

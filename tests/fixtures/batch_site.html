@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Batch fixture: issue thread</title>
+<style>
+  body { font-family: sans-serif; margin: 2rem; }
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+<nav aria-label="Site"><a href="#top">Thread</a></nav>
+<main>
+  <h1>Issue 1: the four-step comment flow</h1>
+  <p>Deterministic. The comment box does not exist until the opener is
+     clicked, which is the whole case a sequential batch exists for: step 1
+     targets an element step 0 creates.</p>
+
+  <button id="open" type="button">Add a comment</button>
+
+  <div id="composer" class="hidden">
+    <label for="body">Markdown value</label>
+    <textarea id="body" rows="3"></textarea>
+    <button id="post" type="button">Post comment</button>
+  </div>
+
+  <section aria-label="Thread">
+    <h2>Comments</h2>
+    <ul id="thread"></ul>
+  </section>
+
+  <!-- A REAL native submitter (input type=submit), so the gate classifies
+       this as form_submit exactly as it would on any site. The submission
+       itself is cancelled so the fixture's counters survive the step: the
+       gate is computed from the control, never from whether a navigation
+       followed. -->
+  <form id="account" action="#posted" method="get"
+        onsubmit="event.preventDefault();">
+    <label for="handle">Account handle</label>
+    <input id="handle" name="handle" type="text" autocomplete="off">
+    <input id="save" type="submit" value="Save account">
+  </form>
+</main>
+<footer><p>Fixture page for KS4Web batch. No network calls.</p></footer>
+<script>
+  // Per-control click counters. The gate pin needs to prove that steps
+  // before a gated step ran EXACTLY ONCE, which a boolean cannot show.
+  window.__counts = {open: 0, post: 0, save: 0, decoy: 0};
+  const qs = new URLSearchParams(location.search);
+
+  document.getElementById('open').addEventListener('click', (ev) => {
+    if (!ev.isTrusted) return;
+    window.__counts.open += 1;
+    document.getElementById('composer').classList.remove('hidden');
+    if (qs.get('rerender')) {
+      // The same accessible name on a BRAND NEW node. A batch that cached
+      // step 1's pre-flight handle acts on a detached element and fails;
+      // one that re-resolves at its own turn succeeds.
+      const old = document.getElementById('body');
+      const fresh = document.createElement('textarea');
+      fresh.id = 'body';
+      fresh.rows = 3;
+      fresh.setAttribute('aria-label', 'Markdown value');
+      old.parentNode.replaceChild(fresh, old);
+    }
+  });
+
+  document.getElementById('post').addEventListener('click', (ev) => {
+    if (!ev.isTrusted) return;
+    window.__counts.post += 1;
+    const li = document.createElement('li');
+    li.textContent = document.getElementById('body').value || '(empty)';
+    document.getElementById('thread').appendChild(li);
+  });
+
+  document.getElementById('save').addEventListener('click', (ev) => {
+    if (!ev.isTrusted) return;
+    window.__counts.save += 1;
+  });
+
+  if (qs.get('ambiguous')) {
+    // Two visible controls with the same accessible name. Whichever step
+    // targets "Comment" refuses, and the refusal lists both.
+    const twin = document.createElement('button');
+    twin.type = 'button';
+    twin.textContent = 'Post comment';
+    twin.addEventListener('click', () => { window.__counts.decoy += 1; });
+    document.getElementById('composer').parentNode.appendChild(twin);
+    document.getElementById('composer').classList.remove('hidden');
+  }
+
+  if (qs.get('counters')) {
+    // Five plain buttons for the budget pin: each click is one action and
+    // nothing else on the page moves.
+    const box = document.createElement('div');
+    for (let i = 1; i <= 6; i += 1) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = 'Tick ' + i;
+      b.addEventListener('click', (ev) => {
+        if (!ev.isTrusted) return;
+        window.__counts['tick' + i] = (window.__counts['tick' + i] || 0) + 1;
+      });
+      box.appendChild(b);
+    }
+    document.querySelector('main').appendChild(box);
+  }
+</script>
+</body>
+</html>

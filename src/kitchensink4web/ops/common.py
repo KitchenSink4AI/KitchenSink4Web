@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import errno
 import os
+import re
 import time
 from pathlib import Path
 
@@ -52,6 +53,31 @@ ENV_SPILL_DIR = "KS4WEB_SPILL_DIR"
 #: `expires <= 253402300799`, rejecting the WHOLE add_cookies call over one
 #: cookie (ship-route test, 2026-09-06).
 _MS_EXPIRY_FLOOR = 1e11
+
+
+#: THE NEXT-PAGE LEXICON, ONE COPY (2026-09-07, with `do`).
+#:
+#: `read_pages` ranks a page's next-page link and `do(intent='next page')`
+#: resolves the same link as an ELEMENT to click. Two expressions of the
+#: same lexicon drift, and the drift is silent: a site whose control says
+#: "Older posts" would be walked by one tool and not found by the other.
+#: The alternation is authored here; `_NEXT_JS` splices the JS literal and
+#: the element resolver compiles the Python one, so both read the same list.
+NEXT_LABEL_ALTERNATION = (
+    r"next|next page|next ›|older|older posts|older entries|more|"
+    r"show more|load more|›|»|→|next\s*[›»→]")
+
+#: The JavaScript literal, for splicing into a page-side script.
+NEXT_LABEL_RE = f"/^({NEXT_LABEL_ALTERNATION})$/i"
+
+#: The same lexicon, compiled for server-side matching over an extraction.
+NEXT_LABEL = re.compile(f"^({NEXT_LABEL_ALTERNATION})$", re.I)
+
+#: And the other direction, which `read_pages` has no use for and a caller
+#: asking to go BACK a page does.
+PREV_LABEL = re.compile(
+    r"^(previous|previous page|prev|newer|newer posts|newer entries|"
+    r"‹|«|←|previous\s*[‹«←])$", re.I)
 
 
 def auth_file_refusal(checked: str, cookies: list, exc: Exception):

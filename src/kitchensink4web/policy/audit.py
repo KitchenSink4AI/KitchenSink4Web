@@ -69,6 +69,24 @@ def annotate(**fields: Any) -> None:
     current.update(fields)
 
 
+def take_annotation(field: str) -> Any:
+    """Remove one field from the CURRENT call's annotations and return it.
+
+    THE COMPOSITE'S TOOL (2026-09-07, from the batch build). Annotations
+    merge into one dict at write, so a composite that calls several
+    replayable tools inside a single registered tool call keeps only the
+    LAST one's `replay` block: a five-step batch would be saved as one step,
+    quietly, by a `save_workflow` that has no way to know it. A composite
+    takes each step's block as that step finishes and republishes the list
+    under its own key, and taking it also clears the buffer, so the
+    composite's own record cannot inherit a member's block as though it
+    described the whole call."""
+    current = _annotations.get()
+    if not current:
+        return None
+    return current.pop(field, None)
+
+
 def _drain_annotations() -> dict:
     current = _annotations.get() or {}
     _annotations.set(None)

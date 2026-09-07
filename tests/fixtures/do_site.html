@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>do fixture: submission mechanisms</title>
+</head>
+<body>
+<nav aria-label="Site"><a href="#top">Home</a><a href="/page/2" rel="next">Next</a></nav>
+<main>
+  <h1>Submission mechanisms</h1>
+  <p>Each variant of this page carries one of HTML's ways of submitting a
+     form, which is the class a calling model resolves by guessing and this
+     tool resolves by asking the document.</p>
+  <div id="forms"></div>
+</main>
+<script>
+  window.__submits = {};
+  const qs = new URLSearchParams(location.search);
+  const variant = qs.get('form') || 'image';
+  const box = document.getElementById('forms');
+
+  function form(id, inner, label) {
+    const f = document.createElement('form');
+    f.id = id;
+    f.setAttribute('action', '#' + id);
+    f.addEventListener('submit', (ev) => {
+      ev.preventDefault();
+      window.__submits[id] = (window.__submits[id] || 0) + 1;
+    });
+    f.innerHTML = (label || '<label for="' + id + '-q">Query</label>'
+      + '<input id="' + id + '-q" name="q" type="text">') + inner;
+    box.appendChild(f);
+    return f;
+  }
+
+  // A 1x1 transparent GIF, so no network request is made for the image.
+  const PIX = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+
+  if (variant === 'image') {
+    // The submit button with a picture on it. In the language since HTML 2.0,
+    // forgotten by every model that looks for the word "Submit", and the
+    // element behind the 2026-09-06 R1 incident.
+    form('image', '<input type="image" src="' + PIX + '" alt="Send it">');
+  }
+  if (variant === 'typeless') {
+    // A <button> with no type attribute inside a form IS a submit button.
+    form('typeless', '<button>Send it</button>');
+  }
+  if (variant === 'label') {
+    // The label sits BEFORE its control and carries the word a search would
+    // hit. Clicking the label submits by delegation; the control is what the
+    // browser actually activates, and it is what must be resolved.
+    form('label',
+      '<label for="go">Send it</label><input id="go" type="submit" value="OK">');
+  }
+  if (variant === 'two') {
+    form('first', '<input type="submit" value="Send it">');
+    form('second', '<button type="submit">Send it too</button>');
+  }
+  if (variant === 'password') {
+    form('login',
+      '<label for="u">Username</label><input id="u" name="u" type="text">'
+      + '<label for="p">Password</label><input id="p" name="p" type="password">'
+      + '<button>Sign in</button>',
+      '');
+  }
+  if (variant === 'payment') {
+    form('checkout',
+      '<label for="cc">Card number</label>'
+      + '<input id="cc" name="cc-number" autocomplete="cc-number" type="text">'
+      + '<input type="submit" value="Pay now">',
+      '');
+  }
+  if (variant === 'none') {
+    // A form with no submit control at all: the mechanism is absent and the
+    // refusal has to say which mechanism was looked for.
+    form('bare', '<button type="button">Do nothing</button>');
+  }
+  if (variant === 'search') {
+    form('site', '<input id="s" type="search" name="q" aria-label="Search">',
+         '');
+  }
+</script>
+</body>
+</html>

@@ -230,6 +230,16 @@
         const type = (el.type || '').toLowerCase();
         if (tag === 'INPUT' && (type === 'submit' || type === 'button' || type === 'reset')
             && el.value) { raw = squash(el.value); how = 'value'; }
+        // `<input type=image>` NAMES ITSELF FROM alt (HTML-AAM), and it had
+        // no rung here at all, so the one submit control this build calls
+        // out by name (the 2026-09-06 R1 incident) read as unnamed: an
+        // unnamed control anchors turn-local, so a ref minted for it did
+        // not survive its own re-resolution. The image submitter is now
+        // addressable by the word the page put on it.
+        if (!raw && tag === 'INPUT' && type === 'image') {
+          const alt = squash(el.getAttribute('alt') || '');
+          if (alt) { raw = alt; how = 'alt'; }
+        }
         if (!raw) {
           try {
             if (el.labels && el.labels.length) {
