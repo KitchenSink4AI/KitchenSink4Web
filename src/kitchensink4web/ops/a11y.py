@@ -418,9 +418,28 @@ async def get_accessibility(
         raise
 
     folded = _fold(results)
+    # WHAT THE IMPACT FILTER REMOVED IS MEASURED BEFORE IT IS REMOVED.
+    # The `tags` guard below exists because "the run selected nothing" and
+    # "the page is clean" produce identical payloads. This filter had the
+    # same property and no guard: every total downstream (rules_violated,
+    # by_impact, nodes_affected, completeness.rules_total, the budget rung)
+    # is derived from this dict, so `impact='minor'` on a page with five
+    # critical-or-serious failures returned zeros with a completeness block
+    # affirming them, and no field anywhere in the payload from which the
+    # five could be recovered. The filter still filters; it no longer does
+    # it silently.
+    filtered_out: dict = {}
     if impact:
+        removed = {k: v for k, v in folded["violations"].items()
+                   if v.get("impact") != impact}
         folded["violations"] = {k: v for k, v in folded["violations"].items()
                                 if v.get("impact") == impact}
+        filtered_out = {
+            "rules": len(removed),
+            "nodes": sum(len(r["nodes"]) for r in removed.values()),
+            "by_impact": _impact_counts(removed),
+            "rule_ids": sorted(removed)[:40],
+        }
     elapsed = round((time.monotonic() - started) * 1000)
 
     if tags and not folded["violations"] and not folded["needs_review"] \
@@ -446,12 +465,24 @@ async def get_accessibility(
         "engine_source": ("an optional pip dependency of this server, not "
                           "vendored into it"),
         "tags": (list(tags) if tags else "the engine's default rule set"),
+        "impact": (impact if impact
+                   else "every impact level the engine assigned"),
         "frames_audited": [{"frame": r.fid or "(main document)",
                             "url": r.url} for r in entered],
         "frames_not_entered": [
             {"frame": r.fid, "why": r.why_not or "not entered",
              "origin": r.origin} for r in _frames.untouched(ladder)],
     }
+    if impact:
+        scope["impact_filtered_out"] = filtered_out
+        scope["impact_note"] = (
+            f"this read was filtered to impact={impact!r}. The engine also "
+            f"found {filtered_out['rules']} rule(s) at other impact levels "
+            f"({filtered_out['by_impact']}) affecting "
+            f"{filtered_out['nodes']} node(s), and NONE of them are in any "
+            f"count below: the totals, by_impact, nodes_affected and "
+            f"completeness block all describe the filtered set only. Call "
+            f"without impact for the page's whole audit.")
     if scope["frames_not_entered"]:
         # The verified silent-omission hazard, made loud. The engine skips
         # cross-origin frames and its result still looks complete; the count
