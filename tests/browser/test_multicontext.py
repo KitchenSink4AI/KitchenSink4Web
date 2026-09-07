@@ -170,7 +170,23 @@ def test_c6_auth_state_saves_and_loads_per_jar(session_factory,
         from kitchensink4web.policy import gates
 
         server.configure(cli_packs=["storage"], read_only=False)
-        monkeypatch.setattr(gates.ENGINE, "ask", lambda *a, **k: None)
+        # A gate `ask` that answers the way the real one does on a
+        # confirmed re-run. This stub returned None until the consent
+        # ladder landed in a sibling wave: the ops layer called `ask`
+        # for its side effect and threw the answer away, and there is
+        # one door now (policy.engine.confirm) that USES the answer and
+        # holds it to the TOCTOU re-validation. A None here models an
+        # engine that no longer exists. Same fix the consent wave made
+        # to the three stubs in test_fieldlog2_fixes.py.
+        def _redeemed(*a, **k):
+            action_class = a[0] if a else k["action_class"]
+            return gates.Gate(
+                token="stub-" + action_class,
+                action_class=action_class, tool=k.get("tool", "test"),
+                session=k.get("session") or "", page=k.get("page"),
+                target={}, summary=k.get("summary", ""), redeemed=True)
+
+        monkeypatch.setattr(gates.ENGINE, "ask", _redeemed)
         sess = await session_factory(contexts=2)
         await lite.navigate(page=sess.focused, url=f"{fixture_site}/form")
         await sess.contexts["c1"].context.add_cookies([{
