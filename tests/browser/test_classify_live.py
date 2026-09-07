@@ -328,7 +328,12 @@ def test_the_embedded_viewer_page_is_read_and_the_document_is_disclosed(site):
     assert handoff["documents"][0]["url"].endswith("/paper.pdf")
     assert handoff["documents"][0]["fetchable_by_url"] is True
     assert handoff["readable_from_here"] is False
-    assert handoff["citation"]["doi"] == "10.2307/2539079"
+    # The publisher's own declaration now rides inside the labeled envelope
+    # (V-18, fix wave 2026-09-08): the DOI is still there, and it arrives
+    # marked as something the page wrote rather than as the server's word.
+    declared = handoff["citation"]
+    assert handoff["page_data"]["nonce"] in declared
+    assert "10.2307/2539079" in declared
     assert handoff["read_from_page"]
 
 

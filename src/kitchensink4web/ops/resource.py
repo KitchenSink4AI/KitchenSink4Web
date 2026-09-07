@@ -30,8 +30,11 @@ Three rules it exists to keep:
 
 from __future__ import annotations
 
+import json
 import posixpath
 from urllib.parse import unquote, urlparse
+
+from .. import pagedata as _pagedata
 
 #: Media types the browser paints rather than lays out as a document. A read
 #: against any of them is a garbled read, so the read surfaces refuse.
@@ -340,6 +343,24 @@ def classify(probe: dict) -> dict | None:
 # THE CITATION METADATA IS PAGE-AUTHORED and is labeled as such. It rides
 # under its own key with the page-data marker, clamped per value, and it is
 # never mixed into the server's own sentences.
+#
+# IT DID NOT, UNTIL THE 2026-09-08 FIX WAVE (V-18). The clamp was real and
+# the sentences were kept separate, but the MARKER was never applied: driving
+# this block with a publisher's own `citation_*` meta tags produced a
+# `citation` dict and a bare `citation_source: "page-authored"` beside it,
+# with no delimiters, no nonce, and no page_data note. An adjacent adjective
+# is not the labeled boundary every other page-derived surface in this build
+# carries, and this block ships INSIDE A REFUSAL (`read_refusal` puts it in
+# `exc.detail`), which is the exact surface gauntlet 2's M2 was written
+# about. `page.title` was bare on the same payload for the same reason.
+#
+# The mechanism is `wellknown`'s, because the question is the same one: a
+# publisher's structured declaration about itself, hostile in exactly the way
+# a `.well-known` file is hostile. So the site-authored half goes INSIDE the
+# envelope whole, as JSON, and only what KS4Web measured for itself (the
+# document URLs, the file names, whether a URL is fetchable) stays outside.
+# A labeled copy sitting beside a bare copy would leave the bare copy on the
+# refusal surface, which is the finding.
 
 #: Metadata field names, mapped from the Highwire/Google-Scholar meta tags a
 #: publisher writes, to the names anything else would recognize.
@@ -449,13 +470,35 @@ def document_handoff(probe: dict, *, read: dict | None = None,
     block: dict = {
         "documents": entries[:4],
         "readable_from_here": False,
-        "page": {"url": page_url, "title": _clean_name(
-            str(probe.get("title") or ""))[:300] or None},
+        "page": {"url": page_url},
     }
+    declared: dict = {}
+    title = _clean_name(str(probe.get("title") or ""))[:300]
+    if title:
+        declared["page_title"] = title
     citation = _citation(probe)
     if citation:
-        block["citation"] = citation
+        declared["citation"] = citation
+    if declared:
+        # V-18: every string in here was written by the page, so it travels
+        # between the nonce delimiters with the label that says so. The
+        # note rides INSIDE the block rather than at the payload's top
+        # level, because `get_page_view` already spends that key on the
+        # projection's own envelope and this block also has to survive
+        # being carried in a refusal's detail.
+        wrapped, note = _pagedata.wrap(
+            json.dumps(declared, indent=1, ensure_ascii=False), url=page_url)
+        # FLAGGED (fix wave 2026-09-08): placeholder wording, mechanically
+        # composed from this file's own `_CITATION_FIELDS` comment and the
+        # label sentences `ops/a11y` and `ops/wellknown` already ship.
+        note["label"] = (
+            "The block below is what this page declared ABOUT ITSELF: its "
+            "title and the Highwire citation meta tags a publisher writes "
+            "for search engines. " + note["label"])
+        note["covers"] = ["citation"]
+        block["citation"] = wrapped
         block["citation_source"] = "page-authored"
+        block["page_data"] = note
     if read is not None:
         block["read_from_page"] = read
     return block
