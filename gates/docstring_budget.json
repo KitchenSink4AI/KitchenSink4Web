@@ -10,17 +10,16 @@
     "schema": 250
   },
   "tools": {
-<<<<<<< HEAD
-    "batch": {
-      "description_tokens": 321,
-      "schema_tokens": 94,
-      "total_tokens": 415,
-=======
     "aggregate": {
       "description_tokens": 220,
       "schema_tokens": 153,
       "total_tokens": 373,
->>>>>>> build/extract
+      "over_reference_caps": true
+    },
+    "batch": {
+      "description_tokens": 321,
+      "schema_tokens": 94,
+      "total_tokens": 415,
       "over_reference_caps": true
     },
     "click": {
