@@ -21,6 +21,7 @@ from __future__ import annotations
 import asyncio
 import functools
 import http.server
+import re
 import socketserver
 import threading
 from pathlib import Path
@@ -353,5 +354,23 @@ def test_the_image_submitter_is_named_by_its_alt_text(site):
         assert "Send it" in found["results"]
         out = await _gated(lite.do, page=page, intent="submit the form")
         assert "Send it" in out["resolution"]["match"]
+
+    run(go())
+
+
+def test_a_scope_that_cannot_be_honored_refuses(site):
+    """A `within` the ladder could not use is a refusal, never a silent
+    widening: the goal matched no shape, so the search fell through to word
+    overlap over the whole page, and acting there would be acting outside
+    the scope the caller asked for."""
+    async def go():
+        _, page = await _open(site, "two")
+        view = await lite.get_page_view(page=page)
+        form = re.search(r"\bf\d+\b", view["projection"]).group(0)
+        with pytest.raises(BadParams) as exc:
+            await lite.do(page=page, intent="click Query",
+                          within={"form": form})
+        assert "find_and_act" in str(exc.value)
+        assert await _submits(page) == {}
 
     run(go())

@@ -4568,6 +4568,20 @@ async def _do_resolve(sess, record, *, intent: str, verb: str,
                 f"{record.handle!r}, query=...) lists what the page actually "
                 f"has.")
     # STAGE 3. The existing describe selector, reused rather than rewritten.
+    if within:
+        # A SCOPE THAT COULD NOT BE HONORED IS A REFUSAL, never a silent
+        # widening. `within` narrows the MECHANISM search, and this intent
+        # matched no goal shape, so the ladder reached the describe selector,
+        # which searches the whole page.
+        raise BadParams(
+            f"within= narrows the search for a goal's mechanism, and "
+            f"{intent!r} matched none of the goal shapes this build "
+            f"recognizes, so the search fell through to word overlap over "
+            f"the whole page and the scope could not be honored. Nothing was "
+            f"done. Either name a goal it knows (submitting a form, logging "
+            f"in, the next or previous page, a search box, a consent banner, "
+            f"closing a dialog), or use find_and_act(query=..., within=...), "
+            f"which scopes a label search.")
     location = {"describe": intent}
     if verb == "click":
         location["prefer"] = "button"

@@ -115,11 +115,6 @@ _PARAM_KEYS = frozenset({"name", "required", "kind", "default",
 PARAM_VALUE_CAP = 8192
 
 
-def _norm_field(field: str) -> str:
-    """A field path with its index generalized, for the table lookup."""
-    return re.sub(r"\.fields\.\d+\.", ".fields.<i>.", field or "")
-
-
 def _field_get(step: dict, field: str):
     """Read one CLOSED field path off a step. Never a generic walk."""
     args = step.get("args") or {}
@@ -437,11 +432,11 @@ async def save_workflow(
                        f'every slot bound and every parameter used')}
            if declared else {}),
         "next": f"run_workflow(name={doc['name']!r}, page=..., "
-                f"dry_run=True"
+                "dry_run=True"
                 + (", parameters={"
                    + ", ".join(f"{p['name']!r}: ..." for p in declared) + "}"
                    if declared else "")
-                + f") re-resolves every anchor before anything executes."
+                + ") re-resolves every anchor before anything executes."
                 + (f" This flow is now findable by site: "
                    f"list_workflows(for_origin={origins[0]!r}) returns it "
                    f"the next time you are there." if origins else ""),
