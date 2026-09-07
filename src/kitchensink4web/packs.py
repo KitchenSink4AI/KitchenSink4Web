@@ -64,8 +64,9 @@ PACK_SUMMARIES: dict[str, str] = {
         "counted, and CSV/JSON export"
     ),
     "capture": (
-        "pixels and documents: screenshots with caps and secret masking, "
-        "PDF export, MHTML page save, and device emulation"
+        "pixels and documents: screenshots with byte and visual-token caps "
+        "and secret masking, local optical reading of canvas and image "
+        "text, PDF export, MHTML page save, and device emulation"
     ),
     "network": (
         "request inspection: paginated request lists, budgeted response "
@@ -88,6 +89,16 @@ PACK_SUMMARIES: dict[str, str] = {
         "named replayable flows recorded from the audit log, with a "
         "mandatory dry run that re-resolves every anchor before executing"
     ),
+    # NOT folded into `diagnostics`, which is thematically right and
+    # practically wrong: that pack carries `evaluate_script`, and packs are
+    # fixed at launch, so putting the audit there would make every user who
+    # wants an accessibility check run a process with the RCE-equivalent
+    # tool registered. That is a bad trade for a one-tool convenience.
+    "accessibility": (
+        "a WCAG audit through axe-core (an optional pip dependency), "
+        "aggregated by rule with a per-rule drilldown, checks the engine "
+        "could not decide reported separately, and no score"
+    ),
 }
 
 #: The DESIGNED pack rosters (DESIGN 2.2). Phase 5 built every row except
@@ -100,13 +111,15 @@ PLANNED_MEMBERS: dict[str, tuple[str, ...]] = {
     "extract": ("get_table", "get_list", "get_links", "get_metadata",
                 "extract_fields", "export_data", "get_article",
                 "read_pages", "extract_page", "aggregate"),
-    "capture": ("take_screenshot", "export_pdf", "save_page", "emulate"),
+    "capture": ("take_screenshot", "read_image_text", "export_pdf",
+                "save_page", "emulate"),
     "network": ("list_requests", "get_request", "export_har", "set_routing"),
     "diagnostics": ("list_console", "get_page_errors", "evaluate_script"),
     "storage": ("manage_cookies", "manage_storage", "save_auth_state",
                 "load_auth_state"),
     "files": ("download", "upload_file", "manage_clipboard"),
     "workflows": ("save_workflow", "run_workflow", "list_workflows"),
+    "accessibility": ("get_accessibility",),
 }
 
 #: Membership only: pack -> set of registered tool NAMES. Deliberately not the

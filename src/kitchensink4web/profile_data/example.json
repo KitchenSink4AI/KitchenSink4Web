@@ -1,0 +1,44 @@
+{
+  "format": 1,
+  "profile": "example",
+  "_this_file_is": "THE ONE SHIPPED EXAMPLE. It exists to demonstrate every field of the site-profile format against example.com, the domain IANA reserves for documentation, so it annotates nothing on the real web. KS4Web ships no starter profiles: every claim in a profile is a factual assertion about somebody else's site, and a wrong one is worse than a missing one because the user believes it. Copy this file into your own profiles directory, rename the file and the slug together, and point it at a site you have actually looked at.",
+  "_keys_beginning_with_underscore": "are ignored by the loader, so a profile may carry its own commentary.",
+  "match": {
+    "hosts": ["example.com", "*.example.com"],
+    "not_hosts": ["private.example.com"],
+    "_path_prefix": ["/issues", "/pull"],
+    "_path_prefix_note": "Rename this key to 'path_prefix' to narrow a profile to part of a host. It is left inert here because a profile that claims a path prefix outranks one that does not, and a shipped example must never outrank a user's own file."
+  },
+  "title": "Example Domain (format demonstration)",
+  "notes": [
+    "This is the shipped example profile. It matches the IANA documentation domain and describes nothing real.",
+    "Notes are free text the server reports back verbatim. A community or local profile's notes ride the untrusted-content envelope."
+  ],
+  "extract": {
+    "title": "the page heading",
+    "description": "the page's own summary of itself"
+  },
+  "access": [
+    {
+      "kind": "paywall",
+      "when": {
+        "status": [200],
+        "text": "this domain is for use in illustrative examples"
+      },
+      "evidence": "the reserved-domain notice, used here only to show what an access signature looks like"
+    }
+  ],
+  "auth": {
+    "kind": "none",
+    "handoff_note": "nothing on this domain requires a login",
+    "state_reusable": false
+  },
+  "open_access": [
+    {
+      "label": "Unpaywall",
+      "url_template": "https://api.unpaywall.org/v2/{doi}?email={email}"
+    }
+  ],
+  "workflows": [],
+  "lane_seed": []
+}

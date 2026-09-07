@@ -20,29 +20,60 @@ Three rules bind everything here:
    page carries such fields and the mask cannot be applied on the current
    code path, the screenshot is refused, never returned unmasked.
 
-3. **Hard byte cap with spill-to-file.** An image over the inline cap
-   lands in the sandbox-governed spill directory and the payload carries
-   the path, so an oversized capture costs tens of tokens instead of
-   flooding the transcript.
+3. **Two caps, because there are two currencies.** BYTES decide whether an
+   image rides in the transcript or spills to a file. PIXELS decide what
+   the caller pays to LOOK at it, and until this wave only the first was
+   capped. An image costs `ceil(width/28) * ceil(height/28)` visual tokens:
+   a 400x120 error banner is 75, a 1280x800 viewport is 1,334, a 4K
+   full-page capture is 4,784. A targeted region is roughly eighteen times
+   cheaper than a viewport shot of the same page, which is the argument
+   this product already makes about structured reads, one level down. So
+   every capture reports its own visual-token estimate against the returned
+   dimensions, and a capture over the pixel cap spills to disk with the
+   estimate and the cheaper route named rather than landing in the
+   transcript unremarked.
+
+   The estimate is an ESTIMATE, and the payload says so in the same posture
+   the budget meter already uses: it is not a billing meter.
 
 Env vars this module adds (for the Q11a docs-pass ruling):
-KS4WEB_SHOT_MAX_BYTES (inline cap, default 700000).
+KS4WEB_SHOT_MAX_BYTES (inline cap, default 700000),
+KS4WEB_SHOT_MAX_EDGE (long-edge pixel cap, default 1568).
 """
 
 from __future__ import annotations
 
+import asyncio
 import json as _json
 import os
 import time
 
+from .. import ocr as _ocr
+from .. import pagedata as _pagedata
 from ..engine import lanes
-from ..errors import BadParams, CredentialRefused, LaneUnsupported
+from ..errors import (BadParams, CredentialRefused, LaneUnsupported, Timeout,
+                      UnsupportedContent)
 from ..policy import engine as _policy
 from . import act as _act
 from . import common
 from . import lite as _lite
 
 ENV_SHOT_MAX = "KS4WEB_SHOT_MAX_BYTES"
+ENV_SHOT_EDGE = "KS4WEB_SHOT_MAX_EDGE"
+
+#: The side of one visual-token patch, in pixels. Published by the vision
+#: docs and used verbatim rather than approximated.
+PATCH_PX = 28
+
+#: The default long-edge cap. 1568 is the standard resolution tier's own
+#: ceiling: at that size an image costs the same whichever tier the caller
+#: runs on, so the default never silently buys high-resolution pricing. A
+#: caller who wants the fidelity asks for it by name.
+DEFAULT_MAX_EDGE = 1568
+
+#: How far a pad may push a clip. Enough to carry the sentence around an
+#: error icon; not enough to turn a region capture into a viewport one.
+MAX_PAD_PX = 400
 
 #: The fields a screenshot masks: the secret family (never read at all) plus
 #: the payment family (gated, and value-bearing on screen). One selector so
@@ -67,23 +98,85 @@ def _inline_cap(max_bytes: int | None) -> int:
         return 700000
 
 
+def _edge_cap(max_pixels: int | None) -> int:
+    if max_pixels:
+        return max(64, int(max_pixels))
+    try:
+        return max(64, int(os.environ.get(ENV_SHOT_EDGE,
+                                          str(DEFAULT_MAX_EDGE))))
+    except ValueError:
+        return DEFAULT_MAX_EDGE
+
+
+def visual_tokens(width: int, height: int) -> int:
+    """What an image of these dimensions costs a caller to look at.
+
+    `ceil(w/28) * ceil(h/28)`, the published patch arithmetic. One formula,
+    printed beside every number it produces, so the estimate and the cap are
+    computed from the same units in the same pass."""
+    return (-(-int(width) // PATCH_PX)) * (-(-int(height) // PATCH_PX))
+
+
+def _cost_block(data: bytes, cap: int) -> dict:
+    """The visual-token accounting for one image, or an honest absence."""
+    dims = common.image_dimensions(data)
+    if not dims:
+        return {"visual_tokens": {
+            "estimate": None,
+            "why_not": ("the image header did not yield dimensions, so no "
+                        "visual-token estimate is given rather than a "
+                        "guessed one")}}
+    width, height = dims
+    return {"pixels": {"width": width, "height": height},
+            "visual_tokens": {
+                "estimate": visual_tokens(width, height),
+                "formula": "ceil(w/28)*ceil(h/28)",
+                "long_edge_cap": cap,
+                "note": ("an estimate of what looking at this image costs "
+                         "the caller, from the published patch arithmetic "
+                         "over the dimensions that actually came back. It "
+                         "is not a billing meter, and a model on the "
+                         "standard resolution tier downscales anything "
+                         "past its own ceiling before charging")}}
+
+
 def _image_result(data: bytes, *, meta: dict, path: str | None,
-                  max_bytes: int | None):
+                  max_bytes: int | None, max_pixels: int | None = None):
     """THE media-type chokepoint. Every image leaves through here."""
     fmt, mime = common.sniff_image(data)
     meta = {**meta, "format": fmt, "media_type": mime, "bytes": len(data)}
     cap = _inline_cap(max_bytes)
-    if path or len(data) > cap:
+    edge = _edge_cap(max_pixels)
+    cost = _cost_block(data, edge)
+    meta.update(cost)
+    dims = meta.get("pixels")
+    # THE PIXEL CAP, enforced the way the byte cap already is. Downscaling
+    # in-process would need an image library this project does not carry for
+    # a formatting concern, and refusing would break a working call, so an
+    # over-cap capture takes the route the codebase already built for an
+    # expensive image: it goes to disk and the payload names the cost and
+    # the cheaper way to ask.
+    over_pixels = bool(dims and max(dims["width"], dims["height"]) > edge)
+    if path or len(data) > cap or over_pixels:
         out = path or str(common.spill_dir()
                           / f"shot_{common.stamp()}.{fmt}")
         saved = common.write_bytes_file(out, data, "save screenshot")
         meta["saved_to"] = saved
         meta["inline"] = False
-        if not path:
+        if not path and len(data) > cap:
             meta["spilled"] = (
                 f"the image is {len(data):,} bytes against the "
                 f"{cap:,}-byte inline cap, so it was written to disk "
                 f"instead of the transcript")
+        elif not path and over_pixels:
+            meta["spilled"] = (
+                f"the image is {dims['width']}x{dims['height']} CSS pixels, "
+                f"an estimated {meta['visual_tokens']['estimate']:,} visual "
+                f"tokens to look at, and its long edge is over the "
+                f"{edge}-pixel cap, so it was written to disk instead of "
+                f"the transcript. A region capture of the part you care "
+                f"about costs a fraction of that; max_pixels raises the cap "
+                f"if you want this one inline")
         return meta
     from fastmcp.tools.tool import ToolResult
     from fastmcp.utilities.types import Image
@@ -96,29 +189,125 @@ def _image_result(data: bytes, *, meta: dict, path: str | None,
         structured_content=payload)
 
 
+async def _document_extent(p) -> dict:
+    """The scrollable extent of the document, in CSS pixels."""
+    try:
+        return await p.evaluate(
+            "() => ({width: Math.max(document.documentElement.scrollWidth,"
+            " document.body ? document.body.scrollWidth : 0, innerWidth),"
+            " height: Math.max(document.documentElement.scrollHeight,"
+            " document.body ? document.body.scrollHeight : 0, innerHeight)})")
+    except Exception:
+        return {"width": 0, "height": 0}
+
+
+def _pad(value: int | None) -> int:
+    try:
+        return max(0, min(MAX_PAD_PX, int(value or 0)))
+    except (TypeError, ValueError):
+        raise BadParams(
+            f"pad_px takes a whole number of CSS pixels from 0 to "
+            f"{MAX_PAD_PX}; {value!r} is not one.") from None
+
+
+async def _clip_from_rect(p, rect: dict | None, pad_px: int) -> tuple:
+    """(clip, note) for target='region'. Clamped to the document, and the
+    clamp is REPORTED: a partial region is still useful, a silent lie is
+    not."""
+    if not isinstance(rect, dict):
+        raise BadParams(
+            "target='region' needs rect={'x': N, 'y': N, 'width': N, "
+            "'height': N} in CSS pixels, measured from the top-left of the "
+            "document. get_page_view and find_elements report element boxes "
+            "you can build one from.")
+    try:
+        x = float(rect.get("x", 0))
+        y = float(rect.get("y", 0))
+        width = float(rect.get("width", 0))
+        height = float(rect.get("height", 0))
+    except (TypeError, ValueError):
+        raise BadParams(
+            f"rect takes numbers for x, y, width, and height; got "
+            f"{rect!r}.") from None
+    if width < 1 or height < 1:
+        raise BadParams(
+            f"a region needs a width and a height of at least 1 CSS pixel; "
+            f"this rect is {width}x{height}.")
+    extent = await _document_extent(p)
+    ex, ey = extent.get("width") or 0, extent.get("height") or 0
+    padded = {"x": x - pad_px, "y": y - pad_px,
+              "width": width + 2 * pad_px, "height": height + 2 * pad_px}
+    if ex and ey and (padded["x"] >= ex or padded["y"] >= ey
+                      or padded["x"] + padded["width"] <= 0
+                      or padded["y"] + padded["height"] <= 0):
+        raise BadParams(
+            f"the requested region ({x}, {y}, {width}x{height}) falls "
+            f"entirely outside this document, whose scrollable extent is "
+            f"{ex}x{ey} CSS pixels. Scroll first if the content is further "
+            f"down, or read the page structurally with get_page_view.")
+    clip, note = _clamp(padded, ex, ey)
+    return clip, note
+
+
+def _clamp(box: dict, ex: float, ey: float) -> tuple:
+    """Clip a box to the document. Returns (clip, note-or-None)."""
+    left = max(0.0, float(box["x"]))
+    top = max(0.0, float(box["y"]))
+    right = float(box["x"]) + float(box["width"])
+    bottom = float(box["y"]) + float(box["height"])
+    if ex:
+        right = min(right, float(ex))
+    if ey:
+        bottom = min(bottom, float(ey))
+    clip = {"x": round(left, 2), "y": round(top, 2),
+            "width": round(max(1.0, right - left), 2),
+            "height": round(max(1.0, bottom - top), 2)}
+    changed = (abs(clip["x"] - float(box["x"])) > 0.5
+               or abs(clip["y"] - float(box["y"])) > 0.5
+               or abs(clip["width"] - float(box["width"])) > 0.5
+               or abs(clip["height"] - float(box["height"])) > 0.5)
+    if not changed:
+        return clip, None
+    return clip, (
+        f"the requested area ran past the edge of the document "
+        f"({ex or '?'}x{ey or '?'} CSS pixels), so the capture was clipped "
+        f"to what exists: {clip['width']}x{clip['height']} at "
+        f"({clip['x']}, {clip['y']})")
+
+
 async def take_screenshot(
     page: str,
     target: str = "viewport",
     location: dict | None = None,
+    rect: dict | None = None,
+    pad_px: int = 0,
     format: str = "png",
     quality: int | None = None,
     max_bytes: int | None = None,
+    max_pixels: int | None = None,
     path: str | None = None,
 ) -> dict:
-    """Capture the viewport, the full page, or one element as an image whose
-    reported media type is derived from the actual bytes, never from the
-    request, so a mislabeled image can never poison the session. Returns
-    the image inline under a byte cap and spills larger captures to a file
-    in the scoped directory with the path named. Password, one-time-code,
-    and payment fields are masked before capture, and if the page carries
-    such fields where masking cannot be applied the capture refuses rather
-    than returning them unmasked. Structured reads are cheaper than pixels;
-    this exists for canvas regions, visual checks, and the record.
+    """Capture the viewport, the full page, one element, or a raw region as
+    an image whose reported media type is derived from the actual bytes,
+    never from the request, so a mislabeled image can never poison the
+    session. target='region' takes rect={'x','y','width','height'} in CSS
+    pixels for the cases that have no element: part of a canvas, the gap an
+    overlay sits in, a chart legend. pad_px adds context around an element
+    or region target. Every result reports its own visual-token estimate,
+    because pixels cost the caller far more than structured reads do and a
+    region capture is roughly eighteen times cheaper than a viewport one.
+    An image over the byte cap or over the long-edge pixel cap
+    (max_pixels, default 1568) is written to the scoped directory with the
+    path and the cost named instead of riding in the transcript. Password,
+    one-time-code, and payment fields are masked before capture, and if the
+    page carries such fields where masking cannot be applied the capture
+    refuses rather than returning them unmasked.
     """
-    if target not in ("viewport", "full", "element"):
+    if target not in ("viewport", "full", "element", "region"):
         raise BadParams(
             f"unknown target {target!r}: the targets are 'viewport', "
-            f"'full', and 'element' (element needs a location).")
+            f"'full', 'element' (needs a location), and 'region' (needs a "
+            f"rect).")
     format = common.enum_arg(format, ("png", "jpeg"), default="png",
                              tool="take_screenshot", name="format")
     if format not in ("png", "jpeg"):
@@ -155,7 +344,13 @@ async def take_screenshot(
     if masks:
         kwargs["mask"] = masks
 
-    clip = None
+    pad = _pad(pad_px)
+    if pad and target in ("viewport", "full"):
+        raise BadParams(
+            f"pad_px pads a target that has edges, so it applies to "
+            f"'element' and 'region' captures. target={target!r} already "
+            f"covers everything there is to pad toward.")
+    clip, clip_note = None, None
     if target == "element":
         if not location:
             raise BadParams(
@@ -171,6 +366,16 @@ async def take_screenshot(
         # Clip through page.screenshot rather than element.screenshot so
         # the mask parameter applies on every path (fail-closed masking).
         clip = {k: box[k] for k in ("x", "y", "width", "height")}
+        if pad:
+            extent = await _document_extent(p)
+            clip, clip_note = _clamp(
+                {"x": clip["x"] - pad, "y": clip["y"] - pad,
+                 "width": clip["width"] + 2 * pad,
+                 "height": clip["height"] + 2 * pad},
+                extent.get("width") or 0, extent.get("height") or 0)
+        kwargs["clip"] = clip
+    elif target == "region":
+        clip, clip_note = await _clip_from_rect(p, rect, pad)
         kwargs["clip"] = clip
     elif target == "full":
         kwargs["full_page"] = True
@@ -195,7 +400,12 @@ async def take_screenshot(
     }
     if clip:
         meta["clip"] = clip
-    return _image_result(data, meta=meta, path=path, max_bytes=max_bytes)
+    if clip_note:
+        meta["clipped_to_document"] = clip_note
+    if pad:
+        meta["pad_px"] = pad
+    return _image_result(data, meta=meta, path=path, max_bytes=max_bytes,
+                         max_pixels=max_pixels)
 
 
 async def export_pdf(
@@ -401,5 +611,160 @@ async def emulate(
     }
 
 
+
+
+async def read_image_text(
+    page: str,
+    target: str = "region",
+    location: dict | None = None,
+    rect: dict | None = None,
+    pad_px: int = 0,
+    language: str | None = None,
+) -> dict:
+    """Read the text that is painted into pixels rather than written into
+    the DOM: a canvas, an error rendered as an image, a screenshot embedded
+    in a page. Every string comes back labeled as a READING of pixels, with
+    its bounding box and word count, never as the page's own text, and it
+    never enters get_text or get_article. Runs entirely on this machine
+    through the OCR engine built into Windows: no network, no API key, no
+    separate install beyond the optional extra. Where no engine is
+    available the call refuses and names why rather than returning an empty
+    result that reads like a blank image. Password, one-time-code, and
+    payment fields are masked before the pixels are read, so a secret on
+    screen cannot be recognized into the transcript. If the DOM has the
+    text, get_text is cheaper and exact; this is for when it does not.
+    """
+    if target not in ("region", "element", "viewport"):
+        raise BadParams(
+            f"unknown target {target!r} for read_image_text: the targets "
+            f"are 'region' (a rect), 'element' (a location), and "
+            f"'viewport'. There is deliberately no 'full': running an "
+            f"optical recognizer over a whole long document is a slow, "
+            f"lossy way to get text the page already has in its DOM, which "
+            f"get_text returns exactly.")
+    ok, why = _ocr.probe()
+    if not ok:
+        # NEVER a silent empty result. An empty `lines: []` here would read
+        # as "there is no text in those pixels", which is a different claim
+        # from "nothing here can read pixels" and the wrong one.
+        raise UnsupportedContent(
+            f"{why}. The pixels are still available: take_screenshot with "
+            f"the same target returns the image and you can read it "
+            f"yourself. If the text is in the page's DOM rather than "
+            f"painted into it, get_text returns it exactly.")
+
+    sess, record = common.locate(page)
+    await _lite._ensure_vetted(sess, record, tool="read_image_text")
+    p = record.page
+
+    # The SAME fail-closed masking the screenshot path uses, and not
+    # optional here: an optical read of an unmasked password field would
+    # recognize the password into the transcript, which is precisely the
+    # failure the mask exists to prevent. Masked pixels are opaque boxes, so
+    # the recognizer reads nothing from them. That is the correct outcome.
+    secret_count = await p.locator(MASK_CSS).count()
+    masks = [p.locator(MASK_CSS)] if secret_count else []
+    kwargs: dict = {"type": "png"}
+    if masks:
+        kwargs["mask"] = masks
+
+    pad = _pad(pad_px)
+    clip, clip_note = None, None
+    if target == "element":
+        if not location:
+            raise BadParams(
+                "target='element' needs a location naming the element, for "
+                "example {'ref': 'e12'} or {'css': '#chart'}.")
+        resolved = await _act.resolve(sess, record, location,
+                                      tool="read_image_text", acting=False)
+        box = await resolved["handle"].bounding_box()
+        if not box or box["width"] < 1 or box["height"] < 1:
+            raise BadParams(
+                "the located element has no visible box to read; it may be "
+                "hidden or zero-sized. Verify with get_page_view.")
+        extent = await _document_extent(p)
+        clip, clip_note = _clamp(
+            {"x": box["x"] - pad, "y": box["y"] - pad,
+             "width": box["width"] + 2 * pad,
+             "height": box["height"] + 2 * pad},
+            extent.get("width") or 0, extent.get("height") or 0)
+        kwargs["clip"] = clip
+    elif target == "region":
+        clip, clip_note = await _clip_from_rect(p, rect, pad)
+        kwargs["clip"] = clip
+
+    started = time.monotonic()
+    try:
+        data = await p.screenshot(**kwargs)
+    except TypeError as exc:
+        if masks:
+            raise CredentialRefused(
+                f"this page carries {secret_count} secret or payment "
+                f"field(s) and the mask could not be applied on this code "
+                f"path ({str(exc)[:120]}), so nothing was captured and no "
+                f"text was read out of it. An optical read of an unmasked "
+                f"password field would put the password in the transcript.")
+        raise
+
+    ceiling = _ocr.max_image_dimension()
+    dims = common.image_dimensions(data)
+    if ceiling and dims and max(dims) > ceiling:
+        # The engine has its own input ceiling. Say so rather than letting a
+        # silent failure look like an empty image: a downscale changes what
+        # is legible, this build carries no image library to do one, so the
+        # honest move is to name the limit and the way around it.
+        raise BadParams(
+            f"the captured area is {dims[0]}x{dims[1]} pixels and this OCR "
+            f"engine accepts at most {ceiling} on a side, so nothing was "
+            f"read rather than a silently truncated reading. Ask for a "
+            f"smaller region.")
+
+    try:
+        got = await _ocr.read(data, language=language)
+    except _ocr.OcrUnavailable as exc:
+        raise UnsupportedContent(
+            f"{exc}. take_screenshot returns the same pixels for you to "
+            f"read yourself.") from exc
+    except (TimeoutError, asyncio.TimeoutError) as exc:
+        raise Timeout(
+            f"the optical read of this area did not finish inside the "
+            f"{_ocr._timeout_s():.1f}-second cap, so nothing was returned. "
+            f"A smaller region finishes faster; "
+            f"{_ocr.ENV_TIMEOUT} raises the cap.") from exc
+
+    lines = got["lines"]
+    body = "\n".join(line["text"] for line in lines)
+    # EVERY string here is page-controlled text arriving through a new door,
+    # so it rides the same labeled envelope every other page-authored string
+    # rides. An instruction painted into a canvas must arrive as data, not
+    # as bare text in the server's voice.
+    wrapped, note = _pagedata.wrap(body, url=p.url) if body else ("", None)
+    result = {
+        "page": record.handle, "session": sess.session_id, "url": p.url,
+        "target": target,
+        "masked_fields": secret_count,
+        "lines": lines,
+        "line_count": len(lines),
+        "text": wrapped,
+        "provenance": got["provenance"],
+        "text_angle": got["text_angle"],
+        "elapsed_ms": round((time.monotonic() - started) * 1000),
+    }
+    if clip:
+        result["clip"] = clip
+    if clip_note:
+        result["clipped_to_document"] = clip_note
+    if pad:
+        result["pad_px"] = pad
+    if note:
+        result["page_data"] = note
+    if not lines:
+        result["empty"] = (
+            "the recognizer ran and found no text in these pixels. That is "
+            "a reading, not a guarantee: low contrast, small glyphs, and "
+            "rotated text all read as nothing.")
+    return result
+
+
 #: The pack roster, in DESIGN 2.2 order.
-TOOLS = (take_screenshot, export_pdf, save_page, emulate)
+TOOLS = (take_screenshot, read_image_text, export_pdf, save_page, emulate)

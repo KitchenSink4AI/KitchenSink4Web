@@ -33,6 +33,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from .. import ocr as _ocr
 from ..errors import RangeOutOfBounds
 from . import ranker
 from .meter import (CONTAINER_ONLY, DROPPED_RUNG, LISTED_NOT_EXPANDED,
@@ -666,6 +667,20 @@ class Renderer:
                 f'zero-width characters found in {c["zero_width_hits"]} text '
                 f'nodes and removed from the content')
 
+        # IMAGE-BORNE TEXT is the same blind spot one tag along, so it
+        # shares the canvas line rather than adding one. The extractor
+        # already counts images and reads `alt` where there is one; what
+        # nobody counted is the image with no alt and no accessible name at
+        # all, which is exactly where a rendered error notice or a
+        # screenshotted table lives. Sharing the line is not tidiness: the
+        # completeness block is metered like everything else, and a whole
+        # new line on every page with a logo is a line the ladder drops
+        # from the reads that need it most.
+        mute = c.get("mute_images") or []
+        mute_clause = (
+            f'; images with no text projection: {len(mute)}'
+            if mute else '')
+
         if c["canvases"]:
             # The counter used to run on an area heuristic (>80x80), which
             # answered wrongly in BOTH directions: a 200x60 canvas with text
@@ -686,11 +701,24 @@ class Renderer:
             if unknown:
                 parts.append(f'{len(unknown)} this build could not sample '
                              f'(a tainted or non-2D canvas)')
+            # THE THIRD STATE. The line used to be binary — canvases exist,
+            # or none do — which left a reader with a count of unread pixels
+            # and no way to tell whether anything on this machine could read
+            # them. Whether or not an engine is here, the sentence says
+            # which, because a capability flag that only speaks when it is
+            # true is a flag nobody can rely on.
             lines.append(
                 f'canvas-rendered regions with no text projection: '
                 f'{len(c["canvases"])}'
                 + (f' ({"; ".join(parts)})' if parts else '')
-                + '; pixels need the capture pack (--packs capture)')
+                + mute_clause
+                + '; pixels need the capture pack (--packs capture); '
+                + _ocr.capability_line())
+        elif mute:
+            lines.append(
+                'canvas-rendered regions: none'
+                + mute_clause
+                + '; ' + _ocr.capability_line())
         else:
             lines.append("canvas-rendered regions: none")
 

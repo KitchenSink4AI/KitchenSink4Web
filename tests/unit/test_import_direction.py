@@ -68,6 +68,27 @@ def test_policy_imports_neither_ops_nor_engine():
     )
 
 
+def test_policy_never_imports_site_profiles():
+    """PROF-3, bought mechanically rather than by review.
+
+    A site profile is third-party data. The closed list of what it may
+    influence is advisory blocks, default extraction hints, workflow names,
+    and one lane-seed handoff at load. It may not influence a refusal code,
+    a gate decision, a budget, an origin decision, the read-only grade, the
+    redaction vault, the wall verdict, or the audit trail. One assertion
+    that no policy module can even see the loader buys the whole of it."""
+    offenders: list[str] = []
+    for path in _files("policy"):
+        for name in _module_imports(path):
+            tail = name.replace("kitchensink4web.", "")
+            if tail.split(".")[0] == "profiles":
+                offenders.append(f"{path.name} imports {name}")
+    assert not offenders, (
+        "policy/ must not depend on profiles (PROF-3): a profile annotates "
+        "and can never reach a verdict: " + "; ".join(offenders)
+    )
+
+
 def test_the_direction_is_actually_exercised():
     """A one-direction rule nobody uses is not a seam, it is an empty
     folder. At least one module outside policy/ must depend on it, or this

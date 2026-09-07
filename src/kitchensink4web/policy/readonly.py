@@ -162,8 +162,23 @@ NON_MUTATING: frozenset[str] = frozenset({
     "get_table", "get_list", "get_links", "get_metadata", "extract_fields",
     "get_article", "export_data", "take_screenshot", "export_pdf",
     "save_page",
+    # read_image_text captures pixels and recognizes them in this process.
+    # It writes nothing to the page, opens no network connection, and
+    # touches no file, so it is a read by every definition this table uses.
+    # It does NOT carry the readOnlyHint, for the same reason
+    # take_screenshot does not: a capture can spill an image to disk.
+    "read_image_text",
     "list_requests", "get_request", "export_har",
     "list_console", "get_page_errors", "list_workflows",
+    # get_accessibility injects and runs the audit engine in the page, so
+    # whether it mutates was MEASURED rather than assumed: a digest of
+    # document.documentElement.outerHTML, of the computed styles of the
+    # first 200 elements, of the total attribute count, and of the node
+    # count, taken immediately before and immediately after a run, on a
+    # clean page, a page full of violations, a page with an iframe, and a
+    # page under a strict Content-Security-Policy. All four digests were
+    # identical on all four pages (axe-core 4.12.1). It reads.
+    "get_accessibility",
     # read_pages NAVIGATES, following the page's own next-page links, and it
     # sits here for exactly the reason `navigate` does: going to a URL is
     # ambiguous rather than mutating, so it is permitted under `browse` and
@@ -207,6 +222,9 @@ GENUINELY_READ_ONLY: frozenset[str] = frozenset({
     "get_article", "extract_page",
     "list_requests", "get_request", "list_console", "get_page_errors",
     "list_workflows",
+    # It writes no file, opens no connection, and leaves the DOM
+    # byte-identical, which is what the hint means.
+    "get_accessibility",
 })
 
 

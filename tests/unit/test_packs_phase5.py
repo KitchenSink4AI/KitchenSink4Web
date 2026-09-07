@@ -44,20 +44,21 @@ def test_every_module_roster_matches_the_design_table():
             f"{sorted(designed)}")
 
 
-def test_full_surface_is_fifty_tools(launch):
+def test_full_surface_is_fifty_two_tools(launch):
     """Forty until 2026-09-06, when find_and_act joined the lite core;
     forty-two later the same day, when handle_dialog did;
     forty-three when get_article joined the extract pack;
     forty-five after the small-parts wave added read_pages to
-    extract and manage_clipboard to files; and FIFTY on 2026-09-08, when the
-    seven-branch integration landed `monitor` (lifecycle), `batch` and `do`
-    (composites), and `extract_page` and `aggregate` (the schema ladder).
+    extract and manage_clipboard to files; and FIFTY-TWO on 2026-09-08, when
+    the seven-branch integration landed `monitor` (lifecycle), `batch` and
+    `do` (composites), `extract_page` and `aggregate` (the schema ladder),
+    and `read_image_text` and `get_accessibility` (the senses wave).
     Every branch measured its own delta against forty-five and each was
     right in isolation, so this number is the UNION rather than any one
     branch's arithmetic."""
     state = launch(cli_packs=packs.pack_names(), read_only=False)
-    assert len(state["registered"]) == 50
-    assert len(set(state["registered"])) == 50
+    assert len(state["registered"]) == 52
+    assert len(set(state["registered"])) == 52
 
 
 def test_full_surface_under_read_only_hides_every_mutating_pack_tool(launch):

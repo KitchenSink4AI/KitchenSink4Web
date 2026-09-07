@@ -44,6 +44,26 @@ dev = [
     "pytest",
     "pytest-timeout",
 ]
+# Reading text out of PIXELS, where the DOM has none: a canvas, an error
+# rendered as an image, a screenshot embedded in a page. The engine is the
+# one already inside Windows, reached through the PyWinRT projection
+# packages: MIT, wheels only, no native install and no subprocess. Optional
+# and Windows-only by nature, so `read_image_text` refuses with the reason
+# named everywhere else rather than degrading in silence.
+ocr = [
+    "winrt-runtime==3.2.1; sys_platform == 'win32'",
+    "winrt-Windows.Media.Ocr==3.2.1; sys_platform == 'win32'",
+    "winrt-Windows.Graphics.Imaging==3.2.1; sys_platform == 'win32'",
+    "winrt-Windows.Storage.Streams==3.2.1; sys_platform == 'win32'",
+    "winrt-Windows.Globalization==3.2.1; sys_platform == 'win32'",
+]
+# The accessibility engine, as a PINNED DEPENDENCY rather than a vendored
+# file (author ruling 2026-09-07). axe-core arrives inside this MIT wrapper
+# from its own publisher, under its own name, with its own license files;
+# this project redistributes none of it. Pinned exactly, because a vendored
+# asset has no resolver to argue with and a bumped engine changes what a
+# result MEANS. `get_accessibility` reports the version it actually ran.
+accessibility = ["axe-playwright-python==0.1.8"]
 
 [project.scripts]
 # Q11, RULED by the author 2026-09-04.
@@ -61,7 +81,7 @@ where = ["src"]
 # The in-page extractor is the projection, and a wheel without it installs a
 # server that cannot read a page. Declared here rather than discovered at
 # ship time.
-kitchensink4web = ["projection/*.js"]
+kitchensink4web = ["projection/*.js", "profile_data/*.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -47,7 +47,8 @@
         "KS4WEB_PACK_STORAGE": "${user_config.pack_storage}",
         "KS4WEB_PACK_FILES": "${user_config.pack_files}",
         "KS4WEB_PACK_DIAGNOSTICS": "${user_config.pack_diagnostics}",
-        "KS4WEB_PACK_WORKFLOWS": "${user_config.pack_workflows}"
+        "KS4WEB_PACK_WORKFLOWS": "${user_config.pack_workflows}",
+        "KS4WEB_PACK_ACCESSIBILITY": "${user_config.pack_accessibility}"
       }
     }
   },
@@ -112,6 +113,13 @@
       "type": "boolean",
       "title": "Recorded workflows",
       "description": "Records a multi-step flow once and replays it later, checking every step still matches the page before anything runs.",
+      "default": false,
+      "required": false
+    },
+    "pack_accessibility": {
+      "type": "boolean",
+      "title": "Accessibility audit",
+      "description": "Checks a page against the WCAG accessibility rules using axe-core, groups what it finds by rule, and says plainly what automated testing cannot check.",
       "default": false,
       "required": false
     }

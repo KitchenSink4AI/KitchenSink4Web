@@ -38,7 +38,7 @@ from fastmcp.exceptions import ValidationError as _FmcpValidationError
 from fastmcp.server.middleware import Middleware
 from pydantic import ValidationError as _PydanticValidationError
 
-from . import confirm, envelope, packs
+from . import confirm, envelope, packs, profiles
 from .errors import (BadParams, ConfirmationRequired, ReadOnlyMode,
                      Timeout, ValidationFailed)
 from .ops import lite
@@ -378,6 +378,7 @@ _PACK_MODULES: dict[str, str] = {
     "files": ".ops.files",
     "diagnostics": ".ops.diag",
     "workflows": ".ops.workflows",
+    "accessibility": ".ops.a11y",
 }
 
 
@@ -433,11 +434,20 @@ def configure(
     selected = packs.resolve_startup_packs(mode=mode, cli_packs=cli_packs)
     packs.apply_startup_packs(selected)
     names = register_all()
+    # SITE PROFILES, loaded here and only here, for the same reason packs
+    # resolve here: a profile set that changed mid-session would change tool
+    # behavior as a side effect of a request. `load_profiles` never raises,
+    # so this line cannot affect which tools registered above — the order is
+    # deliberate and P16-15 asserts the tool count does not move.
+    pset = profiles.load_profiles()
+    profiles.install(pset)
     return {
         "packs": packs.loaded_packs(),
         "read_only": readonly.grade(),
         "consent": consent.scope(),
         "registered": names,
+        "profiles": {"loaded": len(pset.profiles),
+                     "problems": len(pset.problems)},
     }
 
 
@@ -487,7 +497,11 @@ def main() -> None:
     print(
         f"KS4Web: {len(state['registered'])} tools, packs="
         f"{state['packs'] or ['lite']}, read_only={state['read_only']} "
-        f"(decided by {readonly.source()})",
+        f"(decided by {readonly.source()}), "
+        f"site profiles={state['profiles']['loaded']} loaded"
+        + (f", {state['profiles']['problems']} skipped "
+           f"(manage_session(action='profiles') names each one)"
+           if state['profiles']['problems'] else ""),
         file=sys.stderr,
     )
     mcp.run()

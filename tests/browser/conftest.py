@@ -81,6 +81,19 @@ def fixture_site():
     srv.shutdown()
 
 
+
+@pytest.fixture(scope="session")
+def cross_origin_site():
+    """A SECOND fixture server. Same machine, different port, and a
+    different port is a different origin, which is the only way to build
+    the frame the audit must decline to enter and then say so."""
+    if not _playwright_ready():
+        pytest.skip("playwright is not installed")
+    server = _load_fixture_server()
+    srv, base = server.start()
+    yield base
+    srv.shutdown()
+
 @pytest.fixture
 def session_factory():
     """Open sessions, and prove afterward that nothing survived them.

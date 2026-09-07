@@ -418,6 +418,44 @@ _IMAGE_MAGIC: tuple[tuple[bytes, str, str], ...] = (
 )
 
 
+def image_dimensions(data: bytes) -> tuple[int, int] | None:
+    """(width, height) read out of the ACTUAL bytes, or None.
+
+    The same discipline as the media-type sniff and for the same reason: an
+    image's cost to the caller is a property of the pixels that came back,
+    not of the rectangle that was requested. A clip can be clamped, a page
+    can be shorter than asked, and a lane can round; reading the header is
+    the only answer that survives all three."""
+    try:
+        if data.startswith(b"\x89PNG\r\n\x1a\n") and len(data) >= 24:
+            # IHDR is the first chunk of every PNG, at a fixed offset.
+            width = int.from_bytes(data[16:20], "big")
+            height = int.from_bytes(data[20:24], "big")
+            return (width, height) if width and height else None
+        if data.startswith(b"\xff\xd8\xff"):
+            i = 2
+            end = len(data)
+            while i + 9 < end:
+                if data[i] != 0xFF:
+                    i += 1
+                    continue
+                marker = data[i + 1]
+                if marker in (0xD8, 0xD9) or 0xD0 <= marker <= 0xD7:
+                    i += 2
+                    continue
+                seglen = int.from_bytes(data[i + 2:i + 4], "big")
+                # SOF0..SOF15, minus the two non-frame markers in the range.
+                if 0xC0 <= marker <= 0xCF and marker not in (0xC4, 0xC8,
+                                                             0xCC):
+                    height = int.from_bytes(data[i + 5:i + 7], "big")
+                    width = int.from_bytes(data[i + 7:i + 9], "big")
+                    return (width, height) if width and height else None
+                i += 2 + max(2, seglen)
+    except Exception:                    # a truncated header is not an error
+        return None
+    return None
+
+
 def sniff_image(data: bytes) -> tuple[str, str]:
     """(format, media_type) from the bytes, or a refusal. An image whose
     bytes cannot be identified is never returned under a guessed media type,

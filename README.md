@@ -53,6 +53,7 @@ absent, not merely switched off:
 | files | Downloads files from pages into one dedicated folder, fetches a file by URL through the same checks, uploads files into page forms, and reads or writes the clipboard, with every write stopping to ask first. |
 | diagnostics | Reads the page's own error messages and console output, and can run a page script only after you confirm it. |
 | workflows | Records a multi-step flow once and replays it later, checking every step still matches the page before anything runs. |
+| accessibility | Checks a page against the WCAG accessibility rules using axe-core, groups what it finds by rule, and says plainly what automated testing cannot check. |
 
 ## The safety model
 

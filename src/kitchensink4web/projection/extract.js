@@ -502,6 +502,22 @@
   const forms = [];
   const tables = [];
   const canvases = [];
+  // Images that are laid out, big enough to carry a sentence, and
+  // contribute ZERO characters to the read. This is where a rendered error
+  // notice, a screenshotted table, and a text-as-image banner live: the
+  // extractor already counts images and reads `alt` where it exists, and
+  // the case nobody counted is the one with no alt and no accessible name
+  // at all. The floor is shared with the canvas geometry below so the two
+  // thresholds cannot drift apart.
+  const muteImages = [];
+  // The floor targets an image that could carry a SENTENCE, which is the
+  // case this counter exists for: a rendered error notice, a screenshotted
+  // table, a text-as-image banner. A line of legible text needs width more
+  // than height, so the test is 200 by 80 rather than a square: an 80x80
+  // square is an icon, and counting every alt-less icon on a page would
+  // cost the ledger a line of budget to report something nobody can act on.
+  const IMG_TEXT_MIN_W = 200;
+  const IMG_TEXT_MIN_H = 80;
   // Is anything actually drawn on this canvas? (fuzzer class 3.)
   //
   // Sampled rather than read whole: a full getImageData on a 4K canvas is
@@ -1324,6 +1340,25 @@
             painted: canvasPainted(el)
           });
         }
+      } else if (tag === 'IMG') {
+        const geo2 = geometryHidden(el, style);
+        if (!geo2.reason && geo2.rect.width >= IMG_TEXT_MIN_W
+            && geo2.rect.height >= IMG_TEXT_MIN_H) {
+          const alt = (el.getAttribute('alt') || '').trim();
+          const aria = (el.getAttribute('aria-label') || '').trim();
+          const titleAttr = (el.getAttribute('title') || '').trim();
+          const labelledby = (el.getAttribute('aria-labelledby') || '').trim();
+          if (!alt && !aria && !titleAttr && !labelledby) {
+            muteImages.push({
+              region: region ? region.ref : null,
+              w: Math.round(geo2.rect.width),
+              h: Math.round(geo2.rect.height),
+              decorative: el.getAttribute('alt') === ''
+                || el.getAttribute('role') === 'presentation'
+                || el.getAttribute('role') === 'none'
+            });
+          }
+        }
       } else if (tag === 'IFRAME') {
         let same = false;
         try { same = !!el.contentDocument; } catch (e) { same = false; }
@@ -1640,6 +1675,7 @@
       shadow_traversal: SHADOW_ON,
       closed_shadow_roots: (KS.closed || 0),
       virtual: virtualContainers, canvases: canvases,
+      mute_images: muteImages,
       // THE FULL-VIEWPORT LID (hostile H-09). Per-element occlusion stays
       // on the acting path for the cost reason `visibility.js` documents:
       // a page-wide scan plus nine hit tests per element, on every
