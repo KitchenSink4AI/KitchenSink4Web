@@ -640,9 +640,9 @@ async def get_page_view(
     # under the same payload shape a real read uses. The refusal names the
     # download route instead, which is what every issue in that cluster
     # actually asked for.
-    held = await _resource.probe_page(record.page)
+    held, handoff = await _resource.probe_document(record.page)
     if held is not None:
-        raise _resource.read_refusal(held, "get_page_view")
+        raise _resource.read_refusal(held, "get_page_view", handoff)
     sess.counters["reads"] += 1
     root = _scope_root(sess, record, location)
     token = sess.reads.mint_token(record.handle)
@@ -773,6 +773,16 @@ async def get_page_view(
     if parked and getattr(record, "last_classification_url", None) == \
             record.page.url and parked.get("category"):
         payload["classification"] = parked
+    # THE OTHER HALF OF THE EMBEDDED-VIEWER RULING. The page was read, and
+    # the document it embeds was not, so the payload says both: here is what
+    # was read, and here is the document that is not readable from this tab,
+    # with its own URL. A caller can chain to whatever reads documents
+    # without going back to the page to find the link.
+    if handoff:
+        handoff["read_from_page"] = {
+            "returned": "the page's own text and structure",
+            "budget_used": result.tokens, "rung": result.rung}
+        payload["document_handoff"] = handoff
     if baseline is not None:
         # A delta is the WHOLE answer when one is asked for. Returning both a
         # full projection and a delta would charge the caller twice for the
@@ -1140,9 +1150,9 @@ async def get_text(
                     url=record.page.url, lane=sess.spec.label)
     record.touch(record.page.url)
     await _read_gate(sess, record, tool="get_text")
-    held = await _resource.probe_page(record.page)
+    held, handoff = await _resource.probe_document(record.page)
     if held is not None:
-        raise _resource.read_refusal(held, "get_text")
+        raise _resource.read_refusal(held, "get_text", handoff)
     root = _scope_root(sess, record, location)
     scope_frame = _scope_frame(sess, location)
     ladder_all: list = []
@@ -1307,6 +1317,13 @@ async def get_text(
         "url": got["url"],
         "text": wrapped_text,
         "page_data": page_note,
+        # The page was read; the document it embeds was not. Both facts
+        # belong to the caller (the embedded-viewer ruling, 2026-09-08).
+        **({"document_handoff": {
+            **handoff,
+            "read_from_page": {"returned": "the page's own readable text",
+                               "chars": got["returned_chars"]}}}
+           if handoff else {}),
         **({"hidden_content": payload_hidden} if payload_hidden else {}),
         "chars": {"returned": got["returned_chars"],
                   "total_in_scope": got["total_chars"],
@@ -1569,11 +1586,12 @@ async def navigate(
     # is an advisory rather than a refusal. It says what the tab holds and
     # names the route to disk, which is the move the demand data says every
     # caller wants next.
-    held = await _resource.probe_page(record.page)
+    held, handoff = await _resource.probe_document(record.page)
     return {
         "session": sess.session_id, "page": record.handle,
         "lane": sess.spec.lane,
         **({"resource": _resource.navigate_note(held)} if held else {}),
+        **({"document_handoff": handoff} if handoff else {}),
         **({"auto_session": auto_session} if auto_session else {}),
         "changed": {"effect": "navigated" if record.page.url != before
                     else "same-url", "from": before, "to": record.page.url},

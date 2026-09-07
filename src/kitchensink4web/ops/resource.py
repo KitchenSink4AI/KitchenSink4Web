@@ -122,14 +122,69 @@ PROBE_JS = r"""
   }
   const vc = d.querySelector('#viewerContainer');
   const pdfjs = !!(vc && d.querySelector('.pdfViewer') && dominant(vc));
+  // THE EMBEDDED-DOCUMENT INVENTORY, and it is a different question from
+  // the one above. `roots` answers "is this tab holding a resource"; this
+  // answers "does this page point at a document a reader could open", which
+  // is what a caller needs in order to chain to a PDF tool. It looks at the
+  // whole document rather than only body's children, and it collects the
+  // resource's own URL, because a URL is what any other tool can act on.
+  const docs = [];
+  const seen = new Set();
+  const DOC_EXT = /\.(pdf|docx?|xlsx?|pptx?|epub|csv)(\?|#|$)/i;
+  try {
+    for (const e of d.querySelectorAll('embed[src], object[data], iframe[src]')) {
+      const raw = e.getAttribute('src') || e.getAttribute('data') || '';
+      const type = (e.getAttribute('type') || '').toLowerCase();
+      let href = '';
+      try { href = new URL(raw, location.href).href; } catch (err) { href = ''; }
+      if (!href) continue;
+      const looks = DOC_EXT.test(href) || (type && type !== 'text/html');
+      if (!looks) continue;
+      if (seen.has(href)) continue;
+      seen.add(href);
+      const r = e.getBoundingClientRect();
+      docs.push({url: href, type: type || null,
+                 tag: e.tagName.toLowerCase(),
+                 covers: Math.min(1, (r.width * r.height) / (vw * vh))});
+      if (docs.length >= 4) break;
+    }
+  } catch (e) {}
+  // The page's own readable text. An `<embed>` or a loaded `<object>` lays
+  // out no text of its own, so `body.innerText` is already the text OUTSIDE
+  // the embedded document rather than a mixture of the two.
+  let readable = 0;
+  try { readable = ((b && b.innerText) || '').trim().length; } catch (e) {}
+  const meta = {};
+  try {
+    for (const m of d.querySelectorAll('meta[name^="citation_"], meta[name="dc.identifier"]')) {
+      const name = (m.getAttribute('name') || '').toLowerCase();
+      const value = m.getAttribute('content') || '';
+      if (!value) continue;
+      if (meta[name] === undefined) meta[name] = value.slice(0, 300);
+    }
+  } catch (e) {}
   return {
     content_type: (d.contentType || '').toLowerCase(),
     url: location.href,
+    title: (d.title || '').slice(0, 300),
     embedded_types: Array.from(new Set(roots)).slice(0, 4),
     pdf_js_viewer: pdfjs,
+    embedded_documents: docs,
+    readable_chars: readable,
+    citation_meta: meta,
   };
 }
 """
+
+#: The floor under "does this page have anything to read". Not a percentage,
+#: and deliberately not a percentage: the author's ruling is that an
+#: embedded-document page is a CONTENT question, not a threshold one. A
+#: browser's synthesized wrapper around a bare PDF has a body containing one
+#: `<embed>` and nothing else, so it reads zero; a publisher's article page
+#: around the same viewer carries its abstract, its citation block and its
+#: sidebar, so it reads thousands. The floor separates those two and decides
+#: nothing else.
+READABLE_PAGE_CHARS = 200
 
 
 #: Every character a file name may not carry into a refusal sentence
@@ -185,16 +240,59 @@ def _kind_for(content_type: str, url: str, probe: dict) -> str | None:
     return None
 
 
+def _tab_is_the_resource(probe: dict, content_type: str) -> bool:
+    """Is the tab HOLDING a document, or is it a page that POINTS at one?
+
+    THE AUTHOR'S RULING, 2026-09-08, and it supersedes the area test for
+    this question. A page whose main content sits in an embedded viewer is
+    still a page: it has a title, an abstract, a citation block, a sidebar,
+    and those are usually most of what the caller wanted. Refusing to read it
+    because a viewer covers half the viewport withholds the readable half in
+    order to protect the caller from the unreadable half, and it turns an
+    ordinary publisher article into a dead end.
+
+    So the question is a CONTENT question rather than a threshold one: is
+    there anything on this page to read besides the embedded document? A
+    browser's synthesized wrapper around a bare PDF answers no, and it keeps
+    refusing exactly as it did. A publisher's article page answers yes, and
+    it is now read, with the embedded document disclosed as unreadable from
+    here and its URL handed over.
+
+    WHAT THIS DOES NOT TOUCH. The dominance test itself is unchanged and so
+    is everything it protects: a 1x1 offscreen embed still does not make a
+    page a resource (F2), an `<object>` rendering its fallback still is not
+    one (G4-03), and the blocking-overlay defense against non-document
+    interstitials lives in `policy/classify.py` and is not weakened by any of
+    this. The change is strictly in the direction of returning MORE of the
+    page, never less."""
+    if content_type in PDF_TYPES or content_type.startswith(BINARY_PREFIXES):
+        return True          # the DOCUMENT is the resource; nothing to read
+    if probe.get("pdf_js_viewer"):
+        # A viewer shell is a viewer, not a publisher page. Its chrome is
+        # button labels and a page counter, and scraping that under a read's
+        # payload shape is the failure this module exists to refuse.
+        return True
+    readable = probe.get("readable_chars")
+    if isinstance(readable, int) and readable >= READABLE_PAGE_CHARS:
+        return False
+    return True
+
+
 def classify(probe: dict) -> dict | None:
     """What this tab is holding, or None for an ordinary document.
 
     None is the answer for every HTML page, which is the overwhelmingly
-    common case, so the callers pay one dictionary lookup and move on."""
+    common case, so the callers pay one dictionary lookup and move on. It is
+    also the answer for a page that merely EMBEDS a document while carrying
+    readable content of its own; `document_handoff` is what such a page gets
+    instead of a refusal."""
     content_type = (probe.get("content_type") or "").split(";")[0] \
         .strip().lower()
     url = probe.get("url") or ""
     scheme = urlparse(url).scheme.lower()
     kind = _kind_for(content_type, url, probe)
+    if kind is not None and not _tab_is_the_resource(probe, content_type):
+        return None
     if kind is None and scheme == "blob":
         # A blob document with no type still is not a page anyone navigated
         # to on purpose; the caller deserves to know the URL is page-local.
@@ -223,18 +321,148 @@ def classify(probe: dict) -> dict | None:
     }
 
 
+# ------------------------------------------------------ the document handoff
+#
+# WHAT THIS IS FOR. The demand data says the ask is always to escape the
+# viewer, and the escape is only half the job: a caller that gets out of the
+# viewer still has to work out WHAT it got out of and where to take it. This
+# block is the facts needed to hand the document to whatever reads documents,
+# assembled once here so that no caller has to reconstruct them from a
+# refusal sentence.
+#
+# FACTS, NOT INSTRUCTIONS, and it is tool-agnostic on purpose. It names the
+# document's URL, whether that URL is fetchable at all, the file name the
+# resource carries, what was read from the page, and the citation metadata
+# the page declared about itself. It names no tool and prescribes no next
+# call: the routing sentence stays where it already is, in the refusal, and a
+# caller with a different toolchain is not told to use ours.
+#
+# THE CITATION METADATA IS PAGE-AUTHORED and is labeled as such. It rides
+# under its own key with the page-data marker, clamped per value, and it is
+# never mixed into the server's own sentences.
+
+#: Metadata field names, mapped from the Highwire/Google-Scholar meta tags a
+#: publisher writes, to the names anything else would recognize.
+_CITATION_FIELDS: tuple[tuple[str, str], ...] = (
+    ("citation_doi", "doi"),
+    ("citation_title", "title"),
+    ("citation_journal_title", "journal"),
+    ("citation_publication_date", "date"),
+    ("citation_date", "date"),
+    ("citation_volume", "volume"),
+    ("citation_issue", "issue"),
+    ("citation_firstpage", "first_page"),
+    ("citation_pdf_url", "pdf_url"),
+    ("dc.identifier", "identifier"),
+)
+
+
+def _citation(probe: dict) -> dict:
+    """The publisher's own citation metadata, clamped value by value.
+
+    Every value here is page-authored, so each one is flattened of control
+    characters and capped, exactly as a file name is, and a value that ends
+    up empty is dropped rather than reported as a blank field."""
+    meta = probe.get("citation_meta") or {}
+    if not isinstance(meta, dict):
+        return {}
+    out: dict = {}
+    for tag, field in _CITATION_FIELDS:
+        value = _clean_name(str(meta.get(tag) or ""))[:300]
+        if value and field not in out:
+            out[field] = value
+    authors = [_clean_name(str(a))[:120] for a in
+               (meta.get("citation_author") or [])] \
+        if isinstance(meta.get("citation_author"), list) else []
+    if authors:
+        out["authors"] = [a for a in authors if a][:12]
+    return out
+
+
+def document_handoff(probe: dict, *, read: dict | None = None,
+                     downloads: list | None = None) -> dict | None:
+    """What a caller needs in order to take the document somewhere else.
+
+    Returns None when the page points at no document, which is almost every
+    page. `read` says what WAS returned from the page, so the block is honest
+    about the split between the readable half and the unreadable one.
+    `downloads` is the session's download ledger, consulted only to fill in a
+    local path for a document that has already been saved."""
+    docs = probe.get("embedded_documents") or []
+    page_url = probe.get("url") or ""
+    scheme = urlparse(page_url).scheme.lower()
+    entries = []
+    saved = {d.get("from"): d.get("saved_to") for d in (downloads or ())
+             if isinstance(d, dict) and d.get("from")}
+    if _kind_for((probe.get("content_type") or "").split(";")[0].strip()
+                 .lower(), page_url, probe) is not None and not docs:
+        # The tab is holding the document itself; the document's URL is the
+        # page's URL.
+        entries.append({
+            "url": page_url, "url_scheme": scheme,
+            "media_type": (probe.get("content_type") or "").split(";")[0]
+                          or None,
+            "filename": filename_for(page_url),
+            "page_local": scheme in ("blob", "data"),
+            "fetchable_by_url": scheme in ("http", "https"),
+            "found_as": "the document this tab is holding",
+            "local_path": saved.get(page_url),
+        })
+    for doc in docs:
+        url = doc.get("url") or ""
+        doc_scheme = urlparse(url).scheme.lower()
+        entries.append({
+            "url": url, "url_scheme": doc_scheme,
+            "media_type": doc.get("type"),
+            "filename": filename_for(url),
+            "page_local": doc_scheme in ("blob", "data"),
+            "fetchable_by_url": doc_scheme in ("http", "https"),
+            "found_as": f'embedded in the page as <{doc.get("tag")}>',
+            "local_path": saved.get(url),
+        })
+    if not entries:
+        return None
+    block: dict = {
+        "documents": entries[:4],
+        "readable_from_here": False,
+        "page": {"url": page_url, "title": _clean_name(
+            str(probe.get("title") or ""))[:300] or None},
+    }
+    citation = _citation(probe)
+    if citation:
+        block["citation"] = citation
+        block["citation_source"] = "page-authored"
+    if read is not None:
+        block["read_from_page"] = read
+    return block
+
+
 async def probe_page(page) -> dict | None:
     """Run the probe against a live page and classify the result. A driver
     that refuses the evaluate (a page mid-navigation, a crashed renderer)
     returns None rather than raising: this is an advisory, and a failed
     advisory must never turn a working read into an error."""
+    info, _handoff = await probe_document(page)
+    return info
+
+
+async def probe_document(page, *, read: dict | None = None,
+                         downloads: list | None = None
+                         ) -> tuple[dict | None, dict | None]:
+    """One probe, two answers: what the tab is holding, and what document it
+    points at.
+
+    The two used to be the same question, which is what the embedded-viewer
+    ruling separated. A page can be perfectly readable and still point at a
+    document nobody can read from here, and both facts belong to the caller."""
     try:
         raw = await page.evaluate(PROBE_JS)
     except Exception:
-        return None
+        return None, None
     if not isinstance(raw, dict):
-        return None
-    return classify(raw)
+        return None, None
+    return classify(raw), document_handoff(raw, read=read,
+                                           downloads=downloads)
 
 
 # ------------------------------------------------------------- the wording
@@ -275,7 +503,7 @@ def escape_route(info: dict) -> str:
           'real file rather than a scrape of a viewer.')
 
 
-def read_refusal(info: dict, tool: str):
+def read_refusal(info: dict, tool: str, handoff: dict | None = None):
     """The refusal a read surface raises. UNSUPPORTED_CONTENT is the honest
     code: the content is genuinely unreachable as text through this tab, not
     missing and not a bad argument."""
@@ -290,6 +518,8 @@ def read_refusal(info: dict, tool: str):
     exc.hint_tools = ("download",)
     exc.detail = {k: info[k] for k in
                   ("kind", "media_type", "filename", "page_local")}
+    if handoff:
+        exc.detail["document_handoff"] = handoff
     return exc
 
 

@@ -1230,11 +1230,12 @@ async def read_pages(
             "detail": f"the max_pages cap of {max_pages} was reached"}
     resume = None
     while True:
-        held = await _resource.probe_page(record.page)
+        held, handoff = await _resource.probe_document(record.page)
         if held is not None:
             stop = {"reason": "unreadable-resource",
                     "detail": _resource.navigate_note(held)["why"],
-                    "route": _resource.escape_route(held)}
+                    "route": _resource.escape_route(held),
+                    **({"document_handoff": handoff} if handoff else {})}
             break
         url = record.page.url
         visited.append(url)

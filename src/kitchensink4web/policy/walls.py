@@ -271,7 +271,18 @@ def soft_block(status: int | None, *, title: str, body: str,
     Returns `(vendor_or_None, evidence)` or None. Two halves, and BOTH are
     required: a challenge signal, and a document with no readable prose. See
     the section comment above for why the pair is what keeps the F1 cloaking
-    property intact."""
+    property intact.
+
+    SOFT means soft, and the status bound is load-bearing. At a refusing
+    status the vendor tables and the status branches already own the verdict,
+    and this rung's title needles are generic enough ("forbidden", "access
+    denied", "blocked") that letting them run there reclassified an
+    application's own explained 403 as a bot wall, which is a shape
+    `tests/browser/test_wall_headers.py` protects on purpose: a refusal that
+    speaks for itself is not an edge refusal. The rung exists for the case
+    nothing else covers, a 200 that is not a page."""
+    if status is not None and (status >= 400 or status == 202):
+        return None
     chars = visible_chars if visible_chars is not None else len(
         (body or "").strip())
     if chars >= NO_READABLE_PROSE_CHARS:

@@ -567,6 +567,22 @@ def _detect_botwall(ctx: _Ctx) -> tuple[list, list]:
         block.append(_sig("status", "block-only",
                           "HTTP 202 on a top-level document, which is the "
                           "shape of an anti-automation shell"))
+    if ctx.status in _walls.REFUSING_STATUSES:
+        # A VENDOR-NAMED CHALLENGE TITLE, at a refusing status only. This is
+        # where the second Cloudflare title lands: Taylor and Francis said
+        # "Just a moment..." and Crunchbase said "One moment, please…" on the
+        # same day from the same vendor, so a matcher pinned to one string
+        # misses half the samples. It corroborates and never gates, which is
+        # the general rule for vendor title matching.
+        for needle, vendor, evidence in _walls.CHALLENGE_TITLES:
+            if vendor and needle in ctx.title:
+                corr.append(_sig("title", "corroborating", evidence))
+                if ctx.visible_chars < _walls.NO_READABLE_PROSE_CHARS:
+                    corr.append(_sig("text", "corroborating",
+                                     f"the document carries "
+                                     f"{ctx.visible_chars} characters of "
+                                     f"readable text"))
+                break
     soft = _walls.soft_block(ctx.status, title=ctx.title, body=ctx.body,
                              landed_url=ctx.landed,
                              visible_chars=ctx.visible_chars)
