@@ -9,6 +9,11 @@ it and did not carry it, and fill_form's per-item refusal record.
   which the page wrote. `click` returns that string inside the envelope;
   `get_audit` returned the same string with nothing around it, on the
   surface an agent reads when it is working out what it just did.
+- V-13 (two of the five sites): fill_form's per-item failure records
+  reported a byte-clipped prefix of the refusal instead of its structure,
+  and one of them hardcoded STALE_ANCHOR for every exception, so a
+  confirmation or a driver failure was reported to the caller as a stale
+  anchor with a re-read as its recovery.
 
 Every pin here is pure python. No browser, no network.
 """
@@ -20,7 +25,8 @@ import json
 
 import pytest
 
-from kitchensink4web import pagedata
+from kitchensink4web import errors, pagedata
+from kitchensink4web.anchors import Outcome
 from kitchensink4web.ops import lite, resource
 from kitchensink4web.policy import audit, credentials
 
@@ -167,3 +173,80 @@ def test_v23_the_record_itself_is_left_alone(log):
     assert entry["target"] == f'button "{INJECTION}"'
 
 
+# ------------------------------------------------------------------ V-13
+
+
+class _Boom(Exception):
+    """A driver failure: not a WebMcpError, not an anchor outcome."""
+
+
+def test_v13_a_non_anchor_refusal_is_not_reported_as_a_stale_anchor():
+    """The honesty defect. `_outcome_name` defaulted every unmapped
+    exception to STALE_ANCHOR, and fill_form's write-failure branch did not
+    even ask it: a confirmation gate that fired at the write was reported
+    to the caller as a stale anchor, whose recovery is a re-read that
+    changes nothing."""
+    exc = errors.ConfirmationRequired("a payment-shaped field needs a human")
+    assert lite._outcome_name(exc) != Outcome.STALE, (
+        "a confirmation refusal is reported as a stale anchor")
+    assert lite._outcome_name(exc) == "CONFIRMATION_REQUIRED"
+
+
+def test_v13_the_five_ladder_outcomes_are_unchanged():
+    assert lite._outcome_name(errors.StaleAnchor("x")) == Outcome.STALE
+    assert lite._outcome_name(
+        errors.AmbiguousLocation("x")) == Outcome.AMBIGUOUS
+    assert lite._outcome_name(errors.TargetNotFound("x")) == Outcome.NOT_FOUND
+    assert lite._outcome_name(errors.ModalBlocked("x")) == Outcome.MODAL
+    assert lite._outcome_name(errors.BadParams("x")) == Outcome.BAD_PARAMS
+
+
+def test_v13_a_failed_item_carries_the_refusals_structure():
+    """A byte-clipped prefix of a refusal is a mutilated refusal: the code
+    is gone, the hint is gone, and the sentence stops mid-word."""
+    exc = errors.StaleAnchor("A" * 400)
+    item = lite._item_failure("e1", exc)
+    assert item["status"] == "failed" and item["ref"] == "e1"
+    error = item["error"]
+    assert error["code"] == "STALE_ANCHOR"
+    assert error["hint"], "the hint was thrown away by the clip"
+    assert "A" * 400 in error["message"], "the message was clipped"
+
+
+def test_v13_a_multi_line_refusal_keeps_every_line():
+    """The write-failure branch took `splitlines()[0][:200]`, so a refusal
+    whose recovery is on its second line arrived with the recovery gone."""
+    exc = errors.StaleAnchor("the field is gone.\nRe-read with "
+                             "get_page_view(page=...) for a fresh ref.")
+    error = lite._item_failure("e1", exc)["error"]
+    assert "Re-read with" in error["message"], error["message"]
+
+
+def test_v13_the_batch_still_names_what_stopped_it():
+    """`anchors.batch_outcome` looks for an outcome in STOPS_THE_BATCH, and
+    a refusal outside the ladder's vocabulary is not one of them. The batch
+    report must still say which item stopped it and why."""
+    exc = errors.ConfirmationRequired("a human has to answer this")
+    per_item = [{"ref": "e1", "outcome": Outcome.OK, "status": "completed"},
+                lite._item_failure("e2", exc),
+                {"ref": "e3", "status": "not_attempted"}]
+    batch = lite._batch_report(per_item, stopped=True)
+    assert batch["stopped_at"] == "e2"
+    assert batch["stopped_because"] == "CONFIRMATION_REQUIRED"
+    assert batch["completed"] == 1
+    assert batch["not_attempted"] == ["e3"]
+
+
+def test_v13_an_ordinary_stale_batch_reports_exactly_as_before():
+    per_item = [{"ref": "e1", "outcome": Outcome.OK, "status": "completed"},
+                lite._item_failure("e2", errors.StaleAnchor("gone"))]
+    batch = lite._batch_report(per_item, stopped=True)
+    assert batch["stopped_at"] == "e2"
+    assert batch["stopped_because"] == Outcome.STALE
+
+
+def test_v13_a_clean_batch_stops_at_nothing():
+    per_item = [{"ref": "e1", "outcome": Outcome.OK, "status": "completed"}]
+    batch = lite._batch_report(per_item, stopped=False)
+    assert batch["stopped_at"] is None
+    assert batch["stopped_because"] is None

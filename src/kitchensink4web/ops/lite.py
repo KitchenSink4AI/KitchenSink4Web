@@ -3011,10 +3011,7 @@ async def fill_form(
             rr = await _act.resolve(sess, record, loc, tool="fill_form")
         except (AmbiguousLocation, StaleAnchor, TargetNotFound, ModalBlocked,
                 BadParams) as exc:
-            per_item.append({
-                "ref": first.get("node_ref"),
-                "outcome": _outcome_name(exc), "status": "failed",
-                "error": str(exc)[:200]})
+            per_item.append(_item_failure(first.get("node_ref"), exc))
             stopped = True
             continue
         # RE-CLASSIFY THIS FIELD AT ITS OWN WRITE, with the element focused,
@@ -3051,10 +3048,13 @@ async def fill_form(
                                               rr, f.get("value"))
                 set_result = await _confirm_field(rr["handle"], set_result)
         except Exception as exc:
-            per_item.append({
-                "ref": rr.get("node_ref"),
-                "outcome": anchors.Outcome.STALE, "status": "failed",
-                "error": str(exc).splitlines()[0][:200]})
+            # THE OUTCOME IS DERIVED, not asserted (V-13). This branch
+            # hardcoded STALE_ANCHOR for every exception, so a credential
+            # refusal or a late-reclassification gate raised under the write
+            # lock came back to the caller as a stale anchor, and the item
+            # that a human had to answer was reported as one a re-read would
+            # fix. Its sibling five lines up always asked `_outcome_name`.
+            per_item.append(_item_failure(rr.get("node_ref"), exc))
             stopped = True
             continue
         outcome = (anchors.Outcome.REBOUND if rr["resolution"] == "rebound"
@@ -3064,7 +3064,7 @@ async def fill_form(
             "label": desc.get("name"), "set": set_result,
             "rebound": rr.get("rebound")})
 
-    batch = anchors.batch_outcome(per_item)
+    batch = _batch_report(per_item, stopped=stopped)
 
     submitted = None
     if submit and not stopped:
@@ -3289,12 +3289,65 @@ async def _focused_descriptor(page) -> dict | None:
 
 
 def _outcome_name(exc: Exception) -> str:
-    return {AmbiguousLocation: anchors.Outcome.AMBIGUOUS,
-            StaleAnchor: anchors.Outcome.STALE,
-            TargetNotFound: anchors.Outcome.NOT_FOUND,
-            ModalBlocked: anchors.Outcome.MODAL,
-            BadParams: anchors.Outcome.BAD_PARAMS}.get(
-                type(exc), anchors.Outcome.STALE)
+    """The per-item outcome for one failed batch item.
+
+    THE LADDER'S VOCABULARY IS NOT THE WHOLE VOCABULARY (V-13, fix wave
+    2026-09-08). `anchors.Outcome` names the five ways a REF can fail to
+    resolve, and this map covers those five. An action can also fail for
+    reasons the ladder never names: a field the page turned into a payment
+    target when it took focus, a credential refusal, a driver that died
+    mid-write. Every one of those used to come back as STALE_ANCHOR, whose
+    stated recovery is to re-read the page for a fresh ref, and re-reading
+    fixes none of them. The refusal's OWN code is the truthful answer and
+    the caller already knows how to read it, because it is the same
+    vocabulary every refusal envelope ships."""
+    named = {AmbiguousLocation: anchors.Outcome.AMBIGUOUS,
+             StaleAnchor: anchors.Outcome.STALE,
+             TargetNotFound: anchors.Outcome.NOT_FOUND,
+             ModalBlocked: anchors.Outcome.MODAL,
+             BadParams: anchors.Outcome.BAD_PARAMS}.get(type(exc))
+    return named or _envelope.classify(exc)
+
+
+def _item_failure(ref, exc: Exception) -> dict:
+    """One failed item of a batch, carrying the refusal's STRUCTURE.
+
+    V-13, the mutilation half. The two fill_form failure branches reported
+    `str(exc)[:200]` and `str(exc).splitlines()[0][:200]`: a byte-clipped
+    prefix of a refusal, with the code gone, the hint gone, the recovery
+    sentence gone whenever it sat past the clip or on a second line, and the
+    remaining sentence stopping mid-word. `envelope.refusal` already builds
+    the structured form every top-level refusal ships, so the item carries
+    that instead, and the caller reads a failed item exactly the way it
+    reads a failed call.
+
+    NOTHING NEEDS RE-BOUNDING HERE. A batch stops at its first failure, so
+    there is at most one of these per call, and the parts are bounded at
+    their own sources: the candidate listing at twelve, a driver string by
+    `scrub_driver_text`, the detail dicts by the raise sites that build
+    them. Clipping was never what kept this payload small."""
+    return {"ref": ref, "status": "failed",
+            "outcome": _outcome_name(exc),
+            "error": _envelope.refusal(exc)["error"]}
+
+
+def _batch_report(per_item: list[dict], *, stopped: bool) -> dict:
+    """`anchors.batch_outcome`, plus the stop it cannot see.
+
+    `batch_outcome` finds the item that stopped the batch by testing its
+    outcome against `STOPS_THE_BATCH`, which lists the five ladder
+    outcomes. Now that a non-ladder refusal reports its own code instead of
+    borrowing STALE_ANCHOR (V-13), such an item is invisible to that test,
+    and the report would say `stopped_at: null` about a batch that plainly
+    stopped. The batch knows it stopped, so it says which item did it."""
+    batch = anchors.batch_outcome(per_item)
+    if stopped and batch["stopped_at"] is None:
+        failed = next((r for r in per_item if r.get("status") == "failed"),
+                      None)
+        if failed:
+            batch["stopped_at"] = failed.get("ref")
+            batch["stopped_because"] = failed.get("outcome")
+    return batch
 
 
 async def press_keys(
