@@ -3695,3 +3695,112 @@ that builds the machinery. `ACCESS_PATHS` (one per category) and `NOTES`
 `test_the_user_facing_copy_is_still_a_placeholder` fails the moment one is
 filled, which is the guard to delete rather than weaken when the copy lands.
 The facts each one has to convey ride with the build report.
+## The seven-branch integration (2026-09-08 06:10 KST)
+
+Seventeen features were built in parallel on seven branches off `45fc986`, by
+seven agents who could not see each other's trees, and this is the wave that
+put them on one `main`. Nothing was pushed. `integ-base-45fc986` tags the
+pre-integration commit, so the whole thing is one reset away from undone.
+
+The merge ORDER was the first decision and it was not the obvious one.
+`build/lifecycle` went first rather than last, because it is the structurally
+deepest wave: it rewrote `engine/session.py` so `contexts` is the storage and
+`context`, `journal`, `profile_dir`, `saved_auth_*` and `counters` became
+properties over the focused jar. That makes `Session.counters` read-only, and
+the failure mode it creates has no conflict marker — a sibling's
+`counters[k] += 1` compiles and silently counts nothing. Landing the rewrite
+first meant every later branch met a settled session shape and got adapted to
+it one at a time, with a full green suite between each; landing it last would
+have put one whole-file rewrite against six waves' accumulated edits at once
+and made that trap six times easier to miss. Four such writes were found and
+converted to `bump()`: one in `classify`'s `get_page_view`, three in
+`extract`'s `extract_page` and `aggregate`, one in `senses`'s
+`get_accessibility`. Not one of them produced a conflict.
+
+The rest went by `ops/lite.py` collision surface, largest first, so the
+three-way `manage_session` collision every builder predicted got resolved as a
+series of two-way ones while the file was still recognisable: lanes, consent,
+classify, batch, extract, senses. Senses went last on purpose, because it owns
+the tool-count pins and the completeness-rung measurement and both should be
+settled once, against the union, rather than six times.
+
+**Four waves each added a clause to one tool description and the union blew a
+published ceiling.** `manage_session` came to 2,154 characters against the
+build's own hard 2,048 (the client truncation limit, which the docstring gate
+tests as a HARD rule while the token budget is advisory). Resolved by
+relocation rather than rewriting: every fact in the session-transfer clause is
+already published verbatim in `get_workflows(task='session-transfer')`, which
+the lifecycle wave added in the same breath, so the description names the two
+actions and points at the topic. No fact left the product and no prose was
+authored. The description is now a merged placeholder carrying four waves'
+sentences and it needs the author's pass as ONE string; a flag above the
+function says so. The next feature that lands on this tool has nowhere to put
+a clause, which is the real finding underneath.
+
+**Three cross-wave seams that no single builder could have seen.** The consent
+wave closed eleven doors that reached `gates.ENGINE.ask()` without going
+through the ladder, and added an AST sweep so a twelfth fails the suite; the
+lifecycle wave, in a tree that did not have that sweep, opened exactly one —
+`monitor(action='create')`'s off-list navigation gate. It goes through
+`policy.engine.confirm()` now, so a human's pre-authorization applies to the
+monitor that navigates on a timer and the unattended refusal is available to a
+scheduler that has nobody to ask. The consent wave's two credential-route
+installers wrote to `sess.context`, the focused jar, while every sibling
+`set_routing` action now resolves one jar and refuses rather than guessing when
+a session holds several; they take the resolved jar now, keyword-only, because
+consent's own unit pins call them positionally. And the multi-context C6 pin
+stubbed `gates.ENGINE.ask` to return `None`, which was fine when the ops layer
+called `ask` for its side effect and discarded the answer, and is a stub
+modelling an engine that no longer exists now that one door uses the answer and
+holds it to the TOCTOU re-validation. The consent wave had already made that
+same fix to three stubs in its own tree.
+
+**The seeded-random gate earned its keep.** Nine older submit-gate pins failed
+on order alone. `consent.apply()` is startup-only and process-global, so a file
+that calls it leaves Axis B ACTIVE for everything after it in the same process,
+and the ladder then rules a query-shaped GET submission Tier 0 — which is
+exactly what it was built to do, and exactly what nine pins with `method="get"`
+fixtures assert does not happen. Forward order hid it because a file that
+reconfigures for read-only happened to fall between them. The consent wave
+never saw it either, because that wave ran each browser file in its own
+process, so Axis B was inert everywhere but its own two files. The browser
+conftest already had a fixture giving Axis A a known grade per test, with a
+docstring saying a test's verdict must not depend on which other tests ran
+first; Axis B has the same fixture now, for the same reason, resetting to the
+state a fresh process has. It RESETS and does not DECIDE: two pins now
+contradict each other on the same page shape, the consent wave's GET search
+form submitting ungated against the C1 matrix's GET submit button gating, and
+which one describes the shipped product is the author's call. No assertion was
+touched.
+
+**One defect found by installing an extra for the first time.** The `ocr` extra
+was missing `winrt-Windows.Foundation`. PyWinRT awaits an `IAsyncOperation` by
+assigning `op.completed`, and that assignment imports the module; without it the
+extra installs, `probe()` answers "available" because Windows.Media.Ocr really
+is present with a real language pack, the completion callback raises
+`ModuleNotFoundError` inside the runtime's own waiter, the awaitable never
+resolves, and `read_image_text` hangs until its wall clock expires. Under the
+suite it hung past the 120-second pytest timeout and took the whole run down.
+Two packages pinned, two ledger rows saying why. That a capability probe can
+answer "available" for an installation that cannot complete a call is a
+separate question, and it is flagged rather than patched: it is the senses
+wave's design surface, not a merge seam.
+
+Gate: full suite **1,754 green in both orders** (`-p no:randomly` 841.9s,
+`--randomly-seed=20260908` 901.0s), run SEQUENTIALLY, up 730 from the 1,024 of
+the union wave. Four skips, all in `test_classify.py` and all deliberate: three
+consent-wall fixtures a curl capture cannot carry (pinned in the browser suite
+instead) and one client-rendered login shell that honestly classifies
+`insufficient_evidence`. The surface is **52 tools** and a lite roster of
+**19**: forty-five plus `monitor`, `batch`, `do`, `extract_page`, `aggregate`,
+`read_image_text` and `get_accessibility`. Every branch measured its own delta
+against forty-five and each was right in isolation, so both count pins now say
+in their own comments that the number is the union.
+
+One pin is a known load-sensitive race and it is NOT new:
+`test_a_frame_gated_page_is_read_after_the_frames_it_needs` reveals its
+controls on animation frame 5, and the read path's yield is two frames with a
+250 ms floor, so a busy machine misses the reveal. It reproduces at `45fc986`
+two runs in five and it fired in two of the ten integration runs. Left alone
+rather than loosened: the number that would make it stable is the number that
+makes the fix weaker.
