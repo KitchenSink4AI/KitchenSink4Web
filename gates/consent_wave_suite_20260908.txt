@@ -1,0 +1,32 @@
+UNIT: ............................................................             [100%]
+UNIT: 636 passed in 15.88s
+test_anchors_s2.py: .........                                                                [100%] 9 passed in 14.87s 
+test_article_and_aria.py: ..............                                                           [100%] 14 passed in 14.11s 
+test_consent_ladder_live.py: ..........                                                               [100%] 10 passed in 12.43s 
+test_credential_injection_live.py: ....                                                                     [100%] 4 passed in 4.64s 
+test_dialogs_live.py: .................                                                        [100%] 17 passed in 33.21s 
+test_engine_live.py: .........................                                                [100%] 25 passed in 46.13s 
+test_field_test_fixes.py: ......                                                                   [100%] 6 passed in 5.01s 
+test_fieldlog2_fixes.py: ..............                                                           [100%] 14 passed in 10.74s 
+test_find_and_act.py: ...............                                                          [100%] 15 passed in 16.32s 
+test_frame_traversal.py: .....................                                                    [100%] 21 passed in 26.52s 
+test_gauntlet2_fixes.py: .......................                                                  [100%] 23 passed in 16.21s 
+test_gauntlet3_fixes.py: .......................                                                  [100%] 23 passed in 20.71s 
+test_gauntlet4_fixes.py: .......................                                                  [100%] 23 passed in 25.21s 
+test_occlusion_battery.py: ................................................                         [100%] 48 passed in 38.97s 
+test_phase2_reads.py: ..........................                                               [100%] 26 passed in 49.58s 
+test_phase3_policy.py: ..............                                                           [100%] 14 passed in 12.88s 
+test_phase4_actions.py: .......................                                                  [100%] 23 passed in 23.78s 
+test_phase5_packs.py: .............                                                            [100%] 13 passed in 12.34s 
+test_phase6_workflows.py: .....                                                                    [100%] 5 passed in 11.02s 
+test_phase7_field.py: .........                                                                [100%] 9 passed in 9.37s 
+test_phase8_gauntlet_fixes.py: .......                                                                  [100%] 7 passed in 8.94s 
+test_reattack3_fixes.py: ..............                                                           [100%] 14 passed in 8.61s 
+test_reattack_fixes.py: ....................                                                     [100%] 20 passed in 17.42s 
+test_ref_misdirect.py: ....                                                                     [100%] 4 passed in 4.35s 
+test_region_scope.py: ......                                                                   [100%] 6 passed in 5.53s 
+test_shadow_traversal.py: ................                                                         [100%] 16 passed in 16.46s 
+test_smallparts_live.py: ................                                                         [100%] 16 passed in 12.41s 
+test_union_wave_live.py: ................                                                         [100%] 16 passed in 26.07s 
+test_wall_headers.py: ...................................                                      [100%] 35 passed in 13.90s 
+ALL DONE

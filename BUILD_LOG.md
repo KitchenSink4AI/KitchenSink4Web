@@ -3497,8 +3497,11 @@ approved later could not execute the original target anyway; an unattended
 session gets an honest refusal instead of a 150-second wait for an answer
 nobody will give.
 
-Gate: **633 unit green in both orders, 14 new live green, browser suite
-green**, run SEQUENTIALLY. 71 new unit pins and 14 new live pins across seven
-new `corpus/consent` fixtures and two local origins; 39 of the 50 spec pins
-are negative. Every new unit pin errors on `45fc986` at the import of a module
-that does not exist there. Zero orphaned browser processes.
+Gate: **1,112 green, 0 failed**, run SEQUENTIALLY (unit first, then each
+browser file on its own so every verdict is durable), with the unit half green
+under a randomized order as well. 74 new unit pins and 14 new live pins across
+seven new `corpus/consent` fixtures and two local origins; 39 of the 50 spec
+pins are negative. Every new unit pin errors on `45fc986` at the import of a
+module that does not exist there. Zero orphaned browser processes attributable
+to this wave; the four `chrome-headless-shell` alive at exit trace to sibling
+agents' pytest processes.
