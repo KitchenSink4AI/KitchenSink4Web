@@ -37,10 +37,12 @@ import re
 import time
 import uuid
 from pathlib import Path
+from urllib.parse import urlparse
 
 from ..anchors import Outcome, ladder
 from ..engine.session import MANAGER
-from ..errors import (BadParams, Conflict, ConfirmationRequired,
+from ..errors import (AmbiguousLocation, BadParams, Conflict,
+                      ConfirmationRequired, NavigationBlocked,
                       TargetNotFound, ValidationFailed)
 from ..policy import audit as _audit
 from ..policy import gates as _gates
@@ -57,6 +59,122 @@ REPLAYABLE: tuple[str, ...] = ("navigate", "click", "type_text", "fill_form",
                                "press_keys", "scroll", "wait_for")
 
 _NAME_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
+
+# --------------------------------------------------- parameters (#10)
+#
+# ALL PROSE IN THIS SECTION IS PLACEHOLDER COPY. The facts each message must
+# carry are listed in the build report.
+#
+# THE DESIGN DECISION, and everything else follows from it: slots are
+# STRUCTURAL, stored out of band as spans, never `{{tokens}}` written into
+# the recorded text. Three reasons in descending severity. A recorded
+# literal can contain `{{`, because the steps come from what an agent
+# actually typed on a real page, so a run-time string replace over recorded
+# text is a template-injection surface pointed at content nobody controls.
+# An in-band token makes substitution a PARSE, and a parse has an error
+# mode, an escaping rule, and a nesting question, every one of which is a
+# place a value can reach something it should not. And it hides WHERE the
+# parameter goes: a reviewer reading the file cannot tell whether `{{url}}`
+# sits in a `text` value or a `condition` value without reading every step.
+#
+# Substitution is therefore a splice by index, `value[:start] + supplied +
+# value[end:]`. Nothing is parsed and nothing is escaped.
+
+#: A parameter name is an identifier the caller types into a dict, so it is
+#: held tighter than a workflow name.
+_PARAM_NAME_RE = re.compile(r"^[a-z][a-z0-9_]{0,31}$")
+
+#: THE SLOTTABLE SET, CLOSED, AND THIS IS THE SECURITY BOUNDARY.
+#: A parameter is DATA. A parameter is never code, never a selector, never a
+#: condition, never a key. Field paths are matched against this table and
+#: never resolved by a generic dotted-path walk over `args`, because a
+#: generic resolver is how `args.condition` becomes reachable.
+SLOTTABLE: dict[str, tuple[str, ...]] = {
+    "navigate": ("args.url",),
+    "type_text": ("args.text",),
+    "wait_for": ("args.value",),
+    "fill_form": ("args.fields.<i>.value",),
+}
+
+#: `wait_for`'s value is slottable only for these conditions. `condition`
+#: itself is not slottable at all, so a recorded text wait can never become
+#: a js wait, and a `js` step carries no slots and refuses at load. Two
+#: independent guards, both required.
+_SLOTTABLE_WAIT_CONDITIONS = ("text", "text_gone", "url")
+
+#: What a slot entry may contain. Unknown keys refuse rather than being
+#: ignored: a slot is a security-relevant structure, and tolerating an
+#: unknown key there is how a future field gets honored by accident.
+_SLOT_KEYS = frozenset({"param", "field", "span", "recorded_origin"})
+
+#: What a declared parameter may contain, in the file.
+_PARAM_KEYS = frozenset({"name", "required", "kind", "default",
+                         "description", "allow_origin_change"})
+
+#: The value cap. Refuse past it, never truncate.
+PARAM_VALUE_CAP = 8192
+
+
+def _norm_field(field: str) -> str:
+    """A field path with its index generalized, for the table lookup."""
+    return re.sub(r"\.fields\.\d+\.", ".fields.<i>.", field or "")
+
+
+def _field_get(step: dict, field: str):
+    """Read one CLOSED field path off a step. Never a generic walk."""
+    args = step.get("args") or {}
+    if field == "args.url":
+        return args.get("url")
+    if field == "args.text":
+        return args.get("text")
+    if field == "args.value":
+        return args.get("value")
+    match = re.fullmatch(r"args\.fields\.(\d+)\.value", field or "")
+    if match:
+        fields = args.get("fields") or []
+        index = int(match.group(1))
+        if index < len(fields):
+            return (fields[index] or {}).get("value")
+    return None
+
+
+def _field_set(step: dict, field: str, value) -> None:
+    args = step.setdefault("args", {})
+    if field in ("args.url", "args.text", "args.value"):
+        args[field.split(".", 1)[1]] = value
+        return
+    match = re.fullmatch(r"args\.fields\.(\d+)\.value", field or "")
+    if match:
+        args["fields"][int(match.group(1))]["value"] = value
+
+
+def _slottable_fields(step: dict) -> list[str]:
+    """Every field path this recorded step actually offers, expanded."""
+    tool = step.get("tool")
+    args = step.get("args") or {}
+    if tool == "wait_for":
+        condition = (args.get("condition") or "").strip().lower()
+        if condition not in _SLOTTABLE_WAIT_CONDITIONS:
+            return []
+        return ["args.value"]
+    if tool == "fill_form":
+        return [f"args.fields.{i}.value"
+                for i in range(len(args.get("fields") or []))]
+    return [f for f in SLOTTABLE.get(tool, ())
+            if _field_get(step, f) is not None]
+
+
+def _kind_of(step: dict, field: str, value) -> str:
+    if step.get("tool") == "navigate" and field == "args.url":
+        return "url"
+    if isinstance(value, bool):
+        return "bool"
+    return "text"
+
+
+def _origin_of(url: str) -> str:
+    host = urlparse(str(url or "")).hostname or ""
+    return host.lower()
 
 
 def _workflow_dir() -> Path:
@@ -107,7 +225,105 @@ def _load(name: str) -> dict:
         raise ValidationFailed(
             f"workflow file {path.name} parsed as {type(doc).__name__} "
             f"rather than a workflow object; re-save the workflow.")
+    _validate_slots(doc, path.name)
     return doc
+
+
+def _validate_slots(doc: dict, filename: str) -> None:
+    """THE FILE IS SUSPECT, NEVER THE CALLER (feature #10, at load).
+
+    A workflow file is on disk and can be hand-edited, and `_dry_pass`
+    already carries that suspicion for the tool of each step. Slots get the
+    same treatment, and every refusal here blames the FILE: the caller
+    passed a name, not a document."""
+    declared = doc.get("parameters")
+    if declared is not None and not isinstance(declared, list):
+        raise ValidationFailed(
+            f"workflow file {filename} carries a `parameters` key that is "
+            f"not a list, which is not what save_workflow writes; the file "
+            f"may have been edited. Re-record the workflow.")
+    names = set()
+    for entry in declared or []:
+        if not isinstance(entry, dict) or not isinstance(
+                entry.get("name"), str) \
+                or not _PARAM_NAME_RE.match(entry["name"]):
+            raise ValidationFailed(
+                f"workflow file {filename} declares a parameter this build "
+                f"does not recognize, which is not what save_workflow "
+                f"writes; the file may have been edited. Re-record the "
+                f"workflow.")
+        unknown = sorted(set(entry) - _PARAM_KEYS)
+        if unknown:
+            raise ValidationFailed(
+                f"workflow file {filename} declares parameter "
+                f"{entry['name']!r} with unknown key(s) {unknown}. A "
+                f"declaration this build did not write is not honored by "
+                f"accident. Re-record the workflow.")
+        names.add(entry["name"])
+    for i, step in enumerate(doc.get("steps") or []):
+        if not isinstance(step, dict):
+            continue
+        args = step.get("args") or {}
+        if step.get("tool") == "wait_for" \
+                and (args.get("condition") or "").strip().lower() == "js":
+            raise ValidationFailed(
+                f"workflow file {filename} carries wait_for(condition='js') "
+                f"at step {i}, which evaluates JavaScript in the page. "
+                f"save_workflow never records one, so this file was edited "
+                f"by hand. Workflow replay carries a closed set of recorded "
+                f"actions and script evaluation is not in it. Remove the "
+                f"step, or run the predicate through evaluate_script, which "
+                f"names the capability and is gated on it.")
+        slots = step.get("slots")
+        if slots is None:
+            continue
+        if not isinstance(slots, list):
+            raise ValidationFailed(
+                f"workflow file {filename} carries a `slots` key at step "
+                f"{i} that is not a list; the file may have been edited.")
+        offered = _slottable_fields(step)
+        for slot in slots:
+            if not isinstance(slot, dict):
+                raise ValidationFailed(
+                    f"workflow file {filename} carries a slot at step {i} "
+                    f"that is not an object; the file may have been edited.")
+            unknown = sorted(set(slot) - _SLOT_KEYS)
+            if unknown:
+                raise ValidationFailed(
+                    f"workflow file {filename} carries a slot at step {i} "
+                    f"with key(s) {unknown} that this build does not write. "
+                    f"A slot decides where a caller-supplied value lands, "
+                    f"so an unrecognized key in one is refused rather than "
+                    f"ignored. Re-record the workflow.")
+            field = slot.get("field")
+            if field not in offered:
+                raise ValidationFailed(
+                    f"workflow file {filename} carries a slot at step {i} "
+                    f"on field {field!r}, which is not one this build makes "
+                    f"slottable for a {step.get('tool')!r} step, so the "
+                    f"file does not match what save_workflow writes and may "
+                    f"have been edited. A parameter is data: it fills in "
+                    f"what gets typed or a piece of a URL, never a "
+                    f"selector, a wait condition, a key, or a piece of "
+                    f"script. The slottable fields here are {offered}. "
+                    f"Re-record the workflow.")
+            if slot.get("param") not in names:
+                raise ValidationFailed(
+                    f"workflow file {filename} carries a slot at step {i} "
+                    f"for parameter {slot.get('param')!r}, which the file "
+                    f"does not declare; it may have been edited. Re-record "
+                    f"the workflow.")
+            span = slot.get("span")
+            value = _field_get(step, field)
+            length = len(value) if isinstance(value, str) else 0
+            if not (isinstance(span, list) and len(span) == 2
+                    and all(isinstance(x, int) for x in span)
+                    and 0 <= span[0] <= span[1] <= length):
+                raise ValidationFailed(
+                    f"workflow file {filename} carries a slot at step {i} "
+                    f"whose span {span!r} is not inside the recorded value; "
+                    f"the file may have been edited. Re-record the "
+                    f"workflow.")
 
 
 # ------------------------------------------------------------------ saving
@@ -118,6 +334,7 @@ async def save_workflow(
     name: str = "",
     start_index: int = 0,
     end_index: int | None = None,
+    parameters: list | None = None,
 ) -> dict:
     """Save a named, replayable workflow from the session's audit log, so a
     multi-step flow can be re-run later without keeping an arbitrary-code
@@ -126,6 +343,18 @@ async def save_workflow(
     re-render or a later session. start_index and end_index select a slice
     of the session's replayable actions (as numbered by the step listing
     this returns). Returns the saved workflow's name, step list, and file.
+    `parameters` turns the recording into a reusable template: declare
+    parameters=[{'name': 'title', 'example': 'the value you recorded'}] and
+    the value you typed once becomes a slot the next run fills in. A
+    PARAMETER IS DATA. A parameter is never code, never a selector, never a
+    condition, never a key: a slot can fill in what gets typed, or a piece
+    of a URL, and nothing else. Slots are stored as spans out of band rather
+    than as tokens inside the recorded text, so a recorded literal that
+    happens to contain template syntax stays a literal. A parameter that
+    binds nothing refuses and lists every recorded value you could have
+    meant, and an example matching several of them refuses rather than
+    picking one. Returns which slots each parameter bound to and the
+    run_workflow call that fills them.
     """
     if not name:
         raise BadParams(
@@ -175,29 +404,378 @@ async def save_workflow(
                       for s in steps
                       if (s.get("url") or "").startswith(("http://",
                                                           "https://"))})
+    declared: list = []
+    if parameters is not None:
+        declared, _slots = _bind_parameters(steps, parameters)
     doc = {
         "name": _slug(name),
         "created": time.strftime("%Y-%m-%dT%H:%M:%S"),
         "session": session,
         "origins": origins,
+        **({"parameters": [{k: v for k, v in p.items()
+                            if not k.startswith("_")} for p in declared]}
+           if declared else {}),
         "steps": steps,
     }
     path = _path_of(name)
     await _write_workflow(path, doc)
     _audit.annotate(workflow=doc["name"])
+    slot_count = sum(len(s.get("slots") or []) for s in steps)
     return {
         "name": doc["name"],
         "steps": len(steps),
         "step_list": [_step_line(i, s) for i, s in enumerate(steps)],
         "origins": origins,
         "file": str(path),
+        **({"parameters": [
+            {"name": p["name"], "required": p["required"], "kind": p["kind"],
+             "bound_to": p["_bound_to"],
+             **({"recorded_example": p["_example"]}
+                if p["_example"] is not None else {})}
+            for p in declared],
+            "parity": (f'{len(declared)} parameter(s), {slot_count} slot(s), '
+                       f'every slot bound and every parameter used')}
+           if declared else {}),
         "next": f"run_workflow(name={doc['name']!r}, page=..., "
-                f"dry_run=True) re-resolves every anchor before anything "
-                f"executes."
+                f"dry_run=True"
+                + (", parameters={"
+                   + ", ".join(f"{p['name']!r}: ..." for p in declared) + "}"
+                   if declared else "")
+                + f") re-resolves every anchor before anything executes."
                 + (f" This flow is now findable by site: "
                    f"list_workflows(for_origin={origins[0]!r}) returns it "
                    f"the next time you are there." if origins else ""),
     }
+
+
+def _recorded_values(steps: list[dict]) -> list[tuple[int, str, object]]:
+    """Every slottable value in the recorded flow, in order. This is what a
+    refusal lists, so a caller can see what was actually available rather
+    than being told their declaration was wrong and left to guess."""
+    out = []
+    for i, step in enumerate(steps):
+        for field in _slottable_fields(step):
+            out.append((i, field, _field_get(step, field)))
+    return out
+
+
+def _recorded_listing(values: list) -> str:
+    return "; ".join(f"step {i} {f} = {v!r}" for i, f, v in values) \
+        or "none: this flow records no slottable value"
+
+
+def _bind_parameters(steps: list[dict], declared: list) -> tuple[list, list]:
+    """Turn the caller's declarations into (parameters, slots), or refuse.
+
+    Every check runs before the file is written, and a parameter that binds
+    nothing refuses: a workflow saved with a dangling parameter is a
+    workflow that can only fail at run."""
+    if not isinstance(declared, list) or not declared:
+        raise BadParams(
+            "save_workflow(parameters=...) takes a non-empty list of "
+            "parameter declarations, for example "
+            "parameters=[{'name': 'title', 'example': 'D-pad bug'}] to "
+            "replace a recorded value, or "
+            "[{'name': 'title', 'step': 1, 'field': 'args.text'}] to name "
+            "the address outright.")
+    available = _recorded_values(steps)
+    listing = _recorded_listing(available)
+    params: list[dict] = []
+    slots: list[tuple[int, dict]] = []
+    seen: set[str] = set()
+    for entry in declared:
+        decl = {"name": entry} if isinstance(entry, str) else dict(entry or {})
+        name = decl.get("name")
+        if not isinstance(name, str) or not _PARAM_NAME_RE.match(name):
+            raise BadParams(
+                f"parameter name {name!r} is not usable: a name is 1 to 32 "
+                f"characters, starts with a lowercase letter, and carries "
+                f"only lowercase letters, digits, and underscores. It is an "
+                f"identifier the caller types into a dict, so it is held "
+                f"tighter than a workflow name is.")
+        if name in seen:
+            raise BadParams(
+                f"parameter {name!r} is declared twice; every name in the "
+                f"list is distinct, and nothing is merged by position.")
+        seen.add(name)
+        bound = _bind_one(decl, name, available, listing)
+        kind = decl.get("kind") or _kind_of(steps[bound[0]["step"]],
+                                            bound[0]["field"],
+                                            bound[0]["recorded"])
+        for hit in bound:
+            step = steps[hit["step"]]
+            value = hit["recorded"]
+            if kind == "bool" and not isinstance(value, bool):
+                raise BadParams(
+                    f"parameter {name!r} is declared as a bool and the value "
+                    f"it binds to (step {hit['step']} {hit['field']}) is "
+                    f"{type(value).__name__}, so it could only ever fail at "
+                    f"run. Nothing was saved.")
+            slot = {"param": name, "field": hit["field"],
+                    "span": [hit["start"], hit["end"]]}
+            if kind == "url":
+                origin = _origin_of(value)
+                if not str(value or "").startswith(("http://", "https://")):
+                    raise BadParams(
+                        f"parameter {name!r} is declared as a url and the "
+                        f"recorded value at step {hit['step']} is not an "
+                        f"http or https URL. Nothing was saved.")
+                slot["recorded_origin"] = origin
+            slots.append((hit["step"], slot))
+            step.setdefault("slots", []).append(slot)
+        param = {"name": name,
+                 "required": bool(decl.get("required", "default" not in decl)),
+                 "kind": kind}
+        for key in ("default", "description", "allow_origin_change"):
+            if key in decl:
+                param[key] = decl[key]
+        param["_bound_to"] = [f'step {h["step"]} {h["field"]} '
+                              f'[{h["start"]}:{h["end"]}]' for h in bound]
+        param["_example"] = bound[0]["recorded"] \
+            if isinstance(bound[0]["recorded"], (str, bool)) else None
+        params.append(param)
+    return params, slots
+
+
+def _bind_one(decl: dict, name: str, available: list, listing: str) -> list:
+    """Resolve one declaration to one or more (step, field, span) hits."""
+    if decl.get("step") is not None or decl.get("field"):
+        step_index, field = decl.get("step"), decl.get("field")
+        if step_index is None or not field:
+            raise BadParams(
+                f"parameter {name!r} names one half of an address: an "
+                f"explicit declaration carries both `step` and `field`. The "
+                f"recorded slottable values are: {listing}.")
+        match = [(i, f, v) for i, f, v in available
+                 if i == step_index and f == field]
+        if not match:
+            raise BadParams(
+                f"parameter {name!r} addresses step {step_index} "
+                f"{field!r}, which is not a slottable field of that step. A "
+                f"parameter is DATA: it can fill in what gets typed or a "
+                f"piece of a URL, never a selector, a wait condition, a "
+                f"key, or a piece of script. The slottable fields are "
+                f"{ {t: list(f) for t, f in SLOTTABLE.items()} }, and a "
+                f"wait_for value is slottable only when its recorded "
+                f"condition is one of {list(_SLOTTABLE_WAIT_CONDITIONS)}. "
+                f"The recorded slottable values are: {listing}.")
+        _i, _f, value = match[0]
+        span = decl.get("span")
+        if span is None:
+            span = [0, len(value) if isinstance(value, str) else 0]
+        if (not isinstance(span, (list, tuple)) or len(span) != 2
+                or not all(isinstance(x, int) for x in span)
+                or not 0 <= span[0] <= span[1]
+                <= (len(value) if isinstance(value, str) else 0)):
+            raise BadParams(
+                f"parameter {name!r} carries span {span!r}, which is not "
+                f"inside the recorded value at step {step_index} "
+                f"({value!r}).")
+        return [{"step": step_index, "field": field, "start": span[0],
+                 "end": span[1], "recorded": value}]
+    example = decl.get("example")
+    if example is None:
+        raise BadParams(
+            f"parameter {name!r} was declared by name alone, and a name is "
+            f"not an address. Add `example` (the recorded value it should "
+            f"replace, or a piece of one) or `step` and `field`. The "
+            f"recorded slottable values are: {listing}.")
+    hits = []
+    for i, field, value in available:
+        if isinstance(value, bool) and value is example:
+            hits.append({"step": i, "field": field, "start": 0, "end": 0,
+                         "recorded": value})
+            continue
+        if not isinstance(value, str) or not isinstance(example, str):
+            continue
+        start = value.find(example)
+        while start >= 0:
+            hits.append({"step": i, "field": field, "start": start,
+                         "end": start + len(example), "recorded": value})
+            start = value.find(example, start + 1)
+    if not hits:
+        raise BadParams(
+            f"parameter {name!r} declares example {example!r} and no "
+            f"recorded value contains it, so it would bind nothing. A "
+            f"workflow is never saved with a dangling parameter. The "
+            f"recorded slottable values are: {listing}.")
+    if len(hits) > 1 and not decl.get("all"):
+        listed = "; ".join(
+            f'step {h["step"]} {h["field"]} [{h["start"]}:{h["end"]}]'
+            for h in hits)
+        raise AmbiguousLocation(
+            f"parameter {name!r} declares example {example!r} and "
+            f"{len(hits)} recorded values match it. Nothing binds first "
+            f"match, for the reason find_and_act refuses on several matches: "
+            f"picking one is how the wrong thing gets changed. Candidates: "
+            f"{listed}. Name the one you meant with `step` and `field`, or "
+            f"declare `all: true` to bind every one of them.")
+    return hits
+
+
+def _check_value(name: str, kind: str, value) -> None:
+    """A supplied value is DATA of a declared shape, and nothing else."""
+    if kind == "bool":
+        if not isinstance(value, bool):
+            raise BadParams(
+                f"parameter {name!r} is declared as a bool (it fills a "
+                f"checkbox) and a {type(value).__name__} arrived. Pass true "
+                f"or false.")
+        return
+    if isinstance(value, bool) or not isinstance(value, str):
+        raise BadParams(
+            f"parameter {name!r} takes a string and a "
+            f"{type(value).__name__} arrived. A parameter fills in text or "
+            f"a piece of a URL, so a list or an object has nowhere to land.")
+    if len(value) > PARAM_VALUE_CAP:
+        raise BadParams(
+            f"parameter {name!r} is {len(value):,} characters and the cap "
+            f"is {PARAM_VALUE_CAP:,}. It is refused rather than truncated, "
+            f"because a value silently cut in half is worse than one that "
+            f"did not arrive.")
+    bad = [c for c in value if ord(c) < 0x20 and c not in "\n\t"]
+    if bad or "\x00" in value:
+        raise BadParams(
+            f"parameter {name!r} carries a control character, which no "
+            f"field on a page takes as input. Newlines and tabs are fine "
+            f"and reach the field's own honest refusal where the field is "
+            f"single-line.")
+
+
+def _apply_parameters(doc: dict, supplied: dict | None) -> tuple[dict, dict]:
+    """Fill the slots, or refuse. Returns the filled document and the report
+    that rides in the result.
+
+    Substitution happens BEFORE the mandatory dry run, so the dry run's step
+    lines show what will actually be typed. A dry run that showed the
+    template rather than the filled value would be exactly the wrong
+    information at exactly the moment it matters."""
+    declared = doc.get("parameters") or []
+    supplied = dict(supplied or {})
+    if not declared:
+        if supplied:
+            raise BadParams(
+                f"workflow {doc.get('name')!r} declares no parameters and "
+                f"{sorted(supplied)} arrived. It replays exactly what was "
+                f"recorded. To make part of it fill-in-able, re-save it "
+                f"with save_workflow(..., parameters=[...]), which reports "
+                f"the recorded values you can turn into slots.")
+        return doc, {}
+    by_name = {p["name"]: p for p in declared}
+    extra = sorted(set(supplied) - set(by_name))
+    if extra:
+        raise BadParams(
+            f"workflow {doc.get('name')!r} does not declare "
+            f"{extra}; it declares {sorted(by_name)}. An unrecognized "
+            f"parameter is refused rather than ignored, because a caller "
+            f"that believes it configured something it did not is the worse "
+            f"outcome. Nothing was executed.")
+    values: dict = {}
+    defaulted: list = []
+    missing: list = []
+    for param in declared:
+        name = param["name"]
+        if name in supplied:
+            _check_value(name, param.get("kind", "text"), supplied[name])
+            values[name] = supplied[name]
+        elif "default" in param:
+            values[name] = param["default"]
+            defaulted.append({
+                "name": name,
+                **({"value_length": len(str(param["default"]))}
+                   if param.get("kind") != "bool"
+                   else {"value": param["default"]}),
+                "note": "the workflow's declared default was used"})
+        elif param.get("required", True):
+            missing.append(param)
+    if missing:
+        listed = "; ".join(
+            f'{p["name"]} ({p.get("kind", "text")}'
+            + (f', {p["description"]}' if p.get("description") else "")
+            + ")" for p in declared)
+        raise BadParams(
+            f"workflow {doc.get('name')!r} needs "
+            f"{[p['name'] for p in missing]} and they did not arrive. Its "
+            f"parameters are: {listed}. Nothing was executed.")
+    filled = _fill(doc, values)
+    applied = []
+    for i, step in enumerate(filled["steps"]):
+        for slot in step.get("slots") or []:
+            entry = {"step": i, "field": slot["field"],
+                     "param": slot["param"]}
+            kind = by_name[slot["param"]].get("kind", "text")
+            value = _field_get(step, slot["field"])
+            if kind == "url":
+                # The resolved URL IS the information, so it rides in full.
+                entry["result"] = value
+            elif kind == "bool":
+                entry["value"] = value
+            else:
+                # The value came from the caller rather than from the page,
+                # but a workflow parameter is exactly the shape a password
+                # gets typed into by mistake, so the length is reported and
+                # the value is not.
+                entry["value_length"] = len(str(values[slot["param"]]))
+            applied.append(entry)
+    _check_origins(filled, by_name)
+    report = {"supplied": sorted(set(supplied)),
+              **({"defaulted": defaulted} if defaulted else {}),
+              "applied": applied}
+    return filled, report
+
+
+def _fill(doc: dict, values: dict) -> dict:
+    """THE SPLICE. `value[:start] + supplied + value[end:]`, by index.
+
+    Nothing is parsed and nothing is escaped, which is the whole reason
+    slots are stored as spans rather than as tokens written into the
+    recorded text: a recorded literal that happens to contain `{{name}}`
+    is a literal here, and a run-time string replace over recorded text
+    would be a template-injection surface pointed at content nobody
+    controls."""
+    filled = json.loads(json.dumps(doc))
+    for step in filled.get("steps") or []:
+        # Later spans first, so an earlier splice cannot move a later one.
+        for slot in sorted(step.get("slots") or [],
+                           key=lambda s: s["span"][0], reverse=True):
+            if slot["param"] not in values:
+                continue
+            supplied = values[slot["param"]]
+            current = _field_get(step, slot["field"])
+            if isinstance(current, str):
+                start, end = slot["span"]
+                _field_set(step, slot["field"],
+                           current[:start] + str(supplied) + current[end:])
+            else:
+                _field_set(step, slot["field"], supplied)
+    return filled
+
+
+def _check_origins(filled: dict, by_name: dict) -> None:
+    """A workflow recorded on one site does not get pointed at another.
+
+    The origin policy already gates off-list origins; the workflow's own
+    recorded origin is a tighter and free constraint, and a flow the caller
+    trusts BY NAME is exactly the thing that must not quietly retarget."""
+    for i, step in enumerate(filled.get("steps") or []):
+        for slot in step.get("slots") or []:
+            recorded = slot.get("recorded_origin")
+            if not recorded:
+                continue
+            param = by_name.get(slot["param"]) or {}
+            now = _origin_of(_field_get(step, slot["field"]))
+            if now == recorded:
+                continue
+            if param.get("allow_origin_change"):
+                continue
+            raise NavigationBlocked(
+                f"step {i} of this workflow was recorded on "
+                f"{recorded!r} and parameter {slot['param']!r} points it at "
+                f"{now or 'a value that is not an http or https URL'!r}. A "
+                f"workflow you trust by name is not silently retargeted at "
+                f"another site. Nothing was executed. Re-save the workflow "
+                f"with allow_origin_change: true on that parameter if "
+                f"moving sites is what it is for.")
 
 
 def _replay_blocks(row: dict) -> list:
@@ -277,7 +855,8 @@ def _step_line(i: int, step: dict) -> str:
         detail = f' {step["args"].get("url", "")}'
     elif step["tool"] == "wait_for":
         detail = f' {step["args"].get("condition", "")}'
-    return f'{i}: {step["tool"]}{detail}{target}'
+    slots = "".join(f' <{s["param"]}>' for s in step.get("slots") or [])
+    return f'{i}: {step["tool"]}{detail}{target}{slots}'
 
 
 # ----------------------------------------------------------------- listing
@@ -352,10 +931,20 @@ async def list_workflows(session: str | None = None,
                                   for o in origins):
                 skipped += 1
                 continue
+            declared = doc.get("parameters")
             out.append({"name": doc.get("name", path.stem),
                         "steps": len(steps) if isinstance(steps, list) else 0,
                         "created": doc.get("created"),
-                        "origins": origins})
+                        "origins": origins,
+                        **({"parameters": [
+                            {"name": p.get("name"),
+                             "required": p.get("required", True),
+                             "kind": p.get("kind", "text"),
+                             **({"description": p["description"]}
+                                if p.get("description") else {})}
+                            for p in declared if isinstance(p, dict)]}
+                           if isinstance(declared, list) and declared
+                           else {})})
         except Exception:
             out.append({"name": path.stem, "error": "unreadable; re-save"})
     return {"workflows": out,
@@ -382,6 +971,7 @@ async def run_workflow(
     session: str | None = None,
     dry_run: bool = True,
     page: str | None = None,
+    parameters: dict | None = None,
 ) -> dict:
     """Replay a saved workflow on a page. The dry run is mandatory and runs
     first: every anchor checkable on the current page is re-resolved and
@@ -393,13 +983,27 @@ async def run_workflow(
     accept arrives, stopping the replay with completed steps left completed
     (browser actions do not roll back) and the rest not_attempted. Returns
     the per-step resolution report on a dry run and the per-step verified
-    outcomes on a real run.
+    outcomes on a real run. A workflow saved with parameters takes them
+    here, as parameters={'title': 'the value for this run'}: values are
+    filled in before the dry run, so the dry run shows what will actually be
+    typed rather than what was recorded. A missing one refuses and lists
+    every parameter the workflow declares; an unexpected one refuses too
+    rather than being ignored, since a caller that believes it configured
+    something it did not is the worse outcome. A parameter with a default is
+    filled from it and the result says so. A URL parameter that would point
+    the flow at a different site refuses unless the workflow was saved with
+    permission to move.
     """
     doc = _load(name)
     steps = doc.get("steps", [])
     if not steps:
         raise ValidationFailed(
             f"workflow {doc.get('name')!r} holds no steps; re-record it.")
+    # The parameter layer runs here, before the page is even required: a
+    # declaration that does not add up is answered on the declaration rather
+    # than half way into a replay.
+    doc, param_report = _apply_parameters(doc, parameters)
+    steps = doc.get("steps", [])
     if not page:
         raise BadParams(
             "run_workflow needs the page handle to replay on (open one with "
@@ -408,6 +1012,11 @@ async def run_workflow(
     sess, record = MANAGER.locate(page)
     _audit.annotate(session=sess.session_id, page=record.handle,
                     url=record.page.url, workflow=doc["name"])
+    if param_report:
+        # The NAMES, never the values: the log says which template ran with
+        # which slots filled without becoming a place secrets accumulate.
+        _audit.annotate(workflow_parameters=sorted(
+            {a["param"] for a in param_report.get("applied") or []}))
 
     report = await _dry_pass(record, steps)
     would_fail = [r for r in report
@@ -417,6 +1026,7 @@ async def run_workflow(
         return {
             "session": sess.session_id, "page": record.handle,
             "workflow": doc["name"], "dry_run": True,
+            **({"parameters": param_report} if param_report else {}),
             "steps": report,
             "would_fail": [r["step"] for r in would_fail],
             "verdict": ("every checkable anchor resolves; run with "
@@ -432,7 +1042,8 @@ async def run_workflow(
             f"Run with dry_run=True for the full report, or re-record the "
             f"workflow against the current page.")
 
-    return await _execute(sess, record, doc, report)
+    return await _execute(sess, record, doc, report,
+                          param_report)
 
 
 async def _dry_pass(record, steps: list[dict]) -> list[dict]:
@@ -485,7 +1096,8 @@ async def _dry_pass(record, steps: list[dict]) -> list[dict]:
     return report
 
 
-async def _execute(sess, record, doc: dict, dry_report: list[dict]) -> dict:
+async def _execute(sess, record, doc: dict, dry_report: list[dict],
+                   param_report: dict | None = None) -> dict:
     steps = doc["steps"]
     per_step: list[dict] = []
     stopped = None
@@ -541,6 +1153,7 @@ async def _execute(sess, record, doc: dict, dry_report: list[dict]) -> dict:
     return {
         "session": sess.session_id, "page": record.handle,
         "workflow": doc["name"], "dry_run": False,
+        **({"parameters": param_report} if param_report else {}),
         "dry_pass": {"checked": len(dry_report), "all_resolved": True},
         "steps": per_step,
         "completed": completed,
