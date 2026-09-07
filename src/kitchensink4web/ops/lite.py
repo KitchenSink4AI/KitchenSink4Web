@@ -4582,7 +4582,8 @@ async def batch(
     its own target at its own turn. This is the general form of what
     find_and_act did for one action and fill_form did for one form: a
     four-step comment flow that cost sixteen calls costs one. A step is
-    {"find": {...}, "action": "click"} to search and act, {"location":
+    {"find": {"query": "Add a comment"}, "action": "click"} to search and
+    act, {"location":
     {"ref": "e12"}, "action": "type", "text": "hi"} to act on a ref you
     already hold, {"wait": {...}} or {"assert": {...}} for a checkpoint, or
     {"navigate": {"url": ...}}. The selector lives inside find or location
