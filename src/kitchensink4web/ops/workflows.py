@@ -134,9 +134,20 @@ async def save_workflow(
     rows = _audit.LOG.read(limit=500, session=session)["records"]
     candidates = []
     for row in rows:
-        replay = row.get("replay")
-        if (row.get("outcome") == "ok" and isinstance(replay, dict)
-                and replay.get("tool") in REPLAYABLE):
+        if row.get("outcome") != "ok":
+            continue
+        # A COMPOSITE'S ROW EXPANDS, IN ORDER (2026-09-07, with `batch`).
+        # One registered tool call writes one audit record, so a tool that
+        # drives several replayable tools inside it carries its trail as a
+        # LIST. Without this branch a five-step batch would arrive here as
+        # whichever single `replay` block was written last and the workflow
+        # would replay wrong, quietly. Each member is validated against
+        # REPLAYABLE exactly as a single block is, so a step whose tool is
+        # outside the closed set is dropped rather than smuggled in.
+        for replay in _replay_blocks(row):
+            if not isinstance(replay, dict) \
+                    or replay.get("tool") not in REPLAYABLE:
+                continue
             candidates.append({
                 "tool": replay["tool"],
                 "args": replay.get("args") or {},
@@ -187,6 +198,22 @@ async def save_workflow(
                    f"list_workflows(for_origin={origins[0]!r}) returns it "
                    f"the next time you are there." if origins else ""),
     }
+
+
+def _replay_blocks(row: dict) -> list:
+    """Every replayable action one audit record describes, in order.
+
+    A single action writes `replay`. A composite that drives several of them
+    inside one registered tool call writes `replay_steps`, because
+    annotations merge into one dict and a per-step `replay` would leave only
+    the last one standing. A row carrying both is a composite whose own
+    record kept a member's block; the list wins, because it is the complete
+    account and the scalar is a fragment of it."""
+    steps = row.get("replay_steps")
+    if isinstance(steps, list) and steps:
+        return steps
+    single = row.get("replay")
+    return [single] if isinstance(single, dict) else []
 
 
 #: Serializes save_workflow inside ONE server process. The store is

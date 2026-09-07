@@ -21,7 +21,7 @@
   <div id="composer" class="hidden">
     <label for="body">Markdown value</label>
     <textarea id="body" rows="3"></textarea>
-    <button id="post" type="button">Comment</button>
+    <button id="post" type="button">Post comment</button>
   </div>
 
   <section aria-label="Thread">
@@ -83,7 +83,7 @@
     // targets "Comment" refuses, and the refusal lists both.
     const twin = document.createElement('button');
     twin.type = 'button';
-    twin.textContent = 'Comment';
+    twin.textContent = 'Post comment';
     twin.addEventListener('click', () => { window.__counts.decoy += 1; });
     document.getElementById('composer').parentNode.appendChild(twin);
     document.getElementById('composer').classList.remove('hidden');

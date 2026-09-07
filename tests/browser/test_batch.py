@@ -24,6 +24,7 @@ from __future__ import annotations
 import asyncio
 import functools
 import http.server
+import re
 import socketserver
 import threading
 from pathlib import Path
@@ -33,7 +34,7 @@ import pytest
 from kitchensink4web import confirm
 from kitchensink4web.engine.session import MANAGER
 from kitchensink4web.errors import (AmbiguousLocation, BadParams,
-                                    ValidationFailed)
+                                    TargetNotFound, ValidationFailed)
 from kitchensink4web.ops import lite, workflows
 from kitchensink4web.policy import audit, budgets, credentials, gates, readonly
 
@@ -116,7 +117,7 @@ def test_the_four_step_comment_flow_is_one_call(site):
             {"find": {"query": "Add a comment"}, "action": "click"},
             {"find": {"query": "Markdown value"}, "action": "type",
              "text": "the fusion works"},
-            {"find": {"query": "Comment", "role": "button"},
+            {"find": {"query": "Post comment", "role": "button"},
              "action": "click"},
             {"wait": {"condition": "text", "value": "the fusion works"}},
         ])
@@ -202,7 +203,7 @@ def test_a_location_step_acts_on_a_ref_already_held(site):
     async def go():
         _, page = await _open(site)
         found = await lite.find_elements(page=page, query="Add a comment")
-        ref = found["matches"][0]["ref"]
+        ref = re.search(r"\b(e\d+) \|", found["results"]).group(1)
         out = await _do(lite.batch, page=page, steps=[
             {"location": {"ref": ref}, "action": "click", "click_count": 1},
         ])
@@ -236,7 +237,7 @@ def test_an_assert_step_reports_state_not_a_timeout(site):
 
 
 def test_step_one_ambiguity_refuses_the_whole_batch(site):
-    """B2. Two visible "Comment" buttons. Nothing runs, and the assertion is
+    """B2. Two visible "Post comment" buttons. Nothing runs, and the assertion is
     on the page's own counters rather than on the absence of an exception
     from a later step."""
     async def go():
@@ -244,7 +245,7 @@ def test_step_one_ambiguity_refuses_the_whole_batch(site):
         before = await _counts(page)
         with pytest.raises(AmbiguousLocation) as exc:
             await lite.batch(page=page, steps=[
-                {"find": {"query": "Comment", "role": "button"},
+                {"find": {"query": "Post comment", "role": "button"},
                  "action": "click"},
                 {"find": {"query": "Add a comment"}, "action": "click"},
             ])
@@ -292,13 +293,12 @@ def test_a_ref_from_another_page_refuses_upfront(site):
     step 4."""
     async def go():
         _, page = await _open(site)
-        with pytest.raises(Exception) as exc:
+        with pytest.raises((TargetNotFound, ValidationFailed)) as exc:
             await lite.batch(page=page, steps=[
                 {"find": {"query": "Add a comment"}, "action": "click"},
                 {"location": {"ref": "e999"}, "action": "click"},
             ])
-        assert getattr(exc.value, "code", "") in ("NOT_FOUND",
-                                                  "VALIDATION_FAILED")
+        assert "e999" in str(exc.value)
         assert (await _counts(page))["open"] == 0
 
     run(go())
@@ -405,7 +405,7 @@ def test_a_partial_run_never_claims_completeness(site):
         _, page = await _open(site, "?ambiguous=1")
         out = await _do(lite.batch, page=page, steps=[
             {"find": {"query": "Add a comment"}, "action": "click"},
-            {"find": {"query": "Comment", "role": "button"},
+            {"find": {"query": "Post comment", "role": "button"},
              "action": "click"},
             {"wait": {"condition": "text", "value": "never"}},
         ])

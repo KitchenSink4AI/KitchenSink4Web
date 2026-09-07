@@ -1168,6 +1168,23 @@ error, remaining items are reported `not_attempted`, and the envelope carries th
 per-item outcome list plus the form state read-back. A batch never skips a failed
 item and continues, and never retries silently.**
 
+**AMENDED 2026-09-07, with `batch`.** Batch actions come in two shapes and the
+pre-flight rule differs between them. A **same-state batch** (`fill_form`) acts
+on targets that all exist when the call arrives; it resolves every ref before
+executing any, then re-checks each target's fingerprint immediately before its
+own execution. A **sequential batch** (`batch`) acts on targets an earlier step
+may create, so full pre-resolution is impossible by construction: the defining
+case is the Comment button that does not exist until an earlier step types into
+the textarea, and a rule that cannot be satisfied gets satisfied dishonestly. It
+resolves what is resolvable now and reports the rest as advisory; **only the
+first step's ambiguity or absence can refuse the batch**, because only the first
+step's target is guaranteed to be resolvable against the document the caller is
+looking at. Every other guarantee is identical across both shapes: each target is
+re-resolved immediately before its own execution, a failure stops the batch,
+completed items stay completed, the remainder reports `not_attempted`, nothing is
+skipped, and nothing retries silently. The paragraph above governs a same-state
+batch and is unchanged for it.
+
 **The ladder and the confirmation gates compose, and it is worth stating because
 it is load-bearing.** A target that rebinds between a gate's ASK and its EXECUTE
 is caught by the gate's TOCTOU fingerprint re-validation and aborts with

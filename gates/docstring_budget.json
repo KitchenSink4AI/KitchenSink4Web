@@ -10,6 +10,12 @@
     "schema": 250
   },
   "tools": {
+    "batch": {
+      "description_tokens": 321,
+      "schema_tokens": 94,
+      "total_tokens": 415,
+      "over_reference_caps": true
+    },
     "click": {
       "description_tokens": 100,
       "schema_tokens": 112,

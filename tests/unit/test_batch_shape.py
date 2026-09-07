@@ -162,8 +162,7 @@ def test_batch_dispatches_only_through_the_real_tools():
     implementation of clicking, and every gate would then be a test rather
     than a construction. The dispatcher may call only the registered tool
     functions and the resolver, never the driver."""
-    source = inspect.getsource(lite._dispatch_step)
-    tree = ast.parse(inspect.cleandoc(source))
+    tree = ast.parse(inspect.getsource(lite._dispatch_step))
     called = set()
     for node in ast.walk(tree):
         if isinstance(node, ast.Call):

@@ -26,6 +26,10 @@ from kitchensink4web.policy import readonly
 LITE_ROSTER = {
     "get_page_view", "find_elements", "get_text", "navigate", "click",
     "type_text", "fill_form", "find_and_act", "press_keys", "scroll",
+    #: batch joined on 2026-09-07, in LITE for find_and_act's reason with
+    #: more force: a composite that lived in a pack would be absent exactly
+    #: where the calls it fuses are present.
+    "batch",
     "wait_for", "manage_tabs", "manage_session", "get_audit", "get_workflows",
     #: handle_dialog joined on 2026-09-06, and it goes in LITE for the same
     #: reason find_and_act does: a native dialog stops every lite read and
@@ -41,7 +45,7 @@ def test_lite_roster_is_exactly_the_design(launch):
     (DEFAULT_GRADE is 'browse' since the 2026-09-05 field-test ruling)."""
     state = launch(read_only=False)
     assert set(state["registered"]) == LITE_ROSTER
-    assert len(LITE_ROSTER) == 16
+    assert len(LITE_ROSTER) == 17
 
 
 def test_bare_launch_defaults_to_browse_read_only(launch, monkeypatch):

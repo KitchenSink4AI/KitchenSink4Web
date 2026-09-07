@@ -52,7 +52,8 @@ from . import common as _common
 from . import resource as _resource
 from ..engine import frames, lanes, session as _session
 from ..errors import (AmbiguousLocation, AuthRequired, BadParams,
-                      BlockedBySite, Conflict, LaneUnsupported, ModalBlocked,
+                      BlockedBySite, Conflict, ConfirmationRequired,
+                      LaneUnsupported, ModalBlocked,
                       NavigationFailed, NotImplementedYet, PageUnreachable,
                       ReadOnlyMode, SessionDead, StaleAnchor, TargetNotFound,
                       Timeout, ValidationFailed)
@@ -3349,6 +3350,62 @@ async def find_and_act(
     _audit.annotate(session=sess.session_id, page=record.handle,
                     url=record.page.url, lane=sess.spec.label)
     record.touch(record.page.url)
+    settled = await _search_one(sess, record, query=query, role=role,
+                                kind=kind, within=within, action=action)
+    hit, found = settled["hit"], settled["found"]
+    target = {"ref": hit["ref"]}
+    # THE HANDOFF. Same function, same choke point, same ladder, same
+    # verified outcome. The ref is one this call minted a moment ago, so the
+    # rebind ladder re-resolves it against the page as it is at execution
+    # time and refuses if the page moved in between.
+    if action == "click":
+        result = await click(page=page, location=target, button=button,
+                             timeout_ms=timeout_ms)
+    elif action == "type":
+        result = await type_text(page=page, location=target, text=text,
+                                 clear_first=clear_first, submit=submit)
+    elif action == "press":
+        result = await press_keys(page=page, keys=keys, location=target)
+    else:
+        result = await scroll(page=page, action="to", location=target,
+                              timeout_ms=timeout_ms)
+    result["tool"] = "find_and_act"
+    result["acted"] = action
+    # What the search settled on, so the caller can see WHICH element the one
+    # match was without a second read. The match line quotes the accessible
+    # name verbatim and an accessible name is page-authored, so it rides the
+    # same labeled envelope `find_elements` puts its result lines in; the
+    # note also covers `target.name`, which carries the same string.
+    page_note = settled["page_note"]
+    result["found"] = {
+        "query": query, "kind": found["searched"],
+        "role": role, "scope": within if found.get("scope") else "whole page",
+        "match": settled["match_line"],
+        "candidates_scanned": found["candidates_scanned"],
+        "hidden_matches": found["hidden_matches"],
+    }
+    page_note["covers"] = ["found.match", "target.name"]
+    result["page_data"] = page_note
+    return result
+
+
+async def _search_one(sess, record, *, query: str, role: str | None,
+                      kind: str, within: dict | None, action: str,
+                      probe: bool = False, suffix: str = "") -> dict:
+    """THE SEARCH HALF, shared by every composite that resolves one target.
+
+    Extracted from `find_and_act` when `batch` arrived, for the reason
+    `find_and_act` gives for handing off its ACTING half: there is no second
+    implementation to keep in step with the first, so the frame walk, the
+    visible-count arithmetic, the ambiguity refusal, and the nearest-miss
+    refusal cannot diverge between the composites by construction rather
+    than by test.
+
+    Two knobs, both for the batch. `suffix` is appended to either refusal,
+    which is how a batch says that nothing in it ran. `probe` turns the two
+    refusals into VERDICTS instead: a pre-flight pass over a step that is
+    not the first one reports what it found and refuses nothing, because a
+    later step's target may not exist until an earlier step creates it."""
     root = _scope_root(sess, record, within)
     pierce = (within or {}).get("shadow", True) is not False
     # 12 is the ambiguity listing width, not a cap on what was counted:
@@ -3428,6 +3485,19 @@ async def find_and_act(
     # a target: the live resolver filters them and this filters them the same
     # way, so the ambiguity decision is made on the VISIBLE count.
     visible = found["total_matches"] - found["hidden_matches"]
+    if probe and visible > 1:
+        return {"verdict": "ambiguous-now", "count": visible,
+                "detail": (f'{visible} visible elements match {query!r}'
+                           + (f' with role={role!r}' if role else '')
+                           + '; advisory only, and this step re-resolves at '
+                             'its own turn')}
+    if probe and not visible:
+        return {"verdict": "not-found-now",
+                "detail": (f'nothing visible matches {query!r}'
+                           + (f' with role={role!r}' if role else '')
+                           + f' on the page as it is now '
+                             f'({found["candidates_scanned"]:,} candidates '
+                             f'scanned)')}
     if visible > 1:
         # THE ENVELOPE, on the fused path too. `find_elements` wraps these
         # exact strings through the same `_match_line`, and for one round
@@ -3446,7 +3516,7 @@ async def find_and_act(
             + f'Nothing was done. Act on one of those refs directly '
             f'({action if action != "type" else "type_text"}(page='
             f'{record.handle!r}, location={{"ref": "..."}})), or narrow the '
-            f'search with role= or a longer query.')
+            f'search with role= or a longer query.' + suffix)
     if not visible:
         # THE SAME ENVELOPE THE BRANCH TWELVE LINES ABOVE USES (gauntlet 4,
         # G4-08). The asymmetry was inside one function: the ambiguity arm
@@ -3469,43 +3539,656 @@ async def find_and_act(
             + hint
             + (f' {found["hidden_matches"]} match(es) are in hidden content '
                f'and were counted rather than returned.'
-               if found["hidden_matches"] else ''))
+               if found["hidden_matches"] else '') + suffix)
 
     hit = found["matches"][0]
-    target = {"ref": hit["ref"]}
-    # THE HANDOFF. Same function, same choke point, same ladder, same
-    # verified outcome. The ref is one this call minted a moment ago, so the
-    # rebind ladder re-resolves it against the page as it is at execution
-    # time and refuses if the page moved in between.
-    if action == "click":
-        result = await click(page=page, location=target, button=button,
-                             timeout_ms=timeout_ms)
-    elif action == "type":
-        result = await type_text(page=page, location=target, text=text,
-                                 clear_first=clear_first, submit=submit)
-    elif action == "press":
-        result = await press_keys(page=page, keys=keys, location=target)
-    else:
-        result = await scroll(page=page, action="to", location=target,
-                              timeout_ms=timeout_ms)
-    result["tool"] = "find_and_act"
-    result["acted"] = action
-    # What the search settled on, so the caller can see WHICH element the one
-    # match was without a second read. The match line quotes the accessible
-    # name verbatim and an accessible name is page-authored, so it rides the
-    # same labeled envelope `find_elements` puts its result lines in; the
-    # note also covers `target.name`, which carries the same string.
     match_line, page_note = _pagedata.wrap(_match_line(hit), url=found["url"])
-    result["found"] = {
-        "query": query, "kind": found["searched"],
-        "role": role, "scope": within if found.get("scope") else "whole page",
-        "match": match_line,
-        "candidates_scanned": found["candidates_scanned"],
-        "hidden_matches": found["hidden_matches"],
+    return {"verdict": "resolves", "hit": hit, "found": found,
+            "match_line": match_line, "page_note": page_note,
+            "detail": match_line}
+
+
+# ------------------------------------------------------- the batch (#2)
+#
+# ALL PROSE BELOW IS PLACEHOLDER COPY. Every refusal and every docstring
+# sentence carries the FACTS the message must convey and none of the voice;
+# the final English is written by the main thread from the FACTS TO CONVEY
+# list in the build report, never by this module's author.
+
+#: The step vocabulary. CLOSED for the reason `workflows.REPLAYABLE` is
+#: closed: an open step vocabulary is an arbitrary-execution tool wearing a
+#: batch's clothes. One discriminating key per step, and the key names the
+#: kind.
+_BATCH_STEP_KINDS = ("find", "location", "wait", "assert", "navigate")
+
+#: How much pre-flight resolution runs before the first step executes. Only
+#: `strict` lets a step after the first one refuse the batch.
+_BATCH_PREFLIGHT_MODES = ("minimal", "advisory", "strict")
+
+#: `wait_for`'s own closed condition set, reused rather than re-expressed.
+_BATCH_WAIT_CONDITIONS = ("text", "text_gone", "url", "visible", "hidden",
+                          "js", "load")
+
+#: What a `find` step may carry, which is exactly what `find_and_act`
+#: accepts. Anything wider is the `location` form's business, and the
+#: refusal says so rather than widening `find_and_act`'s signature.
+_FIND_STEP_KEYS = frozenset({
+    "action", "text", "keys", "clear_first", "submit", "button",
+    "timeout_ms"})
+
+#: What a `location` step may carry: every argument the split tools take,
+#: because a location step reaches them directly.
+_LOCATION_STEP_KEYS = frozenset({
+    "action", "text", "keys", "clear_first", "submit", "press_enter",
+    "button", "click_count", "modifiers", "delay_ms", "repeat",
+    "timeout_ms"})
+
+_BATCH_KIND_LABEL = {"find": "find+act", "location": "location+act",
+                     "wait": "wait", "assert": "assert",
+                     "navigate": "navigate"}
+
+
+def _batch_line(step: dict) -> str:
+    """One caller-authored line per step. Built from what the CALLER asked
+    for, never from what the page answered, so the line is safe before the
+    step has run; the page's own words arrive later in `target.name`."""
+    kind, spec = step["kind"], step["spec"]
+    if kind == "navigate":
+        return f'navigate {spec.get("url", "")}'
+    if kind in ("wait", "assert"):
+        value = spec.get("value")
+        return (f'{kind} {spec.get("condition", "")}'
+                + (f' {value!r}' if value is not None else ''))
+    verb = step["action"]
+    if kind == "find":
+        target = repr(spec.get("query") or "")
+        if spec.get("role"):
+            target += f' role={spec["role"]!r}'
+    elif isinstance(spec, dict) and spec:
+        key = next(iter(spec))
+        target = f'{key}={spec[key]!r}'
+    else:
+        target = "no target (a global press)"
+    return f'{verb} -> {target}'
+
+
+def _batch_step_error(index: int, detail: str) -> str:
+    return f"batch step {index}: {detail}"
+
+
+def _batch_normalize(steps, *, timeout_ms: int, max_total_ms: int,
+                     preflight: str) -> list[dict]:
+    """Shape and cross-step structure, all of it free and none of it DOM.
+
+    This runs BEFORE the page is located, which is the property the shape
+    pins assert: a malformed step list refuses without opening, touching, or
+    moving anything."""
+    mode = (preflight or "advisory").strip().lower()
+    if mode not in _BATCH_PREFLIGHT_MODES:
+        raise BadParams(
+            f"unknown preflight mode {preflight!r}: the modes are "
+            f"{list(_BATCH_PREFLIGHT_MODES)}. 'minimal' resolves step 0 "
+            f"only, 'advisory' (the default) resolves what it can and "
+            f"refuses on step 0 only, 'strict' refuses on any step whose "
+            f"target is ambiguous or missing right now.")
+    if not steps or not isinstance(steps, list):
+        raise BadParams(
+            "batch needs a non-empty list of steps, each carrying exactly "
+            "one of "
+            f"{list(_BATCH_STEP_KINDS)} as its key: "
+            '{"find": {"query": "Add a comment"}, "action": "click"}. '
+            "The selector lives inside `find` or `location` and the typed "
+            "value sits at the step's top level as `text`, so the two "
+            "cannot collide.")
+    out: list[dict] = []
+    total = 0
+    for i, raw in enumerate(steps):
+        if not isinstance(raw, dict):
+            raise BadParams(_batch_step_error(
+                i, f"a step is an object, not a {type(raw).__name__}. The "
+                   f"step kinds are {list(_BATCH_STEP_KINDS)}."))
+        present = [k for k in _BATCH_STEP_KINDS if k in raw]
+        if "fields" in raw:
+            raise BadParams(_batch_step_error(
+                i, "there is no fill_form step. fill_form is already the "
+                   "batch for a form, and nesting a batch inside a batch "
+                   "doubles every reporting and gate question for no new "
+                   "capability. Call fill_form directly, or give this batch "
+                   "one `find` or `location` step per field."))
+        if len(present) != 1:
+            raise BadParams(_batch_step_error(
+                i, f"a step carries exactly one of {list(_BATCH_STEP_KINDS)} "
+                   f"as its discriminating key; this one carries "
+                   f"{present or 'none of them'} "
+                   f"(keys seen: {sorted(raw)})."))
+        kind = present[0]
+        spec = raw[kind]
+        step: dict = {"index": i, "kind": kind, "spec": spec,
+                      "timeout_ms": int(raw.get("timeout_ms")
+                                        or (spec or {}).get("timeout_ms")
+                                        or timeout_ms)}
+        if kind in ("wait", "assert"):
+            if not isinstance(spec, dict):
+                raise BadParams(_batch_step_error(
+                    i, f"a {kind} step carries a condition object, for "
+                       f'example {{"{kind}": {{"condition": "text", '
+                       f'"value": "Signed in as"}}}}.'))
+            cond = (spec.get("condition") or "").strip().lower()
+            if cond not in _BATCH_WAIT_CONDITIONS:
+                raise BadParams(_batch_step_error(
+                    i, f"unknown condition {spec.get('condition')!r}: the "
+                       f"conditions are {list(_BATCH_WAIT_CONDITIONS)}, "
+                       f"which is wait_for's own set."))
+            spec["condition"] = cond
+        elif kind == "navigate":
+            if not isinstance(spec, dict) or not spec.get("url"):
+                raise BadParams(_batch_step_error(
+                    i, 'a navigate step carries a url, for example '
+                       '{"navigate": {"url": "https://example.com/new"}}.'))
+        else:
+            _batch_normalize_action(step, raw)
+        step["line"] = _batch_line(step)
+        total += step["timeout_ms"]
+        out.append(step)
+
+    if total > max_total_ms:
+        raise ValidationFailed(
+            f"the per-step timeouts sum to {total} ms and max_total_ms is "
+            f"{max_total_ms} ms, so this batch cannot finish inside its own "
+            f"bound. Nothing was executed. Raise max_total_ms or lower the "
+            f"per-step timeouts.")
+
+    # THE CROSS-STEP CHECK ONLY A BATCH CAN MAKE, and the argument for
+    # having a batch at all. A ref does not survive a navigation
+    # (`Session.invalidate_page` drops every ref and read token minted on
+    # the page), so a batch that navigates and then acts on a ref minted
+    # beforehand cannot possibly work, and saying so costs nothing.
+    first_nav = next((s["index"] for s in out if s["kind"] == "navigate"),
+                     None)
+    if first_nav is not None:
+        for step in out:
+            if step["kind"] != "location" or step["index"] < first_nav:
+                continue
+            ref = (step["spec"] or {}).get("ref")
+            if ref:
+                raise ValidationFailed(
+                    f"step {step['index']} acts on ref {ref!r} and step "
+                    f"{first_nav} navigates; refs minted before a navigation "
+                    f"do not survive it, so this batch cannot work as "
+                    f"written. Nothing was executed. Give the later step a "
+                    f"`find` instead, so it resolves its target after the "
+                    f"navigation.")
+    return out
+
+
+def _batch_normalize_action(step: dict, raw: dict) -> None:
+    """The action verb and its arguments, for a `find` or `location` step."""
+    i, kind, spec = step["index"], step["kind"], step["spec"]
+    action = (raw.get("action") or "click").strip().lower()
+    action = {"type_text": "type", "fill": "type", "press_keys": "press",
+              "scroll": "scroll_to", "scroll_into_view": "scroll_to"}.get(
+                  action, action)
+    if action not in _COMPOSITE_ACTIONS:
+        raise BadParams(_batch_step_error(
+            i, f"unknown action {raw.get('action')!r}: the actions are "
+               f"{list(_COMPOSITE_ACTIONS)}. 'type' needs `text`, 'press' "
+               f"needs `keys`; the rest need neither."))
+    if action == "type" and raw.get("text") is None:
+        raise BadParams(_batch_step_error(
+            i, "an action of 'type' needs `text` at the step's top level. "
+               "Pass real newline characters for a multi-line value; a "
+               "single-line field refuses one rather than pressing Enter "
+               "behind your back."))
+    if action == "press" and not (raw.get("keys") or "").strip():
+        raise BadParams(_batch_step_error(
+            i, "an action of 'press' needs `keys`, for example "
+               "keys='Enter' or keys='Control+A'."))
+    allowed = _FIND_STEP_KEYS if kind == "find" else _LOCATION_STEP_KEYS
+    extra = sorted(set(raw) - allowed - {kind})
+    if extra:
+        route = ("; a location step reaches the split tools directly and "
+                 "takes every argument they do, so pass a ref or selector "
+                 "as {\"location\": ...} instead" if kind == "find" else "")
+        raise BadParams(_batch_step_error(
+            i, f"a {kind} step does not take {extra}. It takes "
+               f"{sorted(allowed)}{route}."))
+    if kind == "find":
+        if not isinstance(spec, dict):
+            raise BadParams(_batch_step_error(
+                i, 'a find step carries a search object, for example '
+                   '{"find": {"query": "Add a comment", "role": "button"}}.'))
+        if not (spec.get("query") or "").strip() \
+                and spec.get("kind") not in ("css", "xpath") \
+                and not (spec.get("role") or "").strip():
+            raise BadParams(_batch_step_error(
+                i, "a find step needs a query, a role filter, or a css or "
+                   "xpath kind to find its target with. To act on a ref you "
+                   "already hold, use a location step."))
+    elif not isinstance(spec, (dict, type(None))):
+        raise BadParams(_batch_step_error(
+            i, 'a location step carries a selector object, for example '
+               '{"location": {"ref": "e12"}}, or null for a global press.'))
+    step["action"] = action
+    step["args"] = {k: raw[k] for k in raw if k in allowed and k != "action"}
+
+
+async def _assert_now(page: str, spec: dict, index: int) -> dict:
+    """A checkpoint that does not wait. Same condition vocabulary as a wait,
+    evaluated once, because the failure REPORT is the difference and the
+    difference is the whole value: a zero-timeout wait would report a
+    timeout and send the caller off tuning a number that was never the
+    problem."""
+    sess, record = MANAGER.locate(page)
+    cond = spec["condition"]
+    resolved = None
+    if cond in ("visible", "hidden"):
+        if not spec.get("location"):
+            raise BadParams(_batch_step_error(
+                index, f"an assert on {cond!r} needs a `location` naming the "
+                       f"element to check."))
+        try:
+            resolved = await _act.resolve(sess, record, spec["location"],
+                                          tool="batch", acting=False)
+        except (TargetNotFound, StaleAnchor):
+            resolved = None
+    held = await _wait_precheck(record.page, cond, spec.get("value"),
+                                resolved)
+    if cond == "hidden" and resolved is None:
+        held = True
+    if not held:
+        raise ValidationFailed(
+            f"the page was not in the expected state at step {index}: the "
+            f"assert on {cond!r}"
+            + (f" ({spec.get('value')!r})" if spec.get("value") is not None
+               else "")
+            + " does not hold right now. An assert checks once and does not "
+              "wait, so this is a state mismatch rather than a timeout; use "
+              "a wait step if the condition is expected to arrive later.")
+    return {"asserted": cond, "value": spec.get("value"), "held": True,
+            "url": record.page.url}
+
+
+async def _dispatch_step(page: str, step: dict) -> dict:
+    """One step through the REAL tool, so the policy choke point, the submit
+    classification, the TOCTOU re-validation, the rebind refusal, the
+    credential blindness, the budget charge, and the verified outcome all
+    apply exactly as they would to a direct call.
+
+    This is `find_and_act`'s parity argument one level up, and it is why
+    nothing here reaches the driver: there is no second implementation of
+    clicking to keep in step with the first."""
+    kind, spec, args = step["kind"], step["spec"], step.get("args") or {}
+    if kind == "navigate":
+        return await navigate(page=page, action="goto", url=spec.get("url"),
+                              wait_until=spec.get("wait_until", "load"),
+                              timeout_ms=step["timeout_ms"])
+    if kind == "wait":
+        return await wait_for(page=page, condition=spec["condition"],
+                              value=spec.get("value"),
+                              location=spec.get("location"),
+                              timeout_ms=step["timeout_ms"])
+    if kind == "assert":
+        return await _assert_now(page, spec, step["index"])
+    if kind == "find":
+        return await find_and_act(
+            page=page, query=spec.get("query") or "", action=step["action"],
+            text=args.get("text"), keys=args.get("keys"),
+            role=spec.get("role"), kind=spec.get("kind", "auto"),
+            within=spec.get("within"),
+            clear_first=bool(args.get("clear_first")),
+            submit=bool(args.get("submit")),
+            button=args.get("button", "left"),
+            timeout_ms=step["timeout_ms"])
+    action = step["action"]
+    if action == "click":
+        return await click(page=page, location=spec,
+                           button=args.get("button", "left"),
+                           click_count=int(args.get("click_count") or 1),
+                           modifiers=args.get("modifiers") or None,
+                           timeout_ms=step["timeout_ms"])
+    if action == "type":
+        return await type_text(page=page, location=spec,
+                               text=args.get("text") or "",
+                               clear_first=bool(args.get("clear_first")),
+                               press_enter=bool(args.get("press_enter")),
+                               submit=bool(args.get("submit")),
+                               delay_ms=int(args.get("delay_ms") or 0))
+    if action == "press":
+        return await press_keys(page=page, keys=args.get("keys") or "",
+                                location=spec,
+                                repeat=int(args.get("repeat") or 1),
+                                delay_ms=int(args.get("delay_ms") or 0))
+    return await scroll(page=page, action="to", location=spec,
+                        timeout_ms=step["timeout_ms"])
+
+
+async def _batch_preflight(sess, record, steps: list[dict],
+                           mode: str) -> dict:
+    """What CAN be validated before anything runs, and nothing more.
+
+    `fill_form` resolves every target upfront because they all live on one
+    static form. A batch's defining case is a target an earlier step
+    CREATES, so full pre-resolution is impossible by construction rather
+    than merely expensive. Only step 0's target is guaranteed resolvable
+    against the document the caller is looking at, so only step 0 can refuse
+    the batch."""
+    report = []
+    checked = 0
+    for step in steps:
+        i, kind = step["index"], step["kind"]
+        line = {"step": i, "verdict": "deferred-to-execution"}
+        first = i == 0
+        if kind in ("wait", "assert"):
+            line.update(verdict="not-checkable",
+                        detail=f"a {kind} step has no target to resolve")
+        elif kind == "navigate":
+            line.update(verdict="would-navigate", detail=step["spec"]["url"])
+        elif mode == "minimal" and not first:
+            line.update(verdict="deferred-to-execution",
+                        detail="preflight='minimal' resolves step 0 only")
+        elif kind == "find":
+            checked += 1
+            probe = not first and mode != "strict"
+            try:
+                settled = await _search_one(
+                    sess, record, query=step["spec"].get("query") or "",
+                    role=step["spec"].get("role"),
+                    kind=step["spec"].get("kind", "auto"),
+                    within=step["spec"].get("within"), action=step["action"],
+                    probe=probe,
+                    suffix=(" Nothing in this batch was executed."
+                            if first else ""))
+            except (AmbiguousLocation, TargetNotFound) as exc:
+                # STEP 0 KEEPS ITS OWN CODE, because its target is the one
+                # the caller is looking at and the ordinary refusal is the
+                # honest one. A later step under `strict` failed a check the
+                # caller ASKED for, which is a different fact and gets a
+                # different code.
+                if first:
+                    raise
+                raise ValidationFailed(
+                    f"preflight='strict' resolves every target before the "
+                    f"batch starts and step {i}'s does not resolve on the "
+                    f"page as it is now. Nothing in this batch was executed. "
+                    f"A later step's target often does not exist until an "
+                    f"earlier step creates it, which is what "
+                    f"preflight='advisory' (the default) reports instead of "
+                    f"refusing. {exc}") from exc
+            line.update(verdict=settled["verdict"],
+                        detail=settled.get("detail"))
+            if settled.get("count"):
+                line["count"] = settled["count"]
+        else:
+            checked += 1
+            try:
+                resolved = await _act.resolve(sess, record, step["spec"],
+                                              tool="batch", acting=False)
+                line.update(
+                    verdict=("resolves-rebound" if resolved["resolution"]
+                             == "rebound" else "resolves"),
+                    detail=f'{resolved["descriptor"].get("role")}')
+            except AmbiguousLocation as exc:
+                if first or mode == "strict":
+                    raise AmbiguousLocation(
+                        str(exc) + " Nothing in this batch was executed.") \
+                        from exc
+                line.update(verdict="ambiguous-now", detail=str(exc)[:160])
+            except (TargetNotFound, StaleAnchor) as exc:
+                if first or mode == "strict":
+                    raise ValidationFailed(
+                        f"step {i}'s target does not resolve on the page as "
+                        f"it is now and preflight={mode!r} refuses on any "
+                        f"step. Nothing in this batch was executed. "
+                        f"{str(exc)[:200]}") from exc
+                line.update(verdict="not-found-now", detail=str(exc)[:160])
+        if line["verdict"] in ("ambiguous-now", "not-found-now") \
+                and mode == "strict" and not first:
+            raise ValidationFailed(
+                f"preflight='strict' refuses when any step's target is not "
+                f"uniquely resolvable right now, and step {i} is "
+                f"{line['verdict']}. Nothing in this batch was executed. "
+                f"{line.get('detail') or ''}")
+        report.append(line)
+    return {
+        "mode": mode, "checked": checked, "steps": report,
+        "note": ("only step 0 can refuse a batch before execution: a later "
+                 "step's target may not exist until an earlier step creates "
+                 "it, so each step re-resolves at its own turn"),
     }
-    page_note["covers"] = ["found.match", "target.name"]
-    result["page_data"] = page_note
-    return result
+
+
+async def batch(
+    page: str,
+    steps: list[dict],
+    preflight: str = "advisory",
+    timeout_ms: int = 15000,
+    max_total_ms: int = 180000,
+) -> dict:
+    """Run several actions on one page in a single call, each one resolving
+    its own target at its own turn. This is the general form of what
+    find_and_act did for one action and fill_form did for one form: a
+    four-step comment flow that cost sixteen calls costs one. A step is
+    {"find": {...}, "action": "click"} to search and act, {"location":
+    {"ref": "e12"}, "action": "type", "text": "hi"} to act on a ref you
+    already hold, {"wait": {...}} or {"assert": {...}} for a checkpoint, or
+    {"navigate": {"url": ...}}. The selector lives inside find or location
+    and the typed value sits at the step's top level as text, so the two can
+    never collide. Unlike fill_form, a batch cannot resolve every target
+    before it starts, because the button a batch exists to click often does
+    not exist until an earlier step creates it: what CAN be checked upfront
+    is checked, and only the first step's ambiguity or absence refuses the
+    whole batch. A failure stops the batch and returns a report rather than
+    raising: completed steps stay completed (browser actions do not roll
+    back), the failing step carries its own refusal, and the rest report
+    not_attempted. Each step charges its own budget through the real tool it
+    calls, so a batch of six clicks spends six actions: batching saves calls
+    and tokens, never budget.
+    """
+    normalized = _batch_normalize(steps, timeout_ms=timeout_ms,
+                                  max_total_ms=max_total_ms,
+                                  preflight=preflight)
+    mode = (preflight or "advisory").strip().lower()
+    sess, record = MANAGER.locate(page)
+    _audit.annotate(session=sess.session_id, page=record.handle,
+                    url=record.page.url, lane=sess.spec.label)
+    record.touch(record.page.url)
+
+    # A ref minted on another page refuses NOW rather than at step 4.
+    for step in normalized:
+        ref = (step["spec"] or {}).get("ref") if step["kind"] == "location" \
+            else None
+        entry = sess.element_map.entries.get(ref) if ref else None
+        if ref and (entry is None or entry.handle != record.handle):
+            raise TargetNotFound(
+                f"step {step['index']} acts on ref {ref!r}, which is not on "
+                f"{record.handle}: it was minted on another page, or the "
+                f"page it was minted on has since navigated. Nothing was "
+                f"executed. Read this page and use the refs it returns.")
+
+    started = time.monotonic()
+    preflight_report = await _batch_preflight(sess, record, normalized, mode)
+    before = _budgets.BOOK.snapshot(sess.session_id)["counters"]
+
+    # THE PAGE IS HELD FOR THE WHOLE BATCH (the fix wave's per-page write
+    # lock, made re-entrant per task for exactly this). Step N+1 acts on the
+    # state step N produced, so a call interleaved from elsewhere would turn
+    # the per-step re-resolution from a correctness property into a race
+    # that merely usually wins. The delegated tools take the same lock and
+    # re-enter it, because the owner is this task.
+    async with record.write_lock():
+        per_step, stopped = await _batch_run(page, normalized, started,
+                                             max_total_ms)
+
+    after = _budgets.BOOK.snapshot(sess.session_id)
+    completed = sum(1 for r in per_step if r["status"] == "completed")
+    lines = [f'{r["step"]}: {r["line"]}' for r in per_step]
+    _audit.annotate(batch={"steps": len(normalized), "completed": completed,
+                           "stopped_at": stopped, "lines": lines})
+    # The per-step `replay` annotations were taken as each step ran, so the
+    # batch's own record cannot carry the LAST step's block as though it
+    # were the whole call (see _batch_run).
+    _audit.take_annotation("replay")
+
+    payload = {
+        "session": sess.session_id, "page": record.handle, "tool": "batch",
+        "outcome": "partial" if stopped is not None else "complete",
+        "url": record.page.url,
+        "preflight": preflight_report,
+        "steps": per_step,
+        "completed": completed,
+        "stopped_at": stopped,
+        "not_attempted": [r["step"] for r in per_step
+                          if r["status"] == "not_attempted"],
+        "spend": {
+            "actions": after["counters"]["actions"] - before.get("actions", 0),
+            "navigations": (after["counters"]["navigations"]
+                            - before.get("navigations", 0)),
+            "remaining": {k: after["limits"][k] - after["counters"][k]
+                          for k in ("actions", "navigations")},
+        },
+        "rollback": "none. Browser actions do not roll back; the steps "
+                    "listed as completed HAVE happened.",
+        "page_data": _pagedata.wrap("", url=record.page.url)[1],
+    }
+    if stopped is not None:
+        failed = per_step[stopped]
+        payload["stopped"] = {"step": stopped,
+                              "code": failed.get("outcome"),
+                              "message": failed.get("error")}
+    payload["page_data"]["covers"] = ["steps[].target.name", "steps[].line",
+                                      "stopped.message"]
+    # `outcome` is the second key so it cannot be missed, and `stopped` sits
+    # beside it rather than at the end of a long step list.
+    ordered = {"session": payload["session"], "page": payload["page"],
+               "tool": "batch", "outcome": payload["outcome"]}
+    if "stopped" in payload:
+        ordered["stopped"] = payload["stopped"]
+    ordered.update({k: v for k, v in payload.items() if k not in ordered})
+    return ordered
+
+
+async def _batch_run(page: str, steps: list[dict], started: float,
+                     max_total_ms: int) -> tuple[list[dict], int | None]:
+    """The loop: per-step dispatch, per-step confirmation, stop and mark the
+    tail. Shaped after `run_workflow._execute` with `fill_form`'s
+    stop-and-mark semantics."""
+    per_step: list[dict] = []
+    replay_steps: list[dict] = []
+    stopped: int | None = None
+    for step in steps:
+        i = step["index"]
+        base = {"step": i, "kind": _BATCH_KIND_LABEL[step["kind"]],
+                "line": step["line"]}
+        if stopped is not None:
+            per_step.append({**base, "status": "not_attempted"})
+            continue
+        left_ms = max_total_ms - int((time.monotonic() - started) * 1000)
+        if left_ms <= 0:
+            per_step.append({**base, "status": "failed", "outcome": "TIMEOUT",
+                             "error": _batch_timeout_note(max_total_ms, i)})
+            stopped = i
+            continue
+        # Anything a PREVIOUS step left in the annotation buffer has already
+        # been taken; clear again so a step that raises cannot donate its
+        # neighbour's replay block to the batch record.
+        _audit.take_annotation("replay")
+        try:
+            result = await _batch_step_call(page, step, left_ms)
+        except ConfirmationRequired as exc:
+            # THE GATE, PER STEP. `server._wrap` redeems a gate and re-runs
+            # the WHOLE tool call, which for a batch would re-execute every
+            # completed step. `run_workflow` already works around this the
+            # same way and for the same reason: the elicitation happens HERE
+            # and only this step retries on an accept.
+            from .. import confirm
+            grant = await confirm.attempt(exc)
+            if grant is None:
+                per_step.append({
+                    **base, "status": "failed",
+                    "outcome": "CONFIRMATION_REQUIRED",
+                    "error": ("the step is a gated class and no human "
+                              "accepted the confirmation; it FAILS CLOSED. "
+                              + _batch_error_text(exc))})
+                stopped = i
+                continue
+            _gates.deposit_grant(grant)
+            try:
+                result = await _batch_step_call(page, step, left_ms)
+            except Exception as exc2:  # noqa: BLE001 - reported per step
+                per_step.append({**base, "status": "failed",
+                                 "outcome": _batch_code(exc2),
+                                 "error": _batch_error_text(exc2)})
+                stopped = i
+                continue
+            finally:
+                _gates.clear_grant()
+        except _envelope.CATCHABLE as exc:
+            per_step.append({**base, "status": "failed",
+                             "outcome": _batch_code(exc),
+                             "error": _batch_error_text(exc)})
+            stopped = i
+            continue
+        entry = {**base, "status": "completed"}
+        if isinstance(result, dict):
+            if result.get("target"):
+                entry["target"] = result["target"]
+            changed = result.get("changed")
+            if changed:
+                entry["effect"] = changed.get("effect")
+            if result.get("warnings"):
+                entry["warnings"] = result["warnings"]
+        # THE REPLAY TRAIL, PER STEP. `_drain_annotations` merges every
+        # annotation into one dict, so leaving the delegated tools' own
+        # `replay` blocks in place would record a five-step batch as ONE
+        # step and `save_workflow` would save the last one silently. A wait
+        # on a js predicate annotates nothing, which is `wait_for`'s
+        # existing choice and is preserved by taking whatever it left rather
+        # than by rebuilding a record here.
+        taken = _audit.take_annotation("replay")
+        if isinstance(taken, dict):
+            replay_steps.append(taken)
+        per_step.append(entry)
+    if replay_steps:
+        _audit.annotate(replay_steps=replay_steps)
+    return per_step, stopped
+
+
+def _batch_timeout_note(max_total_ms: int, index: int) -> str:
+    return (f"the whole-batch bound of {max_total_ms} ms expired at step "
+            f"{index}, which is max_total_ms rather than this step's own "
+            f"timeout_ms; raising the step's timeout would not help.")
+
+
+async def _batch_step_call(page: str, step: dict, left_ms: int):
+    """One dispatch, bounded by what is left of the whole-batch budget, so
+    the page is never held for longer than the caller's own bound."""
+    try:
+        return await asyncio.wait_for(_dispatch_step(page, step),
+                                      timeout=max(0.25, left_ms / 1000))
+    except asyncio.TimeoutError as exc:
+        raise Timeout(_batch_timeout_note(left_ms, step["index"])) from exc
+
+
+def _batch_code(exc: Exception) -> str:
+    return getattr(exc, "code", None) or _envelope.classify(exc)
+
+
+def _batch_error_text(exc: Exception) -> str:
+    """A step's refusal, carried into the report WITHOUT breaking an
+    envelope.
+
+    A per-step error is clipped, because a step report is a summary. But an
+    ambiguity refusal quotes page-authored candidate names inside a labeled
+    nonce envelope, and clipping that at 200 characters cuts the block open:
+    the opening delimiter and the label survive, the closing delimiter does
+    not, and page-authored text then runs to the end of the payload with
+    nothing marking where it stops. A message carrying an envelope is
+    carried whole; it is already bounded by the twelve-candidate listing
+    width."""
+    text = str(exc)
+    if _pagedata._STEM in text:
+        return text
+    return text[:200]
 
 
 # ------------------------------------------------------------ the plumbing
@@ -4475,6 +5158,7 @@ LITE_TOOLS = (
     type_text,
     fill_form,
     find_and_act,
+    batch,
     press_keys,
     scroll,
     handle_dialog,
