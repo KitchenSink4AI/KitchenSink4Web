@@ -3505,8 +3505,9 @@ next flush, and a host the cap had just evicted came straight back. The merge
 is now per host and asymmetric, carrying through only hosts this process has
 never held, tracked in a `seen` set that survives eviction.
 
-Gate: full suite **1172 green**, run SEQUENTIALLY, up 139 (130 unit pins, 9
-live). **62 of the new pins are RED on `45fc986`**; the rest are guards on
+Gate: full suite **1173 green in both orders**, run SEQUENTIALLY (forward
+574.1s, reverse 498.9s), up 140 (130 unit pins, 10 live). **62 of the new pins
+are RED on `45fc986`**; the rest are guards on
 existing behavior (the lane-key vocabulary, the `_DROP_CAUSES` subset check,
 the doctrine pin on `_autopick`'s single call site). Zero orphaned browser
 processes. `manage_session` grew one action and three parameters, which costs
