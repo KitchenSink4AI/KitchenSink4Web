@@ -548,3 +548,102 @@ def test_the_survey_the_small_print_points_at_is_in_the_repository():
     text = survey.read_text(encoding="utf-8")
     assert text.count("https://github.com/") >= 8, \
         "the survey carries no source list"
+
+
+# ------------------------------------- the surface counts, against the SURFACE
+#
+# V-21, verify round 2026-09-08. `llms.txt` said 45 tools against a surface of
+# 52, and README.md, `llms.txt` (twice) and `docs/index.html` all said the
+# session starts on 16 when the lite roster is 19. The lite number is the
+# first figure a prospective user reads and it is on the front page.
+#
+# The reason it went stale quietly is structural and it is the part worth
+# fixing: `test_published_numbers_match_the_measuring_snapshot` above checks
+# the published prose against `readme_numbers_snapshot.json`, so when the
+# SNAPSHOT went stale too the guard agreed with it. Tool counts were not in
+# its guarded key list at all. These two ask the live process instead, which
+# is free: registering the surface needs no browser and no page read.
+
+
+def _live_surface_counts() -> dict[str, int]:
+    """{lite_acting, lite_shipped_default, full_acting} as this build
+    actually registers them, right now, in this process."""
+    import os
+
+    from kitchensink4web import server
+
+    saved = {k: v for k, v in os.environ.items() if k.startswith("KS4WEB_")}
+    try:
+        for key in list(saved):
+            del os.environ[key]
+        out = {
+            "lite_acting": len(server.configure(read_only=False)["registered"]),
+            "lite_shipped_default": len(server.configure()["registered"]),
+        }
+        os.environ["KS4WEB_ALL_PACKS"] = "true"
+        out["full_acting"] = len(
+            server.configure(read_only=False)["registered"])
+        return out
+    finally:
+        for key in [k for k in os.environ if k.startswith("KS4WEB_")]:
+            del os.environ[key]
+        os.environ.update(saved)
+        server.configure(read_only=False)
+
+
+def test_every_published_tool_count_matches_the_live_surface():
+    """The lite roster and the full surface, as the product states them on
+    every surface a reader meets, against what the server registers."""
+    live = _live_surface_counts()
+    files = _published_files()
+    claims = {
+        "README.md": [(r"session management, (\d+) tools", "lite_acting")],
+        "docs/llms.txt": [
+            (r"ships on\. (\d+) tools at session", "lite_acting"),
+            (r"start, (\d+) with every capability pack loaded", "full_acting"),
+            (r"loads the lite pack: (\d+) tools", "lite_acting"),
+            (r"default (\d+) of those \d+ are absent", None),
+            (r"about [\d,]+ tokens for (\d+) tools", "lite_shipped_default"),
+            (r"Everything loaded: (\d+) tools", "full_acting"),
+        ],
+        "docs/index.html": [
+            (r"(\d+)\s+lite tools / ", "lite_acting"),
+            (r"tokens;\s+(\d+) full / ", "full_acting"),
+        ],
+    }
+    for where, rows in claims.items():
+        text = files.get(where, "")
+        for pattern, key in rows:
+            found = re.search(pattern, text)
+            assert found, f"{where} no longer states a count matching {pattern}"
+            claimed = int(found.group(1))
+            if key is None:
+                # "N of those M are absent" is the arithmetic between the two.
+                assert claimed == (live["lite_acting"]
+                                   - live["lite_shipped_default"]), (
+                    f"{where} says {claimed} lite tools are absent under the "
+                    f"shipped default; the surface says "
+                    f"{live['lite_acting'] - live['lite_shipped_default']}.")
+                continue
+            assert claimed == live[key], (
+                f"{where} publishes {claimed} for {key} and the live surface "
+                f"registers {live[key]}. Re-run scripts/measure_surface.py "
+                f"and restamp.")
+
+
+def test_the_measuring_snapshot_is_not_itself_stale_about_the_surface():
+    """The guard above this section trusts the snapshot. So the snapshot has
+    to be checked against something that cannot go stale, or a number that
+    moved is agreed with twice instead of caught once."""
+    import json
+
+    snap = json.loads(
+        (ROOT / "tools" / "readme_numbers_snapshot.json").read_text(
+            encoding="utf-8"))
+    live = _live_surface_counts()
+    for key, row in snap["detail"]["surface"].items():
+        assert row["tools"] == live[key], (
+            f"the snapshot records {row['tools']} tools for {key} and the "
+            f"live surface registers {live[key]}. Re-run "
+            f"tools/measure_readme_numbers.py and restamp.")
+    assert snap["fill"]["LITE_TOOL_COUNT"] == live["lite_acting"]

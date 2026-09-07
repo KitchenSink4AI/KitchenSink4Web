@@ -40,7 +40,7 @@ cross-origin frame is counted and named, never entered.
 
 ## The packs
 
-The server starts lite: reading, navigation, and session management, 16 tools. Capability packs
+The server starts lite: reading, navigation, and session management, 19 tools. Capability packs
 are chosen at launch and are fixed for the whole session, which means an absent pack is provably
 absent, not merely switched off:
 
@@ -106,8 +106,8 @@ recommend for the page you are on. It never switches lanes for you.
 
 | Surface | Tokens |
 |---|---|
-| Lite tool surface | 4.8k |
-| Full surface (all packs) | 11.9k |
+| Lite tool surface | 6.5k |
+| Full surface (all packs) | 16.0k |
 | First read of the Treaty of Versailles article on Wikipedia | 4,495 |
 | Delta read after one click | 82 |
 

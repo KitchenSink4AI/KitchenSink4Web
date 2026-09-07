@@ -1,8 +1,8 @@
 # KitchenSink4Web
 
 > Browser MCP server for agents. A budgeted first read of any page, durable
-> refs you can act on, and a safety layer that ships on. 16 tools at session
-> start, 45 with every capability pack loaded. stdio. Out of the box the
+> refs you can act on, and a safety layer that ships on. 19 tools at session
+> start, 52 with every capability pack loaded. stdio. Out of the box the
 > tools that click, type and submit are NOT REGISTERED: read-only is the
 > shipped default and it is a property of the tool list, not a runtime check.
 
@@ -19,10 +19,10 @@ of which ship with the source.
 
 ## 1. Token economics
 
-- Session start loads the lite pack: 16 tools, about 4,800 tokens. Under the
-  shipped read-only default 6 of those 16 are absent, so the wire cost is
-  about 2,900 tokens for 10 tools.
-- Everything loaded: 45 tools, about 11,900 tokens.
+- Session start loads the lite pack: 19 tools, about 6,500 tokens. Under the
+  shipped read-only default 8 of those 19 are absent, so the wire cost is
+  about 3,700 tokens for 11 tools.
+- Everything loaded: 52 tools, about 16,000 tokens.
 - Packs are chosen at LAUNCH (`--packs`, `KS4WEB_MODE`, `KS4WEB_PACK_<NAME>`,
   `KS4WEB_ALL_PACKS`) and are fixed for the whole process. There is no
   mid-session `enable_tools` here, by design: an absent pack is provably
