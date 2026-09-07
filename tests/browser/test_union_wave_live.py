@@ -440,3 +440,28 @@ def test_a_truncated_document_never_reads_back_as_complete():
     finally:
         loris.stop = True
         loris.sock.close()
+
+
+def test_a_self_navigating_page_refuses_honestly(corpus_site):
+    """hostile H-02. A meta refresh onto the same URL made every read
+    surface refuse CONFLICT with the raw driver string under a hint that
+    named re-reading as the recovery, which is the one action guaranteed to
+    fail forever on that page."""
+    async def go():
+        from kitchensink4web.errors import Conflict
+        from kitchensink4web.engine.session import MANAGER
+        session = await MANAGER.open(headless=True)
+        page = session.focused
+        try:
+            await lite.navigate(page=page,
+                                url=f"{corpus_site}/b/uw_selfnav.html",
+                                timeout_ms=4000)
+        except Exception:
+            pass
+        for tool in (lite.get_page_view, lite.get_text):
+            with pytest.raises(Conflict) as caught:
+                await tool(page=page)
+            said = str(caught.value)
+            assert "replaces its own document" in said, said[:200]
+            assert "Re-reading will not help" in said
+    run(go())

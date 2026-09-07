@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Self-navigating</title>
+<meta http-equiv="refresh" content="0;url=uw_selfnav.html">
+</head>
+<body>
+<p>THIS PAGE REPLACES ITSELF</p>
+<!-- Hostile round H-02. A meta refresh onto the SAME url. Every read
+     surface refused CONFLICT with the raw driver string "Page.evaluate:
+     Execution context was destroyed, most likely because of a navigation"
+     under the generic hint "two handles or two callers disagree about
+     state; re-read to re-establish a baseline" -- and re-reading is the
+     one action guaranteed to fail forever on a page that navigates itself
+     on a timer. The url never changes, so a before/after URL comparison
+     sees nothing; what is definite is that the context keeps dying. -->
+</body>
+</html>

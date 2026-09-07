@@ -506,11 +506,18 @@ async def get_page_view(
         ladder_all = await frames.ladder(record)
         enterable = [(f.fid, f.frame, f.to_dict())
                      for f in frames.entered(ladder_all) if not f.is_main]
-    result = await read_page(target, meta, budget=budget, view=view,
-                             root=root, absorb=absorb, mode=mode,
-                             frames=enterable,
-                             frame_ladder=[f.to_dict() for f in ladder_all
-                                           if not f.is_main])
+    try:
+        result = await read_page(target, meta, budget=budget, view=view,
+                                 root=root, absorb=absorb, mode=mode,
+                                 frames=enterable,
+                                 frame_ladder=[f.to_dict() for f in ladder_all
+                                               if not f.is_main])
+    except Exception as exc:
+        # H-02: a page that navigates ITSELF destroys the execution context
+        # under every read, and CONFLICT's generic "re-read to re-establish
+        # a baseline" is the one action guaranteed to fail forever on it.
+        await raise_if_self_navigating(record, exc, "get_page_view")
+        raise
     if isinstance(result, dict) and result.get("error"):
         raise TargetNotFound(
             f'location named {result["asked_for"]!r} and that ref is not on '
@@ -943,8 +950,13 @@ async def get_text(
         target = home.frame
     elif root is None:
         ladder_all = await frames.ladder(record)
-    got = await read_text(target, root=root, start_index=start_index,
-                          max_chars=max_chars, include_hidden=include_hidden)
+    try:
+        got = await read_text(target, root=root, start_index=start_index,
+                              max_chars=max_chars,
+                              include_hidden=include_hidden)
+    except Exception as exc:
+        await raise_if_self_navigating(record, exc, "get_text")
+        raise
     if got.get("error"):
         raise TargetNotFound(
             f'location named {got["asked_for"]!r} and that ref is not on '
@@ -1822,6 +1834,60 @@ ERROR_SCHEMES: tuple[str, ...] = (
     "about:neterror", "about:certerror", "about:blocked",
     "resource://gre/browser/neterror",
 )
+
+
+#: The self-navigation probe. Spaced far enough apart that an ordinary
+#: re-render settles between them, and few enough that a read against a
+#: healthy page never pays for them (the probe runs ONLY after a read has
+#: already failed with a destroyed context).
+_SELFNAV_SAMPLE_S = 0.15
+_SELFNAV_PROBES = 3
+
+
+async def raise_if_self_navigating(record, exc, tool: str):
+    """The honest refusal for a page that navigates itself continuously
+    (hostile H-02).
+
+    `/redir/metaloop` (a `meta refresh` onto itself) and `/redir/jsloop`
+    (`location.replace(self)`) made every read surface refuse CONFLICT with
+    the raw driver string "Page.evaluate: Execution context was destroyed,
+    most likely because of a navigation", under the generic hint "two
+    handles or two callers disagree about state; re-read to re-establish a
+    baseline". Re-reading is the one action guaranteed to fail forever on a
+    page that navigates itself on a timer, so the refusal named a recovery
+    that cannot work and the caller had no way to learn why.
+
+    THE URL IS NOT THE EVIDENCE. Both fixtures navigate to the SAME url, so
+    it never changes and a before/after comparison sees nothing. What is
+    definite is that the context keeps dying: two trivial evaluates, spaced
+    out, that BOTH fail the same way describe a document being replaced
+    faster than anything can read it. A page that merely re-rendered
+    answers the second probe."""
+    if "execution context was destroyed" not in str(exc).lower():
+        return
+    destroyed = 0
+    for _ in range(_SELFNAV_PROBES):
+        await asyncio.sleep(_SELFNAV_SAMPLE_S)
+        try:
+            await record.page.evaluate("() => 1")
+        except Exception as probe:
+            if "execution context was destroyed" in str(probe).lower():
+                destroyed += 1
+                continue
+            return              # some other failure owns this
+        return                  # the context settled; the read can retry
+    if destroyed < _SELFNAV_PROBES:
+        return
+    raise Conflict(
+        f"{tool} cannot read {record.handle}: this page replaces its own "
+        f"document while the read is running, so no read can complete "
+        f"against it. {destroyed} probes spaced "
+        f"{int(_SELFNAV_SAMPLE_S * 1000)} ms apart each found the execution "
+        f"context already destroyed, with no tool navigating: a meta "
+        f"refresh onto the same URL and a scripted location.replace both "
+        f"do this. Re-reading will not help and neither will waiting. "
+        f"navigate(page={record.handle!r}, url=...) to somewhere else, or "
+        f"close the page.")
 
 
 def _is_error_document(url: str | None) -> bool:
