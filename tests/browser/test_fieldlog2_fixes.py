@@ -135,6 +135,26 @@ def run(coro):
     return asyncio.run(main())
 
 
+def _redeemed_stub(*a, **k):
+    """A gate `ask` that answers the way the REAL one does on a confirmed
+    re-run: with a redeemed Gate.
+
+    Three tests here neuter the gate because the gate is not their subject.
+    They used to return None and get away with it, because the ops layer
+    called `ask` for its side effect and threw the answer away. Since the
+    consent ladder landed there is one door (`policy.engine.confirm`) and it
+    USES the answer, holding it to the TOCTOU re-validation before the action
+    runs. A stub that returns None is now a stub modelling an engine that does
+    not exist, so it models the real one instead."""
+    from kitchensink4web.policy import gates as _g
+    action_class = a[0] if a else k["action_class"]
+    return _g.Gate(token="stub-" + action_class, action_class=action_class,
+                   tool=k.get("tool", "test"), session=k.get("session") or "",
+                   page=k.get("page"), target={}, summary=k.get("summary", ""),
+                   redeemed=True)
+
+
+
 async def _open(site, path):
     session = await MANAGER.open(lane="A", engine="chromium", headless=True)
     page = session.focused
@@ -328,8 +348,7 @@ def test_a_failed_auth_load_tears_the_session_down_and_says_why(
     before = list(packs.loaded_packs())
     packs.apply_startup_packs(["storage"])
     # The gate is not the subject here; the teardown and the refusal are.
-    monkeypatch.setattr(gates.ENGINE, "ask",
-                        lambda *a, **k: None)
+    monkeypatch.setattr(gates.ENGINE, "ask", _redeemed_stub)
     state = tmp_path / "bad_state.json"
     state.write_text(json.dumps({"cookies": [{
         "name": "probe", "value": "v", "domain": "127.0.0.1", "path": "/",
@@ -420,7 +439,7 @@ def test_an_expired_state_file_warns_on_load(tmp_path, monkeypatch):
     from kitchensink4web import packs
     before = list(packs.loaded_packs())
     packs.apply_startup_packs(["storage"])
-    monkeypatch.setattr(gates.ENGINE, "ask", lambda *a, **k: None)
+    monkeypatch.setattr(gates.ENGINE, "ask", _redeemed_stub)
     state = tmp_path / "stale.json"
     state.write_text(json.dumps({"cookies": [{
         "name": "sessionid", "value": "v", "domain": "127.0.0.1", "path": "/",
@@ -451,7 +470,7 @@ def test_a_healthy_state_file_loads_without_a_warning(tmp_path, monkeypatch):
     from kitchensink4web import packs
     before = list(packs.loaded_packs())
     packs.apply_startup_packs(["storage"])
-    monkeypatch.setattr(gates.ENGINE, "ask", lambda *a, **k: None)
+    monkeypatch.setattr(gates.ENGINE, "ask", _redeemed_stub)
     state = tmp_path / "fresh.json"
     state.write_text(json.dumps({"cookies": [{
         "name": "sessionid", "value": "v", "domain": "127.0.0.1", "path": "/",
