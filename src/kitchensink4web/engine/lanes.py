@@ -638,7 +638,83 @@ def launch_kwargs(spec: LaneSpec, profile_dir: str,
         kwargs["args"] = list(spec.args)
     if emulation:
         kwargs.update(emulation)
+    identity = agent_identity()
+    if identity:
+        kwargs["extra_http_headers"] = dict(identity["headers"])
     return kwargs
+
+# ------------------------------------------------------ agent identification
+
+#: The header KS4Web sends when the caller has switched identification ON.
+#: A dedicated field rather than the User-Agent, and the reason is a fidelity
+#: one: Playwright takes a user agent at CONTEXT CONSTRUCTION, so appending a
+#: product token to the real one would mean either guessing the base string
+#: (which is a lie waiting to happen) or setting it as a request header after
+#: launch, which leaves `navigator.userAgent` saying one thing and the wire
+#: saying another. An inconsistent fingerprint is the class of thing the
+#: no-spoofing rule exists to prevent, so identification rides its own field
+#: and the browser keeps saying exactly what it is.
+AGENT_HEADER = "X-KS4Web-Agent"
+
+ENV_AGENT_ID = "KS4WEB_AGENT_ID"
+
+
+def _agent_toggle() -> bool:
+    """The install-screen boolean, with the family's loud-typo rule.
+
+    Same shape as the pack toggles (`packs._toggle_env`): empty is off, the
+    literal 'true' is on, 'false' is off, anything else refuses. It is a
+    CHECKBOX and not a free-text field on purpose: a caller who could type the
+    header value could type a claim about who they are, and this feature only
+    exists because it never does that."""
+    raw = os.environ.get(ENV_AGENT_ID)
+    if raw is None:
+        return False
+    value = raw.strip().lower()
+    if value in ("", "false", "0", "off", "no"):
+        return False
+    if value in ("true", "1", "on", "yes"):
+        return True
+    raise BadParams(
+        f"{ENV_AGENT_ID}={raw!r} is not an identification toggle value: use "
+        f"'true' or 'false' (empty means off). It is a switch rather than a "
+        f"field, because the identity KS4Web declares is not something a "
+        f"caller gets to compose.")
+
+
+def _product_version() -> str:
+    try:
+        from importlib.metadata import version
+        return version("kitchensink4web")
+    except Exception:
+        return "unknown"
+
+
+def agent_identity() -> dict | None:
+    """The identification headers this session sends, or None when off.
+
+    DEFAULT OFF, and the default is not timidity: a context-level header goes
+    out on every request the session makes, to every host it touches, so
+    turning it on is a decision to announce this machine's tooling broadly.
+    Turned on, it states one true thing (the product and its version) and
+    claims nothing else: no operator, no purpose, no permission, and no
+    assertion that any site has granted access. KS4Web never lies about what
+    it is in either setting, and nothing here is a bot-verification
+    credential."""
+    if not _agent_toggle():
+        return None
+    version = _product_version()
+    return {
+        "headers": {AGENT_HEADER: f"KitchenSink4Web/{version}"},
+        "on": True,
+        "version": version,
+        "applies_to": "every request this session makes, on every host",
+        "user_agent": "unchanged; the browser reports its own",
+        "verification": ("this is a self-declaration and not a signed "
+                         "credential: a site can read it and cannot verify "
+                         "it"),
+        "off_switch": f"{ENV_AGENT_ID}=false",
+    }
 
 
 
