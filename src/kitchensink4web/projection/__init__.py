@@ -40,11 +40,12 @@ from pathlib import Path
 from .meter import ENCODING_NAME, ntok
 from .render import RUNGS, Projection, project
 
-__all__ = ["EXTRACT_JS", "FIND_JS", "TEXT_JS", "ARTICLE_JS", "VISIBILITY_JS",
-           "PAYMENT_JS", "ACTIVATION_JS", "ARIA_JS", "HREF_JS", "CONSENT_JS",
+__all__ = ["EXTRACT_JS", "FIND_JS", "TEXT_JS", "ARTICLE_JS", "SCHEMA_JS",
+           "VISIBILITY_JS", "PAYMENT_JS", "ACTIVATION_JS", "ARIA_JS",
+           "HREF_JS", "CONSENT_JS", "RENDERED_JS",
            "CLOSED_SHADOW_HOOK", "INSTRUMENT_KEY", "instrument",
            "Projection", "project", "extract", "find", "read_text",
-           "read_article", "read_page", "stitch", "ntok",
+           "read_article", "read_schema", "read_page", "stitch", "ntok",
            "ENCODING_NAME", "RUNGS"]
 
 _HERE = Path(__file__).parent
@@ -58,6 +59,7 @@ _ACT_MARK = "// @@KS4WEB_ACTIVATION@@"
 _ARIA_MARK = "// @@KS4WEB_ARIA@@"
 _HREF_MARK = "// @@KS4WEB_HREF@@"
 _CONSENT_MARK = "// @@KS4WEB_CONSENT@@"
+_TEXT_MARK = "// @@KS4WEB_RENDERED@@"
 
 #: THE ONE HIDDEN-DETECTION SOURCE (gauntlet 2 H2/H3/M4/L2, 2026-09-06).
 #: `hiddenReason` used to exist three times, in `extract.js`, `find.js`, and
@@ -81,6 +83,15 @@ PAYMENT_JS = (_HERE / "payment.js").read_text(encoding="utf-8")
 #: an SVG anchor that property is an SVGAnimatedString, so the payload
 #: carried "/[object%20SVGAnimatedString]" as a fact.
 HREF_JS = (_HERE / "href.js").read_text(encoding="utf-8")
+
+#: THE ONE RENDERED-TEXT SOURCE (2026-09-08 field test). Same story again, one
+#: property along: four readers called `textContent` on an element and got back
+#: the characters no browser paints. A Wikipedia infobox inlines a
+#: TemplateStyles `<style>` element into the cell that needs it, so
+#: `extract_fields` answered the field `Official languages` with three CSS
+#: rules, at the right key, with correct provenance, and with nothing in the
+#: payload saying anything was wrong.
+RENDERED_JS = (_HERE / "rendered.js").read_text(encoding="utf-8")
 
 #: THE ONE ACTIVATION-TARGET SOURCE (re-attack 2 C1, 2026-09-06). Same story
 #: one question earlier: every classifier in the build modelled the element
@@ -161,6 +172,8 @@ def instrument(source: str, *, visibility: str | None = None) -> str:
         source = source.replace(_CONSENT_MARK, CONSENT_JS)
     if _HREF_MARK in source:
         source = source.replace(_HREF_MARK, HREF_JS)
+    if _TEXT_MARK in source:
+        source = source.replace(_TEXT_MARK, RENDERED_JS)
     if _INSTR_MARK in source:
         source = source.replace(_INSTR_MARK, INSTRUMENT_PRELUDE)
     return source
@@ -170,6 +183,10 @@ EXTRACT_JS = instrument((_HERE / "extract.js").read_text(encoding="utf-8"))
 FIND_JS = instrument((_HERE / "find.js").read_text(encoding="utf-8"))
 TEXT_JS = instrument((_HERE / "text.js").read_text(encoding="utf-8"))
 ARTICLE_JS = instrument((_HERE / "article.js").read_text(encoding="utf-8"))
+#: The schema-directed source collector (`extract_page`). It splices the SAME
+#: `visibility.js` every other read splices, which is the whole reason it lives
+#: here rather than as a private string in the extract pack.
+SCHEMA_JS = instrument((_HERE / "schema.js").read_text(encoding="utf-8"))
 
 
 def _checked(data: dict) -> dict:
@@ -285,6 +302,18 @@ async def read_article(page, root: str | None = None, start_index: int = 0,
     return _checked(await page.evaluate(ARTICLE_JS, {
         "root": root, "start_index": start_index, "max_chars": max_chars,
         "links": links}))
+
+
+async def read_schema(page, root: str | None = None,
+                      caps: dict | None = None) -> dict:
+    """Collect every schema candidate the page offers, grouped by tier.
+
+    One evaluate, one deep walk (the light tree plus every open shadow root),
+    no matching. The matcher is server-side on purpose: a matcher running in
+    page script is a matcher the page can profile against, and the
+    confident-wrong-answer defects all live in the matcher."""
+    return _checked(await page.evaluate(
+        SCHEMA_JS, {"root": root, "caps": caps or {}}))
 
 
 #: The completeness counters that ADD across frames, and the ones that do not.

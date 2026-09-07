@@ -10,10 +10,17 @@
     "schema": 250
   },
   "tools": {
+<<<<<<< HEAD
     "batch": {
       "description_tokens": 321,
       "schema_tokens": 94,
       "total_tokens": 415,
+=======
+    "aggregate": {
+      "description_tokens": 220,
+      "schema_tokens": 153,
+      "total_tokens": 373,
+>>>>>>> build/extract
       "over_reference_caps": true
     },
     "click": {
@@ -68,6 +75,12 @@
       "description_tokens": 165,
       "schema_tokens": 58,
       "total_tokens": 223,
+      "over_reference_caps": true
+    },
+    "extract_page": {
+      "description_tokens": 263,
+      "schema_tokens": 109,
+      "total_tokens": 372,
       "over_reference_caps": true
     },
     "fill_form": {

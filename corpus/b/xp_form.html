@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Account</title></head>
+<body>
+<!--
+  "The page has this field and it is blank" and "the page does not have this
+  field" are different facts, so `empty` and `not_found` are different
+  outcomes. The password field carries a value and its value is never read:
+  not read-then-redacted, never read, and the classification is re-derived
+  server-side through policy/credentials.py rather than trusted from the page.
+-->
+<main>
+<form>
+  <label for="acct">Account holder</label>
+  <input id="acct" name="acct" value="Marguerite Oduya">
+  <label for="nickname">Nickname</label>
+  <input id="nickname" name="nickname" value="">
+  <label for="pw">Password</label>
+  <input id="pw" name="pw" type="password" autocomplete="current-password"
+         value="hunter2-correct-horse">
+  <button type="submit">Save</button>
+</form>
+</main>
+</body></html>

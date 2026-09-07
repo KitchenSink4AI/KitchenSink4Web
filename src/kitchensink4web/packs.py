@@ -99,7 +99,7 @@ PACK_SUMMARIES: dict[str, str] = {
 PLANNED_MEMBERS: dict[str, tuple[str, ...]] = {
     "extract": ("get_table", "get_list", "get_links", "get_metadata",
                 "extract_fields", "export_data", "get_article",
-                "read_pages"),
+                "read_pages", "extract_page", "aggregate"),
     "capture": ("take_screenshot", "export_pdf", "save_page", "emulate"),
     "network": ("list_requests", "get_request", "export_har", "set_routing"),
     "diagnostics": ("list_console", "get_page_errors", "evaluate_script"),
