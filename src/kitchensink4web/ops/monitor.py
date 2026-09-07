@@ -162,20 +162,35 @@ async def _run_check(record: dict, *, first: bool = False) -> dict:
     # A SITE THAT SAID SLOW DOWN IS BELIEVED THE FIRST TIME. The backoff is
     # registered on the shared domain book, so a monitor and a
     # conversation cannot walk into the same window from two directions.
-    if response is not None and getattr(response, "status", None) == 429:
-        after = None
+    #
+    # ONE PARSER, NOT THREE (fix wave 2026-09-08, V-17). This branch used to
+    # read the header itself, on 429 alone and as a bare integer alone, so
+    # `120.5` and every HTTP-date form fell through to the default and a 503
+    # with a wait attached lost its number entirely. `navigate` already routes
+    # the parse, the record, and the report through `budgets`; so does this,
+    # for the same statuses and with the same reasoning about a bare 503.
+    status = getattr(response, "status", None) if response is not None \
+        else None
+    if host and status in _budgets.RETRY_AFTER_STATUSES:
         try:
-            raw = dict(response.headers).get("retry-after")
-            after = float(raw) if raw and str(raw).strip().isdigit() else None
+            raw = dict(response.headers).get("retry-after") or ""
         except Exception:
-            after = None
-        if host:
-            waited = _budgets.BOOK.note_429(host, after)
+            raw = ""
+        if status == 429 or raw.strip():
+            rate_limit = _budgets.BOOK.note_retry_after(host, raw,
+                                                        status=status)
+            # THE SOURCE IS THE REPORT'S OWN. A default KS4Web chose must not
+            # be worded as the window the site asked for, and the book already
+            # says which one it is.
+            # FLAGGED (fix wave 2026-09-08): placeholder wording,
+            # mechanically composed from this refusal's own clauses and the
+            # report's `source` field.
             raise BlockedBySite(
-                f"{host} answered HTTP 429 for this monitor's URL and its "
-                f"Retry-After window is {waited:.0f}s. The next check is "
-                f"scheduled past the window; KS4Web honours a site's rate "
-                f"limit rather than retrying against it.")
+                f"{host} answered HTTP {status} for this monitor's URL and "
+                f"the honored window is {rate_limit['seconds']:.0f}s "
+                f"({rate_limit['source']}). The next check is scheduled past "
+                f"the window; KS4Web honours a site's rate limit rather than "
+                f"retrying against it.")
     # 4. WHERE IT LANDED, not only where it was aimed. A redirect must not
     #    launder a blocked origin, and a background tick cannot ask a human
     #    about an off-list landing, so it refuses instead of gating.
@@ -227,16 +242,13 @@ def _remaining_backoff(url: str) -> float:
     """How long the shared domain book still refuses this host. Read rather
     than re-derived, so the monitor and the conversation surfaces cannot
     disagree about the same window."""
-    host = (urlparse(url).hostname or "").lower()
-    try:
-        _budgets.BOOK.check_domain(host)
-    except BlockedBySite as exc:
-        import re
-        found = re.search(r"(\d+)s left", str(exc))
-        if found:
-            return float(found.group(1))
-        return float(_budgets.DEFAULT_RETRY_AFTER_S)
-    return 0.0
+    # ASKED, NOT SCRAPED (fix wave 2026-09-08, V-17). This read the number
+    # back out of `check_domain`'s refusal with a regex, which made a
+    # user-facing sentence into load-bearing API: rewording the refusal, or
+    # dropping the word "left" from it, would have silently changed how long
+    # a monitor recorded itself blocked. The book is asked for its own
+    # number instead.
+    return _budgets.BOOK.remaining_backoff_s(urlparse(url).hostname or "")
 
 
 async def _check_and_record(record: dict) -> dict:

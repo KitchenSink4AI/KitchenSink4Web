@@ -407,6 +407,116 @@ def test_a_create_that_cannot_reach_the_page_creates_nothing(store,
         "change against a page it has not seen")
 
 
+# ------------------------------------------------- V-17: one Retry-After
+#
+# The check parsed the header itself, on 429 alone and as a bare integer
+# alone, so `120.5` and every HTTP-date form fell through to the default and
+# a 503 with a wait attached lost its number entirely. The refusal then
+# reported KS4Web's own default as the site's window. The parse, the record,
+# and the report belong to `budgets`, which `navigate` already uses.
+
+
+class _FakeResponse:
+    def __init__(self, status, headers):
+        self.status = status
+        self.headers = headers
+
+
+class _FakePage:
+    def __init__(self, response, url):
+        self._response = response
+        self.url = url
+
+    async def goto(self, url, **kwargs):
+        return self._response
+
+
+class _FakeRecord:
+    def __init__(self, page):
+        self.page = page
+        self.handle = "p1"
+        self.parked = False
+        self.vetted_url = None
+
+    def touch(self, url):
+        pass
+
+
+class _FakeSession:
+    focused = "p1"
+
+    def __init__(self, record):
+        self._record = record
+
+    def page(self, handle):
+        return self._record
+
+    def invalidate_page(self, handle, why):
+        pass
+
+
+def _answering(store, monkeypatch, status, headers):
+    """Drive one check against a canned response, no browser involved."""
+    record = _planted(store)
+    page = _FakePage(_FakeResponse(status, headers),
+                     "https://example.org/thing")
+    sess = _FakeSession(_FakeRecord(page))
+
+    async def _fake_session():
+        return sess
+
+    monkeypatch.setattr(_monitor_ops, "_monitor_session", _fake_session)
+    _monitor_ops._budgets.BOOK._backoff.clear()
+    with pytest.raises(errors.BlockedBySite) as caught:
+        asyncio.run(_monitor_ops._run_check(record))
+    return str(caught.value)
+
+
+def test_a_fractional_retry_after_is_read_rather_than_defaulted(store,
+                                                                monkeypatch):
+    message = _answering(store, monkeypatch, 429, {"retry-after": "120.5"})
+    assert "120" in message and "60s" not in message
+
+
+def test_a_503_with_a_wait_is_honored_like_a_429(store, monkeypatch):
+    message = _answering(store, monkeypatch, 503, {"retry-after": "90"})
+    assert "90" in message
+    assert _monitor_ops._budgets.BOOK.remaining_backoff_s("example.org") > 0
+
+
+def test_an_http_date_is_honored_in_a_check_too(store, monkeypatch):
+    import re
+    from email.utils import formatdate
+    when = formatdate(time.time() + 300, usegmt=True)
+    message = _answering(store, monkeypatch, 429, {"retry-after": when})
+    found = re.search(r"(\d+)s", message)
+    assert found and int(found.group(1)) >= 250, message
+
+
+def test_the_default_window_is_not_worded_as_the_sites_own(store,
+                                                           monkeypatch):
+    """A 429 with no header still backs off, but the sentence must not
+    attribute KS4Web's default to the site's Retry-After."""
+    message = _answering(store, monkeypatch, 429, {})
+    assert "60" in message
+    assert "its Retry-After window" not in message
+
+
+def test_the_remaining_backoff_is_read_from_the_book_not_the_sentence(
+        store, monkeypatch):
+    """The refusal string is a user-facing sentence, not an API. Rewording
+    it must not change what the monitor records as its blocked window."""
+    _monitor_ops._budgets.BOOK._backoff.clear()
+    _monitor_ops._budgets.BOOK.note_retry_after("example.org", "300",
+                                                status=429)
+    monkeypatch.setattr(
+        _monitor_ops._budgets.BOOK, "check_domain",
+        lambda domain: (_ for _ in ()).throw(
+            errors.BlockedBySite("the window is still open")))
+    assert 290 <= _monitor_ops._remaining_backoff(
+        "https://example.org/thing") <= 300
+
+
 # ---------------------------------------------------------- the predicates
 
 @pytest.mark.parametrize("condition,before,after,fired", [
