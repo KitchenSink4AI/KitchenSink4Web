@@ -256,6 +256,41 @@ def test_a_sensitive_origin_gates_an_ordinary_click(site):
     assert read, "reading a listed origin is not gated: the list gates acting"
 
 
+def test_storage_clear_is_grade_cleared_through_its_real_door(site):
+    """PIN 6, END TO END, and the version that matters. The unit pin proves
+    `consent.decide` returns IN_GRADE; this proves the tool a caller actually
+    types reaches that decision. It did not until the eleven direct
+    `gates.ENGINE.ask()` sites were routed through the choke point."""
+    from kitchensink4web.ops import storage as _storage
+
+    async def go(name):
+        scope(name)
+        session, page = await _open(site, "search.html")
+        try:
+            await _storage.manage_cookies(session=session.session_id,
+                                          action="clear")
+            return "ran"
+        except ConfirmationRequired:
+            return "gated"
+
+    assert run(go("full")) == "ran"
+    assert run(go("research")) == "gated"
+
+
+def test_a_preauth_reaches_both_spellings_of_the_same_operation(site):
+    """`load_auth_state` and `manage_session(open, auth_state=...)` load the
+    same file into the same kind of session. A pre-authorization that cleared
+    one and left the other asking would be a setting that half works, and
+    that is exactly what shipped until these doors were routed."""
+    import inspect
+    from kitchensink4web.ops import storage as _storage
+
+    for fn in (_storage.load_auth_state, lite.manage_session):
+        source = inspect.getsource(fn)
+        if "storage_load" in source:
+            assert "_policy.confirm(" in source, fn.__name__
+
+
 def test_the_audit_records_why_a_cleared_action_was_cleared(site):
     """PIN 27, live and end to end. The record must say `grade`, never
     `human`: an operational log that claimed a human answered when the scope

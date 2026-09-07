@@ -765,6 +765,64 @@ def test_the_tier_tables_partition_the_gate_table():
     assert set(consent.GRADE_CLEARED) <= consent.PREAUTHORIZABLE
 
 
+#: The ONE sanctioned direct caller of the gate engine, named here rather
+#: than discovered by the test. `fill_form`'s submit branch keeps its own
+#: `ask` because it re-resolves the anchor field AFTER the fills and holds
+#: the gate to that fresh read, which is a stronger verification than routing
+#: through the choke point would give it; it consults `consent.decide()`
+#: itself, immediately above the call.
+_SANCTIONED_DIRECT_ASK = {("lite.py", "fill_form")}
+
+
+def test_every_gated_door_goes_through_the_consent_ladder():
+    """THE MECHANICAL HALF, and it is the pin that would have caught the
+    integration gap this wave found late.
+
+    Eleven sites in `ops/` reached a gate WITHOUT `approve()`, each of them
+    legitimate on its own terms, and every one of them called
+    `gates.ENGINE.ask()` directly. So they never saw the consent scope:
+    `storage_clear` under `full` still asked, and
+    `KS4WEB_PREAUTH=storage_load@github.com` cleared `load_auth_state` while
+    leaving `manage_session(open, auth_state=...)` asking, which is the same
+    operation spelled differently. A ladder with eleven doors around it is
+    not a ladder.
+
+    A twelfth door added later fails here rather than shipping."""
+    offenders = []
+    for path in (SRC / "ops").rglob("*.py"):
+        text = path.read_text(encoding="utf-8")
+        tree = ast.parse(text, filename=path.name)
+        func = None
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                for inner in ast.walk(node):
+                    if (isinstance(inner, ast.Call)
+                            and isinstance(inner.func, ast.Attribute)
+                            and inner.func.attr == "ask"
+                            and isinstance(inner.func.value, ast.Attribute)
+                            and inner.func.value.attr == "ENGINE"):
+                        func = (path.name, node.name)
+                        if func not in _SANCTIONED_DIRECT_ASK:
+                            offenders.append(
+                                f"{path.name}:{inner.lineno} in {node.name}")
+    assert not offenders, (
+        f"these sites reach the gate engine without the consent ladder, so "
+        f"the scope, the pre-authorizations, and the unattended refusal do "
+        f"not apply to them: {offenders}. Call policy.engine.confirm().")
+
+
+def test_confirm_is_the_one_place_a_class_meets_the_ladder():
+    """`approve()` step 7 and `confirm()` are the same code, not two copies:
+    a second implementation is how the two drift and how one of them quietly
+    stops honoring a pre-authorization."""
+    import inspect
+    source = inspect.getsource(engine.approve)
+    assert "confirm(" in source
+    assert "consent.decide" not in source.split("def confirm")[0].split(
+        "gate_record = confirm")[-1]
+    assert "consent.decide" in inspect.getsource(engine.confirm)
+
+
 def test_the_environment_is_not_read_at_decide_time(monkeypatch):
     """The scope is resolved ONCE at startup. A runtime read would let a
     process that mutated its own environment widen its consent mid-session,

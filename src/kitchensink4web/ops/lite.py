@@ -1700,9 +1700,10 @@ async def _landed_origin_check(sess, record, *, tool: str) -> None:
             sess, record, "the navigation landed outside the origin "
                           "allowlist and was parked to about:blank until a "
                           "human answers the confirmation")
-        _gates.ENGINE.ask(
+        _policy.confirm(
             "navigation_offlist", tool=tool, session=sess.session_id,
-            page=record.handle, target=None,
+            page=record.handle, target=None, url=landed, kind="navigate",
+            origin_verdict="off-list",
             summary=f"the page landed on {landed}, which is outside "
                     f"{_origins.ENV_ALLOW}, during {tool}. It was parked to "
                     f"about:blank and nothing was read from it.")
@@ -2200,9 +2201,9 @@ async def type_text(
     late = _act.action_class_for(desc, submitting=submitting)
     if late and late != _act.action_class_for(resolved["descriptor"],
                                               submitting=submitting):
-        _gates.ENGINE.ask(
+        _policy.confirm(
             late, tool="type_text", session=sess.session_id,
-            page=record.handle, target=desc,
+            page=record.handle, target=desc, url=record.page.url,
             summary=f'type into {desc.get("role")} "{desc.get("name")}" on '
                     f'{record.handle}, which the page turned into a '
                     f'{late.replace("_", " ")} target when it took focus?')
@@ -2524,9 +2525,9 @@ async def fill_form(
         if late and late != batch_class:
             # A field that only reveals its class under focus still gates,
             # and it gates BEFORE its own write rather than after it.
-            _gates.ENGINE.ask(
+            _policy.confirm(
                 late, tool="fill_form", session=sess.session_id,
-                page=record.handle, target=desc,
+                page=record.handle, target=desc, url=record.page.url,
                 summary=f'write into {desc.get("role")} '
                         f'"{desc.get("name")}" on {record.handle}, which the '
                         f'page turned into a {late.replace("_", " ")} target '
@@ -3741,9 +3742,9 @@ async def manage_session(
             # so a fail-closed answer does not strand a half-built session:
             # loading real credentials is consequential whichever call
             # spells it.
-            _gates.ENGINE.ask(
+            _policy.confirm(
                 "storage_load", tool="manage_session", session=None,
-                page=None, target=None,
+                page=None, target=None, dest_path=checked_state,
                 summary=f"Open a session and load saved authentication "
                         f"state from {checked_state}? This restores a real "
                         f"login.")
@@ -3865,7 +3866,7 @@ async def manage_session(
         # client advertises no confirmation channel it fails closed and the
         # budgets stand. A budget the model could reset by calling a tool
         # would not be a budget.
-        _gates.ENGINE.ask(
+        _policy.confirm(
             "budget_reset", tool="manage_session", session=sess.session_id,
             page=None, target=None,
             summary=f"Reset the action budgets for session "
