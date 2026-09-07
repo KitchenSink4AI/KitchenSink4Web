@@ -36,7 +36,7 @@ from dataclasses import dataclass, field
 from urllib.parse import urlparse
 
 from ..errors import ReadOnlyMode
-from . import budgets, credentials, gates, origins, readonly
+from . import audit, budgets, consent, credentials, gates, origins, readonly
 
 ENV_HIDDEN = "KS4WEB_HIDDEN_CONTENT"
 
@@ -67,6 +67,11 @@ class ActionRequest:
     resolution: str = "ok"          # the rebind ladder's outcome for target
     summary: str = ""               # one human line for the gate prompt
     extra_charges: tuple = field(default_factory=tuple)
+    #: The filesystem path this action reads from or writes to, where it has
+    #: one. The consent ladder needs it: a download INTO a configured
+    #: sandbox root is in-grade and a download anywhere else is not, and the
+    #: difference is a path, not a class.
+    dest_path: str | None = None
 
 
 _KIND_CHARGE = {"navigate": "navigations", "act": "actions",
@@ -110,6 +115,19 @@ def approve(request: ActionRequest) -> dict:
     if domain:
         budgets.BOOK.check_domain(domain)
 
+    # 3b. THE TWO ESCALATIONS THAT HAVE NO CLASS OF THEIR OWN (consent
+    #     ladder). An ordinary click on a page the PAGE declared adult-only,
+    #     and an ordinary click on an origin the HUMAN listed as one to
+    #     always ask about, both carry no action class today and therefore
+    #     no gate. Neither is a content judgment: one relays the page's own
+    #     declaration and the other reads a list the human wrote.
+    age_declared = bool((request.target or {}).get("page_age_declared"))
+    if request.kind in ("act", "download") and not request.action_class:
+        if consent.is_sensitive_origin(request.url):
+            request.action_class = "sensitive_origin"
+        elif age_declared:
+            request.action_class = "age_gate_detected"
+
     # A confirmed re-run (S8 wiring): the elicitation plumbing redeemed the
     # gate the FIRST pass asked for and deposited it, and this pass is the
     # same action moments later. The first pass already noted the call and
@@ -145,22 +163,55 @@ def approve(request: ActionRequest) -> dict:
     #    interlock run HERE, immediately before the caller acts.
     gate_record = None
     if request.action_class:
-        if request.gate_grant is None:
-            granted = gates.ENGINE.ask(
-                request.action_class, tool=request.tool,
-                session=request.session, page=request.page,
-                target=request.target,
-                summary=request.summary or f"{request.tool} on "
-                                           f"{request.url or request.page}")
-            gate_record = gates.ENGINE.verify_execute(
-                granted, request.target,
-                resolution_outcome=request.resolution)
-        else:
+        # 7a. THE CONSENT LADDER RUNS FIRST (DESIGN 5.4a). The grade and the
+        #     gate table used to be orthogonal: unlocking acting bought the
+        #     tools and bought nothing in the approval budget, so a catalog
+        #     search and a bank transfer raised the same prompt. `decide()`
+        #     is where a granted scope becomes standing approval for the
+        #     ordinary actions inside it, and where a launch-time
+        #     pre-authorization or a human's "remember this" answer is read.
+        #     It can only CLEAR an ask; it cannot create one that the class
+        #     table did not already name, and it never touches policy state.
+        decision = consent.decide(
+            request.action_class, url=request.url, desc=request.target,
+            dest_path=request.dest_path, origin_verdict=verdict,
+            kind=request.kind, age_declared=age_declared)
+        if request.gate_grant is not None:
             gate_record = gates.ENGINE.verify_execute(
                 request.gate_grant if isinstance(request.gate_grant,
                                                  gates.Gate)
                 else _grant_error(),
                 request.target, resolution_outcome=request.resolution)
+            gate_record["cleared_by"] = "human"
+        elif decision.clears:
+            # The ask is skipped and the REBIND INTERLOCK is not. A clearance
+            # is permission to skip the question, never permission to skip
+            # the verification, and the honest statement of what survives is
+            # in `gates.verify_cleared`.
+            gate_record = gates.verify_cleared(
+                decision.action_class, request.target,
+                resolution_outcome=request.resolution,
+                summary=request.summary)
+            gate_record["cleared_by"] = decision.cleared_by
+            gate_record["cleared_because"] = decision.reason
+        else:
+            granted = gates.ENGINE.ask(
+                request.action_class, tool=request.tool,
+                session=request.session, page=request.page,
+                target=request.target,
+                summary=request.summary or f"{request.tool} on "
+                                           f"{request.url or request.page}",
+                live_only=decision.outcome == consent.ASK_LIVE_ONLY,
+                unattended=consent.unattended(),
+                origin=consent.origin_of(request.url))
+            gate_record = gates.ENGINE.verify_execute(
+                granted, request.target,
+                resolution_outcome=request.resolution)
+            gate_record["cleared_by"] = "human"
+        # THE AUDIT NEVER RECORDS `human` FOR A GRADE- OR PREAUTH-CLEARED
+        # ACTION. A trail that did would be a false record, and the audit's
+        # own framing as an operational log for the user cannot survive one.
+        audit.annotate(gate=gate_record)
 
     return {"allowed": True, "origin_verdict": verdict,
             "read_only": grade, "gate": gate_record}

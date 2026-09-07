@@ -41,7 +41,7 @@ from .meter import ENCODING_NAME, ntok
 from .render import RUNGS, Projection, project
 
 __all__ = ["EXTRACT_JS", "FIND_JS", "TEXT_JS", "ARTICLE_JS", "VISIBILITY_JS",
-           "PAYMENT_JS", "ACTIVATION_JS", "ARIA_JS", "HREF_JS",
+           "PAYMENT_JS", "ACTIVATION_JS", "ARIA_JS", "HREF_JS", "CONSENT_JS",
            "CLOSED_SHADOW_HOOK", "INSTRUMENT_KEY", "instrument",
            "Projection", "project", "extract", "find", "read_text",
            "read_article", "read_page", "stitch", "ntok",
@@ -57,6 +57,7 @@ _PAY_MARK = "// @@KS4WEB_PAYMENT@@"
 _ACT_MARK = "// @@KS4WEB_ACTIVATION@@"
 _ARIA_MARK = "// @@KS4WEB_ARIA@@"
 _HREF_MARK = "// @@KS4WEB_HREF@@"
+_CONSENT_MARK = "// @@KS4WEB_CONSENT@@"
 
 #: THE ONE HIDDEN-DETECTION SOURCE (gauntlet 2 H2/H3/M4/L2, 2026-09-06).
 #: `hiddenReason` used to exist three times, in `extract.js`, `find.js`, and
@@ -96,6 +97,14 @@ ACTIVATION_JS = (_HERE / "activation.js").read_text(encoding="utf-8")
 #: lives in `aria.js` and is spliced into both, which is what makes "which
 #: tab is active" answerable from whichever read found the tab.
 ARIA_JS = (_HERE / "aria.js").read_text(encoding="utf-8")
+
+#: THE ONE FORM-CENSUS SOURCE (consent ladder, 2026-09-07). The census is
+#: what lets the gate table tell a search from a bank transfer: the form's
+#: effective METHOD above all, since RFC 9110 9.2.1 makes GET a safe method
+#: and that is the signal a query-shaped submission can ride in-grade on.
+#: Unlike `payment.js`, this block makes NO decision: it computes facts and
+#: squashed haystacks, and `policy/submissions.py` owns the vocabularies.
+CONSENT_JS = (_HERE / "consent.js").read_text(encoding="utf-8")
 
 #: The per-process instrument secret. It is baked into the injected script
 #: SOURCES, never passed as an evaluate argument and never written into the
@@ -148,6 +157,8 @@ def instrument(source: str, *, visibility: str | None = None) -> str:
         source = source.replace(_ACT_MARK, ACTIVATION_JS)
     if _ARIA_MARK in source:
         source = source.replace(_ARIA_MARK, ARIA_JS)
+    if _CONSENT_MARK in source:
+        source = source.replace(_CONSENT_MARK, CONSENT_JS)
     if _HREF_MARK in source:
         source = source.replace(_HREF_MARK, HREF_JS)
     if _INSTR_MARK in source:

@@ -31,22 +31,52 @@ reachable from a tool argument.
 from __future__ import annotations
 
 import asyncio
+import time
+from dataclasses import dataclass
 
 from .errors import ConfirmationRequired
-from .policy import gates
+from .policy import consent, gates
 
 #: Shorter than the gate TTL (180 s) so a redemption can never be minted
 #: against a gate that expired while the human was reading the prompt.
 ELICIT_TIMEOUT_S = 150.0
 
 
+@dataclass
+class _Remembered:
+    """The schema for a grantable prompt: one boolean beside the accept.
+
+    A "remember this for 30 minutes" answer is what stops one task raising
+    the same question five times, and its SCOPE is (origin, action class,
+    ttl) rather than a string, a target, or a URL with a query. That is the
+    difference between a consent unit and the useless blanket "always
+    allow" the author correctly rejected: input strings vary, classes do
+    not.
+
+    Offered only on Tier 1 prompts. The money, credential, broadcast,
+    deletion, legal, off-list, and budget prompts keep the bare
+    accept/decline they ship with, so nothing about those renders
+    differently on any client."""
+
+    remember_30_minutes: bool = False
+
+
 async def attempt(exc: ConfirmationRequired) -> gates.Gate | None:
     """Put a raised gate's question to the client; a redeemed Gate on an
     explicit human ACCEPT, None on everything else. None means the caller
-    returns the original refusal: fail closed is the default, not a branch."""
+    returns the original refusal: fail closed is the default, not a branch.
+
+    This is also where the UNATTENDED signal is measured, because this is
+    the only place in the build that watches the confirmation channel
+    behave. Detection, never assumption: a client that raises on `elicit`
+    advertises no channel, and S8 measured a headless client auto-cancelling
+    in 0.0 s. The flag NEVER widens consent; it only lets the next refusal
+    say the honest thing instead of waiting 150 seconds to say it."""
     detail = getattr(exc, "detail", None) or {}
     token = detail.get("requestState")
     if not token:
+        # An unattended refusal carries no elicitation payload on purpose:
+        # there is nothing to ask and nowhere to ask it.
         return None
     try:
         requests = detail.get("inputRequests") or [{}]
@@ -61,20 +91,53 @@ async def attempt(exc: ConfirmationRequired) -> gates.Gate | None:
         ctx = get_context()
     except Exception:
         return None                     # no live request context: fail closed
+
+    pending = gates.ENGINE.peek_pending(token)
+    action_class = pending.action_class if pending is not None else None
+    offer_remember = consent.grantable(action_class)
+    schema = _Remembered if offer_remember else None
+    started = time.monotonic()
     try:
         answer = await asyncio.wait_for(
             ctx.elicit(f"{message} (accept to allow; decline or cancel to "
                        f"refuse; nothing runs until you answer)",
-                       response_type=None),
+                       response_type=schema),
             timeout=ELICIT_TIMEOUT_S)
+    except asyncio.TimeoutError:
+        consent.note_confirmation("timeout", time.monotonic() - started)
+        return None
     except Exception:
-        # No elicitation capability, a transport error, or a timeout. All of
-        # them mean no human answer arrived, and no answer means no action.
+        # No elicitation capability, or a transport error. Either way no
+        # human answer arrived, no answer means no action, and the channel
+        # has told us something about whether one is reachable at all.
+        consent.note_confirmation("no_channel", time.monotonic() - started)
         return None
+    elapsed = time.monotonic() - started
     if not isinstance(answer, AcceptedElicitation):
+        consent.note_confirmation("cancelled", elapsed)
         return None
+    consent.note_confirmation("accepted", elapsed)
     try:
-        return gates.ENGINE.redeem(token, {"allow": True})
+        grant = gates.ENGINE.redeem(token, {"allow": True})
     except Exception:
         # Expired or already-redeemed gate: the refusal stands.
         return None
+    if offer_remember and _wants_remember(answer):
+        recorded = consent.add_grant(action_class, _origin_of(pending))
+        if recorded:
+            from .policy import audit
+            audit.LOG.record("consent_grant", "created", args=recorded)
+    return grant
+
+
+def _wants_remember(answer) -> bool:
+    data = getattr(answer, "data", None)
+    return bool(getattr(data, "remember_30_minutes", False))
+
+
+def _origin_of(pending) -> str | None:
+    """The origin a grant is scoped to, taken from the gate's own record and
+    never from anything a caller supplied."""
+    if pending is None:
+        return None
+    return getattr(pending, "origin", None)

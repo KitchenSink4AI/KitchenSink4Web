@@ -58,6 +58,7 @@ from ..errors import (AmbiguousLocation, AuthRequired, BadParams,
                       Timeout, ValidationFailed)
 from ..policy import audit as _audit
 from ..policy import budgets as _budgets
+from ..policy import consent as _consent
 from ..policy import credentials as _credentials
 from ..policy import engine as _policy
 from ..policy import gates as _gates
@@ -2686,6 +2687,7 @@ _FOCUSED_JS = _instrument(r"""
 // @@KS4WEB_VISIBILITY@@
 // @@KS4WEB_PAYMENT@@
 // @@KS4WEB_ACTIVATION@@
+// @@KS4WEB_CONSENT@@
   const el = document.activeElement;
   if (!el || el === document.body || el === document.documentElement) return null;
   const f = ksFormOf(el);
@@ -2723,6 +2725,13 @@ _FOCUSED_JS = _instrument(r"""
     action: f ? (f.getAttribute('action') || '') : '',
     payment: ksPaymentField(el),
     form_payment: ksFormPayment(f),
+    // THE FORM CENSUS (consent ladder, 2026-09-07). The focused descriptor
+    // reads it for the same reason it reads the payment facts: a global
+    // Enter is a submission, and a submission this build cannot describe is
+    // one it has to gate with the undifferentiated class the ladder exists
+    // to retire.
+    form_census: ksFormCensus(f),
+    page_age_declared: ksAgeDeclared(),
     activates: ksDelegatedActivation(el),
     page_key: location.origin + location.pathname + location.hash
   };
@@ -3767,6 +3776,11 @@ async def manage_session(
             saved = await _storage.save_auth_state(
                 session=sess.session_id, path=path)
         result = await MANAGER.close(sess.session_id)
+        # A "remember this for 30 minutes" answer is scoped to the session
+        # the human answered in, so closing the session ends it. Nothing
+        # here is persisted anywhere, and the process holding it is the
+        # longest any grant can live.
+        _consent.clear_grants()
         if saved:
             # The expiry line rides the close save too (field finding U10).
             # A login saved at the end of a run is the one most likely to be
@@ -3910,6 +3924,15 @@ async def manage_session(
             # Reattaching to an orphan is the expensive half and is not here.
             **({"idle_sessions": _idle_summary(stale)} if stale else {}),
             "read_only": readonly.describe(),
+            # AXIS B, beside Axis A on purpose (consent ladder). A human
+            # reading this needs both halves to understand a prompt they
+            # got or did not get: which tools exist, and which of the ones
+            # that exist still ask. Names and origin patterns only -- there
+            # is no secret value anywhere in this payload and no route that
+            # would put one here.
+            "consent": _consent.describe(),
+            **({"secret_refs": _credentials.secret_ref_names()}
+               if _credentials.credential_injection_enabled() else {}),
             # What this machine has and which lane suits what (field log 2
             # item 44, the user's own ask). Detected once per process from
             # stats and a registry read, never by launching anything, and it
@@ -4372,7 +4395,16 @@ async def handle_dialog(
     target = None
     if held is not None:
         target = {"role": "dialog", "name": held.kind,
-                  "label": held.message[:200], "page_key": held.page}
+                  "label": held.message[:200], "page_key": held.page,
+                  # NOT a fingerprint field, deliberately: FINGERPRINT_FIELDS
+                  # is a fixed tuple and this rides beside it, as the fact the
+                  # consent ladder needs to tell a Tier 2 dialog from a Tier 1
+                  # one. A message this server RECOGNIZES as destructive gates
+                  # at every scope; one it does not recognize is the
+                  # unrecognized case and `full` clears it on an allowlisted
+                  # origin.
+                  "dialog_destructive": bool(
+                      _dialogs.destructive_reason(held.message or ""))}
     if action in ("accept", "arm_accept"):
         kind = held.kind if held is not None else (
             "confirm" if dialog_type == "any" else dialog_type)

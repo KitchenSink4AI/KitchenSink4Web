@@ -40,7 +40,7 @@ import threading
 import unicodedata
 from typing import Any
 
-from ..errors import CredentialRefused
+from ..errors import BadParams, CredentialRefused, TargetNotFound
 
 #: Autocomplete tokens that mark a field as a secret. The same family the
 #: extractor tests in-page; a divergence between the two lists would let a
@@ -672,3 +672,117 @@ def redactor(payload: Any) -> Any:
     runs on every outgoing payload and every file write (DESIGN 5.3: the
     serializer is the ONE place redaction can be enforced globally)."""
     return VAULT.scrub(payload)
+
+
+# ------------------------------------------------- the secret-reference vault
+#
+# DESIGN 5.3's SECOND SANCTIONED CREDENTIAL ROUTE, named in the design and in
+# `errors.py`, unbuilt until 2026-09-07. `refuse_secret_write`'s message had
+# to be rewritten in the 2026-09-05 field test because it promised a route no
+# mechanism backed; this is the mechanism.
+#
+# THE STRUCTURAL PROPERTY, and everything else follows from it: the value
+# enters the process by a route the model cannot see, and every tool that
+# uses one references it BY NAME. A secret that arrives as a tool argument has
+# already lost credential blindness before any gate runs, because the model
+# typed it.
+#
+# SHIP DARK (author ruling, 2026-09-07). The capability is built and the
+# default is OFF. With the switch off this whole subsystem is INERT: no scan
+# runs, no name is registered, nothing is vaulted from the environment, and
+# the credentialed branch of `set_routing` refuses by naming the switch. A
+# `KS4WEB_SECRET_*` variable set on a default install does nothing at all.
+
+#: One referenceable secret per variable. `KS4WEB_SECRET_GITHUB=ghp_...`
+#: defines the reference name `GITHUB`. Environment variables rather than a
+#: file: it matches the config doctrine exactly, a file would need a path
+#: which would need a sandbox policy which would need a decision about where
+#: secrets may live, and an env var is per-process so a secret cannot outlive
+#: the run that used it. The name does not collide with `__KS4WEB_SECRET__`
+#: in `projection/instrument.js`, which is a load-time JS placeholder token.
+ENV_SECRET_PREFIX = "KS4WEB_SECRET_"
+
+#: THE DARK SWITCH. Credential injection is the single most dangerous thing
+#: in this product and the first release is when a reviewer decides what kind
+#: of tool this is, so it is built, tested, and off.
+ENV_INJECTION = "KS4WEB_CREDENTIAL_INJECTION"
+
+_secret_refs: dict[str, str] = {}
+
+
+def credential_injection_enabled() -> bool:
+    """Whether the credentialed branch exists at all in this process.
+
+    Default OFF, and the polarity is deliberate: everything else in this
+    server that is unset means unrestricted, and this one means absent. The
+    unset default is what a first-run user has."""
+    value = os.environ.get(ENV_INJECTION, "").strip().lower()
+    return value in ("1", "true", "on", "yes", "enable", "enabled")
+
+
+def register_secret_refs() -> list[str]:
+    """Scan the environment for `KS4WEB_SECRET_*` and vault every value.
+
+    STARTUP ONLY, from `server.configure`, before any tool runs.
+
+    THE VAULT CALL IS THE LOAD-BEARING LINE. Every downstream redaction path
+    (the tool payload, the audit record, the error message, the spill file,
+    the HAR) is covered by the serializer redactor, and the redactor can only
+    replace what the vault holds. Observing at registration is what converts
+    every one of those rows from "audited by inspection" to "covered by the
+    mechanism", so the observation happens BEFORE the value is stored
+    anywhere and before the process does anything else with it.
+
+    A value under the vault's eight-character floor REFUSES TO START, naming
+    the variable: a secret too short to redact is a secret this server cannot
+    protect, and discovering that at call time is discovering it too late."""
+    _secret_refs.clear()
+    if not credential_injection_enabled():
+        return []                     # ship-dark: truly inert
+    for name in sorted(os.environ):
+        if not name.startswith(ENV_SECRET_PREFIX):
+            continue
+        ref = name[len(ENV_SECRET_PREFIX):].strip().upper()
+        value = os.environ.get(name) or ""
+        if not ref:
+            raise BadParams(
+                f"{name} names no reference: the form is "
+                f"{ENV_SECRET_PREFIX}<NAME>, for example "
+                f"{ENV_SECRET_PREFIX}GITHUB. Refusing to start.")
+        if len(value) < MIN_SECRET_LENGTH:
+            raise BadParams(
+                f"{name} holds a value under {MIN_SECRET_LENGTH} characters. "
+                f"Values that short are never vaulted, so this server could "
+                f"not redact it out of a payload, a log line, or an error "
+                f"message, and a credential it cannot redact is one it "
+                f"cannot protect. Refusing to start rather than registering "
+                f"a reference with no redaction behind it.")
+        VAULT.observe(value)          # BEFORE it is stored anywhere
+        _secret_refs[ref] = value
+    return sorted(_secret_refs)
+
+
+def secret_ref_names() -> list[str]:
+    """The registered reference NAMES. A caller needs to know what it may
+    reference; nothing anywhere returns a value, a prefix, or a length."""
+    return sorted(_secret_refs)
+
+
+def secret_value(ref: Any) -> str:
+    """Look up one secret by name, server-side, at apply time.
+
+    CALLERS: the routing layer's credentialed branch only. The value never
+    crosses the tool boundary in either direction: it goes from here into a
+    route handler's closure and out to the wire.
+
+    An unknown reference lists the registered NAMES and says nothing about
+    unregistered ones. That restraint is the point: a message that revealed
+    whether a similarly-named variable exists would be an oracle."""
+    key = ("" if ref is None else str(ref)).strip().upper()
+    if key and key in _secret_refs:
+        return _secret_refs[key]
+    raise TargetNotFound(
+        f"no secret reference named {quoted_name(ref)} is registered. The "
+        f"registered names are {secret_ref_names() or 'none'}. A human adds "
+        f"one at launch by setting {ENV_SECRET_PREFIX}<NAME> in the "
+        f"environment, which is a settings choice no tool call can make.")
