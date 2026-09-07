@@ -703,6 +703,14 @@ async def find_elements(
     sess, record = MANAGER.locate(page)
     _audit.annotate(session=sess.session_id, page=record.handle,
                     url=record.page.url, lane=sess.spec.label)
+    # THE ORIGIN POLICY (union wave, IG-02). `find_elements` was exempted in
+    # wave 8 on the WALL reasoning ("element inventories, not page prose"),
+    # which is a different question from whether it may inventory an origin
+    # the operator forbade. Live-proven: on a page that self-navigated to a
+    # deny-listed origin, `get_text` refused and parked while
+    # `find_elements` returned that origin's element inventory, marker
+    # strings and all, and left the browser sitting on it.
+    await _ensure_vetted(sess, record, tool="find_elements")
     record.touch(record.page.url)
     root = _scope_root(sess, record, location)
     # `shadow: False` is the escape hatch on a page where piercing every open
@@ -2487,6 +2495,10 @@ async def scroll(
             f"`amount` screens), 'to' (a located element into view), 'end', "
             f"'top', 'container' (scroll a located inner container), and "
             f"'next' (the next chunk, remembering position across calls).")
+    # IG-02: `scroll` returns no content, but it ACTS on the page and it
+    # leaves the browser on whatever it acted on, so it turns the same lock
+    # every other door turns.
+    await _ensure_vetted(sess, record, tool="scroll")
     node_ref = None
     if action in ("to", "container") and not location:
         raise BadParams(
@@ -2598,17 +2610,72 @@ async def wait_for(
             f"'url' a URL, substring, or glob, 'visible'/'hidden' a "
             f"`location`, 'js' a predicate expression, and 'load' a load "
             f"state.")
+    if cond == "js":
+        # THE SCRIPT-EVALUATION GATE (union wave, IG-01). `condition='js'`
+        # is script evaluation by every definition already in this tree: the
+        # predicate reaches `page.evaluate` in the precheck and
+        # `page.wait_for_function` in the wait, and `save_workflow` already
+        # refuses to record one on the ground that "a workflow must never
+        # smuggle evaluate-shaped work past the gate that names it". The
+        # tool itself had no `approve` call at all, so NONE of the seven
+        # ladder checks ran: not the read-only grade, not the origin policy,
+        # not the rate limiter, not the loop detector, not the budget, and
+        # not the confirmation gate. Under the SHIPPED read-only default one
+        # predicate changed the title, inserted a node, wrote localStorage,
+        # wrote a cookie, and fetched a deny-listed origin.
+        #
+        # Same class as `evaluate_script`, same code path, so the two cannot
+        # diverge: kind='act' is what read-only refuses, and
+        # action_class='evaluate_script' is what fails closed when acting.
+        if not value:
+            raise BadParams(
+                "wait_for(condition='js') needs the predicate expression in "
+                "`value`, for example value='() => document.readyState === "
+                "\"complete\"'.")
+        _policy.approve(_policy.ActionRequest(
+            tool="wait_for", kind="act", session=sess.session_id,
+            page=record.handle, url=record.page.url,
+            action_class="evaluate_script",
+            args={"condition": "js", "value": _budgets.fingerprint(value),
+                  "timeout_ms": timeout_ms},
+            summary=f"wait_for evaluates a JavaScript predicate in "
+                    f"{record.handle} at {record.page.url}, repeatedly until "
+                    f"it returns truthy or {timeout_ms} ms pass. A page-"
+                    f"context predicate can read and write anything the page "
+                    f"can."))
+        _audit.annotate(script_evaluation=True)
     resolved = None
+    started = time.monotonic()
     if cond in ("visible", "hidden"):
         if not location:
             raise BadParams(
                 f"wait_for(condition={cond!r}) needs a location naming "
                 f"the element to watch.")
-        resolved = await _act.resolve(sess, record, location,
-                                      tool="wait_for", acting=False)
+        # THE RESOLUTION IS PART OF THE WAIT (hostile H-08). It used to be
+        # eager and one-shot: a form that materialises at
+        # `setTimeout(..., 3000)` made `wait_for(condition='visible',
+        # timeout_ms=30000)` refuse NOT_FOUND after 0.01 s, with a message
+        # whose own last clause named the true situation ("content that has
+        # not rendered yet") while declining to wait for it. The one
+        # condition designed for "this control appears later" could not be
+        # used for exactly that case. `timeout_ms` now bounds the whole
+        # call, resolution included.
+        resolved = await _resolve_for_wait(sess, record, location, cond,
+                                           timeout_ms, started)
         _audit.annotate(replay=_replay_record(
             "wait_for", resolved,
             {"condition": cond, "timeout_ms": timeout_ms}))
+
+    if cond == "hidden" and resolved is None:
+        # Never present at all. Hidden is satisfied by the absence, and
+        # saying which is more useful than saying "resolved".
+        return {
+            "session": sess.session_id, "page": record.handle,
+            "tool": "wait_for", "condition": cond, "value": value,
+            "url": p.url, "resolved": True,
+            "already": ("nothing ever matched that location inside the "
+                        "timeout, so there is no visible element there"),
+        }
 
     # CHECK BEFORE WAITING, for every condition type. By the time an agent
     # issues the wait, the condition has often already resolved, and a wait
@@ -2624,48 +2691,108 @@ async def wait_for(
         }
 
     from ..errors import Timeout as _TO
+    # WHAT IS LEFT OF THE CALLER'S BUDGET, not a fresh copy of it. The
+    # resolution poll above may already have spent most of it, and a wait
+    # that restarts the clock is a wait that runs to twice its bound.
+    remaining_ms = max(
+        250, int(timeout_ms - (time.monotonic() - started) * 1000))
     try:
         if cond == "text":
             await p.wait_for_function(
                 "t => document.body && document.body.innerText.includes(t)",
-                arg=value, timeout=timeout_ms)
+                arg=value, timeout=remaining_ms)
         elif cond == "text_gone":
             await p.wait_for_function(
                 "t => !document.body || !document.body.innerText.includes(t)",
-                arg=value, timeout=timeout_ms)
+                arg=value, timeout=remaining_ms)
         elif cond == "url":
             target = value or ""
             if any(ch in target for ch in "*?"):
-                await p.wait_for_url(target, timeout=timeout_ms)
+                await p.wait_for_url(target, timeout=remaining_ms)
             else:
                 # No wildcards: substring semantics, matching the precheck,
                 # because "template=bug_report" is a fragment and a glob
                 # matcher would wait forever on it.
                 await p.wait_for_url(re.compile(re.escape(target)),
-                                     timeout=timeout_ms)
+                                     timeout=remaining_ms)
         elif cond in ("visible", "hidden"):
             await resolved["handle"].wait_for_element_state(
                 "visible" if cond == "visible" else "hidden",
-                timeout=timeout_ms)
+                timeout=remaining_ms)
         elif cond == "js":
-            await p.wait_for_function(value, timeout=timeout_ms)
+            await p.wait_for_function(value, timeout=remaining_ms)
         elif cond == "load":
-            await p.wait_for_load_state(value or "load", timeout=timeout_ms)
-    except BadParams:
+            await p.wait_for_load_state(value or "load", timeout=remaining_ms)
+    except (BadParams, _TO):
         raise
     except Exception as exc:
-        observed = str(exc).splitlines()[0][:160]
+        # THE ELAPSED TIME, MEASURED (chaos C-07). This used to assert the
+        # BUDGET: a wait that came back in 0.01 s because the browser had
+        # died reported "did not resolve within 5000 ms", which is a
+        # fabricated claim about a wait that never happened, and then sent
+        # the caller to get_page_view, which was refusing too.
+        elapsed_ms = int((time.monotonic() - started) * 1000)
+        observed = _envelope.scrub_driver_text(str(exc), 160)
+        detail = (f"waiting for {cond!r}"
+                  + (f" ({value!r})" if value else "")
+                  + f" ended after {elapsed_ms} ms of a {timeout_ms} ms "
+                    f"budget. Observed instead: {observed}.")
+        if any(m in str(exc).lower() for m in _envelope.DEAD_MARKERS):
+            raise SessionDead(
+                detail + " The browser for this session is gone, which is "
+                         "why the wait ended early rather than expiring: no "
+                         "call on this session can work. Close it with "
+                         "manage_session(action='close') and open a new "
+                         "one.") from exc
         raise _TO(
-            f"waiting for {cond!r}"
-            + (f" ({value!r})" if value else "")
-            + f" did not resolve within {timeout_ms} ms. Observed instead: "
-            f"{observed}. The condition may never have held, or the page may "
-            f"be blocked; verify with get_page_view.") from exc
+            detail + " The condition may never have held, or the page may "
+                     "be blocked; verify with get_page_view.") from exc
     return {
         "session": sess.session_id, "page": record.handle, "tool": "wait_for",
         "condition": cond, "value": value, "url": p.url,
         "resolved": True,
     }
+
+
+#: How often the visible/hidden wait re-tries its own resolution while the
+#: caller's timeout has budget left. Short enough that a control appearing
+#: on a timer is caught promptly, long enough that a 30 s wait is 120 tries
+#: rather than thousands.
+_WAIT_RESOLVE_POLL_S = 0.25
+
+
+async def _resolve_for_wait(sess, record, location: dict, cond: str,
+                            timeout_ms: int, started: float):
+    """Resolve the target for a visible/hidden wait, POLLING until the
+    caller's own timeout expires (hostile H-08).
+
+    A `hidden` wait whose target never appears is satisfied by the absence
+    itself: nothing that is not there is visible. A `visible` wait whose
+    target never appears has genuinely timed out, and the refusal says the
+    element never appeared rather than that the selector was wrong."""
+    deadline = started + max(0.0, timeout_ms / 1000.0)
+    last: Exception | None = None
+    while True:
+        try:
+            return await _act.resolve(sess, record, location,
+                                      tool="wait_for", acting=False)
+        except (TargetNotFound, StaleAnchor) as exc:
+            last = exc
+        if time.monotonic() + _WAIT_RESOLVE_POLL_S >= deadline:
+            break
+        await asyncio.sleep(_WAIT_RESOLVE_POLL_S)
+    if cond == "hidden":
+        # Never present is a stronger answer than hidden, and it is the
+        # answer the caller asked about.
+        return None
+    elapsed_ms = int((time.monotonic() - started) * 1000)
+    raise Timeout(
+        f"waiting for an element to become visible did not resolve within "
+        f"{timeout_ms} ms ({elapsed_ms} ms elapsed): nothing ever matched "
+        f"that location, so there was never an element to watch. The target "
+        f"may be inside a cross-origin iframe or a closed shadow root, which "
+        f"no wait reaches, or the page may never render it. Resolution "
+        f"detail: {str(last)[:200] if last else 'no match'}")
 
 
 async def _wait_precheck(p, cond: str, value: str | None,
@@ -3337,10 +3464,24 @@ async def manage_session(
             # steers rather than switches: no code path reads this back.
             "browsers": lanes.recommended_lane(),
             **({"update": update} if update else {}),
+            # The two idle bounds moved OUT of `hygiene` (endurance F3).
+            # They sat beside the job object and the startup reaper, which
+            # really do act on their own, so an inert mechanism read as a
+            # live defense; a session left alone for 6.7x the recycle bound
+            # still held five browser processes and about 500 MB. They are
+            # advisory thresholds and nothing else, and now say so.
             "hygiene": {"job_object": _session.hygiene.JOB.status,
-                        "startup_reap": MANAGER.startup_reap,
-                        "idle_park_s": _session.IDLE_PARK_S,
-                        "idle_recycle_s": _session.IDLE_CLOSE_S},
+                        "startup_reap": MANAGER.startup_reap},
+            "idle_advisory": {
+                "quiet_after_s": _session.IDLE_PARK_S,
+                "long_quiet_after_s": _session.IDLE_CLOSE_S,
+                "automatic_action": "none",
+                "note": ("these bounds decide when this status calls a "
+                         "session quiet and prints the close advice. "
+                         "Nothing parks a page and nothing recycles a "
+                         "session on its own: a session lives until you "
+                         "close it or the server exits, and an idle one "
+                         "holds its browser processes the whole time.")},
         }
     raise BadParams(
         f"unknown manage_session action {action!r}: the actions are 'open', "

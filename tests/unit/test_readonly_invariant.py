@@ -366,10 +366,17 @@ def test_genuinely_read_only_hints_are_strict(launch):
     scroll, and the session/tab tools all modify something and must not
     claim otherwise, however read-shaped they feel."""
     for name in ("navigate", "scroll", "manage_session", "manage_tabs",
-                 "click", "type_text"):
+                 "click", "type_text",
+                 # LEFT the set 2026-09-07 (union wave, IG-01):
+                 # wait_for(condition='js') evaluates a caller-supplied
+                 # predicate in the page, twice. The branch is gated on the
+                 # evaluate_script class now, and readOnlyHint is still a
+                 # static claim about the TOOL, which a tool carrying an
+                 # evaluator in one of its arguments cannot make.
+                 "wait_for"):
         assert readonly.read_only_hint(name) is False, name
     for name in ("get_page_view", "find_elements", "get_text", "get_audit",
-                 "get_workflows", "wait_for"):
+                 "get_workflows"):
         assert readonly.read_only_hint(name) is True, name
 
 

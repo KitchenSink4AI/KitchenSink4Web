@@ -32,6 +32,7 @@ from ..policy import engine as _policy
 from ..policy import gates as _gates
 from ..policy import sandbox
 from . import common
+from . import lite as _lite
 
 
 def _mask_cookie(cookie: dict, unmask: bool) -> dict:
@@ -145,6 +146,12 @@ async def manage_storage(
         raise BadParams(
             f"unknown storage kind {kind!r}: the kinds are {list(kinds)}.")
     sess, record = common.locate(page)
+    # THE ORIGIN POLICY HERE TOO (union wave, IG-02). `manage_storage`
+    # called its own gate engine for CLEARING only, so on a document no door
+    # ruled on a deny-listed origin's localStorage KEY NAMES and value
+    # lengths (`session_token`, `account_email`) came back as an ordinary
+    # inventory while get_text on the same page refused and parked.
+    await _lite._ensure_vetted(sess, record, tool="manage_storage")
     if unmask:
         _credentials.check_unmask("manage_storage(unmask=true)")
 

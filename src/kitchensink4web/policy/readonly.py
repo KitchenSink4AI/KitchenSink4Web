@@ -168,10 +168,22 @@ NON_MUTATING: frozenset[str] = frozenset({
 #: may carry the hint however read-shaped they feel. An honest hint is what
 #: buys the client-side permission lenience and the safe-concurrency
 #: treatment; an optimistic one would be a false safety claim in metadata.
+#: `wait_for` LEFT this set on 2026-09-07 (union wave, IG-01).
+#: `wait_for(condition='js', value=...)` evaluates a caller-supplied
+#: predicate in the page, twice: once in the precheck and once per poll of
+#: the wait. Live-proven under the SHIPPED read-only default, that one
+#: argument changed `document.title`, inserted a DOM node, wrote
+#: `localStorage`, wrote `document.cookie`, and fetched a second origin the
+#: deny list refuses at the front door — five of the seven verbs the
+#: read-only sentence says no tool in this mode can do. The branch is now
+#: gated on the `evaluate_script` action class, so it refuses under
+#: read-only and fails closed when acting. The ANNOTATION still had to go:
+#: `readOnlyHint: true` is a static claim about the tool, and a tool that
+#: can carry an evaluator in one of its arguments cannot make it.
 GENUINELY_READ_ONLY: frozenset[str] = frozenset({
     # lite core
     "get_page_view", "find_elements", "get_text", "get_audit",
-    "get_workflows", "wait_for",
+    "get_workflows",
     # packs
     "get_table", "get_list", "get_links", "get_metadata", "extract_fields",
     "get_article",

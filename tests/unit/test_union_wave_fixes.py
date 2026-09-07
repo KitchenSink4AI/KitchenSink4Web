@@ -332,3 +332,245 @@ def test_upload_file_checks_the_element_types_not_just_the_list():
         with pytest.raises(errors.BadParams):
             asyncio.run(files_ops.upload_file(
                 page="p1", location={"css": "#f"}, files=payload))
+
+
+# ------------------------------------------- class 6: secrets never on disk
+
+
+def test_a_credential_argument_never_lands_in_the_audit_file(tmp_path,
+                                                             monkeypatch):
+    """The credential-on-disk defect (dream-boundary review, 2026-09-07).
+
+    `record()` scrubs its entry against the vault and the vault only holds
+    what something called `observe` on; NOTHING on the tool-call path ever
+    did. `server._wrap` records `args=kwargs` for every successful call, so
+    a bearer token handed to
+    `set_routing(action='headers', headers={'Authorization': 'Bearer ...'})`
+    was written verbatim into `audit-<pid>.jsonl`.
+
+    Pinned as the CLASS: any tool argument whose key is credential-shaped,
+    at any nesting depth, must be vaulted before the record is built."""
+    import json
+    from kitchensink4web.policy import audit, credentials
+
+    token = "Bearer uw-secret-9f3c2b71d4e6a8c05127bd3e4f6a9b0c"
+    api = "uw-apikey-51ff90aa2be34c7d"
+    credentials.VAULT.clear()
+    monkeypatch.setattr(audit, "STATE_DIR", tmp_path)
+    log = audit.AuditLog()
+    log.record("set_routing", "ok", args={
+        "action": "headers",
+        "headers": {"Authorization": token, "X-Api-Key": api,
+                    "Accept": "text/html"},
+    })
+    written = "\n".join(
+        p.read_text(encoding="utf-8")
+        for p in (tmp_path / "audit").glob("audit-*.jsonl"))
+    assert written, "the audit file was never written"
+    assert token not in written, "a bearer token reached the audit file"
+    assert api not in written, "an api key reached the audit file"
+    assert "text/html" in written, "the scrub ate an ordinary header value"
+    payload = json.loads(written.strip().splitlines()[-1])
+    assert payload["tool"] == "set_routing"
+    credentials.VAULT.clear()
+
+
+def test_the_scrub_runs_before_the_clip():
+    """A 200-character clip applied FIRST leaves a prefix the vault's
+    substring match no longer recognizes, so a long secret sails past the
+    scrub in pieces."""
+    from kitchensink4web.policy import audit, credentials
+    long_token = "uw-" + ("a1b2c3d4" * 40)          # 323 chars
+    credentials.VAULT.clear()
+    credentials.VAULT.observe(long_token)
+    try:
+        out = audit.summarize_args({"authorization": long_token})
+        assert long_token[:100] not in out["authorization"]
+    finally:
+        credentials.VAULT.clear()
+
+
+def test_preference_shaped_arguments_are_not_vaulted():
+    """The guard on the guard: the 2026-09-05 over-redaction lesson holds.
+    A five-character `light` in the vault garbles every read that quotes
+    it, so the argument classifier reuses the cookie calibration."""
+    from kitchensink4web.policy import audit, credentials
+    credentials.VAULT.clear()
+    audit.observe_secret_args({"theme": "light", "locale": "ko-KR",
+                               "viewport": "390x844"})
+    assert len(credentials.VAULT) == 0
+    credentials.VAULT.clear()
+
+
+# ------------------------------------------- class 7: the security surface
+
+
+def test_wait_for_js_is_gated_like_evaluate_script():
+    """IG-01, HIGH. `wait_for(condition='js')` reached `page.evaluate` in
+    the precheck and `page.wait_for_function` in the wait with NO
+    `_policy.approve` call anywhere in the tool, so none of the seven ladder
+    checks ran. Under the SHIPPED read-only default one predicate changed
+    the title, inserted a DOM node, wrote localStorage, wrote a cookie, and
+    fetched an origin the deny list refuses at the front door."""
+    import inspect
+    from kitchensink4web.ops import lite
+    source = inspect.getsource(lite.wait_for)
+    assert 'action_class="evaluate_script"' in source
+    approve = source.index("_policy.approve")
+    js_branch = source.index('if cond == "js"')
+    assert js_branch < approve, "the gate does not run on the js branch"
+
+
+def test_wait_for_no_longer_claims_the_read_only_hint():
+    """The metadata half of IG-01: `readOnlyHint: true` is a static claim
+    about the TOOL, and a tool that can carry an evaluator in one of its
+    arguments cannot make it."""
+    from kitchensink4web.policy import readonly
+    assert readonly.read_only_hint("wait_for") is False
+    assert "wait_for" not in readonly.GENUINELY_READ_ONLY
+
+
+def test_the_origin_policy_reaches_every_content_surface():
+    """IG-02. The origin twin of the wall gate was at the read doors and
+    the act doors and nowhere else, so on a document no door ruled on
+    `find_elements` returned the policed origin's element inventory,
+    `take_screenshot` returned its pixels, `export_pdf` and `save_page`
+    wrote it to disk, and `manage_storage` listed its localStorage keys —
+    and every one of them left the browser sitting on it."""
+    import inspect
+    from kitchensink4web.ops import capture, lite, storage
+    for module, name in ((lite, "find_elements"), (lite, "scroll"),
+                         (capture, "take_screenshot"),
+                         (capture, "export_pdf"), (capture, "save_page"),
+                         (storage, "manage_storage")):
+        source = inspect.getsource(getattr(module, name))
+        assert "_ensure_vetted" in source, f"{name} still skips the check"
+
+
+def test_the_diagnostics_pack_envelopes_its_page_prose():
+    """IG-03. `console.error(...)` and a thrown `Error` are page-authored
+    free text — instruction-shaped prose, not the keyed cells DESIGN 5.1
+    ruled data-shaped — and the pack was in neither of that ruling's lists.
+    Both payloads also carried the session id and no url at all, while the
+    recorder attaches at SESSION OPEN and keeps a session-wide store."""
+    import inspect
+    from kitchensink4web.ops import diag
+    for name in ("list_console", "get_page_errors"):
+        source = inspect.getsource(getattr(diag, name))
+        assert "_pagedata.wrap" in source, f"{name} ships raw page prose"
+        assert '"page_data"' in source, f"{name} has no provenance note"
+
+
+def test_a_workflow_cannot_smuggle_a_js_predicate_through_replay():
+    """IG-01, the defence-in-depth half. `save_workflow` refuses to RECORD
+    a js predicate on the ground that "a workflow must never smuggle
+    evaluate-shaped work past the gate that names it", and `_run_step`
+    forwarded `condition` and `value` with no check at all."""
+    import inspect
+    from kitchensink4web.ops import workflows
+    source = inspect.getsource(workflows._run_step)
+    assert '"js"' in source, "the replay side still forwards a js predicate"
+
+
+# ------------------------------ class 8: no confident wrong extraction
+
+
+def test_extract_fields_partial_needs_both_guards():
+    """The extract_fields defect (dream-extraction review, 2026-09-07).
+
+    `_norm` strips everything non-alphanumeric, so a source key of `"t)"`
+    normalizes to `"t"`, and the length guard was on the NEEDLE only. One
+    character is a substring of almost every field description, so on the
+    frozen Wikipedia Versailles page the field `price` with the hint "the
+    current price" matched the key `"t)"` and confidently returned
+    "destroyers" at `match: partial` — and returned the same value for
+    `published`. Two confident wrong answers from a shipped read tool."""
+    from kitchensink4web.ops.extract import _norm, _partial_matches
+    by_norm = {_norm("t)"): {"key": "t)", "value": "destroyers",
+                             "by": "table-row"},
+               _norm("Signed"): {"key": "Signed", "value": "28 June 1919",
+                                 "by": "table-row"}}
+    assert _partial_matches(_norm("the current price"), by_norm) == []
+    assert _partial_matches(_norm("published"), by_norm) == []
+    assert _partial_matches(_norm("price"), by_norm) == []
+
+
+def test_a_real_partial_still_matches():
+    """The guard on the guard: the floor must not kill the feature."""
+    from kitchensink4web.ops.extract import _norm, _partial_matches
+    by_norm = {_norm("priceCurrency"): {"key": "priceCurrency",
+                                        "value": "USD", "by": "json-ld"},
+               _norm("offers_price"): {"key": "offers_price",
+                                       "value": "49.99", "by": "json-ld"}}
+    got = _partial_matches(_norm("price"), by_norm)
+    assert got, "a genuine substring match was refused"
+    # offers_price is the better cover (5/11 vs 5/13), so it ranks first
+    # and the ranking is deterministic rather than dict-ordered.
+    assert got[0][3]["key"] == "offers_price"
+
+
+def test_a_short_source_key_still_matches_exactly():
+    """`sku`, `url`, and `id` are below the partial floor and are still
+    reachable, because an EXACT match needs no guard."""
+    from kitchensink4web.ops.extract import _norm
+    by_norm = {_norm("sku"): {"key": "sku", "value": "A-1"}}
+    assert _norm("SKU") in by_norm
+
+
+def test_the_partial_ranking_is_deterministic():
+    """The old `next(...)` returned whichever key the PAGE happened to emit
+    first, so a wrong answer was not even reproducible."""
+    from kitchensink4web.ops.extract import _norm, _partial_matches
+    rows = {"key": "x", "value": "v", "by": "meta"}
+    a = {_norm("published_date"): {**rows, "key": "published_date"},
+         _norm("date_published"): {**rows, "key": "date_published"}}
+    b = dict(reversed(list(a.items())))
+    assert [r[2] for r in _partial_matches(_norm("published"), a)] == \
+           [r[2] for r in _partial_matches(_norm("published"), b)]
+
+
+# --------------------------- class 9: no inert defense reads as a live one
+
+
+def test_no_automatic_park_or_recycle_and_the_surface_says_so():
+    """endurance F3. `park_idle` was implemented, complete, and had NO
+    CALLER anywhere in the shipped tree, while the status payload reported
+    `idle_park_s` and `idle_recycle_s` inside the same hygiene block as the
+    job object and the startup reaper, both of which really do act on their
+    own. A session left alone for 6.7x the recycle bound still held five
+    browser processes and about 500 MB.
+
+    Closed by REMOVING the claim rather than arming the mechanism: an
+    automatic recycle closes a session out from under a caller, and with no
+    session tombstone the next call answers "no session 's1'", which is
+    indistinguishable from a close the caller made itself."""
+    import inspect
+    from kitchensink4web.engine import session as session_mod
+    from kitchensink4web.ops import lite
+
+    source = inspect.getsource(session_mod)
+    calls = [line for line in source.splitlines()
+             if "park_idle(" in line and "def park_idle" not in line]
+    assert not calls, f"park_idle has a caller again: {calls}"
+
+    status = inspect.getsource(lite.manage_session)
+    assert '"idle_advisory"' in status, "the bounds are unlabelled again"
+    assert '"automatic_action": "none"' in status
+    block = status[status.index('"hygiene": {"job_object": '
+                                '_session.hygiene.JOB.status,\n'
+                                '                        "startup_reap"'):]
+    assert "idle_park_s" not in block[:200], (
+        "the idle bounds are back inside the hygiene block, beside two "
+        "defenses that really do act")
+
+
+def test_park_idle_invalidates_what_it_destroys():
+    """The latent half: `park_idle` navigated to about:blank without
+    calling `invalidate_page`, so a ref minted before the park survived it
+    and resolved against a blank document. Never observed in the wild only
+    because nothing ever called the method."""
+    import inspect
+    from kitchensink4web.engine import session as session_mod
+    source = inspect.getsource(session_mod.SessionManager.park_idle)
+    assert "invalidate_page" in source
+    assert source.index("invalidate_page") < source.index("PARKED_URL")

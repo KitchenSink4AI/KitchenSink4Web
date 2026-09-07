@@ -74,14 +74,73 @@ def _drain_annotations() -> dict:
     return current
 
 
+def observe_secret_args(args: dict | None, _depth: int = 0) -> None:
+    """Vault every credential-SHAPED argument value before the log is written.
+
+    THE CLASS, not one tool (union wave, 2026-09-07, from the dream-boundary
+    review). `record()` scrubs its entry against the vault, and the vault
+    only holds what something called `observe` on. Nothing on the tool-call
+    path ever did, so a value that arrives as a tool ARGUMENT and is never
+    read back out of a cookie jar or a storage item was never observed and
+    the scrub had nothing to match. `server._wrap` records `args=kwargs` for
+    every successful call, so a bearer token handed to
+    `set_routing(action='headers', headers={'Authorization': 'Bearer ...'})`
+    was written verbatim into `audit-<pid>.jsonl` on disk.
+
+    The classifier is the same `classify_name` the cookie and storage doors
+    use, so the calibration is shared: a preference-shaped key never enters
+    the vault, and the field test's over-redaction lesson (a five-character
+    `light` garbling every read that quotes it) is not re-learned here.
+    Nested dicts and lists are walked, because `headers` is a dict and
+    `fields` is a list of dicts."""
+    if _depth > 6 or not args:
+        return
+    for key, value in (args.items() if isinstance(args, dict)
+                       else enumerate(args)):
+        if isinstance(value, dict):
+            observe_secret_args(value, _depth + 1)
+            continue
+        if isinstance(value, (list, tuple)):
+            for item in value:
+                if isinstance(item, (dict, list, tuple)):
+                    observe_secret_args(item, _depth + 1)
+            continue
+        if isinstance(value, str) and _is_secret_arg(key):
+            credentials.VAULT.observe(value)
+
+
+#: Argument and header names that carry credential material and that the
+#: cookie/storage classifier deliberately does not name. Kept HERE rather
+#: than added to `SECURITY_NAME_TOKENS`, because that list also decides what
+#: gets vaulted out of every cookie jar, and widening it there is how the
+#: 2026-09-05 over-redaction gets re-learned.
+_SECRET_ARG_TOKENS = ("cookie", "authorization", "proxy-authorization",
+                      "x-api", "x-auth", "private_key", "privatekey",
+                      "client_secret", "refresh")
+
+
+def _is_secret_arg(key: Any) -> bool:
+    text = ("" if key is None else str(key)).strip().lower()
+    if not text:
+        return False
+    if credentials.classify_name(text) == "credential":
+        return True
+    return any(token in text for token in _SECRET_ARG_TOKENS)
+
+
 def summarize_args(args: dict | None) -> dict:
-    """Clip every value; the vault scrub at write handles the secrets."""
+    """Scrub, then clip. THE ORDER IS THE POINT (union wave): clipping first
+    cuts a long secret into a prefix the vault's substring match no longer
+    recognizes, so the scrub at write would sail straight past a bearer
+    token that had been truncated to 200 characters."""
     out: dict[str, Any] = {}
     for key, value in (args or {}).items():
         text = value if isinstance(value, (int, float, bool, type(None))) \
             else str(value)
-        if isinstance(text, str) and len(text) > ARG_CLIP:
-            text = text[:ARG_CLIP] + f"… [{len(text)} chars]"
+        if isinstance(text, str):
+            text = credentials.redactor(text)
+            if len(text) > ARG_CLIP:
+                text = text[:ARG_CLIP] + f"… [{len(text)} chars]"
         out[key] = text
     return out
 
@@ -112,6 +171,12 @@ class AuditLog:
         """Append one record. Every value passes the vault scrub, so a
         credential observed anywhere in the process cannot land in the log."""
         self._seq += 1
+        # OBSERVE BEFORE SUMMARIZING. The scrub below can only replace what
+        # the vault holds, and a secret arriving as a tool argument was
+        # never observed by anything (union wave; see observe_secret_args).
+        # This also vaults it for every LATER payload in the process, which
+        # is the point of the vault being process-wide.
+        observe_secret_args(args)
         entry: dict[str, Any] = {
             "seq": self._seq,
             "ts": time.strftime("%Y-%m-%dT%H:%M:%S"),

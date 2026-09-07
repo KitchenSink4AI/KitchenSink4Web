@@ -46,32 +46,36 @@ from . import hygiene, lanes
 #: Bounded per-operation timeout. Generous, finite always.
 DEFAULT_TIMEOUT_MS = int(os.environ.get("KS4WEB_TIMEOUT_MS", "30000"))
 
-#: Idle park and recycle. Defense 3 (DESIGN 4.7): a dormant page burning 28 to
-#: 30 percent CPU for hours is the measured incumbent behavior, and parking to
-#: about:blank dropped it to 0.13 percent.
+#: The two IDLE ADVISORY bounds. They decide when `manage_session(status)`
+#: calls a session quiet and prints the close advice, and they do nothing
+#: else. DESIGN 4.7 frames parking as Defense 3, and the measurement behind
+#: it is real (a dormant page burning 28 to 30 percent CPU for hours, down
+#: to 0.13 percent parked).
+#:
+#: NOTHING PARKS AND NOTHING RECYCLES ON ITS OWN, and the surface says so
+#: (endurance F3, closed 2026-09-07). `park_idle` was implemented, complete,
+#: and had no caller anywhere in the shipped tree, while the status payload
+#: reported these bounds inside the same hygiene block as the job object and
+#: the startup reaper — both of which are real — so an inert mechanism read
+#: as a live defense. A session left alone for 6.7x the recycle bound still
+#: held five browser processes and about 500 MB.
+#:
+#: The mandate was "wire it or remove the claim, and the shipped behaviour
+#: must be honest". WIRING IT WAS BUILT AND REVERTED the same night, on the
+#: lifecycle review's evidence: an automatic recycle closes a session out
+#: from under a caller, and with no session TOMBSTONE the next call answers
+#: "no session 's1'", which is indistinguishable from a close the caller
+#: made itself; the same review has the coming session-handoff feature
+#: depending on pages NOT being parked. Reintroducing parking needs
+#: tombstones built alongside it, which is a lifecycle-build job. What ships
+#: is the truth: these bounds only decide when the advisory speaks, and
+#: closing a session is the caller's move.
+#:
+#: `park_idle` stays as an explicitly-called method, carrying the
+#: ref-invalidation it always needed, so that build inherits a correct
+#: mechanism rather than a landmine.
 IDLE_PARK_S = float(os.environ.get("KS4WEB_IDLE_PARK_S", "300"))
 IDLE_CLOSE_S = float(os.environ.get("KS4WEB_IDLE_CLOSE_S", "1800"))
-
-#: How often the sweeper wakes while any session is open. Small next to the
-#: park bound, so a page is parked within a sweep of going quiet.
-IDLE_SWEEP_S = float(os.environ.get("KS4WEB_IDLE_SWEEP_S", "30"))
-
-
-def idle_sweep_enabled() -> bool:
-    """Defense 3 is ARMED by default (endurance F3).
-
-    `park_idle` was implemented, complete, and had no caller anywhere in the
-    shipped tree: no scheduler, no timer, no background task, and no tool
-    action reaching it. The status payload reported `idle_park_s` and
-    `idle_recycle_s` inside the same hygiene block as the job object and the
-    startup reaper, both of which are real, so the one inert defense read as
-    live. A session left alone for 6.7x the recycle bound still held five
-    browser processes and about 500 MB.
-
-    KS4WEB_IDLE_SWEEP=off disables the sweep and is the honest way to keep
-    a long-lived parked session; the bounds themselves stay tunable."""
-    return os.environ.get("KS4WEB_IDLE_SWEEP", "on").strip().lower() \
-        not in ("0", "false", "off", "no")
 
 PARKED_URL = "about:blank"
 
@@ -155,8 +159,8 @@ class PageHandle:
     #: record here means something different than it does on a page a tool
     #: navigated (concurrency C-2).
     adopted: bool = False
-    #: Where the page was when the idle sweeper parked it. The recovery a
-    #: later call needs is the URL, not the word "parked".
+    #: Where the page was when `park_idle` parked it. The recovery a later
+    #: call needs is the URL, not the word "parked".
     parked_from: str | None = None
 
     def frame_id(self, key: str) -> str:
@@ -397,9 +401,6 @@ class SessionManager:
         self._session_seq = 0
         self._page_seq = 0
         self.startup_reap: dict | None = None
-        #: The idle sweeper (Defense 3). One task, alive only while sessions
-        #: are; see `_start_sweeper`.
-        self._sweeper: Any = None
 
     # ------------------------------------------------------------ lifecycle
 
@@ -552,7 +553,6 @@ class SessionManager:
             self.sessions[sid] = session
             for hook in SESSION_OPEN_HOOKS:
                 hook(session)
-            self._start_sweeper()
             return session
 
     def _attach_page(self, session: Session, page: Any,
@@ -756,8 +756,6 @@ class SessionManager:
             # reset: budgets are per-session by definition (policy/budgets).
             from ..policy import budgets as _budgets
             _budgets.BOOK.drop(session_id)
-            if not self.sessions:
-                self._stop_sweeper()
             return {
                 "session": session_id,
                 "owned_pids": sorted(session.journal.pids),
@@ -864,9 +862,9 @@ class SessionManager:
                     exc.hint = CRASHED_PAGE_HINT
                     raise exc
                 if record.parked and record.parked_from:
-                    # Defense 3 is armed now (endurance F3), so a call CAN
-                    # arrive on a page the sweeper took to about:blank. The
-                    # refusal names the URL it was on, because "the page is
+                    # Nothing parks automatically (endurance F3), so this
+                    # fires only after an explicit `park_idle`. The refusal
+                    # names the URL the page was on, because "the page is
                     # parked" is not a recovery and the URL is.
                     was = record.parked_from
                     record.parked = False
@@ -878,9 +876,8 @@ class SessionManager:
                         f"with it. It was on {was}. Navigate there again "
                         f"with navigate(page={page_handle!r}, url={was!r}) "
                         f"and re-read. Parking is what stops a dormant page "
-                        f"burning CPU and memory for hours; "
-                        f"KS4WEB_IDLE_PARK_S sets the bound and "
-                        f"KS4WEB_IDLE_SWEEP=off turns it off.")
+                        f"burning CPU and memory for hours, and nothing in "
+                        f"this build does it on its own.")
                 if not allow_pending_dialog:
                     held = _dialogs.desk(session).pending_for(page_handle)
                     if held is not None:
@@ -924,10 +921,9 @@ class SessionManager:
                         # tokens minted on the old document die with it,
                         # exactly as they do for any other navigation.
                         # Without this a ref survived a park and resolved
-                        # against about:blank (found while arming the
-                        # sweeper for endurance F3; the mechanism had never
-                        # run in a shipped process, so nothing had exercised
-                        # it).
+                        # against about:blank (found for endurance F3; the
+                        # mechanism has never run in a shipped process, so
+                        # nothing had exercised it).
                         record.parked_from = record.page.url
                         session.invalidate_page(
                             record.handle,
@@ -941,50 +937,6 @@ class SessionManager:
                         pass
         return {"parked": parked, "recycled": recycled,
                 "park_after_s": park_after, "close_after_s": close_after}
-
-    # -------------------------------------------------------- the sweeper
-
-    def _start_sweeper(self) -> None:
-        """Arm Defense 3 (endurance F3). One task per manager, alive only
-        while sessions are.
-
-        In-process asyncio, no subprocess and no window, so the
-        silent-subprocess rule is satisfied by construction. Failures are
-        swallowed and the loop continues: a housekeeping sweep must never
-        turn a working session into an error."""
-        if not idle_sweep_enabled():
-            return
-        task = self._sweeper
-        if task is not None and not task.done():
-            return
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            return
-        self._sweeper = loop.create_task(self._sweep_loop())
-
-    async def _sweep_loop(self) -> None:
-        try:
-            while self.sessions:
-                await asyncio.sleep(max(1.0, IDLE_SWEEP_S))
-                if not self.sessions:
-                    break
-                try:
-                    await self.park_idle()
-                except asyncio.CancelledError:
-                    raise
-                except Exception:
-                    pass
-        except asyncio.CancelledError:
-            raise
-        finally:
-            self._sweeper = None
-
-    def _stop_sweeper(self) -> None:
-        task = self._sweeper
-        self._sweeper = None
-        if task is not None and not task.done():
-            task.cancel()
 
     def owned_pids(self) -> list[int]:
         return sorted({pid for s in self.sessions.values()

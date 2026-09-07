@@ -40,6 +40,7 @@ from ..errors import BadParams, CredentialRefused, LaneUnsupported
 from ..policy import engine as _policy
 from . import act as _act
 from . import common
+from . import lite as _lite
 
 ENV_SHOT_MAX = "KS4WEB_SHOT_MAX_BYTES"
 
@@ -126,6 +127,19 @@ async def take_screenshot(
             "quality applies to jpeg only; png is lossless. Either drop "
             "quality or ask for format='jpeg'.")
     sess, record = common.locate(page)
+    # THE ORIGIN POLICY ON THE CAPTURE SURFACES (union wave, IG-02). Fix
+    # wave 8 put the origin twin of the wall gate at the read doors and the
+    # act doors and stopped there, and the wave-8 ruling that exempted this
+    # pack was made about WALLS ("capturing a wall page is the legitimate
+    # evidence use"), which is a different question from whether a capture
+    # may take an origin the OPERATOR forbade. Live-proven: with the deny
+    # list naming origin B and a page on A that self-navigated to B,
+    # get_text refused and parked while take_screenshot returned B's pixels,
+    # export_pdf wrote B's render to disk, and save_page wrote B's body.
+    # Worse quietly: after a capture the browser is still SITTING on the
+    # policed origin, so every later call in the session starts from a
+    # document the policy said no to.
+    await _lite._ensure_vetted(sess, record, tool="take_screenshot")
     p = record.page
 
     # Masking, fail closed. Count the fields FIRST so a mask failure on a
@@ -197,6 +211,19 @@ async def export_pdf(
     unless a path is named, checked against KS4WEB_ALLOWED_ROOTS.
     """
     sess, record = common.locate(page)
+    # THE ORIGIN POLICY ON THE CAPTURE SURFACES (union wave, IG-02). Fix
+    # wave 8 put the origin twin of the wall gate at the read doors and the
+    # act doors and stopped there, and the wave-8 ruling that exempted this
+    # pack was made about WALLS ("capturing a wall page is the legitimate
+    # evidence use"), which is a different question from whether a capture
+    # may take an origin the OPERATOR forbade. Live-proven: with the deny
+    # list naming origin B and a page on A that self-navigated to B,
+    # get_text refused and parked while take_screenshot returned B's pixels,
+    # export_pdf wrote B's render to disk, and save_page wrote B's body.
+    # Worse quietly: after a capture the browser is still SITTING on the
+    # policed origin, so every later call in the session starts from a
+    # document the policy said no to.
+    await _lite._ensure_vetted(sess, record, tool="export_pdf")
     cost = lanes.capability(sess.spec, "pdf_export")
     started = time.monotonic()
     try:
@@ -249,6 +276,19 @@ async def save_page(
             f"page with subresources, Chromium lanes) and 'html' (the "
             f"serialized DOM, any lane).")
     sess, record = common.locate(page)
+    # THE ORIGIN POLICY ON THE CAPTURE SURFACES (union wave, IG-02). Fix
+    # wave 8 put the origin twin of the wall gate at the read doors and the
+    # act doors and stopped there, and the wave-8 ruling that exempted this
+    # pack was made about WALLS ("capturing a wall page is the legitimate
+    # evidence use"), which is a different question from whether a capture
+    # may take an origin the OPERATOR forbade. Live-proven: with the deny
+    # list naming origin B and a page on A that self-navigated to B,
+    # get_text refused and parked while take_screenshot returned B's pixels,
+    # export_pdf wrote B's render to disk, and save_page wrote B's body.
+    # Worse quietly: after a capture the browser is still SITTING on the
+    # policed origin, so every later call in the session starts from a
+    # document the policy said no to.
+    await _lite._ensure_vetted(sess, record, tool="save_page")
     if format == "mhtml":
         if sess.spec.engine != "chromium":
             raise LaneUnsupported(

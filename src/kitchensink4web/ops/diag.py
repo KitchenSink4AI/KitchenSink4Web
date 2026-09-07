@@ -20,9 +20,11 @@ playwright-mcp's `browser_run_code_unsafe` example.
 
 from __future__ import annotations
 
+import json as _json
 import os
 import re
 
+from .. import pagedata as _pagedata
 from ..engine import session as _session
 from ..errors import BadParams
 from ..policy import engine as _policy
@@ -78,7 +80,13 @@ def _attach_recorder(session) -> None:
             if level not in _LEVELS:
                 level = "log"
             store["messages"].append(
-                {"level": level, "text": common.clip(msg.text, 300)})
+                {"level": level, "text": common.clip(msg.text, 300),
+                 # WHICH PAGE WROTE IT (union wave, IG-03). The recorder
+                 # attaches at SESSION OPEN and keeps a session-wide store,
+                 # so prose planted by any page visited at any point comes
+                 # back on a console read made much later, and nothing in
+                 # the payload named the page it came from.
+                 "url": _msg_url(msg)})
             store["seen"] += 1
             # bound raw retention; the dedup pass reads this list
             if len(store["messages"]) > 20000:
@@ -86,21 +94,45 @@ def _attach_recorder(session) -> None:
         except Exception:
             pass
 
-    def on_pageerror(exc):
-        try:
-            text = str(exc)
-            store["errors"].append({
-                "message": common.clip(text.splitlines()[0], 300),
-                "stack": common.clip(text, 1200)})
-        except Exception:
-            pass
+    def on_pageerror_for(page):
+        def on_pageerror(exc):
+            try:
+                text = str(exc)
+                store["errors"].append({
+                    "message": common.clip(text.splitlines()[0], 300),
+                    "stack": common.clip(text, 1200),
+                    "url": _page_url(page)})
+            except Exception:
+                pass
+        return on_pageerror
 
     for page in session.pages.values():
         page.page.on("console", on_console)
-        page.page.on("pageerror", on_pageerror)
+        page.page.on("pageerror", on_pageerror_for(page.page))
     # New pages in the context inherit the listeners too.
     session.context.on("page", lambda p: (
-        p.on("console", on_console), p.on("pageerror", on_pageerror)))
+        p.on("console", on_console), p.on("pageerror", on_pageerror_for(p))))
+
+
+def _page_url(page) -> str | None:
+    try:
+        return page.url
+    except Exception:
+        return None
+
+
+def _msg_url(msg) -> str | None:
+    """The URL of the document that emitted a console line."""
+    for probe in (lambda: msg.page.url,
+                  lambda: msg.location.get("url"),
+                  lambda: msg.location["url"]):
+        try:
+            got = probe()
+            if got:
+                return str(got)
+        except Exception:
+            continue
+    return None
 
 
 _session.SESSION_OPEN_HOOKS.append(_attach_recorder)
@@ -145,16 +177,43 @@ async def list_console(
     rows = sorted(groups.values(), key=lambda r: -r["count"])[
         :max(1, int(limit))]
     collapsed = kept - len(rows)
+    # THE LABELED ENVELOPE (union wave, IG-03). `console.error(...)` is
+    # page-authored free text, which is instruction-shaped prose and not the
+    # keyed cells DESIGN 5.1 ruled data-shaped; the pack was in neither of
+    # that ruling's lists and shipped raw. Both the `shape` and the `sample`
+    # carry the page's own string, so both go inside.
+    body, note = _pagedata.wrap(
+        _json.dumps(rows, ensure_ascii=False, indent=1),
+        url=_origins_line(rows))
+    note["covers"] = ["messages"]
     return {
         "session": sess.session_id, "level": level,
-        "messages": rows,
+        "messages": body,
+        "page_data": note,
         "totals": {"lines_seen": store["seen"], "lines_at_level": kept,
                    "unique_shapes": len(groups),
                    "collapsed_by_dedup": max(0, collapsed)},
         "note": ("rows are deduplicated by message shape (digits and ids "
                  "normalized) and ranked by repeat count; the default is "
-                 "errors only"),
+                 "errors only. The console recorder attaches at session "
+                 "open and its store is session-wide, so a row can come "
+                 "from any page this session visited; each row names the "
+                 "url that wrote it where the driver reports one"),
     }
+
+
+def _origins_line(rows: list) -> str:
+    """Every origin represented in a diagnostics payload, for the envelope
+    label. A session-wide store can carry several, and "untrusted content
+    from X" is a weaker warning than it looks when half of it came from Y."""
+    seen = []
+    for row in rows:
+        url = row.get("url")
+        if url and url not in seen:
+            seen.append(url)
+    if not seen:
+        return "the page(s) this session visited (the driver reported no url)"
+    return ", ".join(seen[:6]) + (" and others" if len(seen) > 6 else "")
 
 
 async def get_page_errors(session: str | None = None,
@@ -170,9 +229,16 @@ async def get_page_errors(session: str | None = None,
     sess = common.session_of(session)
     store = _store(sess)
     errors = store["errors"][-max(1, int(limit)):]
+    # Same ruling as list_console (IG-03): a thrown `Error` message and its
+    # stack are page-authored prose, not keyed cells.
+    body, note = _pagedata.wrap(
+        _json.dumps(errors, ensure_ascii=False, indent=1),
+        url=_origins_line(errors))
+    note["covers"] = ["page_errors"]
     return {
         "session": sess.session_id,
-        "page_errors": errors,
+        "page_errors": body,
+        "page_data": note,
         "total": len(store["errors"]),
         "note": ("no uncaught page errors recorded" if not store["errors"]
                  else f"{len(store['errors'])} uncaught error(s) recorded "
