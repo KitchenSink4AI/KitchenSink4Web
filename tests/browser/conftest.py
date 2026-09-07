@@ -63,13 +63,104 @@ def known_grade():
     The call site is fixed too, but a test's grade must not depend on which
     other tests ran first, and this is the one place that can guarantee it for
     all of them."""
-    from kitchensink4web.policy import consent, readonly
+    from kitchensink4web.policy import audit, budgets, consent, gates, readonly
 
     readonly.apply(False)
     _known_consent(consent)
+    _known_audit(audit)
+    _known_gates(gates)
+    _known_backoff(budgets)
     yield
     readonly.apply(False)
     _known_consent(consent)
+    _known_audit(audit)
+    _known_gates(gates)
+    _known_backoff(budgets)
+
+
+def _known_audit(audit) -> None:
+    """THE THIRD AXIS, and the one that could not clean up after itself.
+
+    `audit._annotations` is a ContextVar holding a plain dict. `annotate()`
+    reads it and, when a dict is already there, MUTATES THAT DICT IN PLACE
+    rather than setting a new one. `_drain_annotations()` reads it and calls
+    `set(None)`. A `set()` inside a task writes the TASK's copy of the
+    context, so a dict that reached the THREAD-level context is drained for
+    the current task and stays put for the next one, with every key ever
+    written into it still on board: drain returns the dict, it never empties
+    it.
+
+    That is a one-way valve between the two kinds of test in this repo.
+    Synchronous code (the unit suite) runs in the thread's own context, so
+    its `set(None)` really does clear. Async code (every test here, through
+    `asyncio.run`) can only ever ADD to what the thread level holds. So one
+    synchronous `annotate` in the unit suite that is not followed by a
+    synchronous `record` seeds a dict at thread level, and from then on
+    every browser test in the process writes its annotations into that same
+    dict and none of them can take them back out.
+
+    The 2026-09-08 repro, three tests long and deterministic:
+
+        tests/unit/test_consent_ladder.py::test_n26_a_cleared_action_still_aborts_on_a_rebind
+        tests/browser/test_workflow_templates_live.py::test_a_workflow_recorded_from_a_batch_can_be_parameterized
+        tests/browser/test_phase8_gauntlet_fixes.py::test_c1_workflow_replay_inherits_the_gate
+
+    The unit test seeds the dict. The batch test writes `replay_steps` (the
+    two-step list a composite records) into it. The gauntlet pin then calls
+    `LOG.record` for its own single click, the drain hands it the shared
+    dict, and `_replay_blocks` prefers the stale list: the pin saved a
+    TWO-step workflow beginning with a `type_text` into a "Your name" box
+    that exists only on `tests/fixtures/workflow_site.html`. That step
+    failed `ValidationFailed` against the C1 forms page and the gated click
+    the pin exists to check was never attempted. Every browser-only prefix
+    passes, which is why it took a full-suite order to surface.
+
+    The reset is the same shape as the two above it, and for the same
+    reason: no test's verdict may depend on which other tests ran first.
+    The dict is emptied as well as unset, so a task still holding the old
+    reference cannot resurrect it.
+
+    `LOG` gets the same treatment. Most files here already build a fresh
+    `AuditLog()` in their own `clean` fixture, which is a list rather than a
+    rule; the ring is process-global for the ones that do not."""
+    pending = audit._annotations.get()
+    if isinstance(pending, dict):
+        pending.clear()
+    audit._annotations.set(None)
+    audit.LOG.reset()
+
+
+def _known_gates(gates) -> None:
+    """The gate engine's pending table and the deposited-grant slot.
+
+    Swept out with the audit annotations because they are the same shape:
+    process-global (`ENGINE._pending`) or context-local (`_deposited`)
+    state that a test writes and no fixture in this directory takes back.
+    A run of the C1 matrix leaves three unredeemed gates in the table and
+    the next file inherits them; only `tests/unit/test_confirm_wiring.py`
+    ever clears it, which is a list rather than a rule.
+
+    `_deposited` is `set()`-only, so a deposit made inside a test's task
+    cannot climb back to the thread. The reset is here for the case the
+    annotations dict already proved possible: a deposit made from
+    synchronous code would sit at thread level and every later test would
+    start holding a grant it never asked for."""
+    gates.ENGINE._pending.clear()
+    gates.clear_grant()
+
+
+def _known_backoff(budgets) -> None:
+    """Every domain here is 127.0.0.1, which makes the backoff table one
+    shared key.
+
+    `BOOK._backoff` holds the window a 429 or 503 opened and
+    `BOOK._backoff_why` holds the status that opened it, keyed by domain
+    and carried separately. `test_monitor_live.py` clears the first in its
+    own fixture and not the second, so a 503 recorded there is still the
+    answer `backoff_reason()` gives about 127.0.0.1 in every file that runs
+    afterwards, long after the window it described expired."""
+    budgets.BOOK._backoff.clear()
+    budgets.BOOK._backoff_why.clear()
 
 
 def _known_consent(consent) -> None:
