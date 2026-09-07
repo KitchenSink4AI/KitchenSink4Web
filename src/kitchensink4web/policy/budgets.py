@@ -73,20 +73,18 @@ RETRY_AFTER_STATUSES: frozenset[int] = frozenset({429, 503})
 MAX_RETRY_AFTER_S = 24 * 3600.0
 
 
-def parse_retry_after(raw: str | None, *, now: float | None = None
-                      ) -> float | None:
-    """`Retry-After` in seconds, from either spelling RFC 9110 allows.
+def parse_retry_after_unclamped(raw: str | None, *, now: float | None = None
+                                ) -> float | None:
+    """What the header SAID, in seconds, before the ceiling is applied.
 
-    Two forms are legal and only one was read before: delta-seconds, and an
-    HTTP-date. A date-form header parsed as a number is a header thrown away,
-    and the sites most likely to send the date form are exactly the edges that
-    rate-limit hardest.
+    Split out from `parse_retry_after` for one reason: a caller that clamps
+    has to be able to say so, and a value that arrives already clamped
+    carries no evidence that it was. The clamp is a KS4Web decision and gets
+    reported as one (fix wave 2026-09-08, V-07).
 
-    A date already in the past yields 0.0 rather than a negative wait, which
-    means "the window has passed" and is a different fact from "there was no
-    header". Anything unparseable yields None, and None is honest: the caller
-    then falls back to the documented default instead of inventing a number
-    from a malformed string."""
+    Negative is still floored at zero here, because that is not a clamp: a
+    wait that already elapsed is zero seconds of waiting, not a shortened
+    version of some longer number the site sent."""
     text = (raw or "").strip()
     if not text:
         return None
@@ -97,7 +95,7 @@ def parse_retry_after(raw: str | None, *, now: float | None = None
     else:
         if seconds != seconds or seconds in (float("inf"), float("-inf")):
             return None
-        return max(0.0, min(seconds, MAX_RETRY_AFTER_S))
+        return max(0.0, seconds)
     try:
         from email.utils import parsedate_to_datetime
         when = parsedate_to_datetime(text)
@@ -113,7 +111,27 @@ def parse_retry_after(raw: str | None, *, now: float | None = None
         delta = when.timestamp() - current
     except (OverflowError, OSError, ValueError):
         return None
-    return max(0.0, min(delta, MAX_RETRY_AFTER_S))
+    return max(0.0, delta)
+
+
+def parse_retry_after(raw: str | None, *, now: float | None = None
+                      ) -> float | None:
+    """`Retry-After` in seconds, from either spelling RFC 9110 allows.
+
+    Two forms are legal and only one was read before: delta-seconds, and an
+    HTTP-date. A date-form header parsed as a number is a header thrown away,
+    and the sites most likely to send the date form are exactly the edges that
+    rate-limit hardest.
+
+    A date already in the past yields 0.0 rather than a negative wait, which
+    means "the window has passed" and is a different fact from "there was no
+    header". Anything unparseable yields None, and None is honest: the caller
+    then falls back to the documented default instead of inventing a number
+    from a malformed string."""
+    seconds = parse_retry_after_unclamped(raw, now=now)
+    if seconds is None:
+        return None
+    return min(seconds, MAX_RETRY_AFTER_S)
 
 RESET_ROUTE = (
     "manage_session(action='reset_budgets') is the reset route, and it runs "
@@ -145,6 +163,13 @@ class BudgetBook:
         self._ledgers: dict[str, _SessionLedger] = {}
         #: domain -> monotonic time before which requests are refused.
         self._backoff: dict[str, float] = {}
+        #: domain -> (status, came_from_a_header) for the window currently in
+        #: force, so the refusal names the response that caused it instead of
+        #: assuming one. Carried alongside rather than inside `_backoff`,
+        #: because the timing dict is cleared directly by fixtures and a
+        #: second dict that goes stale costs nothing: it is only read while a
+        #: window is live.
+        self._backoff_why: dict[str, tuple[int, bool]] = {}
 
     def _ledger(self, session: str) -> _SessionLedger:
         return self._ledgers.setdefault(session, _SessionLedger())
@@ -263,15 +288,38 @@ class BudgetBook:
 
     # -------------------------------------------------------- rate limiting
 
-    def note_429(self, domain: str, retry_after_s: float | None) -> float:
+    def note_429(self, domain: str, retry_after_s: float | None, *,
+                 status: int = 429) -> float:
         """A site said slow down. Honor it: further requests to the domain
-        refuse until the window passes."""
-        wait = retry_after_s if (retry_after_s and retry_after_s > 0) \
-            else DEFAULT_RETRY_AFTER_S
-        wait = min(float(wait), MAX_RETRY_AFTER_S)
+        refuse until the window passes.
+
+        NONE AND ZERO ARE DIFFERENT ANSWERS (fix wave 2026-09-08, V-07).
+        `parse_retry_after` returns None for "there was no header" and 0.0 for
+        "the window has already passed", and its docstring says the
+        distinction matters; this method then tested the value for truth, so
+        0.0 took the None branch and `Retry-After: 0` became a sixty-second
+        block that the report attributed to the site. Only None takes the
+        documented default now.
+
+        An explicit zero neither opens a window nor closes one. It cannot
+        open one, because a site saying "retry now" has asked for no wait at
+        all and inventing one is the same fabrication in the other direction.
+        It cannot close one, because the `max` below is the rule that a window
+        only ever grows, and a zero that shortened an earlier 300-second
+        window would let one response cancel a wait it never set."""
+        wait = DEFAULT_RETRY_AFTER_S if retry_after_s is None \
+            else max(0.0, min(float(retry_after_s), MAX_RETRY_AFTER_S))
+        if wait <= 0:
+            return 0.0
+        key = domain.lower()
         until = time.monotonic() + wait
-        self._backoff[domain.lower()] = max(
-            self._backoff.get(domain.lower(), 0), until)
+        if until >= self._backoff.get(key, 0):
+            # The status is recorded WITH the window it opened, so the
+            # refusal names the response that actually caused it, and so is
+            # whether a header supplied the number at all. Only the response
+            # that owns the current window gets to name it.
+            self._backoff_why[key] = (int(status), retry_after_s is not None)
+        self._backoff[key] = max(self._backoff.get(key, 0), until)
         return wait
 
     def note_retry_after(self, domain: str, raw_header: str | None, *,
@@ -291,8 +339,10 @@ class BudgetBook:
         bounds": it says whether the wait would have fitted inside the
         allotment this call was given, so the caller can tell a two-second
         pause from a two-hour one without doing the arithmetic."""
-        parsed = parse_retry_after(raw_header)
-        wait = self.note_429(domain, parsed)
+        asked = parse_retry_after_unclamped(raw_header)
+        parsed = None if asked is None else min(asked, MAX_RETRY_AFTER_S)
+        wait = self.note_429(domain, parsed,
+                             status=status if status is not None else 429)
         report = {
             "seconds": round(wait, 1),
             "source": "Retry-After header" if parsed is not None
@@ -306,17 +356,57 @@ class BudgetBook:
             report["status"] = status
         if raw_header and parsed is None:
             report["header_unparsed"] = True
+        if asked is not None and asked > MAX_RETRY_AFTER_S:
+            # THE CLAMP IS DISCLOSED, in the shape `export_handle` already
+            # uses for its TTL (fix wave 2026-09-08, V-07). A three-week
+            # header reported as `seconds: 86400, source: Retry-After header`
+            # is KS4Web's ceiling wearing the site's name.
+            # FLAGGED (fix wave 2026-09-08): placeholder wording,
+            # mechanically composed from MAX_RETRY_AFTER_S's own comment and
+            # export_handle's clamp sentence.
+            report["clamped"] = (
+                f"Retry-After was clamped from {round(asked, 1)}s to "
+                f"{round(wait, 1)}s; the ceiling is "
+                f"{round(MAX_RETRY_AFTER_S, 1)}s, because the window exists "
+                f"to stop a retry loop rather than to schedule one.")
         if budget_ms:
             report["call_budget_s"] = round(budget_ms / 1000.0, 1)
             report["fits_in_budget"] = wait <= (budget_ms / 1000.0)
         return report
 
+    def remaining_backoff_s(self, domain: str) -> float:
+        """How much of this domain's window is left, in seconds, or 0.0.
+
+        The book's own number, read rather than recovered (fix wave
+        2026-09-08, V-17). `monitor._remaining_backoff` used to regex the
+        digits back out of `check_domain`'s refusal sentence, which made a
+        user-facing string into load-bearing API: rewording the refusal would
+        have silently changed how long a monitor recorded itself blocked."""
+        remaining = self._backoff.get(domain.lower(), 0) - time.monotonic()
+        return max(0.0, remaining)
+
+    def backoff_why(self, domain: str) -> tuple[int, bool]:
+        """(status, came_from_a_header) for the window in force here."""
+        return self._backoff_why.get(domain.lower(), (429, False))
+
     def check_domain(self, domain: str) -> None:
-        until = self._backoff.get(domain.lower(), 0)
-        remaining = until - time.monotonic()
+        remaining = self.remaining_backoff_s(domain)
         if remaining > 0:
+            # THE STATUS IS THE ONE THAT ANSWERED, and the window is named
+            # for whoever set its length (fix wave 2026-09-08, V-17).
+            # `RETRY_AFTER_STATUSES` holds 503 as well as 429, so a
+            # Cloudflare "come back later" opened a window this sentence
+            # reported as a 429 the site never sent; and a 429 with no header
+            # at all opened KS4Web's own default window, which this sentence
+            # called the site's Retry-After.
+            # FLAGGED (fix wave 2026-09-08): placeholder wording,
+            # mechanically composed from note_retry_after's own `source`
+            # strings. The sentence is otherwise unchanged.
+            status, from_header = self.backoff_why(domain)
+            whose = "its Retry-After window" if from_header \
+                else "KS4Web's default window"
             raise BlockedBySite(
-                f"{domain} answered HTTP 429 and its Retry-After window has "
+                f"{domain} answered HTTP {status} and {whose} has "
                 f"{remaining:.0f}s left. KS4Web honors a site's rate limit "
                 f"rather than retrying against it; wait, or work on another "
                 f"origin meanwhile.")

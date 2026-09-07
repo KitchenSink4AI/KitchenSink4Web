@@ -116,3 +116,69 @@ def test_the_window_only_ever_grows(book):
 def test_another_domain_is_untouched(book):
     book.note_retry_after("api.example.org", "300", status=429)
     book.check_domain("other.example.org")
+
+
+# ------------------------------------------- V-07: zero is not the default
+#
+# `parse_retry_after` returns 0.0 for "the window has passed" and None for
+# "there was no header", and its docstring says the distinction matters.
+# `note_429` tested the parsed value for truth, so 0.0 fell through to the
+# sixty-second default and `note_retry_after` then reported that default as
+# the site's own number.
+
+
+@pytest.mark.parametrize("raw", ["0", " 0 ", "-5"])
+def test_a_zero_wait_is_zero_rather_than_the_default(book, raw):
+    got = book.note_retry_after("api.example.org", raw, status=429)
+    assert got["seconds"] == 0.0
+    assert got["source"] == "Retry-After header"
+    book.check_domain("api.example.org")
+
+
+def test_a_date_already_past_opens_no_window(book):
+    when = formatdate(time.time() - 600, usegmt=True)
+    got = book.note_retry_after("api.example.org", when, status=429)
+    assert got["seconds"] == 0.0
+    book.check_domain("api.example.org")
+
+
+def test_an_explicit_zero_never_shortens_a_window_it_did_not_set(book):
+    """A site withdrawing its window cannot cancel a longer one it never
+    set: zero declines to open a window, and declines to close one."""
+    book.note_retry_after("api.example.org", "300", status=429)
+    book.note_retry_after("api.example.org", "0", status=429)
+    with pytest.raises(BlockedBySite):
+        book.check_domain("api.example.org")
+
+
+# ------------------------------------------------ V-07: the silent clamp
+
+
+def test_the_clamp_is_disclosed_rather_than_reported_as_the_header(book):
+    got = book.note_retry_after("api.example.org", "1814400", status=429)
+    assert got["seconds"] == budgets.MAX_RETRY_AFTER_S
+    assert "1814400" in got.get("clamped", ""), (
+        "a three-week header was reported as 86400s with nothing saying it "
+        "had been clamped")
+
+
+def test_a_wait_inside_the_ceiling_discloses_nothing(book):
+    assert "clamped" not in book.note_retry_after(
+        "api.example.org", "45", status=429)
+
+
+# --------------------------------- V-17: the window is read, not scraped
+
+
+def test_the_remaining_window_is_readable_without_scraping_a_refusal(book):
+    assert book.remaining_backoff_s("api.example.org") == 0.0
+    book.note_retry_after("api.example.org", "300", status=429)
+    assert 290 <= book.remaining_backoff_s("API.EXAMPLE.ORG") <= 300
+
+
+def test_a_503_window_is_not_reported_as_a_429(book):
+    book.note_retry_after("api.example.org", "300", status=503)
+    with pytest.raises(BlockedBySite) as caught:
+        book.check_domain("api.example.org")
+    assert "503" in str(caught.value)
+    assert "429" not in str(caught.value)
