@@ -57,8 +57,17 @@ GATED_CLASSES: dict[str, str] = {
     # field named `cardnumber` with no autocomplete token anywhere now gates,
     # and telling the human "autocomplete detected" about it would be a
     # sentence the server cannot back.
-    "payment_form": "acting on a payment-shaped form (a card number, expiry, "
-                    "or security-code field was detected in it)",
+    # The parenthetical went the same way for the same reason, one wave
+    # later (fix wave 2026-09-08, V-19). Payment is no longer a field-only
+    # property: a submitter reading "Pay now" on a form with no card input
+    # anywhere -- a stored-card confirm, a one-click buy, a donation
+    # confirm -- now classifies here, and telling the human "a card number
+    # field was detected in it" about that form is a sentence the server
+    # cannot back. The false clause is REMOVED rather than replaced;
+    # FLAGGED for the author, because the evidence-naming half of this
+    # sentence was doing real work and the replacement is copy, not
+    # machinery. The facts it has to convey ride with the build report.
+    "payment_form": "acting on a payment-shaped form",
     "file_upload": "uploading a file from disk",
     "download_to_disk": "saving a download to disk",
     "storage_clear": "clearing cookies or site storage",

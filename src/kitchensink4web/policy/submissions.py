@@ -7,6 +7,10 @@ research and taught people to click through prompts. This module splits the
 class into the four that CAN name their harm, and the residual keeps the old
 name.
 
+    payment_form        money moves. Added 2026-09-08: the class already
+                        existed and was decided from FIELDS alone, so a
+                        stored-card confirm step, which carries no card
+                        field at all, was not a payment to this build.
     credential_submit   an authentication attempt the human did not
                         authorize. Credential blindness refuses the tool
                         WRITING a password; nothing refused it PRESSING the
@@ -191,6 +195,109 @@ DESTRUCTIVE_TERMS: tuple[str, ...] = (
     "刪除", "註銷", "撤銷",
 )
 
+#: STRONG payment terms: a submitter or an action path named one of these is
+#: moving money whatever fields the form carries, so this tier fires alone.
+#:
+#: WHY THIS TABLE EXISTS AT ALL, and it is the finding that put it here
+#: (verify round 2026-09-08, V-19). Payment was a FIELD property and only a
+#: field property: `credentials.is_payment_field` and the census's
+#: `form_payment` flag, both of which read INPUTS. A modern checkout confirm
+#: step has no card input on it, because the card was captured on a previous
+#: page or lives in the wallet, so a `method="get"` form whose only control
+#: says "Pay now" carried no payment signal at all, classified as the
+#: residual `form_submit`, was admitted by the GET rule as query-shaped, and
+#: submitted with zero prompts. A "Delete my account" button on the exact
+#: same page shape gated correctly. It was the word "Pay" that nothing read.
+#:
+#: The terms are the labels checkout pages actually print on that button, in
+#: the nine languages the rest of this module ships. Terms that also name
+#: ordinary furniture are NOT here: bare `subscribe` is a newsletter on most
+#: of the web, bare `order` is a sort direction, bare `continue` is every
+#: second form on the internet. Those live in the corroborated tier below.
+PAYMENT_TERMS: tuple[str, ...] = (
+    # English
+    "pay", "pay now", "pay securely", "pay with", "make payment",
+    "confirm payment", "complete payment", "submit payment", "checkout",
+    "check out", "place order", "place your order", "confirm order",
+    "complete order", "submit order", "buy", "buy now", "buy it now",
+    "purchase", "complete purchase", "confirm purchase", "donate",
+    "donation", "give now", "pledge", "add payment", "billing",
+    "charge my card", "start subscription", "confirm subscription",
+    "payment", "charge", "charges", "paypal", "checkout session",
+    # German
+    "bezahlen", "jetzt bezahlen", "zur kasse", "kostenpflichtig bestellen",
+    "kaufen", "jetzt kaufen", "spenden", "zahlungspflichtig bestellen",
+    "zahlung",
+    # French
+    "payer", "payer maintenant", "paiement", "proceder au paiement",
+    "acheter", "acheter maintenant", "passer la commande",
+    "commander et payer", "faire un don",
+    # Spanish
+    "pagar", "pagar ahora", "pago", "realizar el pedido",
+    "finalizar compra", "comprar", "comprar ahora", "donar", "donacion",
+    # Italian
+    "paga", "paga ora", "pagare", "pagamento", "acquista", "acquistare",
+    "acquista ora", "completa l ordine", "dona", "donazione",
+    # Portuguese
+    "finalizar compra", "finalizar pedido", "comprar agora", "doar",
+    "doacao",
+    # Korean
+    "결제", "구매하기", "주문하기", "후원", "기부",
+    # Japanese
+    "支払", "購入", "決済", "注文確定", "寄付",
+    # Chinese (simplified then traditional)
+    "支付", "付款", "购买", "结算", "结账", "提交订单", "捐款", "捐赠",
+    "購買", "結算", "結帳", "付費", "捐贈",
+)
+
+#: BARE CONFIRM terms. `Confirm`, `Continue` and `Complete` are the labels on
+#: half the buttons on the web, so they fire only WITH a corroborating money
+#: signal: a currency amount printed on the button itself, or an action path
+#: that names a payment endpoint. Same multi-signal rule `BROADCAST_SEND`
+#: follows, for the same reason.
+PAYMENT_CONFIRM: tuple[str, ...] = (
+    "confirm", "confirm and continue", "continue", "complete", "finish",
+    "proceed", "submit", "order", "subscribe", "upgrade", "renew", "join",
+    "bestatigen", "weiter", "fortfahren", "bestellen", "abschliessen",
+    "confirmer", "continuer", "terminer", "commander",
+    "confirmar", "continuar", "finalizar", "pedido", "suscribirse",
+    "conferma", "continua", "completa", "ordine", "abbonarsi",
+    "confirmar", "continuar", "concluir", "assinar",
+    "확인", "계속", "완료", "주문", "구독",
+    "確認", "続ける", "完了", "注文", "購読",
+    "确认", "继续", "完成", "订单", "订阅", "確認", "繼續", "完成", "訂單",
+)
+
+#: Action paths that name a payment endpoint. Matched against the path only,
+#: as the corroborating half of `PAYMENT_CONFIRM`. `order` and `cart` are
+#: here and not in the strong table because a path is a weaker claim than a
+#: label: `/orders` is as often the page that LISTS them.
+PAYMENT_PATHS: tuple[str, ...] = (
+    "pay", "payment", "payments", "checkout", "charge", "charges",
+    "billing", "purchase", "order", "orders", "cart", "basket", "donate",
+    "donation", "subscribe", "subscription", "stripe", "paypal",
+    "braintree", "adyen", "kasse", "paiement", "pagar", "pago",
+    "pagamento", "결제", "決済", "支付",
+)
+
+#: A price printed on the control. Run against the RAW text and never the
+#: squashed haystack, because `squash` deletes every currency symbol on its
+#: way to word boundaries: "Donate $50" reaches `matches()` as " donate 50 ".
+_AMOUNT = re.compile(
+    r"[$€£¥₩₹¢]\s?\d"
+    r"|\d\s?[€£¥₩₹¢]"
+    r"|\b(?:usd|eur|gbp|jpy|krw|cny|rmb|cad|aud|chf|inr|brl|mxn)\s?\d"
+    r"|\d\s?(?:usd|eur|gbp|jpy|krw|cny|rmb|cad|aud|chf|inr|brl|mxn)\b"
+    r"|\d\s?(?:원|円|元|€)",
+    re.I | re.UNICODE)
+
+
+def has_amount(*parts) -> bool:
+    """True when a currency amount is printed on any of these raw strings."""
+    raw = " ".join(str(p) for p in parts if p)[:400]
+    return bool(_AMOUNT.search(raw))
+
+
 #: Assent vocabulary that fires ANYWHERE, including on the submitter's own
 #: name. Every entry is a phrase a page writes only when it means assent.
 ASSENT_TERMS: tuple[str, ...] = (
@@ -244,6 +351,29 @@ def _submitter_hay(census: dict, names: tuple) -> str:
     return squash(census.get("submitter"), *names)
 
 
+def _payment_reason(census: dict, submitter: str, path: str,
+                    names: tuple = ()) -> str | None:
+    """Why this submission is a payment, or None.
+
+    Three signals, and the corroboration rule is the one the rest of the
+    module follows. The census flag is read FIRST and it was not read at
+    all before: `ksFormPayment` computes it in the page and only
+    `act.action_class_for` ever consulted it, so a census reaching this
+    function through the delegate path carried the answer and nobody
+    looked."""
+    if census.get("payment"):
+        return "the form carries a payment-shaped field"
+    hit = matches(submitter, PAYMENT_TERMS) or matches(path, PAYMENT_TERMS)
+    if hit:
+        return f"the submission is named {hit!r}"
+    if has_amount(census.get("submitter"), *names):
+        hit = matches(submitter, PAYMENT_CONFIRM) or \
+            matches(path, PAYMENT_PATHS)
+        if hit:
+            return (f"the submission prints a price and is named {hit!r}")
+    return None
+
+
 def _action_hay(census: dict) -> str:
     """The form's action PATH, squashed. The host is deliberately excluded:
     a form posting to `deleteme.example.com/search` is a search on a
@@ -264,19 +394,30 @@ def classify(census: dict, *names) -> tuple[str, str] | None:
     the control the browser actually activates, so a delegated click cannot
     reach a class a direct click would miss and cannot skip one either.
 
-    ORDER IS IRREVERSIBILITY, and it is the contract: a credential leaving
-    the machine is worse than a deletion, a deletion is worse than being
-    bound by terms, and being bound by terms is worse than a post. A form
-    that is several of these at once gates as the worst one and the prompt
-    says which."""
+    ORDER IS IRREVERSIBILITY, and it is the contract: money leaving is worse
+    than a credential leaving, a credential leaving the machine is worse than
+    a deletion, a deletion is worse than being bound by terms, and being
+    bound by terms is worse than a post. A form that is several of these at
+    once gates as the worst one and the prompt says which.
+
+    Payment is first here because it is already first in
+    `act.action_class_for`, which decides `payment_form` from the FIELDS
+    before this function is ever called. This branch is the other half of
+    that decision: the same class, reached from what the button says rather
+    than from what the form collects."""
     if not isinstance(census, dict) or not census:
         return None
-    if census.get("secret"):
-        return ("credential_submit",
-                "the form carries a password or a one-time-code field")
 
     submitter = _submitter_hay(census, names)
     path = _action_hay(census)
+
+    payment = _payment_reason(census, submitter, path, names)
+    if payment:
+        return ("payment_form", payment)
+
+    if census.get("secret"):
+        return ("credential_submit",
+                "the form carries a password or a one-time-code field")
 
     hit = matches(submitter, DESTRUCTIVE_TERMS) or \
         matches(path, DESTRUCTIVE_TERMS)
