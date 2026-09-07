@@ -1,6 +1,6 @@
 """Fix wave 9 (2026-09-08) unit pins, against the fresh-eyes verify round
 `20260908_verify_round.md`. The browser half is
-`tests/browser/test_fixwave9_fixes.py`.
+`tests/browser/test_fixwave9_fixes_live.py`.
 
 - V-19: `policy/submissions.py:classify` had no payment vocabulary, so a
   card-less "Pay now" was the residual `form_submit`, which the GET rule
@@ -166,3 +166,49 @@ def test_v01_a_typed_refusal_is_still_delivered_word_for_word():
     from kitchensink4web import errors
     exc = errors.TargetNotFound("nothing matched that ref on this page.")
     assert envelope.refusal(exc)["error"]["message"] == str(exc)
+
+
+# ------------------------------------------- V-22, the ContextVar underneath
+
+def test_v22_draining_annotations_empties_the_dict_it_hands_back():
+    """`annotate()` mutates an already-present dict IN PLACE and
+    `_drain_annotations()` cleared the VARIABLE rather than the dict. A
+    `set()` inside an asyncio task writes only that task's copy of the
+    context, so a dict that ever reached the thread-level context was
+    drained for the current task and stayed put, with every key still on it,
+    for the next one.
+
+    Production is safe today by accident of the execution model: each tool
+    call gets its own task, so the thread-level variable stays unset. This
+    pin holds the mechanism rather than the accident."""
+    from kitchensink4web.policy import audit as _audit
+
+    _audit._annotations.set(None)
+    _audit.annotate(target='button "first"')
+    held = _audit._annotations.get()
+    assert held == {"target": 'button "first"'}
+
+    drained = _audit._drain_annotations()
+    assert drained == {"target": 'button "first"'}
+    # THE DICT THE CALLER STILL HOLDS A REFERENCE TO IS EMPTY. This is the
+    # assertion that fails before the fix: `held` came back still carrying
+    # `target`, and anything holding it could resurrect a drained value.
+    assert held == {}
+    # And the returned copy is genuinely a copy, so emptying the original
+    # cannot hollow out the record that was just built from it.
+    assert drained is not held
+
+
+def test_v22_a_second_drain_after_a_task_local_unset_returns_nothing():
+    """The leak's actual shape, without asyncio: unset the variable the way
+    a task's `set()` fails to propagate, then re-seed it with the SAME dict
+    object a stale context would still be pointing at."""
+    from kitchensink4web.policy import audit as _audit
+
+    _audit._annotations.set(None)
+    _audit.annotate(replay_steps=["a", "b"])
+    stale = _audit._annotations.get()
+    _audit._drain_annotations()
+    # A task that never saw the `set(None)` still holds `stale`.
+    _audit._annotations.set(stale)
+    assert _audit._drain_annotations() == {}

@@ -88,9 +88,29 @@ def take_annotation(field: str) -> Any:
 
 
 def _drain_annotations() -> dict:
+    # EMPTY IT AS WELL AS UNSET IT, and the two are not the same thing here.
+    #
+    # `annotate()` MUTATES an already-present dict in place and only calls
+    # `set()` when it has to create one, while this function used to hand
+    # that dict back and clear the VARIABLE. A `set()` inside an asyncio task
+    # writes only that task's copy of the context, so a dict that ever
+    # reached the THREAD-level context was drained for the current task and
+    # stayed exactly where it was, with every key ever written into it, for
+    # the next one. Synchronous callers really did clear it; anything under
+    # `asyncio.run` could only ADD.
+    #
+    # Production is safe today by accident of the execution model: each tool
+    # call gets its own task, so the thread-level variable stays unset. Safe
+    # by accident is not the bar. The harness proved what the asymmetry does
+    # when the assumption stops holding: a stale `replay_steps` list from one
+    # test made another test save a two-step workflow whose first step typed
+    # into a control on a page it had never opened. (Fix wave 2026-09-08,
+    # found under V-22.)
     current = _annotations.get() or {}
     _annotations.set(None)
-    return current
+    drained = dict(current)
+    current.clear()
+    return drained
 
 
 def observe_secret_args(args: dict | None, _depth: int = 0,
