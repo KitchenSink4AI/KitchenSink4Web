@@ -67,8 +67,17 @@ _NO_LISTS = (
     "and role=\"list\" elements holding two or more items, and it skips "
     "navigation lists. Repeated content laid out in TABLE rows or bare "
     "divs is not a semantic list, which is what Hacker News-style layouts "
-    "do. get_page_view shows what IS on the page, and get_table reads "
-    "tabular layouts.")
+    "do. get_page_view shows what IS on the page, get_table reads real "
+    "TABLE elements and ARIA div-tables and skips layout tables, and "
+    "get_text reaches content that is neither a list nor tabular.")
+# The last sentence used to end "and get_table reads tabular layouts", which
+# named Hacker News in the sentence before it and then sent the caller to
+# the tool that garbled Hacker News (ledger A3, verify round V-08). The
+# ledger is right that this had to change in the same commit as the
+# detection fix: with layout tables now skipped rather than read as data,
+# the old promise is false in the other direction too. The replacement is
+# `_NO_TABLES`' own sentence, so the two refusals agree about what
+# `get_table` does.
 
 
 # ------------------------------------------------------------------ tables
@@ -83,10 +92,50 @@ _TABLE_JS = r"""
   const clip = (s) => { s = squash(s); if (s.length <= CLIP) return s; clipped++; return s.slice(0, CLIP) + '...'; };
 
   const SEL = 'table, [role="table"], [role="grid"], [role="treegrid"]';
+  // BLOCK CONTENT INSIDE A CELL is what a layout table is FOR. A data cell
+  // holds a value; a layout cell holds a column of the page.
+  const BLOCKISH = 'table, div, p, ul, ol, form, section, article, nav, h1, h2, h3';
+  // THE LAYOUT TEST, and it used to be one line: role="presentation".
+  //
+  // That line is correct and it is almost never present. Hacker News is
+  // `<table id="hnmain" border="0" cellpadding="0" width="85%">` with no
+  // role attribute at all, so it classified as a DATA table, and because
+  // the nesting filter below keeps the OUTERMOST candidate, the 1x1 wrapper
+  // beat the inner table that actually holds the rows. One candidate meant
+  // no inventory refusal fired either, so the wrong table won by default
+  // and the right one was never offered. `kind: "table"` then asserted the
+  // classification with no confidence downgrade, and the whole inner table
+  // came back as ONE clipped cell described as a complete read. Three
+  // untruths, all of them downstream of this function. (Ledger A2, verify
+  // round V-03.)
+  //
+  // Four signals, and every one of them is a thing a layout table does that
+  // a data table does not. `role="none"` is ARIA's own synonym for
+  // `presentation` and was not matched, which is a bug on its own.
   function kindOf(el) {
-    if ((el.getAttribute('role') || '') === 'presentation') return 'layout';
-    if (el.tagName === 'TABLE') return 'table';
-    const role = el.getAttribute('role') || '';
+    const role = (el.getAttribute('role') || '').trim().toLowerCase();
+    if (role === 'presentation' || role === 'none') return 'layout';
+    if (el.tagName === 'TABLE') {
+      // 1. A table holding another table. Data does not nest; pages do.
+      if (el.querySelector('table, [role="table"], [role="grid"]'))
+        return 'layout';
+      // 2. No header machinery anywhere. A data table names its columns or
+      //    its rows; the ones that do neither are the historical page grid.
+      const headed = el.querySelector('th, thead, caption')
+        || el.getAttribute('summary');
+      if (!headed) {
+        const rows = el.rows ? el.rows.length : 0;
+        const cols = (el.rows && el.rows[0]) ? el.rows[0].cells.length : 0;
+        // 3. A degenerate shape: one row, or one column. A real 1xN table
+        //    exists, which is why this is not sufficient on its own.
+        if (rows <= 1 || cols <= 1) {
+          // 4. ...carrying page-shaped content rather than values.
+          const cell = el.rows && el.rows[0] && el.rows[0].cells[0];
+          if (cell && cell.querySelector(BLOCKISH)) return 'layout';
+        }
+      }
+      return 'table';
+    }
     return role === 'grid' || role === 'treegrid' ? 'div-grid' : 'div-table';
   }
   function captionOf(el) {
@@ -109,12 +158,33 @@ _TABLE_JS = r"""
   // ------------------------------------------------ choose the target table
   let target = null;
   if (arg.el) {
+    // A LOCATION IS AN INSTRUCTION AND IT IS OBEYED: an element that IS a
+    // table is read as that table, layout or not, and the payload says
+    // which. Inside an element, though, first-in-document-order was
+    // picking the wrapper over the table it wraps, so the search prefers a
+    // data table and falls back to whatever is there.
     target = arg.el.matches && arg.el.matches(SEL) ? arg.el
-      : (arg.el.querySelector ? arg.el.querySelector(SEL) : null);
+      : (arg.el.querySelector
+        ? (Array.from(arg.el.querySelectorAll(SEL))
+            .filter((el) => kindOf(el) !== 'layout')[0]
+           || arg.el.querySelector(SEL))
+        : null);
     if (!target) return { error: 'no-table-in-element' };
   } else {
+    // THE LAYOUT DROP HAPPENS FIRST, and the containment dedupe happens to
+    // WHAT SURVIVES IT. In the other order, a layout wrapper is a live
+    // candidate at the moment the dedupe runs, so it eats the data table
+    // inside it and then gets dropped itself -- or, worse, does not get
+    // dropped and IS the answer. Dropping layout first means a data table
+    // inside a page grid is reachable, which is the shape most of the
+    // pre-CSS web is built out of.
+    //
+    // The old first filter (`!el.closest('[role="presentation"] *')`) is
+    // gone with it: it removed every DESCENDANT of a presentation wrapper,
+    // so a page that DID mark its wrapper honestly lost its real table too,
+    // and `get_table` refused with "no data tables" on a page holding one.
+    // Both directions of the nesting case were wrong.
     const all = Array.from(document.querySelectorAll(SEL))
-      .filter((el) => !el.closest('[role="presentation"] *'))
       .filter((el) => kindOf(el) !== 'layout');
     // nested role tables inside a TABLE would double-count; keep outermost
     const tables = all.filter((el) => !all.some((o) => o !== el && o.contains(el)));
@@ -311,6 +381,16 @@ async def get_table(
                  f'to hold the token budget. Raise budget_tokens, or name '
                  f'max_columns and page through the table by row with a '
                  f'narrower grid')
+    # THE SAME CROSS-CHECK THE COLUMN TRIM ALREADY HAS, on the other axis.
+    # `clipped_cells` sat under `accounting` and nothing read it, so a
+    # payload could say "all rows in the table are included" in one key and
+    # `clipped_cells: 1` in another, which is a completeness claim standing
+    # beside its own contradiction. The rows sentence was TRUE about rows
+    # and silently wrong about content. (Verify round V-03, untruth 2.)
+    if got["clipped_cells"]:
+        more += (f'. {got["clipped_cells"]} cell(s) were truncated at '
+                 f'{CELL_CLIP} characters and end in an ellipsis, so the '
+                 f'rows are all here and those cells are not whole')
     payload = {
         "page": record.handle, "session": sess.session_id,
         "url": record.page.url,
@@ -1633,12 +1713,27 @@ async def _aggregate_one(sess, record, url, schema, tiers, wait,
     # 3. A site that said 429 stays said, and every LATER URL on that domain
     #    then refuses in its own slot through the choke point rather than
     #    hammering the host.
-    if status == 429:
-        raw_retry = (headers or {}).get("retry-after", "").strip()
-        _budgets.BOOK.note_429(
-            urlparse(record.page.url).hostname or "",
-            float(raw_retry) if raw_retry.replace(".", "", 1).isdigit()
-            else None)
+    # ONE PARSER, AND THIS WAS THE THIRD. `budgets.parse_retry_after` reads
+    # both spellings RFC 9110 allows and clamps; this site accepted digits
+    # with at most one decimal point, dropped every HTTP-date form on the
+    # floor, and fired on 429 alone while `RETRY_AFTER_STATUSES` has said
+    # 429 AND 503 since the lanes wave. So the two fixes that wave shipped
+    # for `navigate` never reached the aggregate path, and a date-form
+    # header became KS4Web's own 60-second default here. Routed through the
+    # shared source, which is also the one that reports what it honored.
+    # (Verify round V-17, the same duplicate one file over.)
+    if status in _budgets.RETRY_AFTER_STATUSES:
+        raw_retry = (headers or {}).get("retry-after")
+        # `navigate`'s bare-503 guard comes with it, and the aggregate path
+        # never had it: a 503 with NO header is an outage, and opening a
+        # 60-second window from a default nobody sent would be inventing a
+        # rate limit out of one. A 429 keeps the documented default, because
+        # 429 is the site saying the words whether or not it attached a
+        # number.
+        if status == 429 or (raw_retry or "").strip():
+            _budgets.BOOK.note_retry_after(
+                urlparse(record.page.url).hostname or "",
+                raw_retry, status=status)
     # 4. The wall verdict, before one character of the page is read.
     verdict = await _lite._wall_verdict(record.page, status, headers=headers)
     if verdict.get("wall") == "auth-wall":
@@ -1996,7 +2091,7 @@ async def get_article(
             f"block(s) carrying {ev['article_chars']:,} characters, "
             f"{ev['link_density']:.0%} of the best candidate's text is link "
             f"text, and that candidate holds {ev['share_of_page']:.0%} of "
-            f"the page's block prose. Failing: "
+            f"the page's rendered text. Failing: "
             f"{'; '.join(got['failed_tests'])}. get_text reads whatever prose "
             f"is here without pretending it is an article, and get_list or "
             f"get_table reach repeated records.")
@@ -2026,6 +2121,18 @@ async def get_article(
         more = "the thread is returned whole; posts are not paginated"
 
     completeness = {
+        # THE SHARE IS IN THE SUCCESS PAYLOAD NOW, and it was only ever in
+        # the refusal. A caller reading a passing result never saw the
+        # number that let it pass, so a payload saying "this is the end of
+        # the article body" over 16% of the page carried no field anywhere
+        # from which the other 84% could be inferred. (Verify round V-04.)
+        "share_of_page": (
+            f'the returned body is {ev["share_of_page"]:.0%} of the page\'s '
+            f'rendered text ({ev["article_chars"]:,} of {ev["page_chars"]:,} '
+            f'characters). The scorer\'s own ledger accounts for '
+            f'{ev["scored_chars"]:,} of them; the rest of the page is text '
+            f'this read neither returned nor counted as chrome. get_text '
+            f'reads the whole page'),
         "excluded": (
             f'{excluded["blocks"]} block(s) carrying {excluded["chars"]:,} '
             f'characters were page chrome and were excluded from the body, '
