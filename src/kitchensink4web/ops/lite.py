@@ -4794,6 +4794,24 @@ _DO_CONSENT_WORDS = ("cookie", "cookies", "consent", "privacy", "gdpr",
 _DO_CLOSE_NAMES = ("close", "close dialog", "dismiss", "x", "×",
                    "✕", "✖")
 
+#: Names a page writes on a search field. THE SECOND TIER ONLY: `role=
+#: searchbox` and `type=search` are the page declaring what the control IS,
+#: and this is the page merely labelling it, so it is required to sit on a
+#: text input rather than on anything. The commonest search box on the web
+#: is `<input aria-label="Search">` inside a form with a submit button, and
+#: `do(intent="search for ...")` refused on it: the refusal was honest and
+#: named its criterion, which made it a coverage gap rather than a lie, but
+#: the criterion covered the markup almost nobody writes. (Verify round
+#: V-16.) The accessible name already falls back to `placeholder`, so a
+#: placeholder-labelled box is reached by the same tier.
+_DO_SEARCH_NAMES = (
+    "search", "search this site", "site search", "search the site",
+    "search query", "query", "find", "search for", "search here",
+    "suche", "suchen", "recherche", "rechercher", "buscar", "busqueda",
+    "cerca", "ricerca", "pesquisar", "busca",
+    "검색", "検索", "搜索", "搜尋",
+)
+
 #: Pointer, not a copy. `read_pages` ranks the same links.
 _DO_NEXT_LABEL = _common.NEXT_LABEL
 _DO_PREV_LABEL = _common.PREV_LABEL
@@ -5005,11 +5023,26 @@ def _do_mechanism(data: dict, goal: str | None, low: str,
                 f"{'next' if rel == 'next' else 'previous'}-page control, "
                 f"which is the ranking read_pages walks with")
     if goal == "search":
-        return ([u for u in units if u.get("role") == "searchbox"
-                 or (u.get("tag") == "INPUT"
-                     and (u.get("type") or "") == "search")],
-                "a control whose role is searchbox, or an input of type "
-                "search")
+        def _search_like(u: dict) -> bool:
+            if u.get("role") == "searchbox":
+                return True
+            tag = u.get("tag")
+            kind = (u.get("type") or "").lower()
+            if tag == "INPUT" and kind == "search":
+                return True
+            # The labelled tier. Text inputs only: a BUTTON reading "Search"
+            # is the submitter, not the field, and typing into it is the
+            # thing this must never do.
+            if tag == "INPUT" and kind in ("", "text") \
+                    or u.get("role") == "textbox":
+                name = " ".join((u.get("name") or "").lower().split())
+                return name in _DO_SEARCH_NAMES
+            return False
+
+        return ([u for u in units if _search_like(u)],
+                "a control whose role is searchbox, an input of type "
+                "search, or a text input whose accessible name or "
+                "placeholder is one this build recognizes as a search field")
     if goal == "consent":
         # THE TWO ANSWERS ARE NOT INTERCHANGEABLE. Consent is a legal act by
         # a person, so this resolves the control the caller NAMED and never
@@ -6477,7 +6510,55 @@ async def get_audit(
             f"next page"
             if got["next_start_index"] is not None
             else "this is the end of the matching records")
-    return {"audit": got, "continue": more}
+    return {"audit": got, "continue": more, **_audit_page_data(got)}
+
+
+def _audit_page_data(got: dict) -> dict:
+    """The labeled envelope over the part of an audit record the PAGE wrote.
+
+    V-23. `_action_result` annotates every action with
+    `target=f'{role} "{name}"'`, and an accessible name is a string the page
+    authored. `click` hands that string back inside the envelope: its
+    page_data note names `target.name` in `covers`. `get_audit` returned the
+    identical string bare, and the docstring above advertises it ("the
+    resolved target with its human label"), so one page-authored value was
+    labeled untrusted on one surface and handed over unlabeled on the
+    surface an agent reads when it is working out what it just did.
+
+    THE FIX IS AT THE SURFACE THAT RETURNS THE RECORD, not at the writer.
+    The log is an operational record of what was done, and rewriting what
+    goes into it to suit one reader's payload shape would make it a less
+    faithful record. So the record keeps its own bytes and the read wraps a
+    repeat of them, which is `ops/a11y`'s pattern for the same split."""
+    lines = []
+    for row in got.get("records") or []:
+        target = row.get("target")
+        if isinstance(target, dict):
+            target = f'{target.get("role")} "{target.get("name")}"'
+        if target:
+            lines.append(f'#{row.get("seq")} {row.get("tool")}: {target}')
+    if not lines:
+        return {}
+    urls = []
+    for row in got.get("records") or []:
+        if row.get("url") and row["url"] not in urls:
+            urls.append(row["url"])
+    # The envelope's label names ONE origin, and a log spans as many as the
+    # session visited, so the label names the ones it can and says how many
+    # it could not. Truncating in silence would make the label a claim the
+    # payload does not support.
+    # FLAGGED (fix wave 2026-09-08): placeholder wording, mechanically
+    # composed from this file's own listing sentences.
+    origin = "; ".join(urls[:4]) or "the pages this session acted on"
+    if len(urls) > 4:
+        origin += f"; and {len(urls) - 4} more page(s) in this log"
+    wrapped, note = _pagedata.wrap("\n".join(lines), url=origin)
+    note["label"] = (
+        "The block below repeats the page-authored part of every record "
+        "above: the accessible name each action resolved to, which the page "
+        "wrote. " + note["label"])
+    note["covers"] = ["audit.records[].target"]
+    return {"page_derived": wrapped, "page_data": note}
 
 
 async def get_workflows(topic: str | None = None) -> dict:
