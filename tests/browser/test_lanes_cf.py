@@ -258,3 +258,27 @@ def test_a_loopback_fixture_leaves_no_trace_in_the_lane_database(
     assert lanedb.status()["hosts"] == 0
     state = tmp_path / "state"
     assert not state.exists() or not list(state.glob("*.json"))
+
+
+def test_only_a_real_fetch_teaches_the_database(declaring_site, monkeypatch,
+                                                tmp_path):
+    """A history call served from cache and a cancelled load fetched nothing,
+    so neither may manufacture confidence in a lane. Recorded against a
+    STORABLE host, since the loopback fixture is never written at all."""
+    monkeypatch.setattr(lanedb, "storable_host",
+                        lambda url, **kw: "fixture.example.org" if url
+                        else None)
+
+    async def go():
+        session = await MANAGER.open(lane="A", engine="chromium",
+                                     headless=True)
+        await lite.navigate(page=session.focused, url=declaring_site + "/")
+        after_goto = lanedb.report("fixture.example.org")["lanes"][0]["ok"]
+        for action in ("wait_for_load", "stop"):
+            await lite.navigate(page=session.focused, action=action)
+        after_others = lanedb.report("fixture.example.org")["lanes"][0]["ok"]
+        return after_goto, after_others
+
+    first, second = run(go())
+    assert first == 1
+    assert second == 1, "wait_for_load and stop fetched nothing"

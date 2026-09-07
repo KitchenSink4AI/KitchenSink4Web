@@ -1400,7 +1400,13 @@ async def navigate(
     # a non-error status is the only success this database records, and it is
     # recorded against the LANDED host, which is what `page.url` holds after
     # redirects: a hop from a.com to b.com that ends well is b.com's answer.
-    if status is None or status < 400:
+    #
+    # Only `goto` and `reload` count. `stop` cancelled the load, `back` and
+    # `forward` can be served entirely from the back-forward cache, and
+    # `wait_for_load` made no request at all: counting any of them would let a
+    # loop of history calls manufacture confidence in a lane that fetched
+    # nothing.
+    if action in ("goto", "reload") and (status is None or status < 400):
         _note_lane(sess, record.page.url, "ok")
     declared = await _wellknown.declarations(sess, record.page.url)
     # The lane database's degraded note rides ONCE, in the next result that
