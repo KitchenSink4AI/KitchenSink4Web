@@ -3402,3 +3402,79 @@ the channel most likely to be carrying an injection by construction).
 Zero orphaned browser processes attributable to this wave; the
 `chrome-headless-shell` tree alive at exit traces to a sibling agent's
 scratchpad venv and was not touched.
+
+---
+
+## Feature #11: error-page classification, the embedded-viewer ruling, and the document handoff (2026-09-08, branch `build/classify`)
+
+**The defect this opens on.** The wall detector recognized a wall only when
+it recognized the VENDOR, and said nothing at all otherwise. Two model runs
+on 2026-09-08 hit that independently: Reddit answered its own "blocked by
+network security" page and JSTOR answered an Akamai Client Challenge, and
+both came back `ok: true, status: 200, wall: null`. A false success is worse
+than a refusal, because nothing downstream thinks to look at it twice. Both
+runs recommended the same backstop, which is now the soft-block rung: a
+challenge signal plus a document with no readable prose. The rung cannot
+withhold a readable page, because it only fires where there is nothing to
+withhold, which is what keeps the F1 cloaking property intact while the
+status gate is unavailable.
+
+**The corpus is in the repo.** `tests/data/walls/`, 32 real samples across 25
+hosts collected once and politely, with the robots.txt of every host beside
+them and `.gitattributes` holding the bodies byte-for-byte. It contradicted
+six assumptions before a line of the classifier existed, and three more of
+its own during the build:
+
+- consent walls are NOT detectable from a raw HTTP response. A first cut let
+  a named consent-management vendor in the source corroborate on its own and
+  it classified an age gate, two academic paywalls, a 404 and a session
+  interstitial as consent walls. A CMP that is installed is not a banner that
+  is up, and only the blocking overlay tells them apart.
+- every paywall family needs a discriminator of its own. The three families
+  share every structural signal there is, so the shared signals say THAT
+  there is a barrier and only the citation meta tags or the schema.org
+  `@type` say WHICH KIND.
+- a captcha widget and a password field on a page that also has content are
+  form controls, not walls. Science's article page loads a captcha for its
+  comment form and SAGE's carries a sign-in modal; both were classified as
+  walls until the gate was added.
+
+**Cost.** One evaluate, not two. The structural probe rides inside the
+innerText read the verdict path already did, and what it returns is booleans,
+counts, and which of the server's own needles matched, never more page text.
+That is also what lets it see a barrier 30,000 characters into a publisher
+page: a Science paywall carries 32,248 visible characters and the 4,000-slice
+never reached its barrier. `get_page_view` on an ordinary page costs exactly
+what it cost before, pinned by a live evaluate count.
+
+**The embedded-viewer ruling (author, 2026-09-08).** A page whose main
+content sits in an embedded viewer is still a page. The dominance arm is
+unchanged and everything it protects is unchanged (F2's offscreen embed,
+G4-03's fallback-rendering object); what changed is that a dominant embed on
+a page carrying its own readable text no longer denies the read. The question
+is a content question rather than a threshold one, and the change is strictly
+in the direction of returning more of the page.
+
+**The document handoff.** Facts, not instructions, and tool-agnostic: the
+document's URL, whether that URL is fetchable at all, the file name, the
+publisher's citation metadata (clamped per value, labeled page-authored), and
+what WAS read from the page. It rides on `navigate`, `get_page_view`,
+`get_text`, `read_pages`, the unsupported-content refusal, and the
+navigation-became-a-download refusal.
+
+Gate: full suite **1132 green, run SEQUENTIALLY** (527.2s), up 28 from 1104:
+99 unit pins in `tests/unit/test_classify.py` (the corpus, table-driven) and
+13 live pins in `tests/browser/test_classify_live.py`. `test_wall_headers.py`
+passes unchanged, which is the compatibility pin: `wall` values are identical
+to the previous build's for every input that produced one, and it caught the
+one regression this wave introduced (an application's own explained 403 read
+as a soft block until the rung was bound to non-refusing statuses). Zero
+orphaned browser processes.
+
+**PENDING: every user-facing sentence in `policy/classify.py` is a
+placeholder.** Product copy is written by the main thread, not by the agent
+that builds the machinery. `ACCESS_PATHS` (one per category) and `NOTES`
+(four) carry `[COPY PENDING: ...]` markers, and
+`test_the_user_facing_copy_is_still_a_placeholder` fails the moment one is
+filled, which is the guard to delete rather than weaken when the copy lands.
+The facts each one has to convey ride with the build report.

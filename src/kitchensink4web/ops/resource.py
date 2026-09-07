@@ -379,6 +379,30 @@ def _citation(probe: dict) -> dict:
     return out
 
 
+def url_handoff(url: str, *, media_type: str | None = None,
+                local_path: str | None = None,
+                found_as: str = "the URL the navigation was aimed at") -> dict:
+    """The handoff for a document that was never rendered.
+
+    A direct file URL makes the browser download rather than paint, so the
+    navigation stops before there is any page to probe. The facts are still
+    knowable from the URL, and a caller that has just been told "this is a
+    file, not a page" is exactly the caller who needs them."""
+    scheme = urlparse(url or "").scheme.lower()
+    return {
+        "documents": [{
+            "url": url, "url_scheme": scheme, "media_type": media_type,
+            "filename": filename_for(url),
+            "page_local": scheme in ("blob", "data"),
+            "fetchable_by_url": scheme in ("http", "https"),
+            "found_as": found_as, "local_path": local_path,
+        }],
+        "readable_from_here": False,
+        "read_from_page": {"returned": "nothing; the document never rendered "
+                                       "as a page"},
+    }
+
+
 def document_handoff(probe: dict, *, read: dict | None = None,
                      downloads: list | None = None) -> dict | None:
     """What a caller needs in order to take the document somewhere else.

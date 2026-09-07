@@ -1504,7 +1504,12 @@ async def navigate(
             # before it navigates, which is the whole reason that action
             # exists.
             if "download is starting" in str(exc).lower():
-                raise ValidationFailed(
+                # MERGE SEAM: the handoff block rides on this refusal so a
+                # caller that has just been told "this is a file, not a page"
+                # gets the document's facts in the same answer. If the
+                # download capture lands on this branch, the same block
+                # belongs on the success payload with `local_path` filled in.
+                stopped = ValidationFailed(
                     f"{url} is a file the browser downloads rather than a "
                     f"page it renders, so the navigation stopped and no "
                     f"download was captured: nothing was armed to catch it. "
@@ -1513,7 +1518,10 @@ async def navigate(
                     f"and download(action='fetch', url=...) re-requests it "
                     f"through this session's own cookies when the browser "
                     f"would rather paint it in a viewer. Both need the "
-                    f"files pack (--packs files).") from exc
+                    f"files pack (--packs files).")
+                stopped.detail = {
+                    "document_handoff": _resource.url_handoff(url)}
+                raise stopped from exc
             # C-08: remember that THIS document did not finish arriving, so
             # the next read stops calling it complete. Recorded before the
             # refusal is built, because the refusal is what the caller sees
