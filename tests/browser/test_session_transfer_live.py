@@ -242,3 +242,64 @@ def test_an_imported_handle_after_a_close_names_the_close(session_factory,
         assert "closed" in str(caught.value)
 
     run(go())
+
+
+# --------------------------------------- the three features in one process
+
+def test_the_three_lifecycle_features_coexist(session_factory, fixture_site,
+                                              tmp_path, monkeypatch):
+    """One process holding a two-jar user session, a monitor session, and a
+    handle transfer between them.
+
+    Nothing else exercises the seams these three share: the monitor session
+    must stay out of the single-session shortcut while a real session is
+    open, an export must refuse on the monitor session and succeed on the
+    user one, and the import receipt must count both cookie jars rather
+    than the focused one."""
+    from kitchensink4web.engine import monitors as _monitors
+    from kitchensink4web.ops import monitor as _monitor_ops
+
+    monkeypatch.setattr(_monitors, "STORE",
+                        _monitors.MonitorStore(tmp_path / "monitors.json"))
+
+    async def go():
+        mine = await session_factory(contexts=2)
+        await lite.navigate(page=mine.focused, url=f"{fixture_site}/form")
+        for label in ("c1", "c2"):
+            await mine.contexts[label].context.add_cookies([{
+                "name": f"who_{label}", "value": label, "url": fixture_site}])
+
+        created = await _monitor_ops.monitor(
+            action="create", url=f"{fixture_site}/form",
+            condition="text_appears", value="fixture")
+        monitor_sessions = [s for s in MANAGER.sessions.values()
+                            if getattr(s, "role", "user") == "monitor"]
+        assert len(monitor_sessions) == 1
+
+        # The scheduler's session is open, so a call naming no session must
+        # still land on the caller's own and never on the scheduler's.
+        assert MANAGER.session(None) is mine
+
+        with pytest.raises(Exception) as caught:
+            await lite.manage_session(
+                action="export_handle",
+                session=monitor_sessions[0].session_id)
+        assert "monitor" in str(caught.value).lower()
+
+        export = await lite.manage_session(action="export_handle",
+                                           session=mine.session_id)
+        # Both jars are counted, not just the focused one.
+        assert export["receipt"]["cookies"] >= 2
+        report = await lite.manage_session(action="import_handle",
+                                           token=export["token"])
+        assert report["imported"] == mine.session_id
+
+        await _monitor_ops.monitor(action="delete",
+                                   monitor=created["monitor"])
+        assert not [s for s in MANAGER.sessions.values()
+                    if getattr(s, "role", "user") == "monitor"]
+
+    try:
+        run(go())
+    finally:
+        asyncio.run(_monitor_ops.stop_scheduler())
