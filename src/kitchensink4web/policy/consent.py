@@ -772,15 +772,22 @@ def decide(action_class: str | None, *, url: str | None = None,
     """THE consent verdict for one gated action, consulted by
     `engine.approve` immediately before it would ask a human.
 
-    Order is the contract, and it runs most-protective first:
+    ORDER IS THE CONTRACT and it runs most-protective first. Every branch
+    that can REFUSE a clearance comes before every branch that can grant one,
+    which is what makes the ladder readable top to bottom:
 
-    1. a sensitive origin the human named makes ANY action there Tier 2;
-    2. Tier 2 asks, always, and refuses where no human can answer;
-    3. a query-shaped GET submission is Tier 0;
-    4. the scope in force clears the class if its own conditions hold;
-    5. a launch-time pre-authorization for this class AND this origin;
-    6. an in-session standing grant for this class AND this origin;
-    7. otherwise, ask."""
+    1. read-only: Axis B decides nothing and the existing ladder stands;
+    2. a sensitive origin the human named makes any ACT there Tier 2;
+    3. a page's own adult-only declaration does the same;
+    4. a Tier 2 class asks, always, and refuses where no human can answer;
+    5. an off-list origin clears nothing, whatever else is configured;
+    6. a dialog whose own message describes something consequential is
+       Tier 2, because page text may classify up and never down;
+    7. a query-shaped GET submission is Tier 0;
+    8. the scope in force clears the class IF its own conditions hold;
+    9. a launch-time pre-authorization for this class AND this origin;
+    10. an in-session standing grant for this class AND this origin;
+    11. otherwise, ask."""
     if not action_class:
         return Decision(IN_GRADE, "", "no gated class")
     if not active():
