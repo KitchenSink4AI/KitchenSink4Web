@@ -63,11 +63,41 @@ def known_grade():
     The call site is fixed too, but a test's grade must not depend on which
     other tests ran first, and this is the one place that can guarantee it for
     all of them."""
-    from kitchensink4web.policy import readonly
+    from kitchensink4web.policy import consent, readonly
 
     readonly.apply(False)
+    _known_consent(consent)
     yield
     readonly.apply(False)
+    _known_consent(consent)
+
+
+def _known_consent(consent) -> None:
+    """AXIS B GETS THE SAME TREATMENT AXIS A ALREADY HAD, and for the
+    same reason: a test's verdict must not depend on which other tests
+    ran first. The state set here is the one a FRESH PROCESS has, which
+    is the state every pin in this directory was written against.
+
+    Found by the seven-branch integration's seeded-random gate on
+    2026-09-08. `consent.apply()` is startup-only and process-global, so
+    any file that calls it (the consent wave's own two live files do, in
+    their `clean` fixture) leaves Axis B ACTIVE for everything that runs
+    afterwards. Nine older submit-gate pins then fail, because the
+    consent ladder deliberately rules a query-shaped GET submission
+    Tier 0 and their fixtures are `method="get"` forms. Forward order
+    hid it; a shuffle did not.
+
+    THIS RESETS, IT DOES NOT DECIDE. Two pins contradict each other on
+    the same page shape -- `test_a_get_search_form_submits_with_zero_gates_on_every_path`
+    says a GET search form submits ungated, and the C1 matrix says a GET
+    form's submit button gates -- and which one describes the shipped
+    product is the author's call, not a merge resolution. It is written
+    up in the integration report. Until it is ruled on, every test here
+    starts from the same known Axis-B state and every assertion stands
+    exactly as its author wrote it."""
+    consent._reset_runtime_state()
+    consent._scope = None
+    consent._source = "test harness: a known Axis-B state per test"
 
 
 @pytest.fixture(scope="session")
