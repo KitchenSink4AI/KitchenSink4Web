@@ -66,6 +66,14 @@ CLOSED_CODES: frozenset[str] = frozenset({
     # a caller to fix arguments that were correct.
     "SESSION_DEAD", "NAVIGATION_FAILED", "FILE_WRITE_FAILED",
     "DRIVER_FAILURE",
+    # Fix wave 2026-09-08. The fifth thing BAD_PARAMS was standing in for,
+    # and the one the union wave could not see because it needed a bug to
+    # show it: a fault inside KS4Web itself. A framed page tripped a merge
+    # over a counter of the wrong type, and the caller was told its
+    # arguments were malformed and handed the interpreter's own sentence.
+    # An internal fault is not the caller's to fix and there is nothing in
+    # the arguments to change, so it gets its own code and says so.
+    "INTERNAL_ERROR",
 })
 
 #: Codes that exist only while the build is unfinished. Kept OUT of
@@ -118,7 +126,12 @@ CODE_MAP: tuple[tuple[type[BaseException], str], ...] = (
     (OSError, "FILE_WRITE_FAILED"),
     (ValueError, "BAD_PARAMS"),
     (TypeError, "BAD_PARAMS"),
-    (AttributeError, "BAD_PARAMS"),
+    # An AttributeError cannot be an argument fault at this boundary.
+    # Arguments arrive as JSON and are validated before a tool body runs, so
+    # every AttributeError that gets this far was raised by KS4Web's own code
+    # against KS4Web's own object. `ValueError` and `TypeError` stay on
+    # BAD_PARAMS because those two really can come from a caller's value.
+    (AttributeError, "INTERNAL_ERROR"),
     (RecursionError, "UNSUPPORTED_CONTENT"),
     (OverflowError, "BAD_PARAMS"),
     (KeyError, "BAD_PARAMS"),
@@ -262,6 +275,16 @@ HINTS: dict[str, str] = {
         "specific code for, and the message carries what the driver said. "
         "The arguments are not the thing to fix. Check the session with "
         "manage_session(action='status') before retrying"
+    ),
+    # FLAGGED (fix wave 2026-09-08): placeholder wording, mechanically
+    # composed from existing sentences in this file. Needs the author's eyes
+    # before ship, like the union wave's four above it.
+    "INTERNAL_ERROR": (
+        "KS4Web itself failed, not the browser and not the arguments, so "
+        "there is nothing in the call to fix and rewriting it does not "
+        "help. The message carries what the interpreter reported. Retrying "
+        "the same call reaches the same code; a different tool, or the same "
+        "read with a narrower root, may not"
     ),
     "NOT_IMPLEMENTED": (
         "this tool is registered but its engine is not built yet (Phase 0 "
@@ -570,6 +593,28 @@ def refusal(exc: BaseException) -> dict:
                 f"the browser driver failed and this build has no more "
                 f"specific code for it (driver detail: {detail}). The "
                 f"arguments are not the thing to fix.")
+        elif code == "INTERNAL_ERROR":
+            message = (
+                f"KS4Web failed inside its own code and the call did not "
+                f"complete (internal detail: {detail}). The arguments were "
+                f"not the problem and there is nothing in them to fix.")
+        elif code == "BAD_PARAMS" and not (
+                isinstance(exc, LookupError) and len(message) < 40):
+            # THE TERMINAL FALLBACK, and the only backstop code that blames
+            # the caller. A bare builtin reaching it was raised somewhere
+            # this module cannot see, so the honest sentence names both
+            # possibilities instead of asserting the arguments are wrong,
+            # and the interpreter's own text rides as a bounded detail
+            # rather than as the whole message. Before this branch the
+            # `detail != message` test below let an unscrubbed stdlib
+            # sentence ship verbatim whenever the scrubber had nothing to
+            # change, which is most of the time.
+            message = (
+                f"the call failed and this build could not attribute the "
+                f"fault (detail: {detail}). Check the arguments named in "
+                f"the detail first; if they are right, the fault is "
+                f"KS4Web's and the call cannot be made to work by "
+                f"rewriting it.")
         elif detail != message:
             # Any other backstop code (CONFLICT, TIMEOUT, NOT_FOUND...):
             # keep the code's own meaning, ship the bounded text.

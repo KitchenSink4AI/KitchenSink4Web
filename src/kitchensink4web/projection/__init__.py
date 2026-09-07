@@ -326,9 +326,39 @@ _SUMMED = (
     "total_elements", "walked_elements", "text_chars",
     "affordances_collected", "affordances_uncollected",
     "headings_uncollected", "depth_cut_subtrees", "extract_ms",
+    # `name_fallbacks` is a COUNT. `extract.js` builds it with `.length` and
+    # `render.py` prints it as a number, and it sat in `_MERGED_MAPS` below,
+    # where the merge calls `.items()` on it. The `or {}` guard meant a frame
+    # reporting ZERO fell through harmlessly and a frame reporting one or
+    # more crashed the whole read, which is why `get_page_view` died on some
+    # framed pages and not others. (Field test 2026-09-05, the Reuters crash.)
+    "name_fallbacks",
 )
+#: Counters whose value is a {reason: count} map rather than a number.
+#: `_check_shapes` below asserts the split matches what a real extraction
+#: emits, because the cost of getting it wrong is a crashed read, not a
+#: wrong number.
 _MERGED_MAPS = ("hidden_reasons", "hidden_interactive_reasons",
-                "reorder_reasons", "name_fallbacks")
+                "reorder_reasons")
+
+
+def check_counter_shapes(completeness: dict) -> list[str]:
+    """Name every completeness counter whose VALUE contradicts its table.
+
+    The merge in `stitch` dispatches on these two tuples and not on the
+    value, deliberately: a merge that silently coped with either shape would
+    turn a classification bug into a wrong number nobody sees. So the tables
+    are checked instead, by a pin, against a live extraction. Returns a list
+    of human-readable mismatches, empty when the tables are right."""
+    bad = []
+    for key in _SUMMED:
+        if key in completeness and isinstance(completeness[key], dict):
+            bad.append(f"{key} is in _SUMMED but extracts as a map")
+    for key in _MERGED_MAPS:
+        if key in completeness and not isinstance(completeness[key], dict):
+            bad.append(f"{key} is in _MERGED_MAPS but extracts as "
+                       f"{type(completeness[key]).__name__}")
+    return bad
 
 
 def stitch(main: dict, parts: list) -> dict:

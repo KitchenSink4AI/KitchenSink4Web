@@ -35,6 +35,11 @@ DESIGN_CODES = {
     # driver-shaped fault (the structural half of chaos C-01).
     "SESSION_DEAD", "NAVIGATION_FAILED", "FILE_WRITE_FAILED",
     "DRIVER_FAILURE",
+    # Added 2026-09-08 (fix wave, V-01's second half). BAD_PARAMS was still
+    # the terminal fallback for a fault inside KS4Web itself: a crash in the
+    # frame merge reached the caller as "your arguments are malformed",
+    # carrying the interpreter's own sentence as the whole message.
+    "INTERNAL_ERROR",
 }
 
 
