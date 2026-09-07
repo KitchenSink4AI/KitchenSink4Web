@@ -3804,3 +3804,212 @@ controls on animation frame 5, and the read path's yield is two frames with a
 two runs in five and it fired in two of the ten integration runs. Left alone
 rather than loosened: the number that would make it stable is the number that
 makes the fix weaker.
+
+## 2026-09-08 — the verify-round fix wave (six HIGH, nine MEDIUM, eight LOW, closed)
+
+A fresh pair of eyes attacked the integrated tree at `2e8bf30` and came back
+NOT CLEAN: six HIGH, nine MEDIUM, eight LOW, with the round's own doctrine
+that a finding which does not reproduce twice is not a finding. Five of the
+six HIGH were the class this build calls cardinal, a payload asserting
+completeness over content it did not return, and the sixth was a checkout
+confirm that submitted with no prompt. This is the wave that closed them.
+
+Five agents worked in parallel, partitioned STRICTLY BY FILE rather than by
+finding, because the alternative is two agents in `lite.py` at once. That
+partition was the right call and it was also not tight enough: one worker ran
+`git checkout HEAD -- src/kitchensink4web/ops/lite.py` on the shared tree to
+split its own commits and silently destroyed an uncommitted edit of the
+orchestrator's in the same file. It was caught by re-diffing rather than by
+anything structural, which is luck. The rule the next multi-agent wave
+inherits is that a shared tree takes commit-then-rework and nothing else: no
+`git checkout HEAD -- <path>`, no `git stash` that is not scoped, and every
+worker commits only paths it owns.
+
+**The crash, and the code that lied about it.** `get_page_view` died on any
+page holding a same-origin frame that reported a non-zero `name_fallbacks`.
+That counter is built with `.length` and printed as a number, and it sat in
+`_MERGED_MAPS`, the table of per-frame counters the stitch folds with
+`.items()`. The `or {}` guard is the whole reason this reached a field report
+instead of a pin: a frame reporting ZERO fell through harmlessly and a frame
+reporting one or more took the read down, so BBC did not crash and Reuters
+did. The other three entries in that table really are maps, so this was the
+only misclassification in it, and `check_counter_shapes` now asks a live
+extraction whether the tables are right rather than trusting them. The merge
+still dispatches on the tables and not on the value, deliberately: a merge
+that coped with either shape would turn a classification bug into a wrong
+number nobody sees.
+
+The second defect rode on the first and is the more general one. A bare
+`AttributeError` raised inside KS4Web's own code reached the caller as
+`BAD_PARAMS` carrying the interpreter's sentence as the whole message, which
+makes `envelope`'s own first stated rule false. `INTERNAL_ERROR` is the fifth
+thing `BAD_PARAMS` was standing in for and it joins the closed vocabulary
+beside the union wave's four. `AttributeError` routes to it because an
+`AttributeError` cannot be an argument fault at this boundary: arguments
+arrive as JSON and are validated before a tool body runs. `ValueError` and
+`TypeError` stay where they were, because those two really can come from a
+caller's value, and the terminal `BAD_PARAMS` branch now composes a message
+naming both possibilities instead of asserting the arguments are wrong.
+
+**Nothing in the submission ladder read the word "Pay", and that was the
+highest-value fix in the round.** `payment_form` existed, was Tier 2, and was
+decided from FIELDS alone. A modern checkout confirm has no card input on it,
+because the card was captured on a previous step or lives in the wallet, so a
+`method="get"` form whose only control says "Pay now" carried no payment
+signal at all, classified as the residual `form_submit`, was admitted by the
+GET rule as query-shaped, and submitted with zero prompts. The same page shape
+gated on POST. The same GET shape gated when the button said "Delete my
+account". `query_shaped`'s own defence is that "nothing Tier 2 can ride it:
+payment, credentials, sends, deletions, and assent are all classified before
+the method is consulted", and that sentence was true for four of the five.
+
+The vocabulary is built the way the three already in that file were built,
+which is why studying them first mattered: a strong table matched against the
+submitter and the action path alone, a corroborated tier for the bare confirm
+words that fire only with a price printed on the control, and a control arm in
+every battery. `Add to cart` and bare `subscribe` are deliberately outside it.
+The price is read off the RAW text, because `squash` deletes every currency
+symbol on its way to word boundaries and "Donate $50" reaches the matcher as
+" donate 50 ". And `census["payment"]`, which the page computes and only
+`act.action_class_for` ever consulted, is read here at last.
+
+One shipped sentence had to change with it and it is FLAGGED rather than
+rewritten. `gates.GATED_CLASSES["payment_form"]` promised the human that "a
+card number, expiry, or security-code field was detected in it", which is a
+sentence the server cannot back about a form with no card input. The false
+clause is REMOVED and the replacement is the author's; the file's own comment
+records that the same parenthetical was narrowed once before for the same
+reason.
+
+**A layout table is not a table with `role="presentation"` on it.** That one
+line was the whole detection and it is almost never present: real Hacker News
+is `<table id="hnmain" border="0" cellpadding="0" width="85%">` with no role
+attribute. So the wrapper classified as data, the containment dedupe kept the
+OUTERMOST candidate, one candidate meant no inventory refusal fired, and the
+inner table that holds the rows came back as a single clipped cell described
+as a complete read. Four signals now, each a thing a layout table does that a
+data table does not, including `role="none"`, which is `presentation`'s own
+ARIA synonym and was never matched. Two ordering defects went with it: the
+layout drop happens BEFORE the containment dedupe, and the old filter that
+dropped every descendant of a presentation wrapper is gone, because a page
+that marked its wrapper HONESTLY lost its real table with it. Both directions
+of the nesting case were wrong and both are pinned. Both fixtures the tree
+already had declared `role="presentation"`, which is how the old pins passed:
+they were generous enough to make the old code sufficient.
+
+`get_list`'s refusal changed in the same commit, as the deferred ledger
+required. It named Hacker News and then sent the caller to the tool that
+garbled Hacker News.
+
+**The article guard was measuring the wrong denominator, so raising the
+threshold would never have helped.** `pageChars = articleChars +
+excludedChars` is the selected root's own neighbourhood: its floor is the
+numerator, so on a page with no block prose outside the root the share is
+1.00 by construction however small the root is, and when the scorer picks a
+lede `<div>` and books the real body as chrome the ratio is 0.57 against a
+true share of 0.16. The BBC field case cleared it at 18.7%. The denominator is
+`innerText` now, which answers the objection the old comment raised and was
+right about: `textContent` counts script bodies as page text, and `innerText`
+is the rendered text, which is what `get_text` walks. The neighbourhood
+number is kept and reported beside it. And the share is in the SUCCESS payload
+for the first time, because a caller reading a passing result never saw the
+number that let it pass.
+
+**Three Retry-After parsers, not two.** `note_429` collapsed the distinction
+`parse_retry_after` goes to trouble to preserve: `0.0` means the window has
+passed and `None` means there was no header, and `0.0` is falsy, so a site
+saying "retry now" got a 60-second block reported as 60 seconds honoured from
+its own header. The duplicate-parser sweep then found a third inline parser in
+the aggregate path with a third accept-grammar, both duplicates dropping every
+HTTP-date form and both firing on 429 alone while `RETRY_AFTER_STATUSES` has
+said 429 and 503 since the lanes wave. A fourth instance of the same class:
+the monitor was REGEX-SCRAPING `check_domain`'s refusal string to recover a
+number the book already held, which makes a user-facing sentence into
+load-bearing API. Two more re-implementation families were found and NOT
+consolidated, and are named for the author instead: four inline content-type
+parsers and six URL-origin extractors with incompatible return shapes. One of
+the six had a live victim and was fixed, because it kept the default port and
+so treated `https://example.com:443` and `https://example.com` as different
+origins on the surface that decides where a credential may be injected.
+
+**The origin lock ran only where the caller allowed it.** `recorded_origin`
+was written only when `kind == "url"`, and `kind` is caller-supplied, so
+declaring `kind: "text"` on a navigate URL slot turned the guarantee off with
+no refusal and nothing logged; a hand-edited file that dropped the line did
+the same at load. Both are closed at the mechanism: the origin is derived from
+the step's tool and field, and `_validate_slots` requires it. `kind` gained
+the value allowlist it never had, and the origin comparison became a full
+origin rather than a bare host, so a scheme downgrade no longer passes.
+
+**Two page-authored strings were outside an envelope and both are inside one
+now**, including `document_handoff`'s citation block, whose own section
+comment already claimed the marker it did not apply, on a block that ships
+inside a refusal. `handles.json` stopped writing full URLs with query strings
+into the same `STATE_DIR` whose sibling advertises that it stores no URLs: the
+receipt keeps only the three fields reconciliation actually reads, with the
+URL as a per-process-salted digest, and the auth-state path is no longer
+persisted at all because nothing ever read it back.
+
+**The elicitation wait.** A client whose transport RAISES on `elicit` was
+caught in 0.0s. A client whose transport ACCEPTS and then answers nothing
+blocked for the full 150 seconds, twice, before the third refusal became
+instant. The capabilities are known at `initialize` and the SDK exposes them,
+so this is still detection and never assumption. Unknown is treated as yes, in
+one direction only: a wrong False costs a human at the desk the ability to say
+yes at all.
+
+**The published tool counts were stale and the guard agreed with them.**
+`llms.txt` said 45 against a surface of 52, and three surfaces said the
+session starts on 16 when the lite roster is 19. The structural half is the
+one worth recording: the copy guard checked the published prose against
+`readme_numbers_snapshot.json`, so when the snapshot went stale too the wrong
+number was agreed with twice instead of caught once, and tool counts were not
+in its guarded key list at all. Two new guards ask the LIVE process, which is
+free. Re-measuring also moved two figures this wave did NOT restamp and flags
+for the author instead: the front page's demo projection, and the test count.
+
+**One pin is quarantined and the quarantine is measured rather than guessed.**
+`test_a_frame_gated_page_is_read_after_the_frames_it_needs` was characterised
+as a load artifact that passes alone. It does not: solo, one process, it fails
+about a quarter of the time. The fixture reveals on its fifth frame callback,
+between one and four have already run when the first extract happens, and the
+yield adds two, so the page is read at frame 3 to 6 against a reveal at 5.
+Widening the yield does not fix it, and the measurement says why: the 250 ms
+is a ceiling racing two frames, not a floor, and across twelve runs it bought
+16, 16, 16, 16, 16, 16, 16, 16, 9, 5, 2 and 1 frames, with one run taking
+370 ms to deliver a single frame. The pin keeps its assertion and keeps
+running under `xfail(strict=False)`.
+
+Underneath it was a live finding the round had not named, and that one IS
+fixed: `completeness["re_read_after_frames"]` was written by the read and read
+by nothing, so a page that lost the race a second time got "unlisted
+affordances: none, every control is listed" printed over it, which is hostile
+H-06 word for word. Fix wave 8 made that sentence rarer rather than untrue.
+The read says when it waited now, and says the counts describe the second read
+rather than the page.
+
+**What this wave deliberately did not do**, because naming it is the point.
+The nine GET-form submit-gate pins are untouched and the retirement ruling is
+still the author's; the harness's state isolation was fixed and no assertion
+was. The assent and destructive vocabularies have real coverage gaps, listed
+with their missing terms, and every one of them WIDENS a live gate, which is a
+different risk from closing a hole. `DESIGN.md`'s tool counts are left alone
+because they are the original design's reasoning about how big the surface
+should be, not a claim about the shipped product, and restamping them would
+falsify the record.
+
+Gate: full suite **1,860 passed, 4 skipped, 1 xpassed, ZERO FAILED in all
+three orders**, run SEQUENTIALLY: forward `-p no:randomly` (904.6s),
+`--randomly-seed=20260908` (881.3s), and `--randomly-seed=20260909` (856.1s),
+which is the seed the verify round used to find the order failure and the one
+the integration never tried. The 76-row targeted gauntlet battery is 76/76
+with **zero flips across two consecutive clean processes**. The V-22
+three-test order reproduction passes. Every fix-wave pin, 113 of them, passes
+twice. The stable number is `failed == 0`: `xfail(strict=False)` on the
+quarantined pin reports xpassed most runs and xfailed some, and both are
+green.
+
+Zero orphans. No `chrome-headless-shell` and no `chrome.exe` at exit. Fourteen
+`firefox.exe` processes are running on this machine and were not touched: all
+fourteen started eight hours before this session, so they are not this wave's
+to reason about, let alone to kill.
