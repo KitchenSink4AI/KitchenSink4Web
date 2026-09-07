@@ -361,6 +361,21 @@ def test_c12_an_ambiguous_per_jar_call_refuses(session_factory,
     run(go())
 
 
+def test_a_handoff_on_a_multi_jar_session_names_the_jar(session_factory,
+                                                        fixture_site):
+    """The headed window a human signs into carries ONE identity. Silently
+    moving the focused jar's cookies would hand them the wrong one."""
+    async def go():
+        sess = await session_factory(contexts=2)
+        await lite.navigate(page=sess.focused, url=f"{fixture_site}/form")
+        with pytest.raises(BadParams) as caught:
+            await lite.manage_session(action="handoff",
+                                      session=sess.session_id)
+        assert "c1" in str(caught.value) and "c2" in str(caught.value)
+
+    run(go())
+
+
 def test_an_unknown_context_label_lists_the_real_ones(session_factory):
     async def go():
         sess = await session_factory(contexts=2)

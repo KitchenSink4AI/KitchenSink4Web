@@ -579,7 +579,11 @@ async def set_routing(
                 f"throttle takes preset= one of {sorted(presets)}.")
         conditions = presets[preset]
         for record in sess.pages.values():
-            cdp = await sess.context.new_cdp_session(record.page)
+            # THE PAGE'S OWN JAR, which is the right one under multiple
+            # contexts: a CDP session has to come from the context that
+            # owns the page it is being attached to.
+            cdp = await sess.jar(record.context).context.new_cdp_session(
+                record.page)
             if conditions is None:
                 await cdp.send("Network.emulateNetworkConditions",
                                {"offline": False, "latency": 0,

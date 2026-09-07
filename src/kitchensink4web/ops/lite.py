@@ -3896,9 +3896,14 @@ async def manage_session(
             # localStorage does not carry, which the note states.
             old = sess
             spec = old.spec
+            # ONE JAR'S LOGIN moves into the headed window, and a session
+            # holding several names the one it means: silently carrying
+            # only the focused jar would hand the human the wrong identity
+            # to sign in as.
+            old_jar = old.jar(context)
             state = None
             try:
-                state = await old.context.storage_state()
+                state = await old_jar.context.storage_state()
             except Exception:
                 state = None
             current_url = None
@@ -3912,7 +3917,8 @@ async def manage_session(
                                       channel=spec.channel, headless=False)
             if state and state.get("cookies"):
                 try:
-                    await sess.context.add_cookies(state["cookies"])
+                    await sess.jar_handle.context.add_cookies(
+                        state["cookies"])
                 except Exception:
                     pass
             if current_url:
@@ -4139,14 +4145,23 @@ def _live_refs(sess, handle: str) -> int:
                if entry.handle == handle and not entry.gone)
 
 
+async def _session_cookie_count(sess) -> int:
+    total = 0
+    for handle in sess.contexts.values():
+        try:
+            total += len(await handle.context.cookies())
+        except Exception:
+            pass
+    return total
+
+
 async def _transfer_receipt(sess) -> dict:
     """What the session holds at the moment of export, so import can
     compare it against reality rather than asserting nothing changed."""
-    cookies = 0
-    try:
-        cookies = len(await sess.context.cookies())
-    except Exception:
-        cookies = 0
+    # EVERY jar, because the receipt describes the whole session and a
+    # count from the focused jar alone would understate a session holding
+    # two identities.
+    cookies = await _session_cookie_count(sess)
     pages = []
     for record in sess.pages.values():
         pages.append({
@@ -4214,11 +4229,7 @@ async def _transfer_report(sess, record: dict) -> dict:
                 f"page's script until it is answered. handle_dialog is the "
                 f"route.")
         rows.append(row)
-    cookies_now = 0
-    try:
-        cookies_now = len(await sess.context.cookies())
-    except Exception:
-        cookies_now = 0
+    cookies_now = await _session_cookie_count(sess)
     elapsed = time.time() - float(record.get("minted_at", time.time()))
     return {
         "imported": sess.session_id,
