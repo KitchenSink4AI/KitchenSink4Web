@@ -714,10 +714,45 @@ def test_the_status_surface_states_the_limit_beside_the_permission(
          "expires_in_s": pytest.approx(8 * 3600, abs=5)}]
     assert shown["sensitive_origins"] == ["private.example"]
     assert shown["unattended"] is False
-    # NAMES AND PATTERNS ONLY. There is no value anywhere in this payload
-    # and no route that would put one here.
+    # NAMES AND PATTERNS ONLY, in a NORMALIZED form. The raw environment
+    # string is not echoed back: what a caller needs is what is in force,
+    # and echoing the setting verbatim is how a surface starts leaking the
+    # shape of settings that DO carry values.
     import json
-    assert "8h" not in json.dumps(shown)
+    blob = json.dumps(shown)
+    assert "evaluate_script@localhost:8h" not in blob
+    assert "KS4WEB_SECRET" not in blob
+
+
+def test_the_preauth_teaching_hands_the_agent_nothing_callable():
+    """The property `readonly.UNLOCK_TEACHING` is already held to, applied to
+    its analog. A teaching that named an in-session route would be a bypass
+    wearing an instruction's clothes, and this one sits in a payload the
+    model reads."""
+    text = consent.PREAUTH_TEACHING.lower()
+    assert "restart" in text or "settings" in text
+    assert "human" in text or "settings" in text
+    # It says the irreducible set can never be pre-authorized, which is the
+    # half that stops someone trying and finding out at launch.
+    assert "never be pre-authorized" in text or "can never" in text
+    for forbidden in ("manage_session(action", "(action=", "redeem",
+                      "requeststate", "elicitation/create", "inputrequest"):
+        assert forbidden not in text, (
+            f"the preauth teaching names {forbidden!r}, which points the "
+            f"agent at an in-session route rather than a human restart")
+
+
+def test_the_permits_line_states_the_limit_beside_the_permission(monkeypatch):
+    """`readonly.describe()["permits"]`'s grammar, applied to Axis B. A
+    surface that listed what is allowed without listing what still asks
+    teaches the wrong lesson to the one person reading it."""
+    for name in consent.SCOPES:
+        line = consent.PERMITS[name].lower()
+        assert "ask" in line, (
+            f"the {name!r} permits line names no limit; it has to say what "
+            f"still asks, not only what stopped asking")
+    setup(monkeypatch, scope="research")
+    assert consent.describe()["permits"] == consent.PERMITS["research"]
 
 
 def test_a_ttl_is_read_as_a_ttl_and_a_port_as_a_port(monkeypatch):

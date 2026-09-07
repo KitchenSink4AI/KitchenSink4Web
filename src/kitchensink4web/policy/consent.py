@@ -85,6 +85,42 @@ ENV_SENSITIVE_ORIGINS = "KS4WEB_SENSITIVE_ORIGINS"
 #: client renders the schema'd prompt badly.
 ENV_REMEMBER = "KS4WEB_REMEMBER"
 
+#: COPY PLACEHOLDER (build report FACTS TO CONVEY 10). One line per scope, in
+#: `readonly.describe()["permits"]`'s honesty grammar: STATE THE LIMIT
+#: ALONGSIDE THE PERMISSION. A surface that lists what is allowed without
+#: listing what still asks teaches the wrong lesson to the one person reading
+#: it, and this is the line a human reads when they wonder why a prompt did or
+#: did not arrive.
+PERMITS: dict[str, str] = {
+    "research": ("reading, navigating, clicking, typing into ordinary "
+                 "fields, and submitting query-shaped forms. Everything "
+                 "that submits a real form still asks."),
+    "full": ("all of that plus ordinary form submission, sandboxed uploads "
+             "and downloads, storage clears, and unrecognized dialog "
+             "accepts. Money, credentials, sends that reach other people, "
+             "deletions, legal terms, off-allowlist actions, and budget "
+             "resets still ask."),
+}
+
+#: COPY PLACEHOLDER (build report FACTS TO CONVEY 11), the analog of
+#: `readonly.UNLOCK_TEACHING` and held to the same property: it teaches a
+#: HUMAN a launch-time action and hands the AGENT nothing callable,
+#: redeemable, or echoable. A teaching that named an in-session route would
+#: be a bypass wearing an instruction's clothes.
+PREAUTH_TEACHING = (
+    "To pre-authorize an action class for one site (a settings choice a "
+    "human makes, not something any tool call can do): in Claude Desktop, "
+    "fill the pre-authorization field in the server's settings; from a "
+    "shell, restart the server with "
+    "KS4WEB_PREAUTH=<class>@<origin> (for example "
+    "'evaluate_script@localhost' or 'storage_load@github.com', with an "
+    "optional ':8h' time limit). Paying, submitting a credential, sending "
+    "something that reaches other people, deleting, accepting terms, "
+    "acting off an allowlist, and resetting the budgets can never be "
+    "pre-authorized, and naming one of them here stops the server from "
+    "starting rather than silently doing nothing."
+)
+
 # ------------------------------------------------------------- the tiering
 
 #: TIER 2. Gates under every scope. Nothing in this set is preauthorizable
@@ -885,7 +921,9 @@ def describe() -> dict:
     out = {
         "consent_scope": _scope,
         "decided_by": _source,
+        "permits": PERMITS.get(_scope, ""),
         "always_asks": sorted(IRREDUCIBLE),
+        "preauth": PREAUTH_TEACHING,
         "preauthorizable": sorted(PREAUTHORIZABLE),
         "preauthorized": preauth_entries(),
         "remembered_this_session": grants(),
