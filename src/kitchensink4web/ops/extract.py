@@ -660,6 +660,59 @@ def _norm(key: str) -> str:
     return "".join(ch for ch in key.lower() if ch.isalnum())
 
 
+#: The floor a substring match has to clear ON BOTH SIDES.
+#:
+#: `_norm` strips everything that is not alphanumeric, so a source key of
+#: `"t)"` normalizes to `"t"`, and the length guard used to be on the NEEDLE
+#: only: `len(n) > 3 and norm in n`. One character is a substring of almost
+#: every field description in existence, so on the frozen Wikipedia
+#: Versailles page the field `price` with the hint "the current price"
+#: matched the key `"t)"` and confidently returned "destroyers" at
+#: `match: partial` — and returned the same value for `published`. A
+#: confident wrong answer from a read tool is the one failure this
+#: product's whole doctrine exists to forbid.
+#:
+#: Four is the floor because it is the shortest string that carries a word:
+#: `date`, `isbn`, `name`, `type`. Anything shorter still matches EXACTLY,
+#: which is the match that needs no guard.
+PARTIAL_MIN_CHARS = 4
+
+#: How much of the longer string the shorter one has to account for before
+#: a substring hit is evidence rather than a coincidence. `price` inside
+#: `pricecurrency` is 0.38 and is a real hit; `t` inside `thecurrentprice`
+#: is 0.07 and is noise. Deliberately permissive, because the FLOOR above
+#: is what kills the defect and this is the second line.
+PARTIAL_MIN_COVERAGE = 0.2
+
+
+def _partial_matches(needle: str, by_norm: dict) -> list[tuple]:
+    """Every source key that partially matches `needle`, best first.
+
+    BOTH strings clear `PARTIAL_MIN_CHARS` and the overlap clears
+    `PARTIAL_MIN_COVERAGE`. Ranked by coverage, then by overlap length,
+    then alphabetically, so the answer does not depend on dict ordering:
+    the old `next(...)` returned whichever key the page happened to emit
+    first, which made a wrong answer non-reproducible as well as wrong."""
+    if len(needle) < PARTIAL_MIN_CHARS:
+        return []
+    scored = []
+    for norm, src in by_norm.items():
+        if len(norm) < PARTIAL_MIN_CHARS:
+            continue
+        if needle in norm:
+            overlap, container = len(needle), len(norm)
+        elif norm in needle:
+            overlap, container = len(norm), len(needle)
+        else:
+            continue
+        coverage = overlap / container if container else 0.0
+        if coverage < PARTIAL_MIN_COVERAGE:
+            continue
+        scored.append((coverage, overlap, norm, src))
+    scored.sort(key=lambda row: (-row[0], -row[1], row[2]))
+    return scored
+
+
 async def extract_fields(page: str, fields: list | dict) -> dict:
     """Fill a caller-named schema from a page by deterministic matching, and
     be honest about what did not fill. Pass field names (a list, or a dict
@@ -697,7 +750,7 @@ async def extract_fields(page: str, fields: list | dict) -> dict:
     unfilled = 0
     for name, hint in wanted.items():
         needles = [name] + ([hint] if hint else [])
-        hit, quality = None, None
+        hit, quality, alternates = None, None, ()
         for needle in needles:
             n = _norm(needle)
             if not n:
@@ -705,15 +758,20 @@ async def extract_fields(page: str, fields: list | dict) -> dict:
             if n in by_norm:
                 hit, quality = by_norm[n], "exact"
                 break
-            partial = next((src for norm, src in by_norm.items()
-                            if n in norm or (len(n) > 3 and norm in n)), None)
-            if partial is not None:
-                hit, quality = partial, "partial"
+            scored = _partial_matches(n, by_norm)
+            if scored:
+                hit, quality = scored[0][3], "partial"
+                alternates = tuple(row[3]["key"] for row in scored[1:4])
                 break
         if hit:
             results[name] = {"found": True, "value": hit["value"],
                              "source": hit["by"], "matched_key": hit["key"],
                              "match": quality}
+            if alternates:
+                # Say when the substring match was not the only one. A
+                # partial hit is a guess, and a guess with runners-up is a
+                # guess the caller should be able to see.
+                results[name]["other_partial_keys"] = list(alternates)
         else:
             unfilled += 1
             results[name] = {
