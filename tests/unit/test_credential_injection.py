@@ -310,15 +310,26 @@ def test_b15_no_code_path_modifies_a_response_header():
     assert "Response headers are never modified" in src
 
 
-def test_b16_and_b17_the_handler_rechecks_the_origin_itself():
-    """A redirect creates a NEW request at a NEW url and a subresource is a
-    request of its own. Both reach a context-wide rule; neither may reach
-    this one. The matcher scopes it and the HANDLER re-checks it, because a
-    matcher alone is a claim about Playwright's dispatch and the re-check is
-    a property of this code."""
+def test_b16_and_b17_the_handler_bounds_both_hops():
+    """The unit half; `tests/browser/test_credential_injection_live.py` has
+    the wire half, and the wire half is the one that mattered.
+
+    A subresource is a request of its own, so the handler re-checks the
+    origin rather than trusting the matcher that admitted it. A REDIRECT is
+    worse and was a live leak on the first run of the live pin:
+    `route.continue_(headers=...)` hands the headers to the network stack and
+    the stack RE-SENDS them itself on a 302, with the route handler never
+    consulted for the second hop. Fetching with `max_redirects=0` and
+    fulfilling the redirect back to the browser makes the second hop a new
+    request the browser issues, which passes the matcher again and does not
+    match."""
     import inspect
     source = inspect.getsource(net._install_modify)
     assert "_origin_of(request.url) != named" in source
+    assert "max_redirects=0" in source
+    assert "await route.continue_(headers=" not in source, (
+        "continue_ with headers lets the network stack re-send them across a "
+        "redirect, which is the leak the live pin caught")
     assert net._origin_of("https://api.example.com/v1/x?q=1") \
         == "https://api.example.com"
     assert net._origin_of("https://cdn.other.com/a.png") \

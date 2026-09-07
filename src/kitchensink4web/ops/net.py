@@ -876,16 +876,36 @@ async def _install_modify(sess, state, named, name, header_value, *,
         request = route.request
         try:
             # RE-CHECKED INSIDE THE HANDLER, not only in the matcher. A
-            # redirect creates a new request at a new URL and a subresource
-            # is a request of its own; both reach a context-wide rule and
-            # neither may reach this one.
+            # subresource is a request of its own and reaches a context-wide
+            # rule; it does not reach this one.
             if _origin_of(request.url) != named:
                 await route.continue_()
                 return
             merged = dict(request.headers)
             merged[name.lower()] = header_value
+            # THE REDIRECT HOP, AND IT IS THE REASON THIS IS A FETCH RATHER
+            # THAN A CONTINUE. `route.continue_(headers=...)` hands the
+            # headers to the network stack, and the stack RE-SENDS them on
+            # its own when the origin answers 302 -- the route handler is
+            # never consulted for the second hop, so the credential followed
+            # the redirect to another origin. Measured, not assumed: the
+            # live pin caught it on the first run.
+            #
+            # Fetching with `max_redirects=0` and fulfilling the 302 back to
+            # the browser makes the second hop a NEW request the browser
+            # issues itself, which passes the matcher again and does not
+            # match. The landed-URL rule (`origins.py`) one layer down.
+            try:
+                response = await route.fetch(headers=merged,
+                                             max_redirects=0)
+            except TypeError:
+                # A driver without `max_redirects`: the capability cannot be
+                # bounded here, so it does not run. Refusing the injection is
+                # the honest answer; the request still goes, unmodified.
+                await route.continue_()
+                return
             record["applied"] += 1
-            await route.continue_(headers=merged)
+            await route.fulfill(response=response)
         except Exception:
             try:
                 await route.continue_()
