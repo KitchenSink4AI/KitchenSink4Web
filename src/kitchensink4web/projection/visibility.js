@@ -313,6 +313,12 @@ function ksHiddenReason(el, style) {
 // styled-away one, and the rect is wanted by the caller either way.
 function ksGeometryHidden(el, style) {
   var r = el.getBoundingClientRect();
+  // BOTH axes, deliberately. A single-axis test was tried for H-05 and
+  // reverted: a wrapper holding only floated or absolutely positioned
+  // children legitimately measures zero height while its children paint,
+  // and `text.js` RETURNS on a hidden verdict, so calling that wrapper
+  // hidden would count its whole subtree as withheld. H-05's real
+  // mechanism is the ancestor clip below, which is unambiguous.
   if (r.width === 0 && r.height === 0) return { reason: 'zero-size', rect: r };
   var x = r.left + window.scrollX, y = r.top + window.scrollY;
   if (x + r.width < -500 || y + r.height < -500 || x > 100000) {
@@ -322,7 +328,52 @@ function ksGeometryHidden(el, style) {
   if (s.textIndent && parseFloat(s.textIndent) < -900) {
     return { reason: 'offscreen', rect: r };
   }
+  var clipped = ksClippedAway(el, r, s);
+  if (clipped) return { reason: clipped, rect: r };
   return { reason: null, rect: r };
+}
+
+// THE ANCESTOR CLIP (hostile H-05).
+//
+// `* { width:0; height:0; overflow:hidden }` leaves a button measuring 16x6
+// in Chromium, because a button's border box survives `width:0`, so NO test
+// of the element's own geometry can see it: the read offered
+// `e1 | button | "Continue"` under "unlisted affordances: none, every
+// control is listed", and the click then paid the full 15-second
+// actionability timeout to find out, twice (15.09 s and 15.07 s). The
+// sibling page zeroing only the BUTTON reported it correctly and refused in
+// 0.01 s. One CSS effect, two verdicts.
+//
+// The ancestor is where the answer is. A zero-size box with `overflow:
+// hidden` paints nothing inside it, and an element whose rect does not
+// intersect such an ancestor at all is clipped out of the page.
+//
+// Only `hidden` and `clip` count. `scroll` and `auto` are REACHABLE:
+// content scrolled out of an `overflow:auto` container is one scroll away,
+// and calling it invisible would strip real controls off real pages, which
+// is the direction this family of checks must never fail in. A `fixed`
+// element escapes its ancestors' clipping entirely and is exempt.
+function ksClippedAway(el, rect, style) {
+  var s = style || ksCS(el);
+  if (s.position === 'fixed') return null;
+  var depth = 0;
+  for (var n = ksUp(el); n && depth < 40; n = ksUp(n), depth++) {
+    if (n === document.documentElement) break;
+    var ns = ksCS(n);
+    var ov = (ns.overflow || '') + ' ' + (ns.overflowX || '') + ' '
+           + (ns.overflowY || '');
+    if (!/\b(hidden|clip)\b/.test(ov)) {
+      if (ns.position === 'fixed') break;
+      continue;
+    }
+    var box = n.getBoundingClientRect();
+    if (box.width === 0 || box.height === 0) return 'clipped-away';
+    if (rect.right <= box.left || rect.left >= box.right
+        || rect.bottom <= box.top || rect.top >= box.bottom) {
+      return 'clipped-away';
+    }
+  }
+  return null;
 }
 
 // THE CHAIN. The element's own techniques, then every composited technique up

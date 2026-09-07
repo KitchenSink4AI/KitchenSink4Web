@@ -38,6 +38,7 @@ target is an open author call.
 
 from __future__ import annotations
 
+import asyncio
 import re
 import time
 from urllib.parse import urlparse
@@ -53,7 +54,7 @@ from ..errors import (AmbiguousLocation, AuthRequired, BadParams,
                       BlockedBySite, Conflict, LaneUnsupported, ModalBlocked,
                       NavigationFailed, NotImplementedYet, PageUnreachable,
                       ReadOnlyMode, SessionDead, StaleAnchor, TargetNotFound,
-                      ValidationFailed)
+                      Timeout, ValidationFailed)
 from ..policy import audit as _audit
 from ..policy import budgets as _budgets
 from ..policy import credentials as _credentials
@@ -1002,11 +1003,25 @@ async def get_text(
     # from the reference MCP fetch server because it is the best idea in the
     # extractor field: the tool teaches the model its own paging in the
     # result, with no extra schema and no documentation dependency.
-    more = (f'get_text(page="{record.handle}", '
-            f'start_index={got["next_start_index"]}) returns the next '
-            f'{max_chars:,} characters'
-            if got["next_start_index"] is not None
-            else "this is the end of the text in scope")
+    svg_meta = got.get("svg_meta") or {"blocks": 0, "chars": 0}
+    unclassified = got.get("unclassified") or {"blocks": 0, "chars": 0}
+    # NO POSITIVE COMPLETENESS CLAIM OVER OMITTED TEXT (hostile H-04).
+    # "this is the end of the text in scope" was printed unconditionally
+    # whenever the paging finished, including on a page whose visible prose
+    # the extractor had declined in full.
+    if got["next_start_index"] is not None:
+        more = (f'get_text(page="{record.handle}", '
+                f'start_index={got["next_start_index"]}) returns the next '
+                f'{max_chars:,} characters')
+    elif unclassified["chars"]:
+        more = (f'this is the end of the text the extractor classified as '
+                f'readable, and it is NOT the end of the visible text on '
+                f'this page: {unclassified["chars"]:,} character(s) in '
+                f'{unclassified["blocks"]} run(s) sit in inline boxes no '
+                f'block claimed and are counted in "omitted" below rather '
+                f'than returned')
+    else:
+        more = "this is the end of the text in scope"
     payload_hidden = None
     if include_hidden and got.get("hidden_sections") is not None:
         # The labeled section (DESIGN 5.1): hidden content arrives as data
@@ -1036,6 +1051,16 @@ async def get_text(
                   "total_in_scope": got["total_chars"],
                   "start_index": got["start_index"],
                   "next_start_index": got["next_start_index"]},
+        # The counters `total_in_scope` does not cover. It is the EMITTED
+        # total, and before these rows it was reported as if it were the
+        # page's: 24 characters "in scope" on a page holding 51,922 of
+        # visible prose, with "this is the end of the text in scope" under
+        # it (hostile H-04, fuzzer class 2).
+        **({"omitted": {
+            **({"unclassified_visible": unclassified}
+               if unclassified["chars"] else {}),
+            **({"svg_title_desc": svg_meta} if svg_meta["chars"] else {}),
+        }} if (unclassified["chars"] or svg_meta["chars"]) else {}),
         "continue": more,
         "stripped": (
             f'{hidden["blocks"]} hidden block(s) carrying '
@@ -1047,6 +1072,16 @@ async def get_text(
             + (f'; zero-width characters were removed from '
                f'{hidden["zero_width_blocks"]} block(s)'
                if hidden["zero_width_blocks"] else '')
+            + (f'; {unclassified["chars"]:,} visible character(s) in '
+               f'{unclassified["blocks"]} run(s) were counted and not '
+               f'returned: they sit in inline boxes that no block-level box '
+               f'claimed'
+               if unclassified["chars"] else '')
+            + (f'; {svg_meta["chars"]:,} character(s) of SVG <title>/<desc> '
+               f'in {svg_meta["blocks"]} element(s) were counted and not '
+               f'returned, because they are the SVG spelling of alt text '
+               f'rather than page prose'
+               if svg_meta["chars"] else '')
             + (f'; prose was read from {got["shadow_roots_read"]} open '
                f'shadow root(s)'
                if got.get("shadow_roots_read") else '')

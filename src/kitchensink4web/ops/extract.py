@@ -31,9 +31,10 @@ import json
 from urllib.parse import urlparse
 
 from .. import pagedata as _pagedata
-from ..errors import AmbiguousLocation, BadParams, TargetNotFound
+from ..errors import (AmbiguousLocation, BadParams, RangeOutOfBounds,
+                      TargetNotFound)
 from ..policy import engine as _policy
-from ..projection import ntok as _ntok, read_text
+from ..projection import instrument as _instrument, ntok as _ntok, read_text
 from ..projection import read_article as _read_article
 from ..projection.meter import ENCODING_NAME as _ENCODING
 from . import act as _act
@@ -227,12 +228,32 @@ async def _table_data(sess, record, location, index, start_row, max_rows):
     return got
 
 
+#: The token ceiling `get_table` holds, matching `get_page_view`'s default.
+#:
+#: HOSTILE H-03, the only finding in that round that could end a caller's
+#: session in one call. The tool was bounded by ROWS only (`max_rows=50`)
+#: and by nothing else, so the PAGE chose the payload size: a 200x1000
+#: table came back as 254,185 tokens from one default call, reproduced to
+#: the token on both runs. Its own `budget` block reported a spend against
+#: NO STATED LIMIT, while `get_page_view` on the same corpus reported
+#: `{"used": ..., "limit": 5000, "margin_held": 500}` and held it, and
+#: `get_list` and `get_links` came back at 1,415 and 1,322 tokens against
+#: 50,000 items and 100,000 links. One tool with no budget, not a policy.
+TABLE_BUDGET_TOKENS = 5000
+
+#: The floor a caller may set. Below this a table cannot say anything
+#: useful, and a budget nobody can meet is a refusal wearing a number.
+TABLE_BUDGET_FLOOR = 500
+
+
 async def get_table(
     page: str,
     location: dict | None = None,
     index: int | None = None,
     start_row: int = 0,
     max_rows: int = 50,
+    budget_tokens: int = TABLE_BUDGET_TOKENS,
+    max_columns: int | None = None,
 ) -> dict:
     """Read one table as deterministic JSON: headers plus rows of plain
     strings, with every rowspan and colspan value carried forward into the
@@ -250,37 +271,98 @@ async def get_table(
     # refused before any of its content is returned.
     await _lite._read_gate(sess, record, tool="get_table")
     sess.counters["reads"] += 1
+    budget = int(budget_tokens or TABLE_BUDGET_TOKENS)
+    if budget < TABLE_BUDGET_FLOOR:
+        raise RangeOutOfBounds(
+            f"budget_tokens {budget} is below the floor of "
+            f"{TABLE_BUDGET_FLOOR}: a table read that small cannot carry a "
+            f"header row and a data row, so it would report a shape rather "
+            f"than a table. Ask for {TABLE_BUDGET_FLOOR} or more, or read "
+            f"fewer rows with max_rows.")
     got = await _table_data(sess, record, location, index, start_row, max_rows)
+    table = {k: got[k] for k in
+             ("kind", "caption", "columns", "headers", "total_rows",
+              "start_row", "rows", "next_start_row")}
+    # THE COLUMN BOUND (hostile H-03). Rows were bounded and columns were
+    # not, so a page could pick the payload size. Trimming reports what it
+    # trimmed; a trim nobody is told about is the completeness lie this
+    # product exists to refuse.
+    trim = _fit_table(table, budget, max_columns)
     more = (f'get_table(page="{record.handle}", '
-            f'start_row={got["next_start_row"]}'
+            f'start_row={table["next_start_row"]}'
             + (f', index={index}' if index is not None else '')
             + ') returns the next rows'
-            if got["next_start_row"] is not None
+            if table["next_start_row"] is not None
             else "all rows in the table are included")
+    if trim.get("columns_dropped"):
+        more += (f'. {trim["columns_dropped"]} of {trim["columns_total"]} '
+                 f'column(s) are NOT in this payload: the grid was trimmed '
+                 f'to hold the token budget. Raise budget_tokens, or name '
+                 f'max_columns and page through the table by row with a '
+                 f'narrower grid')
     payload = {
         "page": record.handle, "session": sess.session_id,
         "url": record.page.url,
-        "table": {k: got[k] for k in
-                  ("kind", "caption", "columns", "headers", "total_rows",
-                   "start_row", "rows", "next_start_row")},
+        "table": table,
         "continue": more,
         "accounting": {
             "spans_expanded": got["spans_expanded"],
             "clipped_cells": got["clipped_cells"],
+            **trim,
             "note": ("merged cells are expanded: a value spanning rows or "
                      "columns is repeated into every position it covers, "
                      "which is what keeps later columns aligned"),
         },
     }
     payload["budget"] = {"used": _ntok(json.dumps(payload["table"])),
-                         "estimator": _ENCODING}
+                         "limit": budget, "estimator": _ENCODING}
     return payload
+
+
+def _fit_table(table: dict, budget: int, max_columns: int | None) -> dict:
+    """Trim a grid's COLUMNS until it fits the budget, and say what went.
+
+    Columns are trimmed from the right, which is where a wide table puts
+    its least-load-bearing fields and, more to the point, is deterministic:
+    a caller paging by row must get the same columns every call."""
+    headers = list(table.get("headers") or [])
+    rows = list(table.get("rows") or [])
+    total = len(headers) or max((len(r) for r in rows), default=0)
+    keep = total
+    if max_columns is not None:
+        keep = max(1, min(keep, int(max_columns)))
+
+    def apply(n: int) -> None:
+        if headers:
+            table["headers"] = headers[:n]
+        table["rows"] = [row[:n] for row in rows]
+        table["columns"] = n
+
+    apply(keep)
+    # Halve until it fits. A linear walk down a 1,000-column grid would be
+    # a thousand tokenizer runs, and this is a bound, not a fit.
+    while keep > 1 and _ntok(json.dumps(table)) > budget:
+        keep = max(1, keep // 2)
+        apply(keep)
+    if keep >= total:
+        return {"columns_total": total, "columns_dropped": 0}
+    dropped_names = [str(h) for h in headers[keep:keep + 6]]
+    return {
+        "columns_total": total,
+        "columns_returned": keep,
+        "columns_dropped": total - keep,
+        "first_dropped_headers": dropped_names,
+        "trim": ("columns were dropped from the right to hold the token "
+                 "budget; the row count and every value returned are "
+                 "unchanged"),
+    }
 
 
 # ------------------------------------------------------------------- lists
 
 _LIST_JS = r"""
 (arg) => {
+// @@KS4WEB_HREF@@
   const opts = arg.opts || {};
   const squash = (s) => (typeof s === 'string' ? s : '').replace(/\s+/g, ' ').trim();
   const clip = (s, n) => { s = squash(s); return s.length <= n ? s : s.slice(0, n) + '...'; };
@@ -333,7 +415,9 @@ _LIST_JS = r"""
     const link = x.el.querySelector ? x.el.querySelector('a[href]') : null;
     const rec = { i: start + i, text: clip(x.el.textContent, 200) };
     if (x.term) rec.term = x.term;
-    if (link) { try { rec.href = new URL(link.href, location.href).pathname + new URL(link.href, location.href).search; } catch (e) { rec.href = link.getAttribute('href'); } }
+    // ksHref, not link.href (fuzzer class 10): an SVG anchor's href is an
+    // SVGAnimatedString and stringifying it fabricates a URL.
+    if (link) { try { const u = new URL(ksHref(link), location.href); rec.href = u.pathname + u.search; } catch (e) { rec.href = link.getAttribute('href'); } }
     return rec;
   });
   return {
@@ -343,6 +427,9 @@ _LIST_JS = r"""
   };
 }
 """
+# The shared href reader is SPLICED, not duplicated (fuzzer class 10). These
+# two blocks carry no instrument prelude, so the marker is all they need.
+_LIST_JS = _instrument(_LIST_JS)
 
 
 async def get_list(
@@ -419,6 +506,7 @@ async def get_list(
 
 _LINKS_JS = r"""
 (arg) => {
+// @@KS4WEB_HREF@@
   const opts = arg.opts || {};
   const squash = (s) => (typeof s === 'string' ? s : '').replace(/\s+/g, ' ').trim();
   const clip = (s, n) => { s = squash(s); return s.length <= n ? s : s.slice(0, n) + '...'; };
@@ -429,8 +517,15 @@ _LINKS_JS = r"""
   for (const a of root.querySelectorAll('a[href]')) {
     scanned++;
     let href;
+    // THE ATTRIBUTE, NOT THE PROPERTY, FOR SVG (fuzzer class 10). An SVG
+    // `<a>` exposes `href` as an SVGAnimatedString rather than a string,
+    // and stringifying the DOM property produced
+    // "/[object%20SVGAnimatedString]": a plausible-looking URL that was
+    // fabricated, presented as fact, with no flag on it. The attribute is
+    // the page's own text either way, so resolving from it is correct for
+    // HTML anchors too.
     try {
-      const u = new URL(a.href, location.href);
+      const u = new URL(ksHref(a), location.href);
       href = u.origin !== location.origin ? u.origin + u.pathname
         : u.pathname + u.search + u.hash;
     } catch (e) { href = a.getAttribute('href'); }
@@ -451,6 +546,7 @@ _LINKS_JS = r"""
            links: Array.from(seen.values()) };
 }
 """
+_LINKS_JS = _instrument(_LINKS_JS)
 
 
 async def get_links(

@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Wide table</title></head>
+<body>
+<h1>WIDE TABLE</h1>
+<!-- Hostile round H-03. get_table was bounded by rows only (max_rows=50)
+     and by nothing else, so the PAGE picked the payload size: 200 rows of
+     1,000 columns came back as 254,185 tokens in one default call, against
+     no stated limit, while get_page_view on the same corpus reported
+     {"used": ..., "limit": 5000, "margin_held": 500} and held it. The only
+     finding in that round that could end a caller's session in one call. -->
+<table id="wide"><tbody></tbody></table>
+<script>
+  const body = document.querySelector('#wide tbody');
+  const rows = 60, cols = 400;
+  let html = '';
+  for (let r = 0; r < rows; r++) {
+    html += '<tr>';
+    for (let c = 0; c < cols; c++) html += '<td>r' + r + 'c' + c + '</td>';
+    html += '</tr>';
+  }
+  body.innerHTML = html;
+</script>
+</body>
+</html>

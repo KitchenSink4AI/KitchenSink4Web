@@ -260,15 +260,20 @@ def test_list_console_dedupes_the_flood_and_keeps_the_needles(site):
         await session.pages[page].page.wait_for_timeout(300)
         errs = await diag.list_console(session=session.session_id,
                                        level="error")
-        # The two needles survive under thousands of noise lines.
-        samples = " ".join(r["sample"] for r in errs["messages"])
+        # The two needles survive under thousands of noise lines. The rows
+        # ride the labeled data envelope since 2026-09-07 (union wave,
+        # IG-03): console text is page-authored prose, which is the shape
+        # of an injection, and the pack shipped it bare.
+        assert errs["page_data"]["nonce"] in errs["messages"]
+        assert "UNTRUSTED PAGE CONTENT" in errs["page_data"]["label"]
+        samples = errs["messages"]
         assert "TypeError" in samples
         assert "401" in samples
         # And the flood is collapsed, not handed over line by line.
         assert errs["totals"]["lines_seen"] > 1000
         allmsgs = await diag.list_console(session=session.session_id,
                                           level="all")
-        assert len(allmsgs["messages"]) < 60
+        assert allmsgs["totals"]["unique_shapes"] < 60
         assert allmsgs["totals"]["collapsed_by_dedup"] > 1000
     run(go())
 

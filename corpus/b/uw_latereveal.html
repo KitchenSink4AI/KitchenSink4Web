@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Late reveal</title></head>
+<body>
+<p>WAITING</p>
+<div id="slot"></div>
+<!-- Hostile round H-08. The form materialises on a timer. The `visible`
+     and `hidden` conditions resolved their location EAGERLY, once, before
+     the wait, and a resolution miss aborted the call: wait_for(
+     condition='visible', location={css:'#name'}, timeout_ms=30000)
+     refused NOT_FOUND after 0.01 s and never consulted timeout_ms. The one
+     condition designed for "this control appears later" could not be used
+     for exactly that case, and the refusal's own last clause named the
+     true situation while declining to wait for it. -->
+<script>
+  setTimeout(() => {
+    document.getElementById('slot').innerHTML =
+      '<form><input id="name" name="name"><button>Send</button></form>' +
+      '<p>REVEALED</p>';
+  }, 1200);
+</script>
+</body>
+</html>

@@ -1499,14 +1499,32 @@ def _refuse_cloak_verdict(verdict, tool: str) -> None:
         return
     if isinstance(verdict, str):
         verdict = {"reason": verdict, "why": _CLOAK_WHY.get(verdict, verdict)}
+    # THE CROSS-CHECK CLAIM IS NOW TRUE OF ONLY THE CASES IT HOLDS FOR
+    # (hostile H-09). The sentence used to promise that "the read's
+    # completeness block counts it as hidden interactive with the technique
+    # named" for EVERY cloak verdict, and for an opaque panel over the whole
+    # viewport it did not: per-element occlusion is computed on the acting
+    # path, deliberately, for the cost reason `visibility.js` documents, so
+    # a read taken a moment earlier listed the covered control and said
+    # "unlisted affordances: none, every control is listed". A refusal that
+    # advertises a cross-check the read demonstrably fails to produce is
+    # worse than one that says nothing: it tells an agent to trust a block
+    # that contradicts it.
+    occluded = verdict.get("reason") == "occluded"
+    where = (
+        "The read surfaces do not compute per-element occlusion (it costs a "
+        "page-wide scan and up to nine hit tests per control, on every "
+        "read), so this verdict is the acting path's own. A read taken now "
+        "names an opaque panel covering the viewport where there is one."
+        if occluded else
+        "The content is still readable through the labeled route, "
+        "get_text(include_hidden=true), and the read's completeness block "
+        "counts it as hidden interactive with the technique named.")
     raise TargetNotFound(
         f'{tool} will not act on this element: it is in the page and a human '
         f'cannot see it ({verdict["why"]}). A control that is invisible and '
         f'still clickable is how a page steers an agent onto something the '
-        f'user never saw, so nothing was done. The content is still readable '
-        f'through the labeled route, get_text(include_hidden=true), and the '
-        f'read\'s completeness block counts it as hidden interactive with the '
-        f'technique named.')
+        f'user never saw, so nothing was done. {where}')
 
 
 #: The Python mirror of `KS_CLOAK_TECHNIQUES`, for the paths that receive a

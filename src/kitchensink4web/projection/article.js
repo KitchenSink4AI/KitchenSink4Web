@@ -41,6 +41,7 @@
 //    walk for the cost of one extra pass.
 (opts) => {
 // @@KS4WEB_INSTRUMENT@@
+// @@KS4WEB_HREF@@
 // @@KS4WEB_VISIBILITY@@
   const startIndex = Math.max(0, opts.start_index || 0);
   const maxChars = Math.max(200, Math.min(200000, opts.max_chars || 20000));
@@ -190,7 +191,7 @@
 
   function resolveHref(a) {
     try {
-      const u = new URL(a.href, location.href);
+      const u = new URL(ksHref(a), location.href);
       return u.origin !== location.origin ? u.origin + u.pathname
         : (u.pathname + u.search + u.hash);
     } catch (e) { return a.getAttribute('href') || ''; }

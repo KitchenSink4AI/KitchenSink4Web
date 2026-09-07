@@ -182,11 +182,23 @@ def test_include_hidden_can_be_disabled_at_launch(corpus_site, monkeypatch):
 
 def test_the_page_view_never_carries_hidden_content_and_signposts(
         corpus_site):
+    """The RULING is unchanged: the orientation never carries hidden
+    content and the labeled route is get_text. What changed on 2026-09-07
+    (union wave, fuzzer class 7) is that `include_hidden` left
+    get_page_view's SCHEMA rather than staying in it as a knob that refused
+    every truthy value, so the teaching sentence lives in
+    `server.WITHDRAWN_PARAMS` and the signpost is checked there."""
     async def go():
         _, page = await _open(corpus_site, "c/injection_hidden.html")
-        with pytest.raises(BadParams) as exc:
-            await lite.get_page_view(page=page, include_hidden=True)
-        assert "get_text" in str(exc.value)
+        import inspect
+        from kitchensink4web import server as _server
+        assert "include_hidden" not in inspect.signature(
+            lite.get_page_view).parameters
+        note = _server.WITHDRAWN_PARAMS[("get_page_view", "include_hidden")]
+        assert "get_text" in note
+        # And the labeled route really does serve it.
+        got = await lite.get_text(page=page, include_hidden=True)
+        assert got["hidden_content"]["sections"]
 
     run(go())
 

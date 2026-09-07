@@ -41,7 +41,7 @@ from .meter import ENCODING_NAME, ntok
 from .render import RUNGS, Projection, project
 
 __all__ = ["EXTRACT_JS", "FIND_JS", "TEXT_JS", "ARTICLE_JS", "VISIBILITY_JS",
-           "PAYMENT_JS", "ACTIVATION_JS", "ARIA_JS",
+           "PAYMENT_JS", "ACTIVATION_JS", "ARIA_JS", "HREF_JS",
            "CLOSED_SHADOW_HOOK", "INSTRUMENT_KEY", "instrument",
            "Projection", "project", "extract", "find", "read_text",
            "read_article", "read_page", "stitch", "ntok",
@@ -56,6 +56,7 @@ _INSTR_MARK = "// @@KS4WEB_INSTRUMENT@@"
 _PAY_MARK = "// @@KS4WEB_PAYMENT@@"
 _ACT_MARK = "// @@KS4WEB_ACTIVATION@@"
 _ARIA_MARK = "// @@KS4WEB_ARIA@@"
+_HREF_MARK = "// @@KS4WEB_HREF@@"
 
 #: THE ONE HIDDEN-DETECTION SOURCE (gauntlet 2 H2/H3/M4/L2, 2026-09-06).
 #: `hiddenReason` used to exist three times, in `extract.js`, `find.js`, and
@@ -73,6 +74,12 @@ VISIBILITY_JS = (_HERE / "visibility.js").read_text(encoding="utf-8")
 #: declares no token at all was unclassified everywhere at once. The rule now
 #: lives in `payment.js` and is spliced into every consumer at load.
 PAYMENT_JS = (_HERE / "payment.js").read_text(encoding="utf-8")
+
+#: THE ONE HREF SOURCE (union wave, fuzzer class 10). Same story again, one
+#: property along: five sites read `element.href` and stringified it, and on
+#: an SVG anchor that property is an SVGAnimatedString, so the payload
+#: carried "/[object%20SVGAnimatedString]" as a fact.
+HREF_JS = (_HERE / "href.js").read_text(encoding="utf-8")
 
 #: THE ONE ACTIVATION-TARGET SOURCE (re-attack 2 C1, 2026-09-06). Same story
 #: one question earlier: every classifier in the build modelled the element
@@ -141,6 +148,8 @@ def instrument(source: str, *, visibility: str | None = None) -> str:
         source = source.replace(_ACT_MARK, ACTIVATION_JS)
     if _ARIA_MARK in source:
         source = source.replace(_ARIA_MARK, ARIA_JS)
+    if _HREF_MARK in source:
+        source = source.replace(_HREF_MARK, HREF_JS)
     if _INSTR_MARK in source:
         source = source.replace(_INSTR_MARK, INSTRUMENT_PRELUDE)
     return source
@@ -181,8 +190,60 @@ async def extract(page, root: str | None = None,
     resolve, so an element `find_elements` located past the cap is in the
     candidate list the rebind ladder searches. It widens the haystack only:
     the ladder still matches by anchor key and still refuses."""
-    return _checked(await page.evaluate(
+    data = _checked(await page.evaluate(
         EXTRACT_JS, {"root": root, "pin": pin}))
+    if _looks_unfinished(data):
+        # THE READ PATH GETS THE ARMING PROBE'S YIELD (hostile H-06). Fix
+        # wave 8 gave the CLICK path a two-animation-frame yield so a lid
+        # raised in `requestAnimationFrame` is composited before the verdict;
+        # the read path got no equivalent, so `/time/raf?f=5` — an h1, a
+        # paragraph and a button revealed on frame 5 — read as a page with
+        # no controls and the completeness block affirmed it ("unlisted
+        # affordances: none, every control is listed"). An empty read looked
+        # final, and nothing in it signalled that the page was still
+        # materialising.
+        #
+        # The yield is paid ONLY on a read that came back with nothing to
+        # show, which is the shape the defect has and is not the shape an
+        # ordinary page has, so no page that had content pays for it.
+        try:
+            await page.evaluate(_FRAME_YIELD)
+            data = _checked(await page.evaluate(
+                EXTRACT_JS, {"root": root, "pin": pin}))
+            data.setdefault("completeness", {})["re_read_after_frames"] = 2
+        except Exception:
+            pass                # a page that went away keeps the first read
+    return data
+
+
+#: What "the first read found nothing" looks like. Deliberately narrow: a
+#: page with any affordance, any heading, or any readable prose is a page
+#: this build has something to say about, and it pays nothing here.
+def _looks_unfinished(data: dict) -> bool:
+    if not isinstance(data, dict):
+        return False
+    if data.get("affordances") or data.get("headings"):
+        return False
+    if (data.get("shape") or {}).get("prose_chars"):
+        return False
+    return bool(data.get("identity"))
+
+
+#: Two animation frames and a task turn, the same window `_ARMING_PROBE`
+#: uses, for the same reason: it is exactly as far as a page can schedule
+#: without a timer.
+_FRAME_YIELD = """
+() => new Promise(function (done) {
+  let settled = false;
+  const finish = function () {
+    if (settled) return;
+    settled = true;
+    setTimeout(done, 0);
+  };
+  requestAnimationFrame(function () { requestAnimationFrame(finish); });
+  setTimeout(finish, 250);
+})
+"""
 
 
 async def find(page, query: str, kind: str = "auto", limit: int = 20,

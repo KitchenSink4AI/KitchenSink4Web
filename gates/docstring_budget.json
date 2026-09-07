@@ -126,8 +126,8 @@
     },
     "get_table": {
       "description_tokens": 155,
-      "schema_tokens": 100,
-      "total_tokens": 255,
+      "schema_tokens": 134,
+      "total_tokens": 289,
       "over_reference_caps": true
     },
     "get_text": {

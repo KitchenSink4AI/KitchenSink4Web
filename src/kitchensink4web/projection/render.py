@@ -663,10 +663,30 @@ class Renderer:
                 f'nodes and removed from the content')
 
         if c["canvases"]:
+            # The counter used to run on an area heuristic (>80x80), which
+            # answered wrongly in BOTH directions: a 200x60 canvas with text
+            # painted on it reported "none", and a blank 900x600 one
+            # reported unread content (fuzzer class 3). Every laid-out
+            # canvas is counted now, and whether anything is DRAWN on it is
+            # stated separately, because size was never evidence about
+            # content.
+            painted = [x for x in c["canvases"] if x.get("painted") is True]
+            blank = [x for x in c["canvases"] if x.get("painted") is False]
+            unknown = [x for x in c["canvases"]
+                       if x.get("painted") not in (True, False)]
+            parts = []
+            if painted:
+                parts.append(f'{len(painted)} with pixels drawn on them')
+            if blank:
+                parts.append(f'{len(blank)} blank')
+            if unknown:
+                parts.append(f'{len(unknown)} this build could not sample '
+                             f'(a tainted or non-2D canvas)')
             lines.append(
                 f'canvas-rendered regions with no text projection: '
-                f'{len(c["canvases"])}; pixels need the capture pack '
-                f'(--packs capture)')
+                f'{len(c["canvases"])}'
+                + (f' ({"; ".join(parts)})' if parts else '')
+                + '; pixels need the capture pack (--packs capture)')
         else:
             lines.append("canvas-rendered regions: none")
 
@@ -689,6 +709,19 @@ class Renderer:
                 f'{len(suppressed)} class(es) [{detail}].{why}')
         else:
             lines.append("unlisted affordances: none, every control is listed")
+        lid = c.get("viewport_lid")
+        if lid:
+            # H-09: without this line the read said every control was
+            # listed and visible while an opaque panel covered the whole
+            # viewport, and the click refusal cited a completeness entry
+            # that did not exist.
+            lines.append(
+                f'an opaque panel covers the viewport '
+                f'({lid["tag"]}'
+                + (f'#{lid["id"]}' if lid.get("id") else '')
+                + f', {lid["w"]}x{lid["h"]}): a human sees that panel and '
+                f'not the controls listed above, so a click on any of them '
+                f'refuses. Its own controls are the ones a human can act on')
         if c["affordance_cap_hit"]:
             lines.append(
                 f'{c["affordances_uncollected"]} of those were counted but '

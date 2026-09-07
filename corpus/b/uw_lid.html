@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Viewport lid</title>
+<style>
+  #lid { position: fixed; inset: 0; background: #fff; opacity: 1;
+         pointer-events: auto; display: none; z-index: 9999; }
+</style>
+</head>
+<body>
+<h1>UNDER THE LID</h1>
+<button id="go">Continue</button>
+<div id="lid"><p>Loading, please wait...</p></div>
+<!-- Hostile round H-09. The lid is raised on animation frame 5, past the
+     two-frame yield the arming probe takes, and it is fully composited:
+     position:fixed, inset:0, opacity:1, pointer-events:auto. The READ
+     listed the button under "unlisted affordances: none, every control is
+     listed" and named nothing; the CLICK then refused with "an opaque
+     panel is painted over it ... the read's completeness block counts it
+     as hidden interactive with the technique named", which it does not.
+     A refusal advertising a cross-check the read fails to produce is
+     worse than one that says nothing. -->
+<script>
+  let n = 0;
+  (function frame() {
+    if (++n >= 5) { document.getElementById('lid').style.display = 'block'; return; }
+    requestAnimationFrame(frame);
+  })();
+</script>
+</body>
+</html>

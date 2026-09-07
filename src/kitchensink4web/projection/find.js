@@ -37,6 +37,7 @@
 // absolute expression ignores a context node.
 (opts) => {
 // @@KS4WEB_INSTRUMENT@@
+// @@KS4WEB_HREF@@
 // @@KS4WEB_VISIBILITY@@
 // @@KS4WEB_ARIA@@
   const query = opts.query || '';
@@ -355,7 +356,7 @@
     let path = null;
     if (el.tagName === 'A') {
       try {
-        const u = new URL(el.href, location.href);
+        const u = new URL(ksHref(el), location.href);
         path = u.origin !== location.origin ? u.origin + u.pathname
           : (u.pathname + u.search + u.hash);
       } catch (e) { path = el.getAttribute('href'); }

@@ -26,6 +26,7 @@
 // counts of all regions plus the unowned remainder sum to the document.
 (opts) => {
 // @@KS4WEB_INSTRUMENT@@
+// @@KS4WEB_HREF@@
 // @@KS4WEB_VISIBILITY@@
 // @@KS4WEB_PAYMENT@@
 // @@KS4WEB_ACTIVATION@@
@@ -490,6 +491,84 @@
   const forms = [];
   const tables = [];
   const canvases = [];
+  // Is anything actually drawn on this canvas? (fuzzer class 3.)
+  //
+  // Sampled rather than read whole: a full getImageData on a 4K canvas is
+  // megabytes of pixels for a boolean. Sixteen points on a grid catches a
+  // painted toolbar, a chart, or a line of text, and misses only a canvas
+  // whose entire content is thinner than one sixteenth of it in both axes.
+  // `null` where the answer cannot be had, never a guess: a tainted canvas
+  // (a cross-origin image drawn into it) throws a SecurityError on read,
+  // and "I could not look" is a different statement from "nothing is there".
+  function canvasPainted(el) {
+    try {
+      const ctx = el.getContext && el.getContext('2d');
+      if (!ctx) return null;              // WebGL, or no context at all
+      const w = el.width, h = el.height;
+      if (!w || !h) return false;
+      const steps = 4;
+      for (let i = 0; i < steps; i++) {
+        for (let j = 0; j < steps; j++) {
+          const x = Math.min(w - 1, Math.floor(w * (i + 0.5) / steps));
+          const y = Math.min(h - 1, Math.floor(h * (j + 0.5) / steps));
+          const sw = Math.max(1, Math.floor(w / steps));
+          const sh = Math.max(1, Math.floor(h / steps));
+          const data = ctx.getImageData(
+            Math.max(0, x - (sw >> 1)), Math.max(0, y - (sh >> 1)),
+            Math.min(sw, w), Math.min(sh, h)).data;
+          for (let k = 3; k < data.length; k += 4) {
+            if (data[k] !== 0) return true;
+          }
+        }
+      }
+      return false;
+    } catch (e) {
+      return null;
+    }
+  }
+  // Is an opaque panel covering the whole viewport? (hostile H-09.)
+  //
+  // One scan, no hit tests. A candidate has to be positioned, cover at
+  // least 90% of the viewport in both axes, be fully opaque itself, carry
+  // a non-transparent background of its own, and be the LAST such element
+  // in paint order among its peers. That last condition is what keeps an
+  // ordinary full-page wrapper out of the answer: a wrapper is where the
+  // content lives, and this reports the topmost one only.
+  function viewportLid() {
+    try {
+      const vw = window.innerWidth || 1280;
+      const vh = window.innerHeight || 900;
+      let best = null;
+      const nodes = document.body
+        ? document.body.querySelectorAll('*') : [];
+      let scanned = 0;
+      for (const el of nodes) {
+        if (scanned++ > 4000) break;
+        const s = ksCS(el);
+        if (s.position !== 'fixed' && s.position !== 'absolute') continue;
+        if (parseFloat(s.opacity) < 0.99) continue;
+        if (s.visibility === 'hidden' || s.display === 'none') continue;
+        const bg = s.backgroundColor || '';
+        // A transparent panel is not a lid: a human sees straight through
+        // it, and calling that invisible would be the false positive this
+        // whole family of checks has to fail away from.
+        if (!bg || bg === 'transparent'
+            || /rgba\([^)]*,\s*0(\.0+)?\)\s*$/.test(bg)) continue;
+        const r = el.getBoundingClientRect();
+        if (r.width < vw * 0.9 || r.height < vh * 0.9) continue;
+        if (r.left > vw * 0.05 || r.top > vh * 0.05) continue;
+        // The element's own text is what a human reads instead of the page.
+        best = { tag: el.tagName.toLowerCase(),
+                 id: el.id || null,
+                 ref: KS.refof.get(el) || null,
+                 w: Math.round(r.width), h: Math.round(r.height),
+                 covers_viewport: true };
+      }
+      return best;
+    } catch (e) {
+      return null;
+    }
+  }
   const frames = [];
   const virtualContainers = [];
   const hiddenReasons = {};
@@ -1042,7 +1121,7 @@
               href = el.getAttribute('href');
               if (collect) {
                 try {
-                  const u = new URL(el.href, location.href);
+                  const u = new URL(ksHref(el), location.href);
                   external = u.origin !== location.origin;
                   path = external ? u.origin + u.pathname : (u.pathname + u.search + u.hash);
                 } catch (e) { path = href; }
@@ -1202,11 +1281,28 @@
           });
         }
       } else if (tag === 'CANVAS') {
+        // THE LEDGER WAS INVERTED BY AN AREA HEURISTIC (fuzzer class 3).
+        // The old test was "bigger than 80x80", which is a guess about
+        // whether a canvas matters and answers the wrong question in both
+        // directions: a 200x60 canvas with `fillText('SMALLCANVASTEXT')`
+        // painted on it reported "canvas-rendered regions: none", and a
+        // 900x600 canvas that was completely blank reported one region of
+        // unread content. `UNSUPPORTED_CONTENT`'s hint promises "the
+        // completeness block of the last read counts it", and on the small
+        // one it counted zero.
+        //
+        // Every canvas that is LAID OUT is counted now, whatever its size,
+        // because size is not evidence about content and the ledger's job
+        // is to say what was not read. `painted` is the cheap, honest
+        // signal the payload can carry beside it: a canvas whose backing
+        // store is entirely transparent has nothing on it, and one that is
+        // too large to sample says so rather than guessing.
         const geo = geometryHidden(el, style);
-        if (!geo.reason && geo.rect.width > 80 && geo.rect.height > 80) {
+        if (!geo.reason && geo.rect.width >= 1 && geo.rect.height >= 1) {
           canvases.push({
             region: region ? region.ref : null,
-            w: Math.round(geo.rect.width), h: Math.round(geo.rect.height)
+            w: Math.round(geo.rect.width), h: Math.round(geo.rect.height),
+            painted: canvasPainted(el)
           });
         }
       } else if (tag === 'IFRAME') {
@@ -1525,6 +1621,24 @@
       shadow_traversal: SHADOW_ON,
       closed_shadow_roots: (KS.closed || 0),
       virtual: virtualContainers, canvases: canvases,
+      // THE FULL-VIEWPORT LID (hostile H-09). Per-element occlusion stays
+      // on the acting path for the cost reason `visibility.js` documents:
+      // a page-wide scan plus nine hit tests per element, on every
+      // extraction of a ten-thousand-node page. The one case that does NOT
+      // need that is this one, because a panel covering the whole viewport
+      // is a single page-level question asked once.
+      //
+      // It was worth asking. A `position:fixed; inset:0; opacity:1;
+      // pointer-events:auto` panel raised over everything left the read
+      // saying "unlisted affordances: none, every control is listed" with
+      // the covered button listed above it, while `click` refused with "an
+      // opaque panel is painted over it ... the read's completeness block
+      // counts it as hidden interactive with the technique named". It did
+      // not. A refusal advertising a cross-check the read demonstrably
+      // fails to produce is the worst version of the defect: an agent told
+      // to trust the completeness block is told so by a message the
+      // completeness block contradicts.
+      viewport_lid: viewportLid(),
       hidden_interactive: hiddenInteractive, hidden_nodes: hiddenNodes,
       hidden_text_chars: hiddenTextChars, hidden_reasons: hiddenReasons,
       hidden_interactive_reasons: hiddenInteractiveReasons,

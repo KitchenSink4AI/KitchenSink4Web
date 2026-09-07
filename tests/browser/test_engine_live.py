@@ -455,22 +455,25 @@ def test_an_impossible_budget_refuses_by_naming_the_floor(session_factory,
 
 def test_the_parameters_that_are_still_unbuilt_refuse_honestly(
         session_factory, fixture_site):
-    """`location` and `since` landed in Phase 2, and Phase 3 ruled on
-    `include_hidden`: the ORIENTATION never carries hidden content, and the
-    refusal names the labeled get_text route instead. `cursor` is still
-    unbuilt (spill-to-file paging was not built in Phase 5) and refuses
-    honestly rather than returning something plausible."""
+    """`location` and `since` landed in Phase 2.
+
+    `cursor` and `include_hidden` LEFT THE SCHEMA on 2026-09-07 (union
+    wave, fuzzer classes 6 and 7). `cursor` reached the NOT_IMPLEMENTED
+    scaffold code through a parameter the published schema advertised, in a
+    build whose own gate asserts the scaffold set is empty; `include_hidden`
+    refused every truthy value on a policy ruling that is not going to
+    change, so the schema advertised a knob that does not exist. The two
+    teaching sentences moved to `server.WITHDRAWN_PARAMS`, which is what a
+    caller who still sends one gets."""
     async def go():
         session = await session_factory()
         page = session.focused
         await lite.navigate(page=page, url=fixture_site + "/form")
-        with pytest.raises(Exception) as caught:
-            await lite.get_page_view(page=page, cursor="aff:40")
-        assert "not built" in str(caught.value)
-        with pytest.raises(Exception) as caught:
-            await lite.get_page_view(page=page, include_hidden=True)
-        assert "get_text" in str(caught.value)
-        assert "separately labeled" in str(caught.value)
+        from kitchensink4web import server as _server
+        for param in ("cursor", "include_hidden"):
+            assert ("get_page_view", param) in _server.WITHDRAWN_PARAMS
+        note = _server.WITHDRAWN_PARAMS[("get_page_view", "include_hidden")]
+        assert "get_text" in note and "separately labeled" in note
 
         # A ref nobody minted refuses by naming the mint rule, which is the
         # entry condition rather than a not-implemented stub.

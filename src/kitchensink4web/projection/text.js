@@ -55,7 +55,48 @@
 
   const BLOCK = new Set(['P', 'LI', 'BLOCKQUOTE', 'PRE', 'DD', 'DT',
     'FIGCAPTION', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'TD', 'TH']);
-  const SKIP = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEMPLATE', 'SVG']);
+  const SKIP = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEMPLATE']);
+
+  // THE READABLE SET IS NOW EVERY BLOCK-LEVEL BOX, not a fixed tag list
+  // (hostile H-04). The list above was the whole readable set, so text in a
+  // bare DIV was neither emitted NOR counted: `/bomb/divprose?n=400` served
+  // 51,922 characters of ordinary English in 400 divs, nothing hidden, and
+  // get_text answered `chars: {returned: 24, total_in_scope: 24,
+  // next_start_index: null}` with "this is the end of the text in scope"
+  // under it. `stripped` counts only HIDDEN blocks, so visible text the
+  // classifier declined had no counter anywhere and `total_in_scope`
+  // reported the extractor's total as if it were the page's. SPA output
+  // routinely renders body copy as div, and get_page_view saw the problem
+  // correctly on the same page ("prose is 0% of page text"), so the two
+  // read surfaces disagreed about one document.
+  //
+  // Membership is the COMPUTED display rather than the tag, because that is
+  // what decides whether a run of text is its own paragraph on screen. An
+  // inline box is never emitted on its own: its text belongs to the block
+  // that contains it, and `inlineText` already collects it there.
+  const BLOCKISH = /^(block|flow-root|list-item|table|table-row|table-cell|table-caption|flex|grid|-webkit-box)$/;
+  function isBlockBox(el, style) {
+    if (BLOCK.has(el.tagName)) return true;
+    if (!el.tagName || el.tagName === 'BR') return false;
+    const d = (style || cs(el)).display || '';
+    return BLOCKISH.test(d.split(' ')[0]);
+  }
+
+  // SVG carries real, visible, selectable text and the old SKIP entry never
+  // even fired (an `<svg>` element's tagName is lowercase `svg`, and the set
+  // held `SVG`), so the walk descended and then emitted nothing because no
+  // SVG tag was in BLOCK. Five `<svg><text>` elements plus a `<title>` and a
+  // `<desc>` — about 130 visible characters — appeared in no payload at all
+  // and in no ledger row: the completeness block names iframes, shadow
+  // roots, hidden nodes, canvas, virtualized containers and unlisted
+  // affordances, and had no SVG vocabulary whatsoever (fuzzer class 2).
+  // `<text>` is content and is emitted; `<title>` and `<desc>` are the SVG
+  // spelling of alt text, so they are COUNTED rather than mixed into prose.
+  const SVG_TEXT = new Set(['text', 'textPath']);
+  const SVG_META = new Set(['title', 'desc']);
+  function isSvgNode(el) {
+    return el.namespaceURI === 'http://www.w3.org/2000/svg';
+  }
 
   // A block's own text is the text of the INLINE run it contains: its text
   // nodes plus the text of inline wrappers around them, stopping wherever a
@@ -82,7 +123,16 @@
     for (const node of el.childNodes) {
       if (node.nodeType === 3) { into.push(node.nodeValue || ''); continue; }
       if (node.nodeType !== 1) continue;
-      if (SKIP.has(node.tagName) || BLOCK.has(node.tagName)) continue;
+      if (SKIP.has(node.tagName)) continue;
+      // Stop at the next BOX, not just at the next tag from a fixed list,
+      // or a div's paragraph-shaped children would be flattened into their
+      // parent and emitted a second time by the walk (H-04's fix has to
+      // preserve the de-duplication the original stop condition bought).
+      if (isBlockBox(node)) continue;
+      if (isSvgNode(node)
+          && (SVG_TEXT.has(node.tagName) || SVG_META.has(node.tagName))) {
+        continue;               // handled by the walk, on their own terms
+      }
       if (hiddenReason(node)) continue;
       into.push(' ');
       inlineText(node, into);
@@ -94,6 +144,8 @@
   const hiddenSections = [];
   let hiddenBlocks = 0, hiddenChars = 0, injectionSuspects = 0;
   let zeroWidth = 0, shadowRootsRead = 0;
+  let svgMetaBlocks = 0, svgMetaChars = 0;
+  let unclassifiedBlocks = 0, unclassifiedChars = 0;
   const ZERO_WIDTH = /[​-‏‪-‮⁠-⁤﻿]/g;
   const HIDDEN_SECTION_CAP = 2000;      // per section
   const HIDDEN_TOTAL_CAP = 20000;       // per read
@@ -117,6 +169,16 @@
 
   (function walk(el) {
     if (SKIP.has(el.tagName)) return;
+    if (isSvgNode(el) && SVG_META.has(el.tagName)) {
+      // BEFORE the hidden check. An SVG `<title>` has no layout box at
+      // all, so the geometry test calls it zero-size and the hidden
+      // branch would swallow it into the hidden ledger. It is not hidden;
+      // it is the SVG spelling of alt text, and it belongs in its own
+      // ledger row where a caller can see what kind of text it is.
+      const meta = squash(el.textContent || '');
+      if (meta) { svgMetaBlocks++; svgMetaChars += meta.length; }
+      return;
+    }
     const reason = hiddenReason(el);
     if (reason === 'visibility-hidden' && hasVisibleDescendant(el)) {
       // Count this element's OWN inline run as withheld, then keep going:
@@ -166,9 +228,15 @@
       }
       return;
     }
-    if (BLOCK.has(el.tagName)) {
+    if ((isSvgNode(el) && SVG_TEXT.has(el.tagName))
+        || isBlockBox(el)) {
       const parts = [];
-      inlineText(el, parts);
+      if (isSvgNode(el)) {
+        // `<text>` holds `<tspan>` runs; they are inline within it.
+        parts.push(el.textContent || '');
+      } else {
+        inlineText(el, parts);
+      }
       let own = parts.join('');
       if (ZERO_WIDTH.test(own)) {
         zeroWidth++;
@@ -182,6 +250,18 @@
           text: text
         });
       }
+      if (isSvgNode(el)) return;      // tspans were consumed above
+    } else {
+      // NOTHING VISIBLE GOES UNCOUNTED (H-04). Anything left over after the
+      // block-box widening is an inline box holding a text run its parent
+      // did not claim; it has no counter of its own, so it gets one here
+      // rather than vanishing under a completeness claim.
+      const leftover = [];
+      for (const node of el.childNodes) {
+        if (node.nodeType === 3) leftover.push(node.nodeValue || '');
+      }
+      const stray = squash(leftover.join(''));
+      if (stray) { unclassifiedBlocks++; unclassifiedChars += stray.length; }
     }
     for (let child = el.firstElementChild; child; child = child.nextElementSibling) {
       walk(child);
@@ -224,6 +304,12 @@
       injection_suspects: injectionSuspects, zero_width_blocks: zeroWidth,
       included: includeHidden
     },
+    // THE TWO NEW LEDGER ROWS (hostile H-04, fuzzer class 2). `stripped`
+    // counts only HIDDEN blocks, so before these rows there was no counter
+    // anywhere for visible text a read declined, and `total_chars` was
+    // reported as the page's total when it was only the extractor's.
+    svg_meta: { blocks: svgMetaBlocks, chars: svgMetaChars },
+    unclassified: { blocks: unclassifiedBlocks, chars: unclassifiedChars },
     hidden_sections: includeHidden ? hiddenSections : null
   };
 }
