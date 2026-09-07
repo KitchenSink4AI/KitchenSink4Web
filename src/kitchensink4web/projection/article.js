@@ -497,11 +497,36 @@
   const proseBlocks = blocks.filter(
     (b) => b.tag === 'p' || b.tag === 'blockquote' || b.tag === 'pre').length;
   const rootDensity = linkDensity(root);
-  // The denominator is the page's BLOCK-LEVEL prose, kept plus excluded, not
-  // `body.textContent`. textContent counts script bodies and inline JSON as
-  // page text, and on a heavy application shell that alone would make every
-  // real article look like a rounding error against its own page.
-  const pageChars = articleChars + excludedChars;
+  // THE DENOMINATOR WAS THE DEFECT, NOT THE THRESHOLD (ledger A1, verify
+  // round V-04). It used to be `articleChars + excludedChars`: the SELECTED
+  // ROOT'S OWN NEIGHBOURHOOD, not the page. Two things follow from that
+  // arithmetic and both of them are bad. Its floor is `articleChars`, so on
+  // a page with no p/li/h* outside the root the share is exactly 1.00 by
+  // construction however small the root is; and when the scorer picks a
+  // lede <div> and books the real body as chrome, the ratio is
+  // 1739/(1739+1333) = 0.57, a confident pass, while the true share against
+  // what `get_text` returns is 1811/11651 = 0.16. The BBC field case cleared
+  // the same guard at 18.7%. Raising the threshold could never have fixed
+  // it: the number being compared did not mean what its name said.
+  //
+  // `innerText` and not `textContent`, which is the objection the old
+  // comment here raised and it was right: textContent counts script bodies
+  // and inline JSON as page text. innerText is the RENDERED text, so script
+  // and style bodies and display:none subtrees are already out of it, which
+  // is the same content `get_text` counts by walking visible block boxes.
+  // One call, one layout flush, and a fallback to the old arithmetic if the
+  // engine will not give it, because a missing denominator must not take the
+  // read down.
+  let pageChars = 0;
+  try {
+    pageChars = squash((document.body || document.documentElement).innerText
+      || '').length;
+  } catch (e) { pageChars = 0; }
+  // The neighbourhood number is kept and reported beside it. It is what the
+  // scorer's own exclusion ledger accounts for, so a caller comparing the
+  // two can see the gap the ledger does not cover.
+  const scoredChars = articleChars + excludedChars;
+  if (pageChars < scoredChars) pageChars = scoredChars;
 
   // Four tests, each one a way a non-article fails. They are reported
   // individually rather than as a verdict, because "not article-shaped" with
@@ -512,6 +537,9 @@
     link_density: Math.round(rootDensity * 100) / 100,
     share_of_page: pageChars ? Math.round((articleChars / pageChars) * 100) / 100 : 0,
     page_chars: pageChars,
+    scored_chars: scoredChars,
+    share_of_scored: scoredChars
+      ? Math.round((articleChars / scoredChars) * 100) / 100 : 0,
   };
   const failed = [];
   if (proseBlocks < 3) failed.push('fewer than 3 paragraph-shaped blocks');
