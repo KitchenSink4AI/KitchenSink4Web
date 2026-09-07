@@ -158,9 +158,17 @@ def _known_backoff(budgets) -> None:
     and carried separately. `test_monitor_live.py` clears the first in its
     own fixture and not the second, so a 503 recorded there is still the
     answer `backoff_reason()` gives about 127.0.0.1 in every file that runs
-    afterwards, long after the window it described expired."""
-    budgets.BOOK._backoff.clear()
-    budgets.BOOK._backoff_why.clear()
+    afterwards, long after the window it described expired.
+
+    Every `_backoff*` mapping is swept rather than the two by name. Naming
+    them made this fixture the thing that broke against a tree where
+    `_backoff_why` did not exist yet, and an AttributeError raised in here
+    fails every browser test in the run, which is a spectacular way for a
+    cleanup step to behave. The sweep also picks up the next sibling
+    somebody adds alongside them."""
+    for name, value in vars(budgets.BOOK).items():
+        if name.startswith("_backoff") and hasattr(value, "clear"):
+            value.clear()
 
 
 def _known_consent(consent) -> None:
