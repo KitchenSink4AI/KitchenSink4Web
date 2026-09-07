@@ -35,6 +35,8 @@ rather than lapses (DESIGN 7.4).
 from __future__ import annotations
 
 import json as _json
+import os as _os
+import re as _re
 from typing import Any, Callable
 
 from fastmcp.tools.tool import ToolResult as _FmcpToolResult
@@ -57,6 +59,13 @@ CLOSED_CODES: frozenset[str] = frozenset({
     "AUTH_REQUIRED", "CREDENTIAL_REFUSED", "BUDGET_EXHAUSTED",
     "LOOP_DETECTED", "CONFIRMATION_REQUIRED", "READ_ONLY_MODE",
     "LANE_UNSUPPORTED", "MODAL_BLOCKED", "TIMEOUT",
+    # Union wave 2026-09-07. Four codes that exist because BAD_PARAMS was
+    # the terminal fallback for four things that are not argument problems:
+    # a dead browser, a site-authored navigation failure, an unwritable
+    # output path, and an unrecognized driver fault. Every one of them sent
+    # a caller to fix arguments that were correct.
+    "SESSION_DEAD", "NAVIGATION_FAILED", "FILE_WRITE_FAILED",
+    "DRIVER_FAILURE",
 })
 
 #: Codes that exist only while the build is unfinished. Kept OUT of
@@ -87,6 +96,10 @@ CODE_MAP: tuple[tuple[type[BaseException], str], ...] = (
     (_err.LaneUnsupported, "LANE_UNSUPPORTED"),
     (_err.ModalBlocked, "MODAL_BLOCKED"),
     (_err.Timeout, "TIMEOUT"),
+    (_err.SessionDead, "SESSION_DEAD"),
+    (_err.NavigationFailed, "NAVIGATION_FAILED"),
+    (_err.FileWriteFailed, "FILE_WRITE_FAILED"),
+    (_err.DriverFailure, "DRIVER_FAILURE"),
     (_err.UnsupportedContent, "UNSUPPORTED_CONTENT"),
     (_err.ValidationFailed, "VALIDATION_FAILED"),
     (_err.Conflict, "CONFLICT"),
@@ -100,6 +113,9 @@ CODE_MAP: tuple[tuple[type[BaseException], str], ...] = (
     (FileExistsError, "CONFLICT"),
     (FileNotFoundError, "NOT_FOUND"),
     (NotImplementedError, "NOT_IMPLEMENTED"),
+    # Every other OSError is a filesystem refusal, not an argument fault.
+    # Ordered AFTER its two subclasses above so those keep their codes.
+    (OSError, "FILE_WRITE_FAILED"),
     (ValueError, "BAD_PARAMS"),
     (TypeError, "BAD_PARAMS"),
     (AttributeError, "BAD_PARAMS"),
@@ -220,6 +236,33 @@ HINTS: dict[str, str] = {
         "the arguments are malformed. A location object takes exactly one "
         "selector key, and a ref belongs to the page handle that minted it"
     ),
+    # FLAGGED (union wave): placeholder wording, mechanically composed from
+    # existing sentences in this file. The four new codes need the author's
+    # eyes on their hints before ship.
+    "SESSION_DEAD": (
+        "the browser this session owns is gone, so no call on it can work "
+        "and no re-read recovers it. Close the session with "
+        "manage_session(action='close') and open a new one; refs, read "
+        "tokens, and page handles from the old session do not carry over"
+    ),
+    "NAVIGATION_FAILED": (
+        "the navigation reached the network and produced no document, for a "
+        "reason the site owns rather than the arguments. The message names "
+        "what the browser reported. Rewriting the URL does not help; a "
+        "different URL, or a human in a headed window, might"
+    ),
+    "FILE_WRITE_FAILED": (
+        "the file could not be written and nothing was saved. The message "
+        "names the resolved path and what the filesystem reported. Choose a "
+        "writable directory and a plain file name, or omit path to use the "
+        "server's own downloads directory"
+    ),
+    "DRIVER_FAILURE": (
+        "the browser driver failed for a reason this build does not have a "
+        "specific code for, and the message carries what the driver said. "
+        "The arguments are not the thing to fix. Check the session with "
+        "manage_session(action='status') before retrying"
+    ),
     "NOT_IMPLEMENTED": (
         "this tool is registered but its engine is not built yet (Phase 0 "
         "scaffold). No browser code exists in this build"
@@ -251,6 +294,74 @@ def redact(payload: Any) -> Any:
 # ------------------------------------------------------------- classifying
 
 
+#: THE BROWSER IS GONE. Every one of these means the process or the driver
+#: connection died, so the recovery is close-and-reopen and nothing else.
+#: Union wave 2026-09-07: chaos C-01/C-04, endurance F7, and the author's
+#: field report all landed on BAD_PARAMS or on a bare CONFLICT with no route.
+DEAD_MARKERS: tuple[str, ...] = (
+    "target page, context or browser has been closed",
+    "browser has been closed",
+    "browser has disconnected",
+    "connection closed while reading from the driver",
+    "connection closed",
+    "not attached to an active page",
+    "target closed",
+    "has been closed",
+)
+
+#: A RENDERER died and the browser survived. Distinguished from the above
+#: because the recovery really is a fresh tab (M1), and conflating the two is
+#: what made the crash refusal name a recovery that fails (chaos C-04).
+CRASH_MARKERS: tuple[str, ...] = ("page crashed", "target crashed")
+
+#: The DOCUMENT went away underneath the call, which a re-read does fix.
+CONFLICT_MARKERS: tuple[str, ...] = (
+    "execution context was destroyed",
+    "frame was detached",
+)
+
+#: A navigation that reached the network and produced no document, for a
+#: reason the SITE owns. Hostile round H-01, chaos C-01's redirect rows.
+NAV_FAIL_MARKERS: tuple[tuple[str, str], ...] = (
+    ("err_too_many_redirects", "the redirect chain never terminated"),
+    ("ns_error_redirect_loop", "the redirect chain never terminated"),
+    ("err_unsafe_redirect", "a redirect pointed at a scheme the browser "
+                            "refuses to follow"),
+    ("err_invalid_redirect", "a redirect was malformed"),
+    ("err_blocked_by_client", "the browser itself blocked the request"),
+    ("err_blocked_by_response", "a response header told the browser to "
+                                "block the load"),
+    ("err_unsafe_port", "the port is one the browser refuses to open"),
+    ("err_invalid_url", "the browser refused the URL as unnavigable"),
+    ("err_aborted", "the main-frame load was aborted before it produced a "
+                    "document"),
+    ("ns_binding_aborted", "the main-frame load was aborted before it "
+                           "produced a document"),
+)
+
+#: Driver-shaped: a Playwright method name prefix, its call log, or a
+#: browser-level error scheme. Nothing matching these may be answered
+#: BAD_PARAMS, because none of them is an argument fault.
+_DRIVER_SHAPE = _re.compile(
+    r"(^[A-Z][A-Za-z]*\.[a-z_][A-Za-z_]*: )"
+    r"|(\bcall log:)|(\bnet::)|(\bns_error_)|(\bprotocol error\b)"
+    r"|(\bbrowsertype\.)|(\bbrowsercontext\.)|(\bplaywright\b)",
+    _re.I | _re.M)
+
+
+def is_driver_shaped(exc: BaseException) -> bool:
+    """True when the exception text is the browser driver talking.
+
+    Used by `classify` so an unrecognized driver string lands on
+    DRIVER_FAILURE rather than on the terminal BAD_PARAMS, and by `refusal`
+    so the raw text never ships unscrubbed."""
+    if isinstance(exc, _err.WebMcpError):
+        return False
+    if "playwright" in type(exc).__module__.lower():
+        return True
+    return bool(_DRIVER_SHAPE.search(str(exc)))
+
+
 def classify(exc: BaseException) -> str:
     for etype, code in CODE_MAP:
         if isinstance(exc, etype):
@@ -262,26 +373,25 @@ def classify(exc: BaseException) -> str:
     # to keep the closed vocabulary closed.
     name = type(exc).__name__
     text = str(exc).lower()
+    # A renderer crash (gauntlet 2026-09-06, M1) outranks the death markers
+    # below, because a driver string can carry both and the crash recovery
+    # (a fresh tab) is the narrower, correct one when the browser survives.
+    if any(m in text for m in CRASH_MARKERS):
+        return "CONFLICT"
+    if any(m in text for m in DEAD_MARKERS):
+        return "SESSION_DEAD"
     if "timeout" in name.lower():
         return "TIMEOUT"
-    if ("execution context was destroyed" in text
-            or "target closed" in text
-            or "has been closed" in text
-            or "frame was detached" in text
-            # A renderer crash (gauntlet 2026-09-06, M1): before this row it
-            # fell through to BAD_PARAMS and inherited the location-selector
-            # hint, which sent the caller to fix arguments that were fine.
-            or "page crashed" in text
-            # The driver has TWO strings for one event and M1 only caught
-            # one. A tab that dies mid-call reports "Target crashed", which
-            # is what the shadow spike hit: bundled Chromium kills its own
-            # renderer laying out a chain of roughly 28 nested open shadow
-            # roots, before any code of ours runs. That is a page a hostile
-            # site can build on purpose, so the refusal has to be the honest
-            # typed one on the FIRST call that observes it, not only on the
-            # reuse afterward.
-            or "target crashed" in text):
+    if any(m in text for m in CONFLICT_MARKERS):
         return "CONFLICT"
+    if any(m in text for m, _ in NAV_FAIL_MARKERS):
+        return "NAVIGATION_FAILED"
+    if is_driver_shaped(exc):
+        # THE STRUCTURAL FIX (chaos C-01). The transport table is an
+        # allowlist, and everything it does not recognize used to fall
+        # through to argument-blaming. An unrecognized DRIVER fault is
+        # infrastructure by construction, so it gets an infrastructure code.
+        return "DRIVER_FAILURE"
     return "BAD_PARAMS"
 
 
@@ -317,10 +427,99 @@ def pack_hint(exc: BaseException) -> str | None:
     )
 
 
+#: How much driver text may ride out inside a refusal. Chaos C-12 shipped a
+#: 2,368-character message: the driver string, then the whole
+#: `chrome-headless-shell.exe` launch line with every flag and the local
+#: ms-playwright install path, then GPU crash lines with foreign PIDs. That
+#: is a token bomb and a local-path disclosure inside an error.
+DRIVER_DETAIL_CHARS = 200
+
+#: The hint a crashed-renderer refusal carries INSTEAD of CONFLICT's generic
+#: one. FLAGGED: placeholder, lifted from the crash message's own clauses.
+CRASHED_HINT = (
+    "this page handle is dead and re-reading it will not recover it; open a "
+    "new tab with manage_tabs(action='open', url=...) and continue there"
+)
+
+#: Where a driver dump stops being the error and starts being the driver's
+#: diary. Everything from the first of these onward is dropped.
+_DUMP_HEADERS = ("call log:", "browser logs:", "=========================",
+                 "note: use devtools protocol", "pid=", "[pid=")
+
+#: Absolute paths that must not ride out. Built once from the environment
+#: rather than matched by pattern, so the substitution is exact.
+def _local_roots() -> tuple[tuple[str, str], ...]:
+    roots: list[tuple[str, str]] = []
+    for var, label in (("LOCALAPPDATA", "<localappdata>"),
+                       ("APPDATA", "<appdata>"),
+                       ("USERPROFILE", "<home>"),
+                       ("HOME", "<home>"),
+                       ("TEMP", "<temp>"), ("TMP", "<temp>")):
+        value = (_os.environ.get(var) or "").strip().rstrip("\\/")
+        if len(value) > 3:
+            roots.append((value, label))
+    # Longest first so <localappdata> wins over <home> for a nested path.
+    roots.sort(key=lambda r: len(r[0]), reverse=True)
+    return tuple(roots)
+
+
+def scrub_driver_text(text: str, limit: int = DRIVER_DETAIL_CHARS) -> str:
+    """Bound and de-identify a driver-supplied string before it ships.
+
+    Three jobs, in order: cut the dump tail, replace local filesystem roots
+    with a label, and clip. `_argument_message` already goes to real trouble
+    to keep pydantic internals out of a refusal; this is the same discipline
+    for the other side of the wire (chaos C-12, fuzzer class 1c)."""
+    body = str(text or "")
+    lowered = body.lower()
+    cut = len(body)
+    for header in _DUMP_HEADERS:
+        found = lowered.find(header)
+        if found != -1:
+            cut = min(cut, found)
+    body = body[:cut]
+    for root, label in _local_roots():
+        body = body.replace(root, label)
+        body = body.replace(root.replace("\\", "/"), label)
+    body = " ".join(body.split())
+    if len(body) > limit:
+        body = body[:limit].rstrip() + "..."
+    return body
+
+
+def _driver_cause(text: str) -> str | None:
+    """The plain-English cause for a NAVIGATION_FAILED marker, if one of the
+    known markers is present."""
+    lowered = str(text).lower()
+    for marker, cause in NAV_FAIL_MARKERS:
+        if marker in lowered:
+            return cause
+    return None
+
+
+def _sanitize(value: Any) -> Any:
+    """Replace unpaired surrogates anywhere in a payload with U+FFFD.
+
+    Cheap on the common path: a string with no surrogate encodes and is
+    returned unchanged."""
+    if isinstance(value, str):
+        try:
+            value.encode("utf-8")
+            return value
+        except UnicodeEncodeError:
+            return value.encode("utf-8", "replace").decode("utf-8")
+    if isinstance(value, dict):
+        return {_sanitize(k): _sanitize(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_sanitize(v) for v in value]
+    return value
+
+
 def refusal(exc: BaseException) -> dict:
     """Build the {ok: false, error: {code, message, hint}} payload."""
     code = getattr(exc, "code", None) or classify(exc)
     message = str(exc)
+    hint_override: str | None = None
     if not isinstance(exc, _err.WebMcpError) \
             and ("page crashed" in message.lower()
                  or "target crashed" in message.lower()):
@@ -329,7 +528,7 @@ def refusal(exc: BaseException) -> dict:
         # instead of leaking the raw driver string. The handle is marked
         # dead by the crash event, so reuse refuses in locate() with the
         # same recovery.
-        detail = message.splitlines()[0][:160]
+        detail = scrub_driver_text(message.splitlines()[0], 160)
         message = (
             f"the page's renderer process crashed (driver detail: "
             f"{detail}). The arguments were fine; the page itself died, "
@@ -338,13 +537,54 @@ def refusal(exc: BaseException) -> dict:
             f"This page handle is dead and will not recover: open a NEW "
             f"tab with manage_tabs(action='open', url=...) and continue "
             f"there. Refs minted on the crashed page are gone.")
+        # H-02: CONFLICT's generic "re-read to re-establish a baseline" is
+        # the one action guaranteed to fail here.
+        hint_override = CRASHED_HINT
+    elif not isinstance(exc, _err.WebMcpError):
+        # NO RAW DRIVER OR STDLIB STRING IS EVER THE WHOLE MESSAGE (union
+        # wave, fuzzer class 1 + chaos C-05/C-11/C-12 + hostile H-01/H-02).
+        # `envelope`'s own first stated rule is that no exception string
+        # reaches a caller; before this branch `message = str(exc)` made
+        # that rule false for every backstop code in CODE_MAP.
+        # FLAGGED: placeholder wording, mechanically composed.
+        detail = scrub_driver_text(message)
+        if code == "SESSION_DEAD":
+            message = (
+                f"the browser for this session is gone (driver detail: "
+                f"{detail}). No call on this session can work and no "
+                f"re-read recovers it. Close it with "
+                f"manage_session(action='close') and open a new one.")
+        elif code == "NAVIGATION_FAILED":
+            cause = _driver_cause(message)
+            message = (
+                f"the navigation produced no document: "
+                f"{cause or 'the browser refused the load'} (driver "
+                f"detail: {detail}). The site owns this outcome, not the "
+                f"arguments, so rewriting the URL does not help.")
+        elif code == "FILE_WRITE_FAILED":
+            message = (
+                f"the file could not be written and nothing was saved "
+                f"(filesystem detail: {detail}).")
+        elif code == "DRIVER_FAILURE":
+            message = (
+                f"the browser driver failed and this build has no more "
+                f"specific code for it (driver detail: {detail}). The "
+                f"arguments are not the thing to fix.")
+        elif detail != message:
+            # Any other backstop code (CONFLICT, TIMEOUT, NOT_FOUND...):
+            # keep the code's own meaning, ship the bounded text.
+            message = detail
     if isinstance(exc, LookupError) and len(message) < 40:
         message = (
             f"internal lookup failed on {message}: a nested parameter "
             "probably has the wrong shape (a list where a dict belongs, or "
             "the reverse)"
         )
-    hint = HINTS.get(code, "")
+    # A raise site that already named a recovery keeps it (hostile H-02: the
+    # crashed-renderer message says "open a NEW tab" and the generic CONFLICT
+    # hint under it said "re-read to re-establish a baseline").
+    hint = (getattr(exc, "hint", None) or hint_override
+            or HINTS.get(code, ""))
     ph = pack_hint(exc)
     if ph:
         hint = f"{hint} {ph}".strip()
@@ -364,6 +604,14 @@ class RefusalResult(_FmcpToolResult):
     AND a FastMCP ToolResult whose MCP serialization sets isError=true."""
 
     def __init__(self, payload: dict):
+        # LONE SURROGATES CANNOT COLLAPSE THE ENVELOPE (fuzzer class 11).
+        # A refusal echoes its arguments, so an unpaired surrogate in any
+        # string argument made the refusal itself unserializable and the
+        # caller got the framework's bare exception text instead of an
+        # envelope. Latent in production (a conforming JSON-RPC transport
+        # rejects the frame first, and page content is sanitized to U+FFFD)
+        # and one defensive substitution at the serializer.
+        payload = _sanitize(payload)
         text = _json.dumps(payload, indent=2, ensure_ascii=False)
         super().__init__(
             content=text, structured_content=payload, is_error=True

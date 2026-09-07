@@ -212,8 +212,15 @@ async def save_auth_state(
     # both are called auth_<timestamp>.
     out = path or str(common.downloads_dir()
                       / f"auth_{sess.spec.engine}_{common.stamp()}.json")
-    checked = sandbox.check_path(out, "save auth state")
-    state = await sess.context.storage_state(path=checked)
+    # Union wave: ONE resolution for every output path (fuzzer class 4).
+    # `~`, `%TEMP%`, and a relative path were echoed back unresolved here
+    # too, and this is the receipt a caller quotes into load_auth_state.
+    checked = str(common.resolve_out_path(out, "save auth state"))
+    try:
+        state = await sess.context.storage_state(path=checked)
+    except OSError as exc:
+        raise common.write_failed(Path(checked), "save auth state",
+                                  exc) from exc
     n_cookies = len(state.get("cookies", []))
     n_origins = len(state.get("origins", []))
     # EXPIRY, recorded in the file at save time (field finding U10, asked
@@ -226,7 +233,7 @@ async def save_auth_state(
         "engine": sess.spec.engine,
         "auth_expiry": expiry,
     }
-    Path(checked).write_text(json.dumps(state), encoding="utf-8")
+    common.write_text_file(checked, json.dumps(state), "save auth state")
     # The session remembers the save, so close can say "saved earlier" (field
     # finding 41) instead of contradicting a save made minutes ago.
     sess.record_auth_save(checked)

@@ -36,7 +36,9 @@ from typing import Any
 
 from .. import anchors
 from .. import dialogs as _dialogs
-from ..errors import BadParams, Conflict, ModalBlocked, TargetNotFound, Timeout
+from ..envelope import CRASHED_HINT as CRASHED_PAGE_HINT
+from ..errors import (BadParams, Conflict, LaneUnsupported, ModalBlocked,
+                      SessionDead, StaleAnchor, TargetNotFound, Timeout)
 from ..projection import CLOSED_SHADOW_HOOK
 from ..projection.meter import warm as _warm_estimator
 from . import hygiene, lanes
@@ -50,7 +52,34 @@ DEFAULT_TIMEOUT_MS = int(os.environ.get("KS4WEB_TIMEOUT_MS", "30000"))
 IDLE_PARK_S = float(os.environ.get("KS4WEB_IDLE_PARK_S", "300"))
 IDLE_CLOSE_S = float(os.environ.get("KS4WEB_IDLE_CLOSE_S", "1800"))
 
+#: How often the sweeper wakes while any session is open. Small next to the
+#: park bound, so a page is parked within a sweep of going quiet.
+IDLE_SWEEP_S = float(os.environ.get("KS4WEB_IDLE_SWEEP_S", "30"))
+
+
+def idle_sweep_enabled() -> bool:
+    """Defense 3 is ARMED by default (endurance F3).
+
+    `park_idle` was implemented, complete, and had no caller anywhere in the
+    shipped tree: no scheduler, no timer, no background task, and no tool
+    action reaching it. The status payload reported `idle_park_s` and
+    `idle_recycle_s` inside the same hygiene block as the job object and the
+    startup reaper, both of which are real, so the one inert defense read as
+    live. A session left alone for 6.7x the recycle bound still held five
+    browser processes and about 500 MB.
+
+    KS4WEB_IDLE_SWEEP=off disables the sweep and is the honest way to keep
+    a long-lived parked session; the bounds themselves stay tunable."""
+    return os.environ.get("KS4WEB_IDLE_SWEEP", "on").strip().lower() \
+        not in ("0", "false", "off", "no")
+
 PARKED_URL = "about:blank"
+
+#: How many pre-frame navigation responses a session parks for its popups.
+#: Was 16, which a 25-popup flood defeated deterministically (concurrency
+#: C-2). Each entry is a URL, a status, and a header dict, so the memory at
+#: this bound is trivial next to one page.
+PENDING_NAV_MAX = 512
 
 #: The pack-recorder seam. Ops modules (network, diagnostics, files) append
 #: a callable here at import; every newly opened session is passed through
@@ -120,6 +149,15 @@ class PageHandle:
     #: never been through the deny/allow lists, and it is set only where a
     #: check actually passed.
     vetted_url: str | None = None
+    #: True when the BROWSER opened this page (a `window.open` popup adopted
+    #: by the context hook) rather than a tool call. Such a page's own first
+    #: navigation response is the one `pending_nav` parks, so a missing
+    #: record here means something different than it does on a page a tool
+    #: navigated (concurrency C-2).
+    adopted: bool = False
+    #: Where the page was when the idle sweeper parked it. The recovery a
+    #: later call needs is the URL, not the word "parked".
+    parked_from: str | None = None
 
     def frame_id(self, key: str) -> str:
         if key not in self.frame_ids:
@@ -166,6 +204,15 @@ class Session:
     #: the page that landed there, and bounded so a popup-spamming site
     #: cannot grow it.
     pending_nav: dict = field(default_factory=dict)
+    #: How many pending records the bound has had to drop. Concurrency C-2:
+    #: the bound was 16, a page opening 25 popups evicted the first nine,
+    #: and the adopted popups with no surviving record then served a 403
+    #: interstitial behind `cf-mitigated: challenge` as ordinary content —
+    #: the exact defect G4-05 was written to close, reappearing whenever a
+    #: site opens more windows than the buffer holds. The bound is now large
+    #: enough that a session has to be pathological to reach it, and when it
+    #: IS reached the count is what lets a read say it cannot rule.
+    pending_nav_evicted: int = 0
     #: The sticky element map and the delta store, per SESSION rather than
     #: per page, because refs are unique across the session (DESIGN 3.5) so a
     #: bare `e12` is never ambiguous. The engine owns them and the anchors
@@ -189,6 +236,40 @@ class Session:
     def record_auth_save(self, path: str) -> None:
         self.saved_auth_at = time.time()
         self.saved_auth_path = path
+
+    # ------------------------------------------------------- ground truth
+
+    def browser_alive(self) -> bool | None:
+        """Is the browser this session owns actually running?
+
+        THE GROUND-TRUTH CHECK (chaos C-02, endurance F7). `_session_status`
+        derived `state` from idle timing alone and printed `owned_pids`
+        straight out of the journal without asking `hygiene.alive` about a
+        single one, so a session whose every owned PID was dead reported
+        `state: "active"` while every real call refused. The status surface
+        is the one an agent reaches for when everything else is refusing,
+        and it was the one confirming the fiction.
+
+        None means "cannot tell" (no PIDs recorded, or a platform where the
+        liveness probe does not answer), and None is never reported as
+        health either way."""
+        pids = list(self.journal.pids)
+        if not pids:
+            return None
+        survivors = self.journal.survivors()
+        if survivors:
+            return True
+        # No survivor by creation time. On a platform where `alive` cannot
+        # answer at all, say so rather than declaring death.
+        if not hygiene.WINDOWS:
+            return None
+        return False
+
+    def dead_pages(self) -> list[str]:
+        """Handles whose renderer crashed. `manage_tabs(list)` used to print
+        these as ordinary live tabs in the same second `locate` was refusing
+        them as dead (chaos C-03)."""
+        return sorted(h for h, r in self.pages.items() if r.crashed)
 
     def nav_record(self, record) -> dict | None:
         """The navigation response that produced the document CURRENTLY on
@@ -249,6 +330,62 @@ class Session:
         return self.pages[handle]
 
 
+#: What a failed launch means, keyed by the marker in the driver's text.
+#: The author's own field report has A:firefox answering "Tool execution
+#: failed" with no error detail at all (Desktop Critical-2), and the fuzzer
+#: has the same site shipping the whole `chrome-headless-shell.exe` command
+#: line and the local ms-playwright install path inside a BAD_PARAMS.
+_LAUNCH_CAUSES: tuple[tuple[str, str], ...] = (
+    ("executable doesn't exist",
+     "the browser binary for this lane is not installed"),
+    ("looks like playwright was just installed or updated",
+     "the browser binary for this lane is not installed"),
+    ("please run the following command to download new browsers",
+     "the browser binary for this lane is not installed"),
+    ("browsertype.launch: target page, context or browser has been closed",
+     "the browser started and exited before it was ready"),
+    ("timeout", "the browser did not become ready inside the launch timeout"),
+    ("access is denied",
+     "the operating system refused to start the browser binary"),
+    ("permission denied",
+     "the operating system refused to start the browser binary"),
+    ("invalid parameters",
+     "the browser refused one of the context options this launch asked for"),
+    ("no such file or directory",
+     "something the launch needs is missing from the install"),
+)
+
+
+def _launch_refusal(spec, exc: Exception, emulation_report) -> Exception:
+    """One honest refusal for a launch that failed.
+
+    Three things it has to do that the old one did not: name a CAUSE rather
+    than only echoing the driver, keep the local install path and the launch
+    command line out of the message (chaos C-12, fuzzer class 1c), and stop
+    wearing BAD_PARAMS, since a browser that will not start is not a
+    malformed argument."""
+    from ..envelope import scrub_driver_text
+    text = str(exc).lower()
+    cause = next((c for marker, c in _LAUNCH_CAUSES if marker in text), None)
+    detail = scrub_driver_text(str(exc))
+    install = ("Install it with `python -m playwright install "
+               f"{spec.engine}`. " if cause and "not installed" in cause
+               else "")
+    body = (
+        f"could not launch {spec.label}: "
+        f"{cause or 'the browser did not start'} "
+        f"({type(exc).__name__}: {detail}). {install}"
+        f"manage_session(action='capabilities') lists the lanes this build "
+        f"supports and what each one can do."
+        + (f" The emulation asked for was {emulation_report}; a time zone "
+           f"the browser does not know and a device preset an engine cannot "
+           f"honor both fail at launch like this."
+           if emulation_report else ""))
+    if cause and "not installed" in cause:
+        return LaneUnsupported(body)
+    return SessionDead(body)
+
+
 class SessionManager:
     """Process-wide browser state. One instance, held at module level."""
 
@@ -260,6 +397,9 @@ class SessionManager:
         self._session_seq = 0
         self._page_seq = 0
         self.startup_reap: dict | None = None
+        #: The idle sweeper (Defense 3). One task, alive only while sessions
+        #: are; see `_start_sweeper`.
+        self._sweeper: Any = None
 
     # ------------------------------------------------------------ lifecycle
 
@@ -331,14 +471,7 @@ class SessionManager:
                 context = await browser_type.launch_persistent_context(**kwargs)
             except Exception as exc:
                 hygiene._remove_tree(profile)
-                raise BadParams(
-                    f"could not launch {spec.label}: {type(exc).__name__}: "
-                    f"{str(exc)[:300]}"
-                    + (f". The emulation asked for was {emulation_report}; a "
-                       f"time zone the browser does not know and a device "
-                       f"preset an engine cannot honor both fail at launch "
-                       f"like this."
-                       if emulation_report else "")) from exc
+                raise _launch_refusal(spec, exc, emulation_report) from exc
             context.set_default_timeout(DEFAULT_TIMEOUT_MS)
             # THE INSTRUMENT CHANNEL, bound before any page script in any
             # document of this session runs. It carries the closed-root
@@ -405,9 +538,10 @@ class SessionManager:
                     session.pending_nav[response.url] = {
                         "url": response.url, "status": response.status,
                         "headers": dict(response.headers)}
-                    while len(session.pending_nav) > 16:
+                    while len(session.pending_nav) > PENDING_NAV_MAX:
                         session.pending_nav.pop(
                             next(iter(session.pending_nav)))
+                        session.pending_nav_evicted += 1
                 except Exception:
                     pass
 
@@ -418,6 +552,7 @@ class SessionManager:
             self.sessions[sid] = session
             for hook in SESSION_OPEN_HOOKS:
                 hook(session)
+            self._start_sweeper()
             return session
 
     def _attach_page(self, session: Session, page: Any,
@@ -432,7 +567,7 @@ class SessionManager:
             if existing.page is page:
                 return existing
         handle = self._next_page_handle()
-        record = PageHandle(handle=handle, page=page)
+        record = PageHandle(handle=handle, page=page, adopted=bool(adopted))
         # The renderer-crash mark (M1). The event is the reliable signal:
         # whichever call OBSERVES the crash, the handle is dead from the
         # moment it fires, and locate() refuses reuse with the recovery
@@ -621,6 +756,8 @@ class SessionManager:
             # reset: budgets are per-session by definition (policy/budgets).
             from ..policy import budgets as _budgets
             _budgets.BOOK.drop(session_id)
+            if not self.sessions:
+                self._stop_sweeper()
             return {
                 "session": session_id,
                 "owned_pids": sorted(session.journal.pids),
@@ -684,6 +821,24 @@ class SessionManager:
         for session in self.sessions.values():
             if page_handle in session.pages:
                 record = session.pages[page_handle]
+                # THE BROWSER CHECK RUNS FIRST (chaos C-04/C-05). One
+                # message used to serve two different deaths: it named
+                # `manage_tabs(action='open')` as the recovery, which is
+                # right for a crashed renderer and a dead end when the whole
+                # browser is gone (that call answers "Target page, context
+                # or browser has been closed"), and it blamed deep DOM
+                # nesting for a browser somebody killed from outside.
+                if session.browser_alive() is False:
+                    raise SessionDead(
+                        f"the browser for session {session.session_id} is "
+                        f"gone: every process it owns has exited "
+                        f"({sorted(session.journal.pids)}). Page {page_handle}"
+                        f" and every other handle in this session are dead "
+                        f"with it, and opening a fresh tab fails the same "
+                        f"way. Close the session with manage_session("
+                        f"session={session.session_id!r}, action='close') "
+                        f"and open a new one; refs, read tokens, and page "
+                        f"handles do not carry over.")
                 if record.crashed:
                     # A crashed renderer never recovers on the same page:
                     # replaying the driver's "Page crashed" against a dead
@@ -691,7 +846,7 @@ class SessionManager:
                     # the record through Session.page() and can still close
                     # or list it; everything that would READ or ACT refuses
                     # here with the real recovery.
-                    raise Conflict(
+                    exc = Conflict(
                         f"page {page_handle} is dead: {record.crashed}. A "
                         f"crashed renderer does not recover on the same "
                         f"page handle. Open a fresh tab with manage_tabs("
@@ -699,8 +854,33 @@ class SessionManager:
                         f"url=...) and continue there; this handle can only "
                         f"be closed (manage_tabs action='close'). Refs "
                         f"minted on it are gone. Extremely deep or "
-                        f"pathological nesting is a known crash cause, in "
-                        f"the DOM or in shadow roots.")
+                        f"pathological nesting is a known crash cause in the "
+                        f"DOM or in shadow roots, and so is the browser "
+                        f"being killed or running out of memory; this build "
+                        f"cannot tell which from the page.")
+                    # H-02: CONFLICT's own hint says "re-read to re-establish
+                    # a baseline", which is the one action this message has
+                    # just said will never work.
+                    exc.hint = CRASHED_PAGE_HINT
+                    raise exc
+                if record.parked and record.parked_from:
+                    # Defense 3 is armed now (endurance F3), so a call CAN
+                    # arrive on a page the sweeper took to about:blank. The
+                    # refusal names the URL it was on, because "the page is
+                    # parked" is not a recovery and the URL is.
+                    was = record.parked_from
+                    record.parked = False
+                    record.parked_from = None
+                    raise StaleAnchor(
+                        f"page {page_handle} was idle long enough to be "
+                        f"parked to about:blank, so the document it held is "
+                        f"gone and every ref and read token minted on it "
+                        f"with it. It was on {was}. Navigate there again "
+                        f"with navigate(page={page_handle!r}, url={was!r}) "
+                        f"and re-read. Parking is what stops a dormant page "
+                        f"burning CPU and memory for hours; "
+                        f"KS4WEB_IDLE_PARK_S sets the bound and "
+                        f"KS4WEB_IDLE_SWEEP=off turns it off.")
                 if not allow_pending_dialog:
                     held = _dialogs.desk(session).pending_for(page_handle)
                     if held is not None:
@@ -740,6 +920,20 @@ class SessionManager:
                     continue
                 if force or (now - record.last_used) >= park_after:
                     try:
+                        # A park is a NAVIGATION, so the refs and read
+                        # tokens minted on the old document die with it,
+                        # exactly as they do for any other navigation.
+                        # Without this a ref survived a park and resolved
+                        # against about:blank (found while arming the
+                        # sweeper for endurance F3; the mechanism had never
+                        # run in a shipped process, so nothing had exercised
+                        # it).
+                        record.parked_from = record.page.url
+                        session.invalidate_page(
+                            record.handle,
+                            f"the page was idle for "
+                            f"{int(now - record.last_used)}s and was parked "
+                            f"to about:blank to free the browser")
                         await record.page.goto(PARKED_URL, timeout=10000)
                         record.parked = True
                         parked.append(record.handle)
@@ -747,6 +941,50 @@ class SessionManager:
                         pass
         return {"parked": parked, "recycled": recycled,
                 "park_after_s": park_after, "close_after_s": close_after}
+
+    # -------------------------------------------------------- the sweeper
+
+    def _start_sweeper(self) -> None:
+        """Arm Defense 3 (endurance F3). One task per manager, alive only
+        while sessions are.
+
+        In-process asyncio, no subprocess and no window, so the
+        silent-subprocess rule is satisfied by construction. Failures are
+        swallowed and the loop continues: a housekeeping sweep must never
+        turn a working session into an error."""
+        if not idle_sweep_enabled():
+            return
+        task = self._sweeper
+        if task is not None and not task.done():
+            return
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            return
+        self._sweeper = loop.create_task(self._sweep_loop())
+
+    async def _sweep_loop(self) -> None:
+        try:
+            while self.sessions:
+                await asyncio.sleep(max(1.0, IDLE_SWEEP_S))
+                if not self.sessions:
+                    break
+                try:
+                    await self.park_idle()
+                except asyncio.CancelledError:
+                    raise
+                except Exception:
+                    pass
+        except asyncio.CancelledError:
+            raise
+        finally:
+            self._sweeper = None
+
+    def _stop_sweeper(self) -> None:
+        task = self._sweeper
+        self._sweeper = None
+        if task is not None and not task.done():
+            task.cancel()
 
     def owned_pids(self) -> list[int]:
         return sorted({pid for s in self.sessions.values()

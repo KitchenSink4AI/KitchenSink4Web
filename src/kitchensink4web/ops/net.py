@@ -35,6 +35,7 @@ import time
 
 from ..engine import lanes, session as _session
 from ..errors import BadParams, LaneUnsupported, TargetNotFound
+from ..policy import budgets as _budgets
 from ..policy import credentials as _credentials
 from ..policy import engine as _policy
 from . import common
@@ -439,8 +440,14 @@ async def set_routing(
 
     _policy.approve(_policy.ActionRequest(
         tool="set_routing", kind="act", session=sess.session_id,
+        # Every argument that makes one set_routing call different from
+        # another (fuzzer class 5). Four mock routes with four different
+        # statuses used to share one fingerprint and trip LOOP_DETECTED
+        # claiming "identical arguments" about calls that differed.
         args={"action": action, "patterns": patterns, "offline": offline,
-              "preset": preset},
+              "preset": preset, "status": status, "headers": headers,
+              "body": _budgets.fingerprint(body) if body else None,
+              "content_type": content_type},
         summary=f"set_routing({action}) on session {sess.session_id}"))
 
     if action == "block":

@@ -128,6 +128,39 @@ class GuidedAbsenceMiddleware(Middleware):
             return envelope.refuse(refusal)
 
 
+#: Parameters a tool USED to advertise and no longer does, with the sentence
+#: that used to be their refusal. Union wave, fuzzer classes 6 and 7: a
+#: schema that advertises a knob which always refuses is a schema that lies,
+#: and `get_page_view(cursor=...)` additionally reached NOT_IMPLEMENTED —
+#: a scaffold code this build's own gate says must never ship. Removing them
+#: from the signature fixes the schema; this table is how the good teaching
+#: sentence survives the removal for a caller who still sends one.
+#: FLAGGED: both sentences are lifted verbatim from the refusals they
+#: replace, not newly written.
+WITHDRAWN_PARAMS: dict[tuple[str, str], str] = {
+    ("get_page_view", "include_hidden"): (
+        "get_page_view never includes hidden content: the orientation "
+        "reports hidden regions in its completeness block and stops there. "
+        "The labeled route is get_text(page=..., include_hidden=True), "
+        "which returns hidden blocks in a separately labeled section with "
+        "the hiding technique named per block."),
+    ("get_page_view", "cursor"): (
+        "get_page_view takes no cursor. Spill-to-file paging was never "
+        "built, and the region and section reads plus get_text's "
+        "start_index pagination cover the cases it was for."),
+}
+
+
+def _withdrawn_note(tool: str, exc: BaseException) -> str | None:
+    """The sentence for a withdrawn parameter, when the failure names one."""
+    text = str(exc)
+    for (name, param), sentence in WITHDRAWN_PARAMS.items():
+        if name == tool and param in text:
+            return (f"{tool} has no {param!r} parameter and nothing was "
+                    f"executed. {sentence}")
+    return None
+
+
 def _argument_message(tool: str, exc: BaseException) -> str:
     """One honest sentence per malformed argument, built from pydantic's
     structured error entries rather than its rendered string, so neither the
@@ -143,6 +176,9 @@ def _argument_message(tool: str, exc: BaseException) -> str:
             except Exception:  # a shape this version does not serve
                 entries = None
     label = tool or "this tool"
+    withdrawn = _withdrawn_note(tool, exc)
+    if withdrawn:
+        return withdrawn
     if not entries:
         return (f"{label} was called with malformed arguments and nothing "
                 f"was executed. Check each argument against the tool's "

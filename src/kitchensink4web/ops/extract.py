@@ -1164,6 +1164,10 @@ async def read_pages(
             break
         record.touch(record.page.url)
         sess.counters["navigations"] += 1
+        # Endurance F2: this door charged the ledger and never recorded the
+        # origin it landed on, so the reported list silently omitted every
+        # site reached by a page-walk hop.
+        _lite.note_origin(sess, record.page.url)
         # THE LANDED CHECK ON THIS DOOR TOO (gauntlet 4, G4-06). The hop's
         # destination went through `approve()`, and a redirect on the way
         # laundered a deny-listed origin straight into the payload: the

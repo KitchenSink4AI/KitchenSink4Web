@@ -44,14 +44,16 @@ from urllib.parse import urlparse
 
 from .. import anchors
 from .. import dialogs as _dialogs
+from .. import envelope as _envelope
 from .. import pagedata as _pagedata
 from . import act as _act
 from . import resource as _resource
 from ..engine import frames, lanes, session as _session
 from ..errors import (AmbiguousLocation, AuthRequired, BadParams,
                       BlockedBySite, Conflict, LaneUnsupported, ModalBlocked,
-                      NotImplementedYet, PageUnreachable, ReadOnlyMode,
-                      StaleAnchor, TargetNotFound, ValidationFailed)
+                      NavigationFailed, NotImplementedYet, PageUnreachable,
+                      ReadOnlyMode, SessionDead, StaleAnchor, TargetNotFound,
+                      ValidationFailed)
 from ..policy import audit as _audit
 from ..policy import budgets as _budgets
 from ..policy import credentials as _credentials
@@ -378,9 +380,7 @@ async def get_page_view(
     detail: str = "standard",
     location: dict | None = None,
     budget_tokens: int = 5000,
-    cursor: str | None = None,
     since: str | None = None,
-    include_hidden: bool = False,
     mode: str = "auto",
 ) -> dict:
     """Read a page as an ORIENTATION, not a transcript, under a token budget
@@ -402,22 +402,15 @@ async def get_page_view(
     its document belongs to an origin the page itself cannot read either,
     and the completeness block counts every frame it did not open.
     """
-    if cursor:
-        _stub("get_page_view(cursor=...)",
-              "a later phase (spill-to-file paging is not built; the "
-              "region and section reads plus get_text pagination cover the "
-              "cases it was for)")
-    if include_hidden:
-        # The policy ruling, not a stub: the ORIENTATION never carries hidden
-        # content. The labeled route is get_text, where hidden blocks arrive
-        # in their own clearly labeled section, never mixed into the text.
-        raise BadParams(
-            "get_page_view never includes hidden content: the orientation "
-            "reports hidden regions in its completeness block and stops "
-            "there. The labeled route is get_text(page=..., "
-            "include_hidden=True), which returns hidden blocks in a "
-            "separately labeled section with the hiding technique named per "
-            "block.")
+    # `cursor` and `include_hidden` are GONE FROM THE SCHEMA (fuzzer classes
+    # 6 and 7). `cursor` reached the NOT_IMPLEMENTED scaffold code through a
+    # parameter the published schema advertised, in a build whose own gate
+    # asserts the scaffold set is empty and whose envelope says nothing
+    # outside the closed vocabulary may appear in a shipped refusal.
+    # `include_hidden` refused every truthy value on a policy ruling that is
+    # not going to change, so the schema advertised a knob that does not
+    # exist. Both are answered by `server.WITHDRAWN_PARAMS`, which keeps the
+    # teaching sentence for a caller who sends one.
     if view not in _PROJECTION_VIEWS:
         raise BadParams(
             f"unknown view {view!r}. This build serves "
@@ -1181,8 +1174,7 @@ async def navigate(
             raise
         status = response.status if response else None
         sess.counters["navigations"] += 1
-        sess.origins.add(urlparse(record.page.url).netloc)
-        sess.counters["origins"] = len(sess.origins)
+        note_origin(sess, record.page.url)
     else:
         raise BadParams(
             f"unknown navigate action {action!r}: the actions are 'goto', "
@@ -1284,13 +1276,90 @@ _NET_CAUSES: tuple[tuple[str, str], ...] = (
     ("ns_error_connection_refused", "the host refused the connection"),
     ("ns_error_net_reset", "the connection was reset before a reply"),
     ("ns_error_offline", "this machine has no network connection"),
+    # Union wave (chaos C-01, second half): a body cut mid-transfer is a
+    # transport failure and was landing on BAD_PARAMS on Firefox because
+    # only the RESET spelling was in the table.
+    ("ns_error_net_partial_transfer", "the connection dropped part-way "
+                                      "through the response body"),
+    ("ns_error_net_interrupt", "the connection was interrupted before the "
+                               "response finished"),
+    ("ns_error_net_timeout", "the connection timed out"),
+    ("err_empty_response", "the server closed without sending a response"),
+    ("err_response_headers_truncated", "the response headers were cut off "
+                                       "before they finished"),
+    ("err_incomplete_chunked_encoding", "the response body ended before it "
+                                        "was complete"),
+    ("err_content_length_mismatch", "the response body was shorter than the "
+                                    "length the server declared"),
+    ("err_socket_not_connected", "the socket closed before a reply"),
+    ("err_timed_out", "the connection timed out"),
+    ("err_tunnel_connection_failed", "the configured proxy refused"),
+    ("ns_error_proxy_connection_refused", "the configured proxy refused"),
 )
 
 
+def note_origin(sess, url: str | None) -> None:
+    """Record an origin this session actually landed on.
+
+    ONE helper because there are THREE navigation doors and `sess.origins`
+    was written at exactly one of them (endurance F2). `manage_tabs(open,
+    url=...)` and the `read_pages` hop both charged the enforcing ledger and
+    neither touched the reported list, so a 550-page run that opened every
+    page as a tab finished with `navigations: 550` and `origins: 0`. The
+    list is the thing that answers "which sites has this session touched",
+    and it was silently omitting two of the three ways to touch one."""
+    host = urlparse(url or "").netloc
+    if not host:
+        return
+    sess.origins.add(host)
+    sess.counters["origins"] = len(sess.origins)
+
+
+def reported_counters(sess) -> dict:
+    """The counter block the status and budget surfaces print.
+
+    ONE WRITER PER NUMBER (endurance F1, concurrency C-7). `actions` lived
+    in `sess.counters`, was initialised to 0 in the dataclass, and was
+    written by NOTHING in the tree, so the status surface reported
+    `actions: 0` after any amount of acting while the budget ledger's own
+    refusal printed `actions=4` for the same session in the same second.
+    Two counters for one quantity is how that happens, so there is now one:
+    actions, navigations, and downloads are read off the enforcing ledger,
+    which is the thing that actually counts them, and reads and
+    pages_opened stay with the session, which is the thing that counts
+    those."""
+    snap = _budgets.BOOK.snapshot(sess.session_id)["counters"]
+    return {
+        "navigations": snap.get("navigations", 0),
+        "reads": sess.counters.get("reads", 0),
+        "actions": snap.get("actions", 0),
+        "downloads": snap.get("downloads", 0),
+        "pages_opened": sess.counters.get("pages_opened", 0),
+        "origins": len(sess.origins),
+    }
+
+
 def _raise_if_unreachable(exc: Exception, what: str) -> None:
-    """Re-raise a driver transport failure as PAGE_UNREACHABLE, naming the
-    cause. Anything unrecognized is left alone for the envelope to map."""
+    """Re-raise a driver failure as the honest typed refusal, naming the
+    cause.
+
+    THREE outcomes, and the third is the union wave's structural fix (chaos
+    C-01). A recognized TRANSPORT failure is PAGE_UNREACHABLE. A recognized
+    SITE-authored navigation failure is NAVIGATION_FAILED. A dead browser is
+    SESSION_DEAD. Anything else is left for `envelope.classify`, which no
+    longer answers BAD_PARAMS for driver-shaped text either: the table was
+    an allowlist, and everything it did not recognize fell through to the
+    argument-blaming code."""
     text = str(exc).lower()
+    if any(m in text for m in _envelope.CRASH_MARKERS):
+        return          # the crash path owns this; envelope builds it
+    if any(m in text for m in _envelope.DEAD_MARKERS):
+        raise SessionDead(
+            f"{what} could not run: the browser for this session is gone "
+            f"(driver detail: {_envelope.scrub_driver_text(str(exc))}). No "
+            f"call on this session can work and no re-read recovers it. "
+            f"Close it with manage_session(action='close') and open a new "
+            f"one.") from exc
     for marker, cause in _NET_CAUSES:
         if marker in text:
             raise PageUnreachable(
@@ -1299,6 +1368,12 @@ def _raise_if_unreachable(exc: Exception, what: str) -> None:
                 f"so rewriting it will not help. Check the connection or "
                 f"the host name, and retry once conditions change rather "
                 f"than in a loop.") from exc
+    for marker, cause in _envelope.NAV_FAIL_MARKERS:
+        if marker in text:
+            raise NavigationFailed(
+                f"{what} produced no document: {cause} (driver reported "
+                f"{marker}). The site owns this outcome, not the arguments, "
+                f"so rewriting the URL does not help.") from exc
 
 
 def _validated_url(url: str | None) -> str:
@@ -1547,6 +1622,35 @@ def _recorded_wall_possible(sess, record) -> dict | None:
     return got if _walls.header_block(got["headers"]) else None
 
 
+def _refuse_unrecorded_popup(sess, record) -> None:
+    """An adopted popup whose navigation record the buffer had to drop
+    (concurrency C-2).
+
+    The wall gate on an adopted popup is the RECORDED response and nothing
+    else: page text at 200 is deliberately not a wall (the F1 contract), so
+    with no record there is no evidence either way. Serving the document as
+    ordinary content is what let a site defeat the whole wall refusal by
+    opening more windows than the buffer held. This says the server cannot
+    rule instead. It fires only when eviction has actually happened in this
+    session, so an ordinary popup with a recorded response is untouched and
+    so is one on a session that never overflowed."""
+    if not getattr(record, "adopted", False):
+        return
+    if not sess.pending_nav_evicted:
+        return
+    if record.last_nav_url == record.page.url:
+        return          # a later navigation on this page IS recorded
+    raise Conflict(
+        f"the browser opened {record.handle} itself and this session has "
+        f"opened more windows than the server keeps first-response records "
+        f"for ({sess.pending_nav_evicted} record(s) dropped), so nothing "
+        f"survives that says what this page answered with. A bot wall and "
+        f"an ordinary page look the same from the document alone, so no "
+        f"read is taken rather than handing you an interstitial as content. "
+        f"navigate(page={record.handle!r}, url=...) to the URL you want, "
+        f"which records the response, or close the page.")
+
+
 async def _recorded_wall_refusal(sess, record) -> None:
     """The wall verdict a READ has to consult (gauntlet 4, G4-04).
 
@@ -1566,6 +1670,7 @@ async def _recorded_wall_refusal(sess, record) -> None:
     rather than reasoned from."""
     got = _recorded_wall_possible(sess, record)
     if got is None:
+        _refuse_unrecorded_popup(sess, record)
         return
     verdict = await _wall_verdict(record.page, got["status"],
                                  headers=got["headers"])
@@ -1747,8 +1852,15 @@ async def type_text(
         page=record.handle, url=record.page.url, target=desc,
         writes_value=True,
         action_class=_act.action_class_for(desc, submitting=submitting),
+        # `text` IS part of what makes this call distinct (concurrency C-6).
+        # Without it, five type_text calls carrying five different strings
+        # into one field tripped LOOP_DETECTED with the message "with
+        # identical arguments", which was false about the calls it refused.
+        # Fingerprinted rather than carried, so a value the vault would
+        # scrub never travels in an argument dict.
         args={"location": location, "clear_first": clear_first,
-              "press_enter": press_enter, "submit": submit},
+              "press_enter": press_enter, "submit": submit,
+              "text": _budgets.fingerprint(text)},
         resolution=resolved["resolution"],
         summary=f'type into {desc.get("role")} "{desc.get("name")}" on '
                 f'{record.handle}'
@@ -2864,7 +2976,16 @@ async def manage_tabs(
                 summary=f"manage_tabs opens a tab at {url}."))
         new_page = await sess.context.new_page()
         record = MANAGER._attach_page(sess, new_page)
-        sess.focused = record.handle
+        # THE HANDLE THIS CALL MINTED, held in a local across every await
+        # below (concurrency C-1). The op used to return only `focused`,
+        # which is session-global and which every concurrent open
+        # overwrites, so parallel opens handed callers each other's tabs:
+        # three callers were told `p35`, one of the three tabs had no name
+        # any caller could use, and two callers got a handle whose URL was
+        # still about:blank because another call had created it and not yet
+        # navigated it.
+        opened_handle = record.handle
+        sess.focused = opened_handle
         if url:
             try:
                 await _session.with_timeout(
@@ -2875,6 +2996,10 @@ async def manage_tabs(
                 raise
             record.touch(new_page.url)
             sess.counters["navigations"] += 1
+            # Endurance F2: same omission as the read_pages hop. A run that
+            # opened every page as a tab finished with navigations: 550 and
+            # origins: 0.
+            note_origin(sess, new_page.url)
             # THE LANDED CHECK, same as navigate's and now literally the
             # same helper (gauntlet 4, G4-06).
             await _landed_origin_check(sess, record, tool="manage_tabs")
@@ -2885,16 +3010,24 @@ async def manage_tabs(
                 record.page, getattr(record, "last_nav_status", None),
                 headers=getattr(record, "last_nav_headers", None))
             if verdict.get("wall"):
-                return {"session": sess.session_id, "focused": sess.focused,
+                return {"session": sess.session_id, "page": opened_handle,
+                        "focused": sess.focused,
                         "wall": verdict, "pages": _tab_list(sess)}
+        return {"session": sess.session_id, "page": opened_handle,
+                "focused": sess.focused,
+                "url": _page_url(record),
+                "pages": _tab_list(sess)}
     elif action == "select":
         record = sess.page(page)
+        selected_handle = record.handle
         await record.page.bring_to_front()
-        sess.focused = record.handle
+        sess.focused = selected_handle
         record.touch()
         # Selecting an ADOPTED popup is the moment a caller starts working
         # on a page nothing policed (gauntlet 4, G4-05).
         await _ensure_vetted(sess, record, tool="manage_tabs")
+        return {"session": sess.session_id, "page": selected_handle,
+                "focused": sess.focused, "pages": _tab_list(sess)}
     elif action == "close":
         record = sess.page(page)
         await record.page.close()
@@ -2920,16 +3053,35 @@ async def manage_tabs(
             "pages": _tab_list(sess)}
 
 
+def _page_url(record) -> str:
+    try:
+        return record.page.url
+    except Exception:
+        return "(closing)"
+
+
 def _tab_list(sess) -> list[dict]:
+    """The tab inventory, with the crash mark ON IT (chaos C-03).
+
+    The list used to print a page as an ordinary live tab in the same second
+    `locate()` was refusing every read and act on it as dead, and the tab
+    list is the one that reads as authoritative."""
+    browser_dead = sess.browser_alive() is False
     out = []
     for record in sess.pages.values():
         try:
             url = record.page.url
         except Exception:
             url = "(closing)"
-        out.append({"page": record.handle, "url": url,
-                    "focused": record.handle == sess.focused,
-                    "parked": record.parked})
+        row = {"page": record.handle, "url": url,
+               "focused": record.handle == sess.focused,
+               "parked": record.parked}
+        if browser_dead:
+            row["dead"] = ("the browser this session owns has exited; every "
+                           "page in it is gone")
+        elif record.crashed:
+            row["dead"] = record.crashed
+        out.append(row)
     return out
 
 
@@ -3081,7 +3233,7 @@ async def manage_session(
         sess = MANAGER.session(session)
         return {"session": sess.session_id,
                 "enforced": _budgets.BOOK.snapshot(sess.session_id),
-                "reporting_counters": dict(sess.counters),
+                "reporting_counters": reported_counters(sess),
                 "origins": sorted(sess.origins),
                 "reset_route": _budgets.RESET_ROUTE}
     if action == "reset_budgets":
@@ -3199,26 +3351,40 @@ async def manage_session(
 def _session_status(sess) -> dict:
     """One session's row in the status report, with its age and its idleness.
 
-    `state` reads off the two bounds the idle park already enforces, so the
-    word a caller sees and the behaviour the manager applies come from one
-    place: 'active' below the park bound, 'idle' between the two, and
-    'recyclable' past the close bound, which is a session the next park sweep
-    would take away."""
+    `state` reads LIVENESS FIRST and idle timing second (chaos C-02,
+    endurance F7). It used to read off the idle bounds alone, so a session
+    whose every owned PID was dead reported `state: "active"` in the same
+    second every read and act call on it was refusing, and this is the
+    surface an agent reaches for precisely when everything else is refusing.
+    Below the liveness question the two bounds the idle park enforces still
+    name the word: 'active' below the park bound, 'idle' between the two,
+    and 'recyclable' past the close bound."""
     now = time.time()
     touched = max([p.last_used for p in sess.pages.values()] or [sess.opened])
     idle_for = now - touched
+    alive = sess.browser_alive()
+    dead_pages = sess.dead_pages()
     if idle_for >= _session.IDLE_CLOSE_S:
         state = "recyclable"
     elif idle_for >= _session.IDLE_PARK_S:
         state = "idle"
     else:
         state = "active"
-    return {
+    if alive is False:
+        state = "dead"
+    live_pids = sess.journal.survivors()
+    row = {
         "session": sess.session_id, "lane": sess.spec.label,
         "pages": len(sess.pages), "focused": sess.focused,
         "profile_dir": sess.profile_dir,
         "owned_pids": sorted(sess.journal.pids),
-        "counters": dict(sess.counters),
+        # The journal is populated once, at open, so it names the processes
+        # that existed at launch and never grows (endurance p9_journal).
+        # Reporting which of THOSE are still running is the honest half.
+        "owned_pids_alive": live_pids,
+        "browser": ("alive" if alive else
+                    "dead" if alive is False else "unknown"),
+        "counters": reported_counters(sess),
         "age_s": round(now - sess.opened, 1),
         "idle_s": round(idle_for, 1),
         "parked_pages": sum(1 for p in sess.pages.values() if p.parked),
@@ -3228,6 +3394,17 @@ def _session_status(sess) -> dict:
         # hid a phone-shaped context would be a lie.
         **({"emulation": dict(sess.emulation)} if sess.emulation else {}),
     }
+    if alive is False:
+        row["health"] = (
+            "the browser this session owns has exited. Nothing on this "
+            "session can work and no re-read recovers it: close it with "
+            f"manage_session(session={sess.session_id!r}, action='close') "
+            "and open a new one.")
+    if dead_pages:
+        # C-03: the tab list and the crash mark disagreed, and the tab list
+        # is the one that reads as authoritative.
+        row["dead_pages"] = dead_pages
+    return row
 
 
 def _idle_summary(stale: list[dict]) -> str:

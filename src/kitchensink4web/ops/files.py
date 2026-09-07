@@ -114,7 +114,7 @@ async def download(
                     session=sess.session_id, page=record.handle,
                     url=record.page.url, target=resolved["descriptor"],
                     action_class="download_to_disk",
-                    args={"action": "click"},
+                    args={"action": "click", "path": path},
                     summary=f"download via {resolved['descriptor'].get('name')}"
                             f" on {record.handle}"))
                 await resolved["handle"].click(timeout=timeout_ms)
@@ -126,7 +126,7 @@ async def download(
                     tool="download", kind="download",
                     session=sess.session_id, page=record.handle, url=url,
                     action_class="download_to_disk",
-                    args={"action": "goto", "url": url},
+                    args={"action": "goto", "url": url, "path": path},
                     summary=f"download {url} on {record.handle}"))
                 try:
                     await record.page.goto(url, timeout=timeout_ms)
@@ -158,7 +158,7 @@ async def download(
     _policy.approve(_policy.ActionRequest(
         tool="download", kind="download", session=sess.session_id,
         page=record.handle, action_class="download_to_disk",
-        args={"action": "wait"},
+        args={"action": "wait", "path": path},
         summary=f"save the download on {record.handle}"))
     return await _finish(sess, record, download_obj, path)
 
@@ -191,7 +191,7 @@ async def _fetch(sess, record, url, path, timeout_ms) -> dict:
     _policy.approve(_policy.ActionRequest(
         tool="download", kind="download", session=sess.session_id,
         page=record.handle, url=target, action_class="download_to_disk",
-        args={"action": "fetch", "url": target},
+        args={"action": "fetch", "url": target, "path": path},
         summary=f"fetch and save {target} through the session on "
                 f"{record.handle}"))
     try:
@@ -293,6 +293,17 @@ async def upload_file(
         raise BadParams(
             "upload_file needs a non-empty list of file paths to set on "
             "the input.")
+    # ELEMENT TYPES, not just the container's (fuzzer class 1b). The guard
+    # above checked the list and not what is in it, so `files=[null]` reached
+    # `os.fspath` inside the sandbox check and came back as a raw
+    # "expected str, bytes or os.PathLike object, not NoneType".
+    bad = [i for i, f in enumerate(files) if not isinstance(f, str) or not f.strip()]
+    if bad:
+        raise BadParams(
+            f"upload_file takes a list of file PATHS and item(s) "
+            f"{bad} are not usable path strings (got "
+            f"{[type(files[i]).__name__ for i in bad[:4]]}). Every entry has "
+            f"to be a non-empty path to a file that exists on this machine.")
     # The read-check runs FIRST on both routes, before anything is resolved
     # or clicked: a path outside the allowed roots is refused before the page
     # learns a file was ever named.

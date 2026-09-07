@@ -26,6 +26,14 @@ class WebMcpError(Exception):
     #: a tool name must not trigger the hint).
     hint_tools: tuple[str, ...] = ()
 
+    #: A raise-site hint that REPLACES the per-code one. None means the
+    #: code's HINTS entry stands, which is the case for almost every refusal
+    #: in the tree. Set it where the code's generic hint would contradict the
+    #: message: hostile H-02 found the crashed-renderer message saying "open
+    #: a NEW tab, this handle will not recover" with CONFLICT's "re-read to
+    #: re-establish a baseline" printed underneath it.
+    hint: str | None = None
+
 
 # --------------------------------------------------------- inherited family
 
@@ -164,6 +172,51 @@ class ModalBlocked(WebMcpError):
 class Timeout(WebMcpError):
     """A wait expired. Names what was being waited for and what was observed
     instead."""
+
+
+class SessionDead(WebMcpError):
+    """The browser process, or the driver connection to it, is gone. Nothing
+    on this session can work again and no re-read recovers it.
+
+    Separate from Conflict (a crashed RENDERER, where the browser survives
+    and a fresh tab is the route) because the recovery differs: a dead
+    browser needs manage_session close + open, and the fresh-tab advice the
+    crash refusal gives fails when the whole browser is gone.
+
+    Union wave 2026-09-07: chaos C-01/C-02/C-04, endurance F7, and the
+    author's own field report (a Cloudflare challenge killing the Firefox
+    process, after which every call answered BAD_PARAMS) are one condition
+    with one name."""
+
+
+class NavigationFailed(WebMcpError):
+    """A navigation reached servers and did not produce a document, for a
+    reason the SITE owns: a redirect loop, a redirect to a scheme the
+    browser refuses, an aborted main-frame load.
+
+    Separate from PageUnreachable (nothing answered at all) and from
+    BlockedBySite (something answered, hostilely, with a wall). Before this
+    code these fell through the transport table into BAD_PARAMS, which
+    blamed the caller for a loop the site built."""
+
+
+class FileWriteFailed(WebMcpError):
+    """A file the caller asked the server to write could not be written: the
+    directory refuses, the name is a device, the path is too long, the file
+    is held open elsewhere.
+
+    Exists so an `[Errno 13] Permission denied` stops arriving as
+    BAD_PARAMS with a hint about location objects."""
+
+
+class DriverFailure(WebMcpError):
+    """The browser driver refused or failed for a reason none of the typed
+    codes above covers.
+
+    The terminal backstop for driver-shaped exceptions. Its whole purpose is
+    that it is NOT BAD_PARAMS: an unrecognized transport or protocol error
+    is infrastructure, and telling a caller its arguments were malformed
+    sends it to rewrite arguments that were correct."""
 
 
 # ----------------------------------------------------------- scaffold only

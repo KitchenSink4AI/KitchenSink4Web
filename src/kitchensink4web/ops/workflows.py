@@ -30,19 +30,23 @@ Three design facts carry the whole module:
 
 from __future__ import annotations
 
+import asyncio
 import json
+import os
 import re
 import time
+import uuid
 from pathlib import Path
 
 from ..anchors import Outcome, ladder
 from ..engine.session import MANAGER
-from ..errors import (BadParams, ConfirmationRequired, TargetNotFound,
-                      ValidationFailed)
+from ..errors import (BadParams, Conflict, ConfirmationRequired,
+                      TargetNotFound, ValidationFailed)
 from ..policy import audit as _audit
 from ..policy import gates as _gates
 from ..policy import sandbox
 from ..projection import extract
+from . import common
 from . import lite as _lite
 
 #: The tools a workflow step may replay. CLOSED: everything here is a lite
@@ -89,11 +93,21 @@ def _load(name: str) -> dict:
                else "Nothing has been saved yet; record a flow and call "
                     "save_workflow."))
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        doc = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError) as exc:
         raise ValidationFailed(
             f"workflow file {path.name} could not be read "
             f"({exc.__class__.__name__}); re-save the workflow.") from exc
+    # A file that PARSES is not a file that is a workflow (chaos C-10). A
+    # top-level list, string, or null sailed past this guard and every
+    # consumer then called `.get` on it, so the caller got a raw Python
+    # `'list' object has no attribute 'get'` under BAD_PARAMS with a hint
+    # about location objects.
+    if not isinstance(doc, dict):
+        raise ValidationFailed(
+            f"workflow file {path.name} parsed as {type(doc).__name__} "
+            f"rather than a workflow object; re-save the workflow.")
+    return doc
 
 
 # ------------------------------------------------------------------ saving
@@ -158,8 +172,7 @@ async def save_workflow(
         "steps": steps,
     }
     path = _path_of(name)
-    path.write_text(json.dumps(doc, ensure_ascii=False, indent=1),
-                    encoding="utf-8")
+    await _write_workflow(path, doc)
     _audit.annotate(workflow=doc["name"])
     return {
         "name": doc["name"],
@@ -174,6 +187,58 @@ async def save_workflow(
                    f"list_workflows(for_origin={origins[0]!r}) returns it "
                    f"the next time you are there." if origins else ""),
     }
+
+
+#: Serializes save_workflow inside ONE server process. The store is
+#: machine-global, so this cannot be the whole answer, which is why the
+#: read-back below exists as well.
+_SAVE_LOCK = asyncio.Lock()
+
+
+async def _write_workflow(path, doc: dict) -> None:
+    """Write a workflow so no caller holds a receipt for a file it did not
+    produce (concurrency C-4).
+
+    Three properties. SERIALIZED in-process, so two concurrent
+    `save_workflow` calls in one server cannot interleave. ATOMIC replace,
+    so a reader mid-write never sees a half-written document. READ BACK,
+    because the store is machine-global (`%LOCALAPPDATA%\\ks4web\\workflows`)
+    and the breaker found files there written minutes earlier by a DIFFERENT
+    server process: nothing in this process can lock out that writer, so the
+    only honest move left is to check what actually landed and say so when
+    it is not what this call wrote.
+
+    Re-saving under an existing name still overwrites, which is the ordinary
+    thing a caller does after re-recording a flow. What refuses is a receipt
+    that would be false."""
+    body = json.dumps(doc, ensure_ascii=False, indent=1)
+    marker = json.dumps(doc.get("steps"), ensure_ascii=False)
+    async with _SAVE_LOCK:
+        tmp = path.with_name(f"{path.name}.{os.getpid()}."
+                             f"{uuid.uuid4().hex}.tmp")
+        try:
+            tmp.write_text(body, encoding="utf-8")
+            os.replace(tmp, path)
+        except OSError as exc:
+            try:
+                tmp.unlink()
+            except OSError:
+                pass
+            raise common.write_failed(path, "save the workflow", exc) from exc
+        try:
+            landed = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            landed = None
+        if not isinstance(landed, dict) or json.dumps(
+                landed.get("steps"), ensure_ascii=False) != marker:
+            raise Conflict(
+                f"the workflow file {path} does not hold what this call "
+                f"wrote: another save under the same name landed on top of "
+                f"it. The workflow store is shared across every KS4Web "
+                f"process on this machine, so a name collision is not "
+                f"confined to this session. Nothing here is a receipt for "
+                f"the steps you asked to save; re-save under a different "
+                f"name.")
 
 
 def _step_line(i: int, step: dict) -> str:
@@ -238,21 +303,34 @@ async def list_workflows(session: str | None = None,
     out = []
     skipped = 0
     for path in sorted(_workflow_dir().glob("*.json")):
+        # ONE BAD FILE MUST NOT BRICK ENUMERATION (chaos C-10). The per-file
+        # fallback existed for exactly this and was guarded by the same two
+        # exceptions as the parse, so a file that parsed to a list took down
+        # the listing of every OTHER workflow in the store with an
+        # AttributeError from `doc.get`.
         try:
             doc = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
+            if not isinstance(doc, dict):
+                raise ValueError("not a workflow object")
+        except Exception:
             out.append({"name": path.stem, "error": "unreadable; re-save"})
             continue
-        if session and doc.get("session") not in (None, session):
-            continue
-        origins = doc.get("origins", [])
-        if wanted and not any(_origin_matches(o, wanted) for o in origins):
-            skipped += 1
-            continue
-        out.append({"name": doc.get("name", path.stem),
-                    "steps": len(doc.get("steps", [])),
-                    "created": doc.get("created"),
-                    "origins": origins})
+        try:
+            if session and doc.get("session") not in (None, session):
+                continue
+            origins = doc.get("origins")
+            origins = list(origins) if isinstance(origins, list) else []
+            steps = doc.get("steps")
+            if wanted and not any(_origin_matches(o, wanted)
+                                  for o in origins):
+                skipped += 1
+                continue
+            out.append({"name": doc.get("name", path.stem),
+                        "steps": len(steps) if isinstance(steps, list) else 0,
+                        "created": doc.get("created"),
+                        "origins": origins})
+        except Exception:
+            out.append({"name": path.stem, "error": "unreadable; re-save"})
     return {"workflows": out,
             "directory": str(_workflow_dir()),
             **({"filter": {
@@ -498,7 +576,22 @@ async def _run_step(sess, record, step: dict) -> dict:
                                   action=args.get("action", "by"),
                                   amount=int(args.get("amount") or 1),
                                   location=location)
-    # wait_for
+    # wait_for. THE RECORDING SIDE ALREADY REFUSES A JS PREDICATE ("a
+    # workflow must never smuggle evaluate-shaped work past the gate that
+    # names it"), and the replay side did not check, so a hand-edited
+    # workflow file was a second door onto the same capability (IG-01,
+    # defence-in-depth half). `wait_for(condition='js')` is now gated in the
+    # tool itself; this stays as the closed-set guard the module's own
+    # contract promises.
+    if (args.get("condition") or "").strip().lower() == "js":
+        raise ValidationFailed(
+            "this workflow step is wait_for(condition='js'), which "
+            "evaluates caller-supplied JavaScript in the page. Workflow "
+            "replay carries a closed set of recorded actions and script "
+            "evaluation is not in it; save_workflow never records one, so "
+            "this file was edited by hand. Remove the step, or run the "
+            "predicate through evaluate_script, which names the capability "
+            "and is gated on it.")
     return await _lite.wait_for(page=page,
                                 condition=args.get("condition", "load"),
                                 value=args.get("value"),

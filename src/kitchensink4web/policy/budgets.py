@@ -109,9 +109,14 @@ class BudgetBook:
                ) -> None:
         """Charge one unit against a budget, refusing when it is exhausted.
 
-        The check runs BEFORE the increment, so the refusal fires on the
-        first call past the limit and the counters it prints are the true
-        spend, not the attempted one."""
+        EVERY check runs before EVERY increment (endurance F6). The
+        docstring's own claim — "the counters it prints are the true spend,
+        not the attempted one" — was true of the counter being checked and
+        false of the one billed alongside it: the navigation increment ran
+        first, so a call the ORIGIN check refused printed
+        `navigations=31` for 30 navigations performed, and a session hitting
+        off-list origins walked its navigation budget down for work that
+        never happened."""
         ledger = self._ledger(session)
         elapsed = time.monotonic() - ledger.started
         if elapsed > limit("wall_clock_s"):
@@ -119,21 +124,26 @@ class BudgetBook:
                 f"the session wall-clock budget is spent: "
                 f"{elapsed:.0f}s against {limit('wall_clock_s')}s. "
                 f"{self._printed(session)} {RESET_ROUTE}")
-        if kind in ("actions", "navigations", "downloads"):
-            if ledger.counters[kind] >= limit(kind):
-                raise BudgetExhausted(
-                    f"the {kind} budget is spent: {ledger.counters[kind]} "
-                    f"against {limit(kind)}. {self._printed(session)} "
-                    f"{RESET_ROUTE}")
+        counted = kind in ("actions", "navigations", "downloads")
+        if counted and ledger.counters[kind] >= limit(kind):
+            raise BudgetExhausted(
+                f"the {kind} budget is spent: {ledger.counters[kind]} "
+                f"against {limit(kind)}. {self._printed(session)} "
+                f"{RESET_ROUTE}")
+        if origin and origin not in ledger.origins \
+                and len(ledger.origins) >= limit("new_origins"):
+            raise BudgetExhausted(
+                f"the distinct-origins budget is spent: {origin} would be "
+                f"origin {len(ledger.origins) + 1} against "
+                f"{limit('new_origins')}. {self._printed(session)} "
+                f"{RESET_ROUTE}")
+        # Both checks passed; now spend. No await between the checks and the
+        # increments, so asyncio cannot interleave a second charge into the
+        # gap (the property the concurrency round verified and this
+        # reordering has to preserve).
+        if counted:
             ledger.counters[kind] += 1
         if origin:
-            if (origin not in ledger.origins
-                    and len(ledger.origins) >= limit("new_origins")):
-                raise BudgetExhausted(
-                    f"the distinct-origins budget is spent: {origin} would be "
-                    f"origin {len(ledger.origins) + 1} against "
-                    f"{limit('new_origins')}. {self._printed(session)} "
-                    f"{RESET_ROUTE}")
             ledger.origins.add(origin)
 
     def _printed(self, session: str) -> str:

@@ -27,6 +27,14 @@ DESIGN_CODES = {
     "AUTH_REQUIRED", "CREDENTIAL_REFUSED", "BUDGET_EXHAUSTED",
     "LOOP_DETECTED", "CONFIRMATION_REQUIRED", "READ_ONLY_MODE",
     "LANE_UNSUPPORTED", "MODAL_BLOCKED", "TIMEOUT",
+    # Added 2026-09-07 (union wave, super-class 1). BAD_PARAMS was the
+    # terminal fallback for four conditions that are not argument faults:
+    # a dead browser (chaos C-01/C-02, endurance F7, the author's own field
+    # report), a site-authored navigation failure (hostile H-01), an
+    # unwritable output path (chaos C-11, fuzzer class 1a), and any other
+    # driver-shaped fault (the structural half of chaos C-01).
+    "SESSION_DEAD", "NAVIGATION_FAILED", "FILE_WRITE_FAILED",
+    "DRIVER_FAILURE",
 }
 
 

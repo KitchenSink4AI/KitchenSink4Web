@@ -604,7 +604,51 @@ def reap_orphans(dry_run: bool = False) -> dict:
                 path.unlink(missing_ok=True)
             except OSError:
                 pass
+    report["audits_removed"] = _reap_audits(dry_run)
     return report
+
+
+#: How many audit files the state directory keeps, newest first, and how old
+#: one may be before it goes regardless. Each FILE is bounded (the JSONL
+#: rotates at 2x the 5,000-record ring); the COUNT was not, and the file is
+#: named `audit-<pid>.jsonl`, so a client that restarts the server often
+#: leaves one per launch forever. The endurance campaign's 30 launches left
+#: 30 files totalling 6.1 MB, and the reaper swept journals and profiles and
+#: never audits.
+AUDIT_KEEP = 20
+AUDIT_MAX_AGE_S = 14 * 24 * 3600
+
+
+def _reap_audits(dry_run: bool = False) -> list[str]:
+    """Sweep stale audit files at startup, alongside journals and profiles.
+
+    The CURRENT process's own file is never a candidate: it does not exist
+    yet at reap time, and the guard is here so a future caller cannot make
+    the reaper eat the log it is writing."""
+    try:
+        files = sorted(STATE_DIR.glob("audit-*.jsonl"),
+                       key=lambda p: p.stat().st_mtime, reverse=True)
+    except OSError:
+        return []
+    mine = STATE_DIR / f"audit-{os.getpid()}.jsonl"
+    now = time.time()
+    removed: list[str] = []
+    for index, path in enumerate(files):
+        if path == mine:
+            continue
+        try:
+            too_old = (now - path.stat().st_mtime) > AUDIT_MAX_AGE_S
+        except OSError:
+            continue
+        if index < AUDIT_KEEP and not too_old:
+            continue
+        if not dry_run:
+            try:
+                path.unlink()
+            except OSError:
+                continue
+        removed.append(str(path))
+    return removed
 
 
 def _names_a_foreign_profile(cmd: str, owned_profile: str) -> bool:

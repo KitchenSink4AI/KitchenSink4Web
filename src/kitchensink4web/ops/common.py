@@ -27,13 +27,14 @@ KS4WEB_DOWNLOAD_DIR, KS4WEB_SPILL_DIR.
 
 from __future__ import annotations
 
+import errno
 import os
 import time
 from pathlib import Path
 
 from .. import envelope
 from ..engine.session import MANAGER
-from ..errors import UnsupportedContent, ValidationFailed
+from ..errors import FileWriteFailed, UnsupportedContent, ValidationFailed
 from ..policy import audit as _audit
 from ..policy import credentials as _credentials
 from ..policy import sandbox
@@ -209,13 +210,95 @@ def stamp() -> str:
     return time.strftime("%Y%m%d_%H%M%S")
 
 
+#: Windows device names. Opening one of these succeeds, consumes the bytes,
+#: and persists nothing, so `saved_to: "CON"` with a byte count was a
+#: fabricated receipt for a file that does not exist (fuzzer class 4).
+_DEVICE_NAMES = frozenset(
+    ["con", "prn", "aux", "nul"]
+    + [f"com{i}" for i in range(1, 10)]
+    + [f"lpt{i}" for i in range(1, 10)])
+
+
+def resolve_out_path(path, purpose: str) -> Path:
+    """The ONE resolution every output path goes through.
+
+    `saved_to` has to be an honest answer to "where did it go", and before
+    the union wave it was the caller's own string echoed back: `~/x.txt`
+    created a directory literally named `~`, `%TEMP%/x.txt` one named
+    `%TEMP%`, and `../../../../x.txt` was echoed unresolved while the file
+    landed relative to a server CWD the caller cannot see (fuzzer class 4).
+
+    Three steps: expand the shell tokens the caller plainly meant, run the
+    sandbox check on what that resolves to (so containment sees the real
+    target rather than the token), and return an ABSOLUTE path. A device
+    name refuses rather than reporting a write that persisted nothing."""
+    raw = os.fspath(path)
+    if isinstance(raw, bytes):
+        raw = os.fsdecode(raw)
+    expanded = os.path.expandvars(os.path.expanduser(raw.strip()))
+    if not expanded:
+        raise FileWriteFailed(
+            f"refusing to {purpose}: the path is empty. Give a file path, "
+            f"or omit path to use the server's downloads directory.")
+    # The device check runs on the name the CALLER gave, before abspath:
+    # `os.path.abspath("CON")` already rewrites it to the `\\.\CON` device
+    # form, where the basename is empty and the check would miss.
+    leaf = os.path.basename(expanded.replace("\\", "/").rstrip("/")) or expanded
+    if ":" in leaf:
+        # An NTFS alternate data stream. The bytes land somewhere no
+        # directory listing shows, which is not what any caller asking for
+        # `x.txt:stream` means (fuzzer class 4).
+        raise FileWriteFailed(
+            f"refusing to {purpose}: {leaf!r} names an alternate data "
+            f"stream rather than a file. The bytes would not appear in any "
+            f"directory listing. Use a file name with no colon in it.")
+    if leaf.split(".")[0].strip().lower() in _DEVICE_NAMES:
+        raise FileWriteFailed(
+            f"refusing to {purpose}: {leaf!r} is a reserved device name on "
+            f"this platform. Writing to it consumes the bytes and persists "
+            f"no file, so the receipt would name a file that does not "
+            f"exist. Choose an ordinary file name.")
+    checked = sandbox.check_path(expanded, purpose)
+    return Path(os.path.abspath(checked))
+
+
+def write_failed(p: Path, purpose: str, exc: OSError) -> FileWriteFailed:
+    """One typed refusal for every filesystem fault on the write path.
+
+    Chaos C-11 and fuzzer class 1a: five tools answered BAD_PARAMS with a
+    bare `[Errno 13] Permission denied: '...'` and the location-object hint
+    under it, and an over-long Windows path answered NOT_FOUND ("no such
+    file") for a file the caller had asked the server to CREATE."""
+    detail = envelope.scrub_driver_text(str(exc))
+    cause = ""
+    if isinstance(exc, PermissionError):
+        cause = ("the directory or the file refuses writes, or something "
+                 "else holds it open. ")
+    elif isinstance(exc, IsADirectoryError):
+        cause = "a directory already occupies that name. "
+    elif isinstance(exc, FileNotFoundError) and len(str(p)) > 240:
+        cause = (f"the path is {len(str(p))} characters, past the limit this "
+                 f"platform accepts. ")
+    elif isinstance(exc, FileNotFoundError):
+        cause = "part of the path does not exist and could not be created. "
+    elif getattr(exc, "errno", None) == errno.ENOSPC:
+        cause = "the volume is full. "
+    return FileWriteFailed(
+        f"could not {purpose}: {cause}Nothing was written. Target was "
+        f"{p} (filesystem detail: {detail}). Choose a writable directory, "
+        f"or omit path to use the server's downloads directory.")
+
+
 def write_text_file(path, text: str, purpose: str) -> str:
     """Sandbox-checked, REDACTED text write. Every text file leaving the
     server passes the same redaction seam a payload does (DESIGN 5.3), so a
     tool that forgot its own scrubbing is still caught here."""
-    p = Path(sandbox.check_path(os.fspath(path), purpose))
-    p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(envelope.redact(text), encoding="utf-8", newline="")
+    p = resolve_out_path(path, purpose)
+    try:
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(envelope.redact(text), encoding="utf-8", newline="")
+    except OSError as exc:
+        raise write_failed(p, purpose, exc) from exc
     return str(p)
 
 
@@ -223,9 +306,12 @@ def write_bytes_file(path, data: bytes, purpose: str) -> str:
     """Sandbox-checked binary write (images, PDFs, MHTML). Binary payloads
     carry pixels rather than strings, so the redaction seam does not apply;
     the sandbox containment still does."""
-    p = Path(sandbox.check_path(os.fspath(path), purpose))
-    p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_bytes(data)
+    p = resolve_out_path(path, purpose)
+    try:
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_bytes(data)
+    except OSError as exc:
+        raise write_failed(p, purpose, exc) from exc
     return str(p)
 
 
