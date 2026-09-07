@@ -385,6 +385,15 @@ class Session:
     def jar_handle(self) -> ContextHandle:
         handle = self.contexts.get(self.focused_context)
         if handle is None:
+            if not self.contexts:
+                # Only reachable if a launch was torn down mid-flight and
+                # something kept the handle. A named refusal beats a
+                # StopIteration surfacing three frames away.
+                raise SessionDead(
+                    f"session {self.session_id} holds no browser context. "
+                    f"Its launch did not finish or every context was torn "
+                    f"down. Open a new session with "
+                    f"manage_session(action='open').")
             handle = next(iter(self.contexts.values()))
         return handle
 
