@@ -4766,6 +4766,12 @@ async def handle_dialog(
 
 #: The lite roster, in the order DESIGN 2.1 lists it. `server.py` registers
 #: exactly this and nothing else in Phase 0.
+# Imported HERE rather than at the top of the module: `ops/monitor.py`
+# reaches back into this one for the URL validator and the driver-error
+# ladder, so a module-scope import in either direction is a cycle. Every
+# lite tool still ships from one roster.
+from . import monitor as _monitor_ops  # noqa: E402
+
 LITE_TOOLS = (
     get_page_view,
     find_elements,
@@ -4783,4 +4789,5 @@ LITE_TOOLS = (
     manage_session,
     get_audit,
     get_workflows,
+    _monitor_ops.monitor,
 )

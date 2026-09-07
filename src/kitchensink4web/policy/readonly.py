@@ -146,6 +146,14 @@ NON_MUTATING: frozenset[str] = frozenset({
     "get_page_view", "find_elements", "get_text", "navigate", "scroll",
     "wait_for", "manage_tabs", "manage_session", "get_audit",
     "get_workflows",
+    # `monitor` navigates and reads and does nothing else, which is the
+    # call already made for `navigate` and `read_pages`. It is deliberately
+    # NOT in GENUINELY_READ_ONLY below: it creates browser processes,
+    # writes files, and issues outbound requests on a timer, so the
+    # readOnlyHint would be a false safety claim. Under grade `strict` its
+    # checks are held to the origin allowlist hop by hop like any other
+    # navigation.
+    "monitor",
     # packs (planned)
     "get_table", "get_list", "get_links", "get_metadata", "extract_fields",
     "get_article", "export_data", "take_screenshot", "export_pdf",

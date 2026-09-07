@@ -531,8 +531,8 @@ class SessionManager:
     async def open(self, lane: str | None = None, engine: str | None = None,
                    channel: str | None = None, headless: bool | None = None,
                    device: str | None = None, viewport=None,
-                   locale: str | None = None, timezone: str | None = None
-                   ) -> Session:
+                   locale: str | None = None, timezone: str | None = None,
+                   role: str = "user") -> Session:
         """Launch a browser on an owned profile and mint a session handle.
 
         The startup reaper runs here rather than at import: it is the first
@@ -589,7 +589,7 @@ class SessionManager:
             journal.adopt_descendants(since=before)
             session = Session(session_id=sid, spec=spec, context=context,
                               profile_dir=str(profile), journal=journal,
-                              emulation=emulation_report)
+                              emulation=emulation_report, role=role)
             for page in context.pages:
                 self._attach_page(session, page)
             if not session.pages:
