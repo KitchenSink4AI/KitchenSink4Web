@@ -40,11 +40,12 @@ from pathlib import Path
 from .meter import ENCODING_NAME, ntok
 from .render import RUNGS, Projection, project
 
-__all__ = ["EXTRACT_JS", "FIND_JS", "TEXT_JS", "ARTICLE_JS", "VISIBILITY_JS",
+__all__ = ["EXTRACT_JS", "FIND_JS", "TEXT_JS", "ARTICLE_JS", "SCHEMA_JS",
+           "VISIBILITY_JS",
            "PAYMENT_JS", "ACTIVATION_JS", "ARIA_JS", "HREF_JS",
            "CLOSED_SHADOW_HOOK", "INSTRUMENT_KEY", "instrument",
            "Projection", "project", "extract", "find", "read_text",
-           "read_article", "read_page", "stitch", "ntok",
+           "read_article", "read_schema", "read_page", "stitch", "ntok",
            "ENCODING_NAME", "RUNGS"]
 
 _HERE = Path(__file__).parent
@@ -159,6 +160,10 @@ EXTRACT_JS = instrument((_HERE / "extract.js").read_text(encoding="utf-8"))
 FIND_JS = instrument((_HERE / "find.js").read_text(encoding="utf-8"))
 TEXT_JS = instrument((_HERE / "text.js").read_text(encoding="utf-8"))
 ARTICLE_JS = instrument((_HERE / "article.js").read_text(encoding="utf-8"))
+#: The schema-directed source collector (`extract_page`). It splices the SAME
+#: `visibility.js` every other read splices, which is the whole reason it lives
+#: here rather than as a private string in the extract pack.
+SCHEMA_JS = instrument((_HERE / "schema.js").read_text(encoding="utf-8"))
 
 
 def _checked(data: dict) -> dict:
@@ -274,6 +279,18 @@ async def read_article(page, root: str | None = None, start_index: int = 0,
     return _checked(await page.evaluate(ARTICLE_JS, {
         "root": root, "start_index": start_index, "max_chars": max_chars,
         "links": links}))
+
+
+async def read_schema(page, root: str | None = None,
+                      caps: dict | None = None) -> dict:
+    """Collect every schema candidate the page offers, grouped by tier.
+
+    One evaluate, one deep walk (the light tree plus every open shadow root),
+    no matching. The matcher is server-side on purpose: a matcher running in
+    page script is a matcher the page can profile against, and the
+    confident-wrong-answer defects all live in the matcher."""
+    return _checked(await page.evaluate(
+        SCHEMA_JS, {"root": root, "caps": caps or {}}))
 
 
 #: The completeness counters that ADD across frames, and the ones that do not.

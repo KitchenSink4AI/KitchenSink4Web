@@ -157,6 +157,12 @@ NON_MUTATING: frozenset[str] = frozenset({
     # ambiguous rather than mutating, so it is permitted under `browse` and
     # held to the origin allowlist under `strict`, hop by hop.
     "read_pages",
+    # extract_page reads the rendered DOM and writes nothing at all, so it also
+    # carries the readOnlyHint below. `aggregate` NAVIGATES to every URL it is
+    # given, which is the same ambiguity `navigate` and `read_pages` carry: it
+    # is permitted under `browse` and held to the origin allowlist under
+    # `strict`, hop by hop, and it is deliberately NOT genuinely read-only.
+    "extract_page", "aggregate",
 })
 
 #: Tools that are GENUINELY read-only for the MCP readOnlyHint annotation:
@@ -186,7 +192,7 @@ GENUINELY_READ_ONLY: frozenset[str] = frozenset({
     "get_workflows",
     # packs
     "get_table", "get_list", "get_links", "get_metadata", "extract_fields",
-    "get_article",
+    "get_article", "extract_page",
     "list_requests", "get_request", "list_console", "get_page_errors",
     "list_workflows",
 })

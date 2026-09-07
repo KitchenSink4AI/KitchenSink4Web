@@ -28,14 +28,20 @@ from __future__ import annotations
 import csv
 import io
 import json
+import re
+import time
 from urllib.parse import urlparse
 
+from .. import envelope as _envelope
 from .. import pagedata as _pagedata
-from ..errors import (AmbiguousLocation, BadParams, RangeOutOfBounds,
-                      TargetNotFound)
+from ..errors import (AmbiguousLocation, BadParams, BudgetExhausted, Conflict,
+                      LoopDetected, RangeOutOfBounds, TargetNotFound)
+from ..policy import budgets as _budgets
+from ..policy import credentials as _credentials
 from ..policy import engine as _policy
 from ..projection import instrument as _instrument, ntok as _ntok, read_text
 from ..projection import read_article as _read_article
+from ..projection import read_schema as _read_schema
 from ..projection.meter import ENCODING_NAME as _ENCODING
 from . import act as _act
 from . import common
@@ -894,6 +900,848 @@ async def extract_fields(page: str, fields: list | dict) -> dict:
     }
 
 
+# ------------------------------------------------------- the tier ladder
+#
+# `extract_page` (#3) and `aggregate` (#7) share every line below. The ladder
+# is four classes of EVIDENCE tried in order, and the boundary between them is
+# "who asserted the relationship between the label and the value": the page's
+# machine-readable declaration, the page's HTML semantics, the page's DOM
+# structure, or nobody. There is no fifth tier, because the fifth tier is
+# guessing, and a confident wrong answer from a read tool is the one failure
+# this product's whole doctrine exists to forbid. When in doubt it refuses.
+
+#: The tiers, in ladder order. `page-hint` is collected always and REACHABLE
+#: only by naming it, because a class-token match is weak evidence and the
+#: default surface must not be able to answer from one.
+TIER_ORDER = ("declared", "labeled", "proximate", "page-hint")
+TIER_MODES = ("all", "declared", "labeled", "proximate", "page-hint")
+
+#: What `tiers="all"` admits. Tier 4 is deliberately not in it.
+_ALL_TIERS = ("declared", "labeled", "proximate")
+
+#: Match qualities, best first. `exact` and `all-words` may consult the field's
+#: DESCRIPTION; `partial` consults the field NAME only, and that restriction is
+#: a defect rather than a preference: with the description in play, a field
+#: `product_name` described as "the product title" partial-matched the source
+#: key `title` and returned the DOCUMENT title ("Lamp") instead of the product
+#: name. Plausible, wrong, and confidently labeled.
+_QUALITY_RANK = {"exact": 3, "all-words": 2, "partial": 1}
+
+#: The floor a partial match clears ON BOTH SIDES, and the reason is
+#: `PARTIAL_MIN_CHARS`'s reason one tool along: `_norm` strips everything that
+#: is not alphanumeric, so a source key of `"t)"` normalizes to `"t"`, and one
+#: character is a substring of almost every field description in existence.
+#: Four is the shortest string that carries a word (`date`, `isbn`, `name`).
+_PARTIAL_MIN = PARTIAL_MIN_CHARS
+
+#: Function words, stripped from the content-word sets `all-words` compares.
+#: Deliberately function words ONLY: `current` and `listed` carry meaning, and
+#: stripping them would make "the current price" and "price" the same needle.
+_STOPWORDS = frozenset((
+    "a", "an", "and", "are", "as", "at", "be", "by", "for", "from", "in",
+    "is", "it", "its", "my", "of", "on", "or", "our", "that", "the", "their",
+    "these", "this", "those", "to", "was", "were", "with", "your"))
+
+_CAMEL_SPLIT = re.compile(r"(?<=[a-z0-9])(?=[A-Z])")
+_NON_WORD = re.compile(r"[^0-9A-Za-zÀ-￿]+")
+
+#: The per-value and per-key clips, and the per-tier retention caps. Every one
+#: of them is REPORTED when it is hit: a cap nobody is told about is the
+#: completeness lie this product exists to refuse.
+SCHEMA_CAPS = {
+    "key_clip": 90, "value_clip": VALUE_CLIP, "leaves": 6000,
+    "declared": 1200, "labeled": 800, "proximate": 800, "hint": 900,
+    "json_ld_nodes": 400, "value_shape_max": 120,
+}
+
+#: How many competing values an `ambiguous` outcome lists, and how many
+#: lower-tier disagreements a filled field carries.
+AMBIGUOUS_CANDIDATE_CAP = 6
+DISAGREEMENT_CAP = 4
+
+#: The most fields one call will match. A schema larger than this is a
+#: different tool's job, and the refusal says so before anything is extracted.
+MAX_SCHEMA_FIELDS = 40
+
+
+def _words(text: str) -> frozenset[str]:
+    """The word set of a key or a needle, camelCase split first so
+    `priceCurrency` reads as two words rather than one."""
+    spaced = _CAMEL_SPLIT.sub(" ", str(text or ""))
+    return frozenset(
+        part.lower() for part in _NON_WORD.split(spaced) if part)
+
+
+def _content_words(text: str) -> frozenset[str]:
+    return frozenset(w for w in _words(text) if w not in _STOPWORDS)
+
+
+def _quality(key: str, name: str, description: str):
+    """How well one source key answers one schema field: `(quality, extra)` or
+    None, where `extra` counts the content words the KEY carries beyond the
+    needle it matched.
+
+    THE PARTIAL RULE IS A WORD-BOUNDARY RULE, never a bare substring test.
+    `price` is one of `priceCurrency`'s words and that is a real hit; `t` is a
+    substring of `thecurrentprice` and that is noise. Requiring both sides to
+    clear four characters AND to align on a word boundary is what makes the
+    difference structural rather than a threshold the page can sit under.
+
+    `extra` is the SPECIFICITY tie-break and it is not a fudge factor. A
+    schema.org Product declares both `offers.price` and `offers.priceCurrency`,
+    and a field named `price` is a subset of both word sets, so without a
+    tie-break the two compete and every commerce page in the world answers
+    `ambiguous` for its own price. A key that says MORE than the field asked
+    for is a worse answer to that field than a key that says exactly it, and
+    that is a fact about the two keys rather than a confidence estimate. Keys
+    that tie on specificity still tie, and a tie still refuses, which is what
+    keeps the eight-author page answering `ambiguous`."""
+    key_norm, key_words = _norm(key), _words(key)
+    key_content = frozenset(w for w in key_words if w not in _STOPWORDS)
+    for needle in (name, description):
+        if needle and key_norm and _norm(needle) == key_norm:
+            return "exact", 0
+    for needle in (name, description):
+        wanted = _content_words(needle) if needle else frozenset()
+        if wanted and wanted <= key_words:
+            return "all-words", len(key_content - wanted)
+    name_norm, name_words = _norm(name), _words(name)
+    if len(key_norm) >= _PARTIAL_MIN and len(name_norm) >= _PARTIAL_MIN:
+        if key_norm in name_words or name_norm in key_words:
+            return "partial", len(key_content - _content_words(name))
+    return None
+
+
+def _schema_arg(schema) -> dict:
+    """The two accepted shapes, and a refusal that shows one of each."""
+    if isinstance(schema, dict) and schema:
+        wanted = {str(k): str(v or "") for k, v in schema.items()}
+    elif isinstance(schema, (list, tuple)) and schema:
+        wanted = {str(k): "" for k in schema}
+    else:
+        raise BadParams(
+            "extract_page needs the schema to fill, in one of two shapes: a "
+            "list of field names (['price', 'author']), or a dict of name to "
+            "a natural-language description ({'price': 'the listed product "
+            "price'}). The description sharpens the match and is never "
+            "required. Nothing was extracted.")
+    if len(wanted) > MAX_SCHEMA_FIELDS:
+        raise BadParams(
+            f"the schema names {len(wanted)} fields and the cap is "
+            f"{MAX_SCHEMA_FIELDS}; no extraction ran. Split the schema across "
+            f"calls, or scope the read with location= and ask for less.")
+    return wanted
+
+
+def _tiers_arg(tiers: str) -> tuple[str, ...]:
+    mode = (tiers or "all").strip().lower()
+    if mode not in TIER_MODES:
+        raise BadParams(
+            f"unknown tiers mode {tiers!r}. 'all' admits machine-readable "
+            f"declarations, HTML-declared label/value relations, and the "
+            f"three named structural relations. 'declared' admits only what "
+            f"the page states in machine-readable form, which is the mode to "
+            f"use when every filled field has to be defensible. 'labeled' and "
+            f"'proximate' admit one tier each. 'page-hint' admits class, id, "
+            f"and data-testid tokens, which is weak evidence and is why it is "
+            f"never included in 'all'.")
+    return _ALL_TIERS if mode == "all" else (mode,)
+
+
+def _is_secret(src: dict) -> bool:
+    """Re-derive the secret classification SERVER-SIDE from the descriptor.
+
+    The collector already declines to read a page-classified secret's value;
+    this is the authority. `policy/credentials.py` is the one classifier every
+    other surface uses, and routing through it is what keeps a field that is
+    secret in the projection from being readable here. Payment fields are in
+    the never-read set for this tool specifically: a rendered card number is
+    exactly the string that must not enter a transcript."""
+    if src.get("by") != "form-field":
+        return False
+    if src.get("secret"):
+        return True
+    descriptor = {k: src.get(k) for k in
+                  ("type", "autocomplete", "name", "label", "attr_id",
+                   "placeholder")}
+    return (_credentials.is_secret_field(descriptor)
+            or _credentials.is_payment_field(descriptor))
+
+
+def _buckets(raw: dict) -> dict:
+    """The collector's four lists, with every secret value struck.
+
+    A secret source stays in its bucket so a field whose only match IS a
+    credential can report `secret` rather than `not_found`; what never survives
+    is the value."""
+    out = {"declared": list(raw.get("declared") or []),
+           "labeled": list(raw.get("labeled") or []),
+           "proximate": list(raw.get("proximate") or []),
+           "page-hint": list(raw.get("hint") or [])}
+    for tier, sources in out.items():
+        for src in sources:
+            src["tier"] = tier
+            if _is_secret(src):
+                src["secret"] = True
+                src["value"] = ""
+    return out
+
+
+def _distinct(hits: list) -> list:
+    """The distinct VALUES among a set of equally-good hits, first occurrence
+    kept. Whitespace-squashed and case-sensitive: `$1,795.00` and `1795.00` are
+    genuinely different strings and pretending otherwise is the tool deciding
+    what a page meant."""
+    seen, out = set(), []
+    for src in hits:
+        value = " ".join(str(src.get("value") or "").split())
+        if value in seen:
+            continue
+        seen.add(value)
+        out.append(src)
+    return out
+
+
+def _hit_shape(src: dict) -> dict:
+    """One filled field's provenance, which is the honest half of the answer.
+    A value whose provenance is unstated is worth less than no value: the
+    caller cannot check it against the page."""
+    out = {"value": src.get("value", ""), "by": src.get("by"),
+           "matched_key": src.get("key"), "where": src.get("where") or None}
+    if src.get("relation"):
+        out["relation"] = src["relation"]
+        out["gap_px"] = src.get("gap_px")
+    return out
+
+
+def _disagreements(name: str, desc: str, answer: str, tier: str,
+                   enabled: tuple, buckets: dict) -> list:
+    """Every LOWER enabled tier that held a different value for this field.
+
+    The tool still answers, because the higher tier is better evidence and
+    saying so is not a guess, but it never hides that the page said two things.
+    A JSON-LD price of `1795.00` beside a rendered `$1,795.00` is a formatting
+    difference and reads as one; a JSON-LD price that disagrees in MAGNITUDE
+    with the rendered price is the case a caller has to be told about."""
+    out, start = [], TIER_ORDER.index(tier) + 1
+    for lower in TIER_ORDER[start:]:
+        if lower not in enabled:
+            continue
+        for src in buckets[lower]:
+            if src.get("secret") or not src.get("value"):
+                continue
+            if not _quality(src["key"], name, desc):
+                continue
+            if " ".join(src["value"].split()) == " ".join(answer.split()):
+                continue
+            out.append({"tier": lower, "value": src["value"],
+                        "by": src.get("by"), "matched_key": src.get("key")})
+            if len(out) >= DISAGREEMENT_CAP:
+                return out
+    return out
+
+
+def _hint_note(name: str, desc: str, buckets: dict, enabled: tuple) -> dict:
+    """What the page-hint tier holds for a field nothing else answered.
+
+    THE STYLING-ONLY ANSWER IS SILENCE PLUS A FLAG. On a real product page a
+    star rating exists only as `class="star-rating Three"` with no text
+    anywhere: a human sees three stars and the page never wrote the number.
+    Reading it would mean the tool learning one site's private encoding, so it
+    stays silent, and it SAYS it stayed silent rather than reporting a bare
+    `not_found` that reads as "this page does not have a rating"."""
+    if "page-hint" in enabled:
+        return {}
+    hits = [src for src in buckets["page-hint"]
+            if _quality(src["key"], name, desc)]
+    if not hits:
+        return {}
+    styling = [src for src in hits if src.get("styling_only")]
+    out = {"page_hint_candidates": len(hits)}
+    if len(styling) == len(hits):
+        out["styling_only"] = True
+        out["styling_note"] = (
+            f"this page names something like {name!r} in a class, id, or "
+            f"data-testid token on an element that carries NO TEXT, so the "
+            f"value exists only as styling. Reading it would mean guessing "
+            f"one site's private encoding of its own class names, which this "
+            f"tool does not do. The tokens are listed under tiers='page-hint' "
+            f"and a screenshot is the honest route to a value only a human "
+            f"eye can read.")
+    else:
+        out["hint_note"] = (
+            f"a class, id, or data-testid token names something like "
+            f"{name!r}. That is the page's own styling vocabulary rather than "
+            f"a declaration, so it is never admitted under tiers='all'; "
+            f"tiers='page-hint' returns it and states what it is.")
+    return out
+
+
+_NOT_FOUND_ROUTES = (
+    "get_text reads whatever prose is here, get_table reads a tabular layout, "
+    "and get_page_view shows what the page actually is.")
+
+
+def _resolve(name: str, desc: str, enabled: tuple, buckets: dict,
+             searched: dict) -> dict:
+    """One schema field against the whole ladder. Returns the payload entry.
+
+    Nothing here raises. A page with no match for a field is a normal page and
+    the field comes back `found: false` with the reason, which is the contract
+    that lets a caller ask five questions of a page that answers two."""
+    for tier in TIER_ORDER:
+        if tier not in enabled:
+            continue
+        best, hits = None, []
+        for src in buckets[tier]:
+            scored = _quality(src["key"], name, desc)
+            if not scored:
+                continue
+            quality, extra = scored
+            score = (_QUALITY_RANK[quality], -extra)
+            if best is None or score > best:
+                best, hits = score, [(quality, src)]
+            elif score == best:
+                hits.append((quality, src))
+        if not hits:
+            continue
+        quality = hits[0][0]
+        sources = [src for _, src in hits]
+
+        if all(src.get("secret") for src in sources):
+            # A credential is never read, not read-then-redacted. The routes
+            # named are the two CREDENTIAL_REFUSED names and no others.
+            return {"found": False, "reason": "secret", "confidence": tier,
+                    "note": (
+                        f"the only source matching {name!r} on this page is a "
+                        f"secret field (a password, a one-time code, or a card "
+                        f"number), and a credential never passes through the "
+                        f"model's context. Its value was not read. The "
+                        f"sanctioned routes are manage_session(action="
+                        f"'handoff'), where a human types it in the headed "
+                        f"window, and save_auth_state / load_auth_state "
+                        f"(storage pack), which move a completed login through "
+                        f"a file rather than through the transcript.")}
+        sources = [src for src in sources if not src.get("secret")]
+        filled = [src for src in sources if src.get("value")]
+        if not filled and all(src.get("styling_only") for src in sources):
+            # A CLASS TOKEN WITH NO TEXT IS NOT AN EMPTY FIELD. `star-rating
+            # Three` on an element carrying no text is a value that exists only
+            # as styling, and calling it `empty` would say the page has a
+            # rating and left it blank. It does not: it drew it.
+            entry = {"found": False, "reason": "not_found",
+                     "searched": dict(searched)}
+            entry.update(_hint_note(name, desc, buckets, ()))
+            entry["note"] = (
+                f"{name!r} matches a class, id, or data-testid token on this "
+                f"page and that element carries no text at all, so there is "
+                f"no value to return at any tier. {_NOT_FOUND_ROUTES}")
+            return entry
+        if not filled:
+            # "the page has this field and it is blank" and "the page does not
+            # have this field" are different facts about a page.
+            src = sources[0]
+            return {"found": False, "reason": "empty", "confidence": tier,
+                    "match": quality, "by": src.get("by"),
+                    "matched_key": src.get("key"),
+                    "where": src.get("where") or None,
+                    "note": (f"the page carries a source for {name!r} and its "
+                             f"value is empty. An unfilled form field is the "
+                             f"common case; this is not the same fact as the "
+                             f"page not having the field at all.")}
+        distinct = _distinct(filled)
+        if len(distinct) > 1:
+            # THE LISTING-PAGE ANSWER. Returning the first of eight authors
+            # would be a first-match answer, which is the thing no tool in this
+            # codebase does.
+            return {
+                "found": False, "reason": "ambiguous", "confidence": tier,
+                "match": quality, "rivals": len(distinct),
+                "candidates": [
+                    {"value": src["value"], "by": src.get("by"),
+                     "matched_key": src.get("key"),
+                     "where": src.get("where") or None}
+                    for src in distinct[:AMBIGUOUS_CANDIDATE_CAP]],
+                "note": (
+                    f"{len(distinct)} distinct values matched {name!r} equally "
+                    f"well at the {tier} tier, so this page holds repeated "
+                    f"records rather than one. No tool here answers on first "
+                    f"match. Scope the call to one record with location= (a "
+                    f"ref, region, form, or table from get_page_view or "
+                    f"find_elements) and ask again."
+                    + (f" {len(distinct) - AMBIGUOUS_CANDIDATE_CAP} further "
+                       f"candidate(s) are not listed."
+                       if len(distinct) > AMBIGUOUS_CANDIDATE_CAP else ""))}
+        answer = distinct[0]
+        out = {"found": True, "confidence": tier, "match": quality,
+               **_hit_shape(answer)}
+        clash = _disagreements(name, desc, answer.get("value", ""), tier,
+                               enabled, buckets)
+        if clash:
+            out["conflict"] = True
+            out["disagreement"] = clash
+            out["conflict_note"] = (
+                f"a lower evidence tier on this page holds a different value "
+                f"for {name!r}. The answer above is the higher tier's, because "
+                f"a machine-readable declaration is better evidence than a "
+                f"rendering, and both are shown so the choice is yours rather "
+                f"than the tool's.")
+        return out
+    entry = {"found": False, "reason": "not_found",
+             "searched": dict(searched),
+             "note": (f"no source on this page matched {name!r} at any "
+                      f"admitted tier. {_NOT_FOUND_ROUTES}")}
+    entry.update(_hint_note(name, desc, buckets, enabled))
+    return entry
+
+
+def _render_fields(fields: dict) -> str:
+    """The page-authored half of the payload, rendered into the one block the
+    envelope wraps. Keys, values, candidate listings, and element descriptors
+    are all the page's own strings and all travel inside the delimiters."""
+    lines = []
+    for name, entry in fields.items():
+        if entry.get("found"):
+            lines.append(f'{name} = {entry["value"]}')
+            lines.append(f'  from key "{entry["matched_key"]}"'
+                         f' ({entry["by"]}'
+                         + (f', {entry["where"]}' if entry.get("where") else '')
+                         + ')')
+            for clash in entry.get("disagreement") or []:
+                lines.append(f'  {clash["tier"]} tier says: {clash["value"]}'
+                             f' (key "{clash["matched_key"]}")')
+        elif entry.get("reason") == "ambiguous":
+            lines.append(f'{name} = (ambiguous, {entry["rivals"]} candidates)')
+            for cand in entry["candidates"]:
+                lines.append(f'  "{cand["matched_key"]}" -> {cand["value"]}'
+                             + (f' ({cand["where"]})' if cand.get("where")
+                                else ''))
+        elif entry.get("reason") == "empty":
+            lines.append(f'{name} = (empty, key "{entry["matched_key"]}")')
+        else:
+            lines.append(f'{name} = ({entry.get("reason")})')
+    return "\n".join(lines)
+
+
+async def _schema_read(sess, record, location, schema, tiers):
+    """The shared body of `extract_page` and one `aggregate` row.
+
+    Everything both tools do to ONE page lives here, so the batch tool cannot
+    drift from the single-page tool: same collector, same ladder, same refusal
+    contract, same accounting."""
+    wanted = _schema_arg(schema)
+    enabled = _tiers_arg(tiers)
+    from .lite import _scope_root
+    root = _scope_root(sess, record, location)
+    raw = await _read_schema(record.page, root=root, caps=SCHEMA_CAPS)
+    if raw.get("error") == "ROOT_GONE":
+        raise TargetNotFound(
+            f'location named {raw["asked_for"]!r} and that ref is not on '
+            f'{record.handle} any more: the page moved on. Re-read the page '
+            f'and use the ref that read returns.')
+    buckets = _buckets(raw)
+    searched = {tier: len(buckets[tier]) for tier in TIER_ORDER}
+    fields = {name: _resolve(name, desc, enabled, buckets, searched)
+              for name, desc in wanted.items()}
+    counts = raw.get("counts") or {}
+    tally = {"filled": 0, "not_found": 0, "ambiguous": 0, "empty": 0,
+             "secret": 0, "conflicts": 0}
+    for entry in fields.values():
+        if entry.get("found"):
+            tally["filled"] += 1
+        else:
+            tally[entry.get("reason", "not_found")] += 1
+        if entry.get("conflict"):
+            tally["conflicts"] += 1
+    accounting = {
+        "requested": len(wanted), **tally,
+        "sources_searched": searched,
+        "tiers_admitted": list(enabled),
+        "tiers_withheld": [t for t in TIER_ORDER if t not in enabled],
+        "scope": "one subtree" if raw.get("scoped") else "the whole page",
+        "elements_walked": counts.get("walked", 0),
+        "leaves_scanned": counts.get("leaves_scanned", 0),
+        "hidden_values_excluded": counts.get("hidden_values_excluded", 0),
+        "secret_fields_never_read": counts.get("secret_fields", 0),
+        "shadow_roots_read": counts.get("shadow_roots_read", 0),
+        "json_ld": {"blocks": counts.get("json_ld_blocks", 0),
+                    "invalid": counts.get("json_ld_invalid", 0),
+                    "nodes_walked": counts.get("json_ld_nodes", 0)},
+        "note": ("no model is consulted and nothing is read out of prose: a "
+                 "price mentioned in a paragraph is not this page's price. "
+                 "The same page and schema always answer the same way."),
+    }
+    if raw.get("capped"):
+        accounting["capped"] = {
+            "dropped": raw["capped"],
+            "why": ("the per-tier retention caps were reached and the sources "
+                    "past them are NOT in the search above. Scope the read "
+                    "with location= to search a subtree exhaustively rather "
+                    "than the whole page partially."),
+        }
+    if raw.get("scoped"):
+        accounting["scope_note"] = (
+            "this read was scoped to one subtree, so page-level declarations "
+            "(the document title, head meta tags, and JSON-LD outside the "
+            "subtree) were not searched.")
+    return fields, accounting, raw
+
+
+async def extract_page(
+    page: str,
+    schema: dict | list,
+    location: dict | None = None,
+    tiers: str = "all",
+) -> dict:
+    """FLAGGED: placeholder wording, composed mechanically from the spec's
+    FACTS TO CONVEY. The author or the main thread writes the shipped prose.
+
+    Read the rendered page against a caller-named schema. Four evidence tiers
+    are tried in order: machine-readable declarations (JSON-LD, meta tags,
+    microdata, RDFa), HTML-declared label and value relations (definition
+    lists, two-cell table rows, labeled form fields, aria-labels), three named
+    structural relations between a visible label and a value, and page-authored
+    class or testid tokens, which are off unless named. Every filled field
+    states which tier, which source class, and which of the page's own keys
+    produced it. No model is consulted, so the same page and schema always
+    answer the same way. A field with no match returns not_found with the count
+    of what was searched. A field with several equally-good competing values
+    returns ambiguous with the candidates listed rather than the first one.
+    Secret fields are never read. Prose is never mined: a price mentioned in a
+    paragraph is not this page's price.
+    """
+    sess, record = common.locate(page)
+    # THE READ GATE (gauntlet 4, G4-04/05/06): a page that moved
+    # itself onto a wall, or a popup no door ever policed, is
+    # refused before any of its content is returned.
+    await _lite._read_gate(sess, record, tool="extract_page")
+    sess.counters["reads"] += 1
+    fields, accounting, raw = await _schema_read(
+        sess, record, location, schema, tiers)
+    # Every extracted value, every matched key, and every candidate in an
+    # ambiguous outcome is PAGE-AUTHORED, and this is the single most direct
+    # injection channel the tool has: a schema-extraction tool exists to lift
+    # page strings into the caller's reasoning.
+    wrapped, note = _pagedata.wrap(_render_fields(fields), url=record.page.url)
+    note["label"] += (
+        " The structured fields beside this block carry the same content and "
+        "exactly the same status: the values, the page's own keys, the "
+        "element descriptors, and every candidate listed in an ambiguous "
+        "outcome are all page-authored.")
+    payload = {
+        "page": record.handle, "session": sess.session_id,
+        "url": record.page.url,
+        "scope": location if location else "the whole page",
+        "fields": fields,
+        "fields_text": wrapped,
+        "page_data": note,
+        "accounting": accounting,
+    }
+    payload["budget"] = {"used": _ntok(json.dumps(fields)),
+                         "estimator": _ENCODING}
+    return payload
+
+
+# --------------------------------------------------------------- aggregate
+
+#: The hard ceiling on one batch. Above it the call REFUSES rather than
+#: clamping: a caller who asks for 80 URLs and silently gets 50 has been given
+#: a dataset that is missing 30 rows it believes are there, which is the
+#: completeness lie in miniature.
+AGGREGATE_URL_CEILING = 50
+
+#: What the DEFAULT batch is derived from. A constant default is a guess about
+#: a budget it cannot see; one fifth of the session's navigation limit affords
+#: five full batches, and it tracks the limit when a deployment moves it. With
+#: the shipped limit of 150 navigations this is 30.
+AGGREGATE_BUDGET_DIVISOR = 5
+
+#: Per-URL error codes that belong in that URL's slot rather than in a raise.
+#: One dead host is not a dead batch.
+_PER_URL_CODES = frozenset({
+    "BLOCKED_BY_SITE", "AUTH_REQUIRED", "PAGE_UNREACHABLE",
+    "NAVIGATION_BLOCKED", "NAVIGATION_FAILED", "TIMEOUT",
+    "UNSUPPORTED_CONTENT", "DRIVER_FAILURE", "NOT_FOUND",
+    "READ_ONLY_MODE", "CONFIRMATION_REQUIRED", "RANGE_OUT_OF_BOUNDS",
+})
+
+
+def default_batch_size() -> int:
+    """The default `max_urls`, derived from the session navigation budget."""
+    return max(1, min(AGGREGATE_URL_CEILING,
+                      _budgets.limit("navigations") // AGGREGATE_BUDGET_DIVISOR))
+
+
+def _aggregate_preflight(urls, max_urls) -> tuple[list[str], int]:
+    """Validate the WHOLE list before any navigation, and name every bad entry
+    at once. A batch tool that refuses on the first bad URL makes the caller
+    discover a five-typo list five calls at a time."""
+    if not isinstance(urls, (list, tuple)) or not urls:
+        raise BadParams(
+            "aggregate needs a non-empty list of URLs to visit, in the order "
+            "you want them visited. Nothing was navigated.")
+    cap = default_batch_size() if max_urls is None else int(max_urls)
+    if cap < 1 or cap > AGGREGATE_URL_CEILING:
+        raise BadParams(
+            f"max_urls={max_urls} is outside 1 to {AGGREGATE_URL_CEILING}. "
+            f"The ceiling is a real bound rather than a clamp: a batch that "
+            f"silently returned {AGGREGATE_URL_CEILING} of the URLs asked for "
+            f"would be a dataset missing rows the caller believes are in it. "
+            f"The default on this server is {default_batch_size()}, which is "
+            f"one fifth of the session navigation budget of "
+            f"{_budgets.limit('navigations')}. Nothing was navigated.")
+    bad = []
+    cleaned = []
+    for i, url in enumerate(urls):
+        text = str(url or "").strip()
+        try:
+            cleaned.append(_lite._validated_url(text))
+        except Exception as exc:
+            bad.append(f"[{i}] {text!r}: {str(exc)[:120]}")
+    if bad:
+        raise BadParams(
+            f"{len(bad)} of {len(urls)} URL(s) are not navigable and the "
+            f"whole list is checked before anything is visited, so ZERO "
+            f"navigations happened: " + "; ".join(bad[:8])
+            + (f"; and {len(bad) - 8} more" if len(bad) > 8 else "")
+            + ". Fix them and resend the list.")
+    if len(cleaned) > cap:
+        raise BadParams(
+            f"the list holds {len(cleaned)} URLs and max_urls is {cap}, so "
+            f"nothing was navigated. Raise max_urls (the ceiling is "
+            f"{AGGREGATE_URL_CEILING}) or send the list in batches; each hop "
+            f"is charged against the session navigation budget exactly as a "
+            f"separate navigate call would be.")
+    return cleaned, cap
+
+
+async def _aggregate_one(sess, record, url, schema, tiers, wait,
+                         per_url_timeout_ms) -> dict:
+    """One URL, in the order that IS the contract. Raises on its own failures;
+    the caller decides which raise is a slot and which is the batch."""
+    # 1. The choke point, BEFORE the driver is touched: origin policy, 429
+    #    backoff, loop detection, and the navigation budget, charged per URL
+    #    exactly as if the caller had issued N navigate calls. A walk is not a
+    #    way around a budget.
+    _policy.approve(_policy.ActionRequest(
+        tool="aggregate", kind="navigate", session=sess.session_id,
+        page=record.handle, url=url, args={"action": "goto", "url": url},
+        summary=f"aggregate visits {url} on {record.handle}"))
+    before = record.page.url
+    started = time.monotonic()
+    try:
+        response = await record.page.goto(
+            url, wait_until="load", timeout=per_url_timeout_ms)
+    except Exception as exc:
+        _lite._raise_if_unreachable(exc, "aggregate", record)
+        raise
+    record.touch(record.page.url)
+    sess.counters["navigations"] += 1
+    _lite.note_origin(sess, record.page.url)
+    if record.page.url != before:
+        sess.invalidate_page(record.handle, f"aggregate navigated from {before}")
+    # 2. The landed check: a redirect onto a denied origin aborts THIS URL
+    #    rather than laundering its content into the dataset.
+    await _lite._landed_origin_check(sess, record, tool="aggregate")
+    status = response.status if response is not None else None
+    try:
+        headers = dict(response.headers) if response is not None else None
+    except Exception:
+        headers = None
+    # 3. A site that said 429 stays said, and every LATER URL on that domain
+    #    then refuses in its own slot through the choke point rather than
+    #    hammering the host.
+    if status == 429:
+        raw_retry = (headers or {}).get("retry-after", "").strip()
+        _budgets.BOOK.note_429(
+            urlparse(record.page.url).hostname or "",
+            float(raw_retry) if raw_retry.replace(".", "", 1).isdigit()
+            else None)
+    # 4. The wall verdict, before one character of the page is read.
+    verdict = await _lite._wall_verdict(record.page, status, headers=headers)
+    if verdict.get("wall") == "auth-wall":
+        raise _lite._auth_refusal(record.page.url, verdict.get("marker"))
+    if verdict.get("wall"):
+        raise _lite._blocked_refusal(sess, record.page.url, status, verdict)
+    # 5. The optional wait, through wait_for's own precheck-then-wait path.
+    if wait:
+        if not isinstance(wait, dict) or not wait.get("condition"):
+            raise BadParams(
+                "wait must be one wait_for spec: {'condition': 'text', "
+                "'value': 'In stock'}. The conditions are the ones wait_for "
+                "names, and the same spec is applied to every URL.")
+        await _lite.wait_for(
+            page=record.handle, condition=wait["condition"],
+            value=wait.get("value"), location=wait.get("location"),
+            timeout_ms=int(wait.get("timeout_ms") or per_url_timeout_ms))
+    # 6. A URL that landed on a PDF is REPORTED as such rather than extracted
+    #    as if it were HTML.
+    held = await _resource.probe_page(record.page)
+    slot = {"url": record.page.url, "ok": True, "status": status,
+            "timing_ms": int((time.monotonic() - started) * 1000)}
+    if verdict.get("wall") is None and verdict.get("status") is not None:
+        slot["verdict"] = verdict
+    if held is not None:
+        slot["ok"] = False
+        slot["error"] = {
+            "code": "UNSUPPORTED_CONTENT",
+            "message": _resource.navigate_note(held)["why"],
+            "hint": _resource.escape_route(held)}
+        return slot
+    sess.counters["reads"] += 1
+    fields, accounting, _raw = await _schema_read(
+        sess, record, None, schema, tiers)
+    slot["fields"] = fields
+    slot["accounting"] = accounting
+    return slot
+
+
+def _rollup(schema_names, results) -> dict:
+    """The per-field roll-up, COMPUTED rather than claimed. "price filled on 18
+    of 20, ambiguous on 2" is the answer a competitive scan actually wants, and
+    it is the number the caller would otherwise have to walk the slots for."""
+    per_field = {name: {"filled": 0, "not_found": 0, "ambiguous": 0,
+                        "empty": 0, "secret": 0} for name in schema_names}
+    total = 0
+    for slot in results:
+        for name, entry in (slot.get("fields") or {}).items():
+            row = per_field.setdefault(
+                name, {"filled": 0, "not_found": 0, "ambiguous": 0,
+                       "empty": 0, "secret": 0})
+            if entry.get("found"):
+                row["filled"] += 1
+                total += 1
+            else:
+                key = entry.get("reason", "not_found")
+                row[key] = row.get(key, 0) + 1
+    return {"fields_filled_total": total, "per_field": per_field}
+
+
+async def aggregate(
+    urls: list,
+    schema: dict | list,
+    page: str | None = None,
+    wait: dict | None = None,
+    tiers: str = "all",
+    max_urls: int | None = None,
+    per_url_timeout_ms: int = 30000,
+) -> dict:
+    """FLAGGED: placeholder wording, composed mechanically from the spec's
+    FACTS TO CONVEY. The author or the main thread writes the shipped prose.
+
+    Visit each URL in turn, wait if a wait is named, and extract the same
+    schema from each, returning one dataset with a slot per URL in the order
+    they were given. A URL that fails carries its typed error in its own slot
+    and the batch continues; the summary states how many succeeded and how many
+    failed, so the dataset never reads as complete when it is not. Each hop is
+    charged against the session's navigation and origin budgets exactly as
+    separate calls would be. A site that answers 429 stops later hops to that
+    host. Exhausting a budget part way through returns the results already
+    collected rather than discarding them. One page handle is reused for the
+    whole walk, so refs and read tokens minted before the call are gone
+    afterwards.
+    """
+    cleaned, cap = _aggregate_preflight(urls, max_urls)
+    _schema_arg(schema)                       # refuse a bad schema pre-flight
+    _tiers_arg(tiers)
+    auto_session = None
+    if page is None:
+        if not _lite.MANAGER.sessions:
+            opened = await _lite.MANAGER.open()
+            auto_session = (
+                f"no session was open, so aggregate opened one: "
+                f"{opened.session_id} ({opened.spec.label}, headless).")
+        page = _lite.MANAGER.session(None).focused
+    sess, record = common.locate(page)
+    # THE PRE-FLIGHT BUDGET ADVISORY, and it is an advisory rather than a
+    # refusal on purpose: a caller may legitimately want as many URLs as fit.
+    # Nothing is silently truncated either; the number is simply stated.
+    snapshot = _budgets.BOOK.snapshot(sess.session_id)
+    left = (snapshot["limits"]["navigations"]
+            - snapshot["counters"]["navigations"])
+    budget_note = None
+    if left < len(cleaned):
+        budget_note = (
+            f"this session has {left} navigation(s) left of "
+            f"{snapshot['limits']['navigations']} and the batch asks for "
+            f"{len(cleaned)}, so roughly {max(0, left)} URL(s) are affordable "
+            f"before the budget trips. Nothing is truncated here: the walk "
+            f"runs until the budget refuses, and that refusal carries every "
+            f"row collected up to it.")
+    results, stopped = [], None
+    try:
+        for url in cleaned:
+            try:
+                results.append(await _aggregate_one(
+                    sess, record, url, schema, tiers, wait,
+                    per_url_timeout_ms))
+            except (BudgetExhausted, LoopDetected, Conflict):
+                raise
+            except _envelope.CATCHABLE as exc:
+                code = getattr(exc, "code", None) or _envelope.classify(exc)
+                if code not in _PER_URL_CODES:
+                    raise
+                # THE PER-URL ERROR IS THE TOP-LEVEL ERROR'S SHAPE, built by
+                # the same function, so the caller has ONE parsing path for a
+                # refusal wherever it happened.
+                results.append({"url": url, "ok": False,
+                                "error": _envelope.refusal(exc)["error"]})
+    except (BudgetExhausted, LoopDetected, Conflict) as exc:
+        # LOSING TWELVE SUCCESSFUL EXTRACTIONS BECAUSE THE THIRTEENTH URL
+        # exhausted a budget is the failure mode this clause exists to prevent.
+        # `envelope.refusal` reads `detail` off the exception, so the partial
+        # dataset rides out with the refusal instead of being discarded.
+        exc.detail = {
+            "partial_results": results,
+            "requested": len(cleaned),
+            "completed": len(results),
+            "note": ("the batch stopped here and the rows already collected "
+                     "are attached and complete. They cover only the URLs "
+                     "listed in them."),
+        }
+        raise
+    succeeded = sum(1 for slot in results if slot.get("ok"))
+    failed = len(results) - succeeded
+    wrapped, note = _pagedata.wrap(
+        "\n\n".join(
+            f'--- {slot["url"]}\n' + _render_fields(slot.get("fields") or {})
+            for slot in results if slot.get("ok")),
+        url=record.page.url,
+        frames=[{"fid": f'url[{i}]', "provenance": slot["url"]}
+                for i, slot in enumerate(results) if slot.get("ok")] or None)
+    note["label"] += (
+        " Each row in this payload came from a DIFFERENT document, listed "
+        "above, and the structured fields beside this block carry the same "
+        "content with exactly the same status.")
+    payload = {
+        "session": sess.session_id, "page": record.handle,
+        "requested": len(cleaned), "succeeded": succeeded, "failed": failed,
+        "results": results,
+        "summary": _rollup(list(_schema_arg(schema)), results),
+        "dataset_text": wrapped,
+        "page_data": note,
+        "stopped": stopped,
+        "continue": (
+            f"this dataset covers the {succeeded} URL(s) whose slot says "
+            f"ok=true and NOT the {failed} that failed; each failure carries "
+            f"its own typed error in its own slot, in input order."
+            if failed else
+            f"every one of the {succeeded} URL(s) asked for is in this "
+            f"dataset."),
+        "refs": ("this walk navigated, so refs and read tokens minted before "
+                 "it are gone; read the page you are on to mint fresh ones"),
+    }
+    if auto_session:
+        payload["auto_session"] = auto_session
+    payload["budget"] = {
+        "used": _ntok(json.dumps([slot.get("fields") for slot in results])),
+        "estimator": _ENCODING,
+        "navigations_charged": len(results),
+        **({"advisory": budget_note} if budget_note else {}),
+    }
+    return payload
+
+
 # ------------------------------------------------------------------ export
 
 
@@ -1384,4 +2232,4 @@ async def read_pages(
 
 
 TOOLS = (get_table, get_list, get_links, get_metadata, extract_fields,
-         export_data, get_article, read_pages)
+         export_data, get_article, read_pages, extract_page, aggregate)
