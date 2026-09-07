@@ -31,6 +31,7 @@ enrichment cannot leak across concurrent calls.
 from __future__ import annotations
 
 import contextvars
+import hashlib
 import json
 import os
 import time
@@ -74,7 +75,8 @@ def _drain_annotations() -> dict:
     return current
 
 
-def observe_secret_args(args: dict | None, _depth: int = 0) -> None:
+def observe_secret_args(args: dict | None, _depth: int = 0,
+                        tool: str | None = None) -> None:
     """Vault every credential-SHAPED argument value before the log is written.
 
     THE CLASS, not one tool (union wave, 2026-09-07, from the dream-boundary
@@ -97,6 +99,14 @@ def observe_secret_args(args: dict | None, _depth: int = 0) -> None:
         return
     for key, value in (args.items() if isinstance(args, dict)
                        else enumerate(args)):
+        if tool and _depth == 0 and _denied_value(tool, key):
+            # THE ONE ARGUMENT THAT MUST NOT BE VAULTED. A session handle
+            # token reads as credential-shaped to `classify_name`, so this
+            # walk would vault it and the vault would then mask it in the
+            # export payload that has to show it. The denylist replaces it
+            # in the log instead, which is the protection it actually
+            # needs (pin H-3 fails the moment this branch is removed).
+            continue
         if isinstance(value, dict):
             observe_secret_args(value, _depth + 1)
             continue
@@ -128,13 +138,49 @@ def _is_secret_arg(key: Any) -> bool:
     return any(token in text for token in _SECRET_ARG_TOKENS)
 
 
-def summarize_args(args: dict | None) -> dict:
+#: ARGUMENTS THE LOG REPLACES WITH A FINGERPRINT, keyed by the tool that
+#: owns them (defect D4, lifecycle review). The vault cannot serve this
+#: case: a session handle token deliberately never enters the vault,
+#: because the vault would then mask it in the export payload that has to
+#: show it (pin H-3), so the audit trail would have written it verbatim.
+#: Tool-scoped rather than global on purpose. `token` is an ordinary word
+#: and another tool's `token` argument is an ordinary value; a global name
+#: ban would quietly degrade unrelated records, which is the shape of the
+#: 2026-09-05 over-redaction lesson.
+ARG_DENYLIST: dict[str, frozenset[str]] = {
+    "manage_session": frozenset({"token"}),
+}
+
+
+def _denied_value(tool: str, key: Any) -> bool:
+    return str(key) in ARG_DENYLIST.get(tool, frozenset())
+
+
+def arg_fingerprint(value: Any) -> str:
+    """What a denylisted value is replaced with. Computed HERE rather than
+    imported from the engine, because policy/ imports neither ops/ nor
+    engine/ and duplicating eight lines of hashing is cheaper than a hole
+    in the seam (the same call `audit.STATE_DIR` already makes)."""
+    if not isinstance(value, str) or not value:
+        return "<withheld, absent>"
+    return (f"<withheld, {len(value)} chars, sha256 "
+            f"{hashlib.sha256(value.encode('utf-8')).hexdigest()[:8]}>")
+
+
+def summarize_args(args: dict | None, tool: str | None = None) -> dict:
     """Scrub, then clip. THE ORDER IS THE POINT (union wave): clipping first
     cuts a long secret into a prefix the vault's substring match no longer
     recognizes, so the scrub at write would sail straight past a bearer
-    token that had been truncated to 200 characters."""
+    token that had been truncated to 200 characters.
+
+    A denylisted argument is replaced BEFORE either step, with a
+    fingerprint that ties two rows about the same token together and grants
+    nothing to anyone who reads the file."""
     out: dict[str, Any] = {}
     for key, value in (args or {}).items():
+        if tool and _denied_value(tool, key):
+            out[key] = arg_fingerprint(value)
+            continue
         text = value if isinstance(value, (int, float, bool, type(None))) \
             else str(value)
         if isinstance(text, str):
@@ -176,13 +222,13 @@ class AuditLog:
         # never observed by anything (union wave; see observe_secret_args).
         # This also vaults it for every LATER payload in the process, which
         # is the point of the vault being process-wide.
-        observe_secret_args(args)
+        observe_secret_args(args, tool=tool)
         entry: dict[str, Any] = {
             "seq": self._seq,
             "ts": time.strftime("%Y-%m-%dT%H:%M:%S"),
             "tool": tool,
             "outcome": outcome,
-            "args": summarize_args(args),
+            "args": summarize_args(args, tool),
         }
         entry.update(_drain_annotations())
         entry.update(fields)

@@ -50,7 +50,7 @@ from .. import pagedata as _pagedata
 from . import act as _act
 from . import common as _common
 from . import resource as _resource
-from ..engine import frames, lanes, session as _session
+from ..engine import frames, handles as _handles, lanes, session as _session
 from ..errors import (AmbiguousLocation, AuthRequired, BadParams,
                       BlockedBySite, Conflict, LaneUnsupported, ModalBlocked,
                       NavigationFailed, NotImplementedYet, PageUnreachable,
@@ -3671,6 +3671,9 @@ async def manage_session(
     viewport: str | dict | None = None,
     locale: str | None = None,
     timezone: str | None = None,
+    token: str | None = None,
+    note: str | None = None,
+    expires_minutes: int = _handles.DEFAULT_TTL_MIN,
 ) -> dict:
     """Open, close, or inspect a browser session, report the current lane's
     capabilities, read the budget counters, or hand the headed window to the
@@ -3687,11 +3690,18 @@ async def manage_session(
     degrades, and cannot do, and status reports any emulation in force. The
     status action also names the browsers installed on this machine and
     which lane suits which job, as steering: nothing switches a lane on its
-    own. Tool availability reflects the packs this server was started with.
+    own. 'export_handle' mints a single-use token plus a receipt of what a
+    session holds, and 'import_handle' redeems it in another conversation
+    and reports per page what is still the same document; the transfer
+    works only inside this running server on this machine, and a session
+    that is gone is refused with the reason it ended rather than a bare
+    'not found'. Tool availability reflects the packs this server was
+    started with.
     """
     action = _common.enum_arg(
         action, ("open", "close", "status", "capabilities", "budget",
-                 "reset_budgets", "handoff"), default="status",
+                 "reset_budgets", "handoff", "export_handle",
+                 "import_handle"), default="status",
         tool="manage_session")
 
     if action == "open":
@@ -3886,6 +3896,121 @@ async def manage_session(
                 "again", "reason": reason,
                 **({"upgraded": upgraded} if upgraded else {}),
                 "pages": _tab_list(sess)}
+    if action == "export_handle":
+        sess = MANAGER.session(session)
+        if getattr(sess, "role", "user") != "user":
+            raise BadParams(
+                f"session {sess.session_id} is a monitor session and belongs "
+                f"to the monitor scheduler, which navigates its pages on a "
+                f"timer. It cannot be transferred to a conversation: the two "
+                f"would fight over the same page. monitor(action='list') is "
+                f"what inspects monitors. Nothing was minted.")
+        asked = expires_minutes
+        ttl = _handles.DEFAULT_TTL_MIN if not isinstance(asked, int) \
+            else max(_handles.TTL_MIN_MIN, min(_handles.TTL_MAX_MIN, asked))
+        receipt = await _transfer_receipt(sess)
+        minted = _handles.STORE.mint(sess.session_id, receipt, note, ttl)
+        record = minted["record"]
+        return {
+            "session": sess.session_id,
+            "token": minted["token"],
+            "expires": record["expires"],
+            "expires_minutes": ttl,
+            "single_use": True,
+            "receipt": receipt,
+            **({"note": note} if note else {}),
+            **({"clamped": (
+                f"expires_minutes was clamped from {asked} to {ttl}; the "
+                f"range is {_handles.TTL_MIN_MIN} to "
+                f"{_handles.TTL_MAX_MIN} minutes.")}
+               if isinstance(asked, int) and asked != ttl else {}),
+            "how_to_use": (
+                f"in the other conversation, call "
+                f"manage_session(action='import_handle', token=...) with "
+                f"this token. It works once, it expires at "
+                f"{record['expires']}, and it works only in this running "
+                f"KS4Web process on this machine."),
+            "security": (
+                "this token is not an access control. Any conversation "
+                "talking to this KS4Web can already list and use every open "
+                "session through manage_session(action='status'). What the "
+                "token adds is that the transfer is deliberate and that "
+                "import reports what state is actually being picked up."),
+        }
+
+    if action == "import_handle":
+        # 1. SHAPE. A malformed token is an argument fault; a well-shaped
+        #    token that was never minted is a lookup miss, and the two get
+        #    different answers because they have different recoveries.
+        if not _handles.valid_shape(token):
+            raise BadParams(
+                f"that is not a KS4Web session handle token. A token is "
+                f"minted by manage_session(action='export_handle') and is "
+                f"the prefix {_handles.TOKEN_PREFIX!r} followed by "
+                f"{_handles.TOKEN_BODY_LEN} url-safe characters. Nothing "
+                f"was changed.")
+        _handles.STORE.prune()
+        record = _handles.STORE.find(token)
+        if record is None:
+            raise TargetNotFound(
+                "no handle token like that was minted by this KS4Web, or it "
+                "was minted long enough ago that its record has been "
+                "discarded. Export again from the conversation that holds "
+                "the session with manage_session(action='export_handle'). "
+                "Nothing was changed.")
+        # 2. CONSUMED, then EXPIRED. Both are lookup misses with a specific
+        #    cause, which is why consumed and expired records are kept for
+        #    a grace window instead of being deleted at once.
+        if record.get("consumed_at"):
+            raise TargetNotFound(
+                f"that token was already used at "
+                f"{record.get('consumed', 'an earlier time')}. A handle "
+                f"token works once. Export again from either conversation "
+                f"to get a fresh one. Nothing was changed.")
+        if _handles.time.time() > float(record["expires_at"]):
+            raise TargetNotFound(
+                f"that token expired at {record['expires']}. Export again "
+                f"with manage_session(action='export_handle') from the "
+                f"conversation that holds the session. Nothing was changed.")
+        # 3. PROCESS IDENTITY. The one refusal that has to be specific:
+        #    "unknown token" here would hide the real answer, which is that
+        #    the browser died with the server that owned it.
+        if record.get("minted_by_pid") != _handles.os.getpid():
+            raise Conflict(
+                f"that token was minted by KS4Web process "
+                f"{record.get('minted_by_pid')} and this is process "
+                f"{_handles.os.getpid()}. A session handle transfer works "
+                f"only inside one running server. The browser that session "
+                f"held was closed when that process ended, because KS4Web "
+                f"ties the browser's life to its own rather than leaving "
+                f"orphaned browser processes behind. Open a fresh session "
+                f"with manage_session(action='open').")
+        sid = record["session"]
+        # 4. LIVENESS, and the tombstone is what makes the answer specific.
+        if sid not in MANAGER.sessions:
+            stone = MANAGER.tombstone(sid)
+            if stone:
+                raise Conflict(
+                    f"session {sid} is no longer open."
+                    + _session.tombstone_line(stone)
+                    + " Open a fresh session with "
+                      "manage_session(action='open').")
+            raise Conflict(
+                f"session {sid} is not open in this process and KS4Web has "
+                f"no record of how it ended, which is itself the answer "
+                f"worth having: it did not end by any route that leaves a "
+                f"record. Open a fresh session with "
+                f"manage_session(action='open').")
+        sess = MANAGER.sessions[sid]
+        # 5. HEALTH, QUOTED. The status surface owns the liveness verdict
+        #    and this feature must never compute a second opinion, or the
+        #    two answers eventually disagree about the same browser.
+        verdict = _session_status(sess)
+        if verdict.get("health"):
+            raise SessionDead(verdict["health"])
+        _handles.STORE.consume(record)
+        return await _transfer_report(sess, record)
+
     if action == "status":
         # The 14-day update check: one calm line, only when a newer release
         # is confirmed on PyPI, never an install, and a silent skip on any
@@ -3902,6 +4027,25 @@ async def manage_session(
         stale = [s for s in listed if s["state"] != "active"]
         return {
             "sessions": listed,
+            # THE SHARED-PROCESS DISCLOSURE (2026-09-08 model field test).
+            # One KS4Web process serves every conversation that reaches it,
+            # and sessions are process-global rather than conversation-
+            # scoped, so a call that names no session can legitimately land
+            # on a browser some other conversation opened. That is the
+            # design, and it stops being a trap the moment it is said out
+            # loud beside the list it applies to.
+            **({"shared_state": (
+                "sessions belong to this KS4Web process, not to a "
+                "conversation. Every session above is reachable from any "
+                "conversation talking to this server, including ones "
+                "another conversation opened, and a call that names no "
+                "session uses the single open one whatever opened it. The "
+                "open_pages of each session above are what it is actually "
+                "showing. To work in isolation, open your own with "
+                "manage_session(action='open') and pass its handle "
+                "explicitly; to pick up an existing one deliberately, use "
+                "manage_session(action='export_handle') in the "
+                "conversation that holds it.")} if listed else {}),
             # Field log 2 item U1's cheap half. A conversation that timed out
             # leaves its browser running, and the status call is where that
             # becomes visible: every session carries how long it has been
@@ -3937,8 +4081,121 @@ async def manage_session(
         }
     raise BadParams(
         f"unknown manage_session action {action!r}: the actions are 'open', "
-        f"'close', 'status', 'capabilities', 'budget', 'reset_budgets', and "
-        f"'handoff'.")
+        f"'close', 'status', 'capabilities', 'budget', 'reset_budgets', "
+        f"'handoff', 'export_handle', and 'import_handle'.")
+
+
+def _live_refs(sess, handle: str) -> int:
+    """How many refs minted on one page are still usable. This is the
+    number that makes the later loss report mean something: "0 of 12" is a
+    fact a caller can act on, "your refs may be stale" is not."""
+    return sum(1 for entry in sess.element_map.entries.values()
+               if entry.handle == handle and not entry.gone)
+
+
+async def _transfer_receipt(sess) -> dict:
+    """What the session holds at the moment of export, so import can
+    compare it against reality rather than asserting nothing changed."""
+    cookies = 0
+    try:
+        cookies = len(await sess.context.cookies())
+    except Exception:
+        cookies = 0
+    pages = []
+    for record in sess.pages.values():
+        pages.append({
+            "page": record.handle,
+            "url": _page_url(record),
+            "focused": record.handle == sess.focused,
+            "parked": record.parked,
+            "live_refs": _live_refs(sess, record.handle),
+        })
+    return {
+        "lane": sess.spec.label,
+        "opened": time.strftime("%Y-%m-%dT%H:%M:%S",
+                                time.localtime(sess.opened)),
+        "pages": pages,
+        "cookies": cookies,
+        "auth_state_saved_to": sess.saved_auth_path,
+        "emulation": dict(sess.emulation) if sess.emulation else None,
+        "budget": _budgets.BOOK.snapshot(sess.session_id)["counters"],
+    }
+
+
+async def _transfer_report(sess, record: dict) -> dict:
+    """The payload that makes the import worth making.
+
+    Nothing is copied and nothing moves: this is the same live session, so
+    the honest report is a per-page comparison against the receipt plus the
+    conditions a conversation arriving mid-flight would otherwise discover
+    one refusal at a time (a page that navigated, a page whose renderer
+    died, a held dialog, and a budget somebody else already spent)."""
+    receipt = record.get("receipt") or {}
+    was = {p["page"]: p for p in receipt.get("pages", [])}
+    desk = _dialogs.desk(sess)
+    rows = []
+    for handle, page_record in sess.pages.items():
+        before = was.get(handle)
+        url_now = _page_url(page_record)
+        same = bool(before) and before.get("url") == url_now \
+            and page_record.last_nav_url in (None, url_now)
+        row = {
+            "page": handle,
+            "url_now": url_now,
+            "same_document_as_export": same,
+            "parked": page_record.parked,
+            "live_refs": _live_refs(sess, handle),
+        }
+        if before is None:
+            row["opened_after_export"] = True
+        elif not same:
+            row["url_at_export"] = before.get("url")
+            row["refs"] = (
+                f"{_live_refs(sess, handle)} of {before.get('live_refs', 0)} "
+                f"ref(s) minted on {handle} survive: the page navigated "
+                f"after the export and refs do not survive a navigation. "
+                f"Re-read with get_page_view(page={handle!r}).")
+        else:
+            row["refs"] = (
+                f"{_live_refs(sess, handle)} of {before.get('live_refs', 0)} "
+                f"ref(s) minted on {handle} are still live and usable.")
+        if page_record.crashed:
+            row["dead"] = page_record.crashed
+        held = desk.pending_for(handle)
+        if held is not None:
+            row["dialog_held"] = (
+                f"a native dialog is open on {handle} and it stops the "
+                f"page's script until it is answered. handle_dialog is the "
+                f"route.")
+        rows.append(row)
+    cookies_now = 0
+    try:
+        cookies_now = len(await sess.context.cookies())
+    except Exception:
+        cookies_now = 0
+    elapsed = time.time() - float(record.get("minted_at", time.time()))
+    return {
+        "imported": sess.session_id,
+        "lane": sess.spec.label,
+        "elapsed_since_export": _common.human_span(elapsed),
+        "pages": rows,
+        "cookies": f"{receipt.get('cookies', 0)} at export, "
+                   f"{cookies_now} now",
+        **({"note": record["note"]} if record.get("note") else {}),
+        "carried": ["pages", "page handles", "cookies and site storage",
+                    "the audit trail", "the budget ledger and its spend",
+                    "saved auth-state history"],
+        "not_carried": (
+            "nothing was copied. This is the same live session in the same "
+            "server process, so nothing needed copying."),
+        "budget": {
+            **_budgets.BOOK.snapshot(sess.session_id)["counters"],
+            "note": ("this session's budget carries over with it, including "
+                     "what the other conversation already spent."),
+        },
+        "next": (f"manage_tabs(session={sess.session_id!r}, action='list') "
+                 f"to see the tabs, get_page_view(page=...) to re-read."),
+    }
 
 
 def _session_status(sess) -> dict:
@@ -3982,6 +4239,20 @@ def _session_status(sess) -> dict:
         "idle_s": round(idle_for, 1),
         "parked_pages": sum(1 for p in sess.pages.values() if p.parked),
         "state": state,
+        # WHAT EACH PAGE IS ACTUALLY SHOWING. The status row used to carry
+        # a page COUNT and nothing else, so a conversation that inherited
+        # the process-wide default session read its own orientation call
+        # and still had no way to see that p1 was sitting on a URL it had
+        # never navigated to (2026-09-08 model field test: an agent's first
+        # dozen calls landed on a session another agent had opened, and it
+        # only worked this out from the page CONTENT). Sessions are
+        # process-global by design; the fix for a surprise is disclosure.
+        "open_pages": _tab_list(sess),
+        # A session the scheduler owns is not a session a conversation may
+        # use, and a browser process the user did not open must never be
+        # invisible here.
+        **({"role": sess.role} if getattr(sess, "role", "user") != "user"
+           else {}),
         # Stated only when something was actually set. A status that printed
         # "emulation: none" on every session would be noise; a status that
         # hid a phone-shaped context would be a lie.
@@ -3997,6 +4268,12 @@ def _session_status(sess) -> dict:
         # C-03: the tab list and the crash mark disagreed, and the tab list
         # is the one that reads as authoritative.
         row["dead_pages"] = dead_pages
+    outstanding = _handles.STORE.outstanding(sess.session_id)
+    if outstanding:
+        # An unconsumed export token is a pending intent somebody may have
+        # forgotten. The COUNT and the soonest expiry, never a token and
+        # never a hash.
+        row["export_tokens"] = outstanding
     return row
 
 
@@ -4275,6 +4552,29 @@ async def get_workflows(topic: str | None = None) -> dict:
             "lines into a single-line field, and do not retry a wall. Each "
             "of those refuses with the reason and the next call, and the "
             "refusal is cheaper to read than the retry is to run.",
+        ],
+        "session-transfer": [
+            "manage_session(action='export_handle', session='s1') in the "
+            "conversation that holds the session. It returns a token once, "
+            "plus a receipt of what the session holds right now.",
+            "manage_session(action='import_handle', token=...) in the other "
+            "conversation. It reports, per page, whether the page is still "
+            "on the document it was on at export and what happened to the "
+            "refs minted there.",
+            "The limits, stated up front: a token works once, expires in an "
+            "hour by default, and works only inside this running KS4Web "
+            "process on this machine. It does not survive a server restart, "
+            "and Claude Desktop's chat panel and its Code panel run "
+            "separate copies of the server, so a token does not cross "
+            "between them.",
+            "Nothing is copied. It is the same live browser, so if the "
+            "other conversation navigates a page your refs to that page are "
+            "gone, and the budget the other conversation spent is spent.",
+            "A token is not a lock. Any conversation talking to this KS4Web "
+            "can already see and use its sessions through "
+            "manage_session(action='status'). The token makes a transfer "
+            "deliberate and lets KS4Web report what state is being picked "
+            "up.",
         ],
         "packs": packs.menu(),
         "packs-are-launch-time": (

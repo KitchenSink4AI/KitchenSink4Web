@@ -31,6 +31,7 @@ from __future__ import annotations
 import asyncio
 import os
 import time
+from collections import deque
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -95,6 +96,24 @@ PENDING_NAV_MAX = 512
 #: their failures propagate: a recorder that cannot attach is a launch
 #: problem to surface, not one to swallow.
 SESSION_OPEN_HOOKS: list = []
+
+#: HOW MANY CLOSED SESSIONS ARE REMEMBERED (defect D3, lifecycle review).
+#: A closed session used to leave nothing at all: `close()` popped it from
+#: the dict and deleted its journal file, so `MANAGER.session('s1')`
+#: afterwards could only say the handle is not open. That one message had
+#: to serve four different situations — you closed it, something recycled
+#: it, its browser crashed, or you are talking to a different server
+#: process — and a caller cannot act on the difference it is not told.
+#: The ring is in memory and bounded, and it is deliberately not persisted:
+#: its whole job is to explain a disappearance INSIDE one process, and a
+#: token presented to a different process is already answered by the
+#: process-identity check with a better message.
+TOMBSTONE_MAX = 32
+
+#: The closed set of reasons a session can end. `crash` is derived rather
+#: than declared: a close that finds every owned PID already gone did not
+#: happen the way an explicit close does, and saying so is free.
+CLOSE_REASONS = ("explicit_close", "idle_recycle", "crash", "shutdown")
 
 
 @dataclass
@@ -260,6 +279,15 @@ class Session:
     #: a status that reports an emulation nobody set is as misleading as one
     #: that hides an emulation somebody did.
     emulation: dict = field(default_factory=dict)
+    #: WHO OPENED THIS SESSION AND WHAT IT IS FOR. `user` is a session some
+    #: conversation asked for; `monitor` is the one the monitor scheduler
+    #: owns (feature #8). The distinction is load-bearing in three places:
+    #: the single-session shortcut in `SessionManager.session(None)` must
+    #: not hand a caller the scheduler's browser, the status report must
+    #: name a browser process the user did not open, and a handle transfer
+    #: refuses to hand the scheduler's session to a conversation that would
+    #: then fight it for the same page.
+    role: str = "user"
 
     def record_auth_save(self, path: str) -> None:
         self.saved_auth_at = time.time()
@@ -414,6 +442,47 @@ def _launch_refusal(spec, exc: Exception, emulation_report) -> Exception:
     return SessionDead(body)
 
 
+#: What each end reason MEANS, in one clause. PLACEHOLDER WORDING: these
+#: are the facts a refusal has to carry, not the final English.
+REASON_TEXT: dict[str, str] = {
+    "explicit_close": "a manage_session(action='close') call closed it",
+    "idle_recycle": "an idle recycle closed it after a quiet period",
+    "crash": ("its browser process exited on its own, so this was a crash "
+              "rather than a close"),
+    "shutdown": "the server closed it while shutting down",
+}
+
+
+def tombstone_line(stone: dict | None) -> str:
+    """The half of a stale-handle refusal that says WHY, not just that.
+
+    Returns an empty string when nothing is recorded, and the empty case is
+    informative too: a session that ended by any route this build knows
+    about leaves a record, so no record means it ended by a route that does
+    not leave one, which the import refusal states in its own words."""
+    if not stone:
+        return ""
+    when = time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(stone["closed"]))
+    what = REASON_TEXT.get(stone["reason"], stone["reason"])
+    auth = stone.get("auth_state_saved_to")
+    return (f" That session ended at {when}: {what}. It held "
+            f"{stone['pages_at_close']} page(s) at the time."
+            + (f" Its auth state had been saved to {auth}, so the login is "
+               f"recoverable with load_auth_state." if auth else ""))
+
+
+def monitor_session_line(sessions: dict) -> str:
+    """Name the scheduler's session in an ambiguity refusal. A session the
+    caller never opened, appearing in a list of sessions to choose between,
+    is otherwise a mystery the message creates."""
+    monitors = sorted(sid for sid, s in sessions.items()
+                      if getattr(s, "role", "user") == "monitor")
+    if not monitors:
+        return ""
+    return (f" {monitors} belong(s) to the monitor scheduler rather than to "
+            f"a conversation; monitor(action='list') is what inspects those.")
+
+
 class SessionManager:
     """Process-wide browser state. One instance, held at module level."""
 
@@ -425,6 +494,8 @@ class SessionManager:
         self._session_seq = 0
         self._page_seq = 0
         self.startup_reap: dict | None = None
+        #: Closed sessions, newest last, bounded at TOMBSTONE_MAX.
+        self.tombstones: deque = deque(maxlen=TOMBSTONE_MAX)
 
     # ------------------------------------------------------------ lifecycle
 
@@ -741,7 +812,47 @@ class SessionManager:
         desk.tasks.add(task)
         task.add_done_callback(desk.tasks.discard)
 
-    async def close(self, session_id: str) -> dict:
+    # ------------------------------------------------------- tombstones
+
+    def entomb(self, session: Session, reason: str | None = None) -> dict:
+        """Record how one session ended, before it stops existing.
+
+        `reason` defaults to a DERIVED one rather than to `explicit_close`:
+        a close that finds every owned PID already gone is not the same
+        event as a caller closing a working browser, and the caller of the
+        close is usually the one that cannot tell the difference."""
+        if reason is None:
+            reason = "crash" if session.browser_alive() is False \
+                else "explicit_close"
+        urls = []
+        for record in session.pages.values():
+            try:
+                urls.append(record.page.url)
+            except Exception:
+                pass
+        stone = {
+            "session": session.session_id,
+            "lane": session.spec.label,
+            "role": getattr(session, "role", "user"),
+            "opened": session.opened,
+            "closed": time.time(),
+            "reason": reason,
+            "pages_at_close": len(session.pages),
+            "last_urls": urls[:8],
+            "auth_state_saved_to": session.saved_auth_path,
+        }
+        self.tombstones.append(stone)
+        return stone
+
+    def tombstone(self, session_id: str) -> dict | None:
+        """The most recent record for one session id, or None. Handles are
+        never reused, so the newest match is the only match."""
+        for stone in reversed(self.tombstones):
+            if stone["session"] == session_id:
+                return stone
+        return None
+
+    async def close(self, session_id: str, reason: str | None = None) -> dict:
         """Close one session and verify the teardown by owned PID.
 
         The verification is the point. "We called context.close()" is a claim;
@@ -753,7 +864,12 @@ class SessionManager:
             if session is None:
                 raise TargetNotFound(
                     f"no session {session_id!r}. Open sessions are "
-                    f"{sorted(self.sessions) or 'none'}.")
+                    f"{sorted(self.sessions) or 'none'}."
+                    + tombstone_line(self.tombstone(session_id)))
+            # BEFORE the teardown, because `browser_alive()` is what
+            # distinguishes a crash from a close and the journal is closed
+            # below.
+            stone = self.entomb(session, reason)
             # The hold-expiry timers die with the session they belong to.
             # A task still sleeping when its loop closes is a "destroyed but
             # pending" warning at best and a dismissal against a closed page
@@ -785,6 +901,7 @@ class SessionManager:
                 "owned_pids": sorted(session.journal.pids),
                 "survivors_killed": survivors,
                 "profile_removed": True,
+                "ended": stone["reason"],
             }
 
     @staticmethod
@@ -801,27 +918,43 @@ class SessionManager:
         return survivors
 
     async def close_all(self) -> list[dict]:
-        return [await self.close(sid) for sid in list(self.sessions)]
+        return [await self.close(sid, reason="shutdown")
+                for sid in list(self.sessions)]
 
     # --------------------------------------------------------------- lookup
 
     def session(self, session_id: str | None) -> Session:
         if session_id is None:
-            if len(self.sessions) == 1:
-                return next(iter(self.sessions.values()))
+            # THE SHORTCUT IS FOR USER SESSIONS ONLY. A conversation with
+            # one session of its own plus the monitor scheduler's session
+            # would otherwise be handed the scheduler's browser by a call
+            # that named no session at all, and every later refusal would
+            # be about the wrong browser.
+            mine = [s for s in self.sessions.values()
+                    if getattr(s, "role", "user") == "user"]
+            if len(mine) == 1:
+                return mine[0]
             if not self.sessions:
                 raise TargetNotFound(
                     "no browser session is open. Open one with "
                     "manage_session(action='open').")
+            if not mine:
+                raise TargetNotFound(
+                    "no browser session of your own is open. The only open "
+                    "session belongs to the monitor scheduler and is not "
+                    "yours to use. Open one with "
+                    "manage_session(action='open').")
             raise BadParams(
                 f"several sessions are open ({sorted(self.sessions)}); name "
-                f"the one you mean rather than letting the server pick.")
+                f"the one you mean rather than letting the server pick."
+                + monitor_session_line(self.sessions))
         if session_id not in self.sessions:
             raise TargetNotFound(
                 f"no session {session_id!r}. Open sessions are "
                 f"{sorted(self.sessions) or 'none'}. A session handle is "
                 f"minted by manage_session(action='open') and is never "
-                f"reused after a close.")
+                f"reused after a close."
+                + tombstone_line(self.tombstone(session_id)))
         return self.sessions[session_id]
 
     def locate(self, page_handle: str, *, allow_pending_dialog: bool = False
@@ -933,7 +1066,7 @@ class SessionManager:
             idle_for = now - max(
                 [p.last_used for p in session.pages.values()] or [session.opened])
             if not force and idle_for >= close_after:
-                await self.close(sid)
+                await self.close(sid, reason="idle_recycle")
                 recycled.append(sid)
                 continue
             for record in session.pages.values():
