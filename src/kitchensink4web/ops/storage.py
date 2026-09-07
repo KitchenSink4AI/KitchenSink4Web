@@ -90,9 +90,9 @@ async def manage_cookies(
         return {"session": sess.session_id, "count": len(cookies),
                 "url_filter": url, "name_filter": name}
     if action == "clear":
-        _gates.ENGINE.ask(
+        _policy.confirm(
             "storage_clear", tool="manage_cookies",
-            session=sess.session_id, page=None, target=None,
+            session=sess.session_id, page=None, target=None, url=url,
             summary=(f"Clear {len(cookies)} cookie(s) from session "
                      f"{sess.session_id}"
                      + (f" matching {name!r}" if name else "")
@@ -156,9 +156,10 @@ async def manage_storage(
 
     if kind == "indexeddb":
         if action == "clear":
-            _gates.ENGINE.ask(
+            _policy.confirm(
                 "storage_clear", tool="manage_storage",
                 session=sess.session_id, page=record.handle, target=None,
+                url=record.page.url,
                 summary=f"Clear all IndexedDB databases on {record.handle}?")
         names = await record.page.evaluate(
             "async () => { if (!indexedDB.databases) return "
@@ -179,9 +180,10 @@ async def manage_storage(
     if key:
         got["items"] = [i for i in got["items"] if i["key"] == key]
     if action == "clear":
-        _gates.ENGINE.ask(
+        _policy.confirm(
             "storage_clear", tool="manage_storage",
             session=sess.session_id, page=record.handle, target=None,
+            url=record.page.url,
             summary=(f"Clear {got['count']} {kind}Storage entr"
                      f"{'y' if got['count'] == 1 else 'ies'} on "
                      f"{record.handle}?"))
@@ -320,9 +322,9 @@ async def load_auth_state(
     sess = common.session_of(session)
     jar = sess.jar(context)
     checked = sandbox.check_path(path, "load auth state")
-    _gates.ENGINE.ask(
+    _policy.confirm(
         "storage_load", tool="load_auth_state", session=sess.session_id,
-        page=None, target=None,
+        page=None, target=None, dest_path=checked,
         summary=f"Load saved authentication state from {checked} into "
                 f"session {sess.session_id}? This restores a real login.")
     # Fails closed above; the code below runs only through a redeemed gate

@@ -60,6 +60,7 @@ from ..errors import (AmbiguousLocation, AuthRequired, BadParams,
                       Timeout, ValidationFailed)
 from ..policy import audit as _audit
 from ..policy import budgets as _budgets
+from ..policy import consent as _consent
 from ..policy import credentials as _credentials
 from ..policy import engine as _policy
 from ..policy import gates as _gates
@@ -1765,9 +1766,10 @@ async def _landed_origin_check(sess, record, *, tool: str) -> None:
             sess, record, "the navigation landed outside the origin "
                           "allowlist and was parked to about:blank until a "
                           "human answers the confirmation")
-        _gates.ENGINE.ask(
+        _policy.confirm(
             "navigation_offlist", tool=tool, session=sess.session_id,
-            page=record.handle, target=None,
+            page=record.handle, target=None, url=landed, kind="navigate",
+            origin_verdict="off-list",
             summary=f"the page landed on {landed}, which is outside "
                     f"{_origins.ENV_ALLOW}, during {tool}. It was parked to "
                     f"about:blank and nothing was read from it.")
@@ -2372,9 +2374,9 @@ async def type_text(
     late = _act.action_class_for(desc, submitting=submitting)
     if late and late != _act.action_class_for(resolved["descriptor"],
                                               submitting=submitting):
-        _gates.ENGINE.ask(
+        _policy.confirm(
             late, tool="type_text", session=sess.session_id,
-            page=record.handle, target=desc,
+            page=record.handle, target=desc, url=record.page.url,
             summary=f'type into {desc.get("role")} "{desc.get("name")}" on '
                     f'{record.handle}, which the page turned into a '
                     f'{late.replace("_", " ")} target when it took focus?')
@@ -2696,9 +2698,9 @@ async def fill_form(
         if late and late != batch_class:
             # A field that only reveals its class under focus still gates,
             # and it gates BEFORE its own write rather than after it.
-            _gates.ENGINE.ask(
+            _policy.confirm(
                 late, tool="fill_form", session=sess.session_id,
-                page=record.handle, target=desc,
+                page=record.handle, target=desc, url=record.page.url,
                 summary=f'write into {desc.get("role")} '
                         f'"{desc.get("name")}" on {record.handle}, which the '
                         f'page turned into a {late.replace("_", " ")} target '
@@ -2742,20 +2744,44 @@ async def fill_form(
         # filled either way and the form state read-back is the authority on
         # what the page now holds.
         first = prepared[0][2] if prepared else None
-        granted = _gates.ENGINE.ask(
-            "form_submit", tool="fill_form", session=sess.session_id,
-            page=record.handle,
-            target=first["descriptor"] if first else None,
-            summary=f"Submit the form after filling {batch['completed']} "
-                    f"field(s) on {record.handle}?")
-        # Only a confirmed re-run reaches this line. Re-resolve the anchor
-        # field NOW so the fingerprint comparison is against the page as it
-        # is at execution, not as it was at the ask.
+        # WHICH KIND of submission this is, and it was hardcoded
+        # `form_submit` until the consent ladder landed: the batch path
+        # asked the same undifferentiated question about a catalog query and
+        # a sign-in, and it asked it at every scope because it called the
+        # gate engine directly and never reached the consent ladder at all.
+        # The class now comes from the SAME classifier the other three write
+        # paths use, against the first filled field's own form.
+        first_desc = first["descriptor"] if first else None
+        submit_class = (_act.action_class_for(first_desc, submitting=True)
+                        if first_desc else None) or "form_submit"
+        decision = _consent.decide(
+            submit_class, url=record.page.url, desc=first_desc,
+            origin_verdict=_origins.evaluate(record.page.url or ""))
+        granted = None
+        if not decision.clears:
+            granted = _gates.ENGINE.ask(
+                submit_class, tool="fill_form", session=sess.session_id,
+                page=record.handle, target=first_desc,
+                summary=f"Submit the form after filling {batch['completed']} "
+                        f"field(s) on {record.handle}?",
+                live_only=decision.outcome == _consent.ASK_LIVE_ONLY,
+                unattended=_consent.unattended(),
+                origin=_consent.origin_of(record.page.url))
+        # Only a cleared decision or a confirmed re-run reaches this line.
+        # Re-resolve the anchor field NOW so the verification is against the
+        # page as it is at execution, not as it was at the ask: an earlier
+        # field in the batch can legitimately re-render a later one.
         fresh = await _act.resolve(sess, record, prepared[0][1],
                                    tool="fill_form") if prepared else None
-        _gates.ENGINE.verify_execute(
-            granted, fresh["descriptor"] if fresh else None,
-            resolution_outcome=fresh["resolution"] if fresh else "ok")
+        if granted is not None:
+            _gates.ENGINE.verify_execute(
+                granted, fresh["descriptor"] if fresh else None,
+                resolution_outcome=fresh["resolution"] if fresh else "ok")
+        else:
+            _gates.verify_cleared(
+                submit_class, fresh["descriptor"] if fresh else None,
+                resolution_outcome=fresh["resolution"] if fresh else "ok",
+                summary="submit the form after filling it")
         fctx = _act.context_of(fresh or {}, record)
         before = await _act.observe(fctx,
                                     fresh["node_ref"] if fresh else None)
@@ -2763,8 +2789,13 @@ async def fill_form(
         outcome = await _act.verify(fctx,
                                     fresh["node_ref"] if fresh else None,
                                     before)
-        _audit.annotate(gate={"action_class": "form_submit",
-                              "gate": granted.token[:8]},
+        _audit.annotate(gate={"action_class": submit_class,
+                              "gate": (granted.token[:8] if granted
+                                       else None),
+                              "cleared_by": ("human" if granted
+                                             else decision.cleared_by),
+                              **({"cleared_because": decision.reason}
+                                 if granted is None else {})},
                         effect=outcome["effect"])
         submitted = {"submitted": True, "how": submitted,
                      "changed": {"effect": outcome["effect"],
@@ -2859,6 +2890,7 @@ _FOCUSED_JS = _instrument(r"""
 // @@KS4WEB_VISIBILITY@@
 // @@KS4WEB_PAYMENT@@
 // @@KS4WEB_ACTIVATION@@
+// @@KS4WEB_CONSENT@@
   const el = document.activeElement;
   if (!el || el === document.body || el === document.documentElement) return null;
   const f = ksFormOf(el);
@@ -2896,6 +2928,13 @@ _FOCUSED_JS = _instrument(r"""
     action: f ? (f.getAttribute('action') || '') : '',
     payment: ksPaymentField(el),
     form_payment: ksFormPayment(f),
+    // THE FORM CENSUS (consent ladder, 2026-09-07). The focused descriptor
+    // reads it for the same reason it reads the payment facts: a global
+    // Enter is a submission, and a submission this build cannot describe is
+    // one it has to gate with the undifferentiated class the ladder exists
+    // to retire.
+    form_census: ksFormCensus(f),
+    page_age_declared: ksAgeDeclared(),
     activates: ksDelegatedActivation(el),
     page_key: location.origin + location.pathname + location.hash
   };
@@ -3943,14 +3982,21 @@ async def manage_session(
             # The same gate load_auth_state carries, asked ONCE for every
             # file BEFORE any context is launched, so a fail-closed answer
             # does not strand two half-built browsers.
-            _gates.ENGINE.ask(
+            # ONE DOOR (consent wave §3.2): this asked the gate engine directly and
+            # therefore never saw the consent scope, so
+            # KS4WEB_PREAUTH=storage_load@host cleared load_auth_state and
+            # left this call asking for the same operation spelled
+            # differently. dest_path is passed only when every jar loads
+            # the SAME file; several files have no single destination and
+            # naming one of them would be a false statement to the ladder.
+            _one_state = sorted(set(checked_states.values()))
+            _policy.confirm(
                 "storage_load", tool="manage_session", session=None,
                 page=None, target=None,
+                dest_path=_one_state[0] if len(_one_state) == 1 else None,
                 summary=f"Open a session and load saved authentication "
-                        f"state from "
-                        f"{sorted(set(checked_states.values()))}? This "
-                        f"restores {len(set(checked_states.values()))} real "
-                        f"login(s).")
+                        f"state from {_one_state}? This restores "
+                        f"{len(_one_state)} real login(s).")
         sess = await MANAGER.open(device=device, viewport=viewport,
                                   locale=locale, timezone=timezone,
                                   contexts=contexts if isinstance(contexts,
@@ -4041,6 +4087,11 @@ async def manage_session(
                 jars[label]["saved_now"] = await _storage.save_auth_state(
                     session=sess.session_id, context=label, path=path)
         result = await MANAGER.close(sess.session_id)
+        # A "remember this for 30 minutes" answer is scoped to the session
+        # the human answered in, so closing the session ends it. Nothing
+        # here is persisted anywhere, and the process holding it is the
+        # longest any grant can live.
+        _consent.clear_grants()
         # The learned lane records are flushed here rather than only on the
         # debounce, because a conversation that opens a session, hits a wall,
         # and closes is exactly the shape that would otherwise learn something
@@ -4075,7 +4126,7 @@ async def manage_session(
         # client advertises no confirmation channel it fails closed and the
         # budgets stand. A budget the model could reset by calling a tool
         # would not be a budget.
-        _gates.ENGINE.ask(
+        _policy.confirm(
             "budget_reset", tool="manage_session", session=sess.session_id,
             page=None, target=None,
             summary=f"Reset the action budgets for session "
@@ -4314,7 +4365,15 @@ async def manage_session(
             # for precisely when everything else is refusing, and it has to
             # be able to say what is wrong.
             **_identification_line(),
-            # What this machine has and which lane suits what (field log 2
+            # AXIS B, beside Axis A on purpose (consent ladder). A human
+            # reading this needs both halves to understand a prompt they
+            # got or did not get: which tools exist, and which of the ones
+            # that exist still ask. Names and origin patterns only -- there
+            # is no secret value anywhere in this payload and no route that
+            # would put one here.
+            "consent": _consent.describe(),
+            **({"secret_refs": _credentials.secret_ref_names()}
+               if _credentials.credential_injection_enabled() else {}),            # What this machine has and which lane suits what (field log 2
             # item 44, the user's own ask). Detected once per process from
             # stats and a registry read, never by launching anything, and it
             # steers rather than switches: no code path reads this back.
@@ -5130,7 +5189,16 @@ async def handle_dialog(
     target = None
     if held is not None:
         target = {"role": "dialog", "name": held.kind,
-                  "label": held.message[:200], "page_key": held.page}
+                  "label": held.message[:200], "page_key": held.page,
+                  # NOT a fingerprint field, deliberately: FINGERPRINT_FIELDS
+                  # is a fixed tuple and this rides beside it, as the fact the
+                  # consent ladder needs to tell a Tier 2 dialog from a Tier 1
+                  # one. A message this server RECOGNIZES as destructive gates
+                  # at every scope; one it does not recognize is the
+                  # unrecognized case and `full` clears it on an allowlisted
+                  # origin.
+                  "dialog_destructive": bool(
+                      _dialogs.destructive_reason(held.message or ""))}
     if action in ("accept", "arm_accept"):
         kind = held.kind if held is not None else (
             "confirm" if dialog_type == "any" else dialog_type)

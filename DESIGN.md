@@ -2527,6 +2527,125 @@ answer to both. Claude for Chrome is the cautionary example: *"I click 'Always
 allow actions on this site.' The very next action on that same domain prompts
 again... So a long browsing task dies waiting on a click you never saw."*
 
+### 5.4a P3b: the consent ladder (Axis B)
+
+Added 2026-09-07. 5.4 above is unchanged and this section sits beside it,
+because the defect was never in the gate mechanism.
+
+**The mechanical root cause, in one sentence.** The policy grade and the gate
+table were two orthogonal systems that never consulted each other.
+`policy/readonly.py` decided which tools EXIST; `policy/gates.py` decided
+which actions ASK a human; and the gate table was identical at every grade.
+Unlocking write mode therefore bought the tools and bought nothing at all in
+the approval budget, so a library catalog query and a bank transfer raised the
+same prompt with the same sentence. The author's complaint, near-verbatim:
+*"Searching web forms for research is not when I need to approve a search
+unless it's something risky or risque."*
+
+**The principle.** A policy grade stops being a capability switch and becomes
+a CONSENT DECLARATION. Granting one is standing approval for every ordinary
+in-grade action inside it, and gates fire on EXCEEDS-GRADE events only.
+
+**Two axes, kept separate so the provable property survives.**
+
+- **Axis A, TOOL PRESENCE** (5.2). Launch-time, enforced by ABSENCE. Binary:
+  read-only or acting. UNCHANGED. Nothing in the ladder alters which tools
+  register, so the absence claim is exactly as strong as it was, and the
+  rejection of a middle grade still stands for the reason it was made.
+- **Axis B, CONSENT SCOPE** (`policy/consent.py`, `KS4WEB_CONSENT`).
+  Launch-time, applies only when acting is allowed, decides which
+  consequential classes the human pre-approved. `research` is the default.
+  It changes no tool's presence; it changes what asks.
+
+Both are resolved once, from `server.configure`, and a static tree scan
+enforces the single call site for each.
+
+**Three tiers, and the tier is a property of the ACTION CLASS.** That is the
+whole answer to why a blanket "always allow" is useless: input strings vary
+and classes do not.
+
+| Tier | Behavior | Members |
+|---|---|---|
+| 0 | never gates | reads, navigation, clicks, ordinary typing, a QUERY-SHAPED form submission, an `alert` accept, a download into a configured sandbox root |
+| 1 | asks under `research`, silent under `full`, pre-authorizable per origin | residual POST `form_submit`, `file_upload`, `download_to_disk`, `storage_clear`, `dialog_accept`, and (preauth only) `evaluate_script`, `storage_load`, `clipboard_read` |
+| 2 | asks at every scope; no grade, no preauth, no grant clears one | `payment_form`, `credential_submit`, `broadcast_submit`, `destructive_submit`, `legal_assent`, `navigation_offlist`, `action_offlist`, `budget_reset`, `age_gate_detected`, `sensitive_origin`, `credential_injection` |
+
+**The query-shaped rule, and it is spec-backed rather than heuristic.** A
+submission is query-shaped when the effective method is GET, no field
+classifies secret, no field classifies payment, there is no file input, and
+the enctype is not multipart. RFC 9110 section 9.2.1 defines GET as a SAFE
+method: a GET form submission is by specification not supposed to cause side
+effects on the server, so a page publishing one has made a claim about its own
+operation and this server takes it at its word. That is the load-bearing
+signal, and it is why the rule is defensible rather than a convenience.
+
+Two limits ship with it, stated rather than papered over. A site implementing
+search over POST still gates under `research`, which is the site making a
+claim and this server believing it, the correct direction to be wrong in. And
+the rule is a TIER 0 ADMISSION TEST, never a TIER 2 EXEMPTION: a GET checkout
+form gates as payment, because payment is classified before the method is ever
+consulted.
+
+**`form_submit` split into four classes that can name their harm**
+(`policy/submissions.py`). `credential_submit` is an authentication attempt
+the human did not authorize; `broadcast_submit` attaches the human's name to
+words they did not write; `destructive_submit` deletes, cancels, revokes, or
+deactivates; `legal_assent` binds them to terms nobody read to them. The
+vocabularies ship multilingual from day one, because the payment list was
+English-only until a live PAN arrived in `Kartennummer`. Unlike the payment
+split, the DECISION lives in Python and the projection supplies facts and
+squashed haystacks: one list, one home, nothing to drift.
+
+The honest limit, published: the server sees the DOM, not the site's
+server-side semantics. A POST form whose submitter says nothing recognizable
+in any shipped language passes ungated under `full`. That is the same residual
+risk the human accepted the moment they granted write mode, and it does not
+apply under `research`, where every POST gates regardless.
+
+**Content sensitivity: no classifier, and that is a design position.** Any
+list of "risky topics" this server shipped would impose one person's values on
+every user, would gate a nuclear-weapons and DPRK research corpus on day one,
+and would be trivially defeated anyway. What ships instead relays a claim
+somebody else made: `age_gate_detected` reports the PAGE'S own declaration,
+and `KS4WEB_SENSITIVE_ORIGINS` is a list the human writes.
+
+**Standing grants, two mechanisms for two different questions.**
+`KS4WEB_PREAUTH=<class>@<origin>[:<ttl>]` is a launch-time pre-authorization
+set at the same human surface that already carries "Allow this server to click
+and type": nothing in-session reaches it, no tool argument sets it, no injected
+page writes it, and no model reads a value back. It inherits read-only mode's
+entire safety property by construction, and it is the answer for a client that
+receives an elicitation and does not render it. A Tier 2 class named there
+REFUSES TO START rather than being silently dropped. The second mechanism is
+the in-session "remember this for 30 minutes" answer, scoped to (origin,
+action class, ttl) and offered on Tier 1 prompts only.
+
+**What a clearance clears and what it does not.** It clears the ASK. It never
+clears the REBIND INTERLOCK, and it cannot clear the two-pass TOCTOU
+comparison for the honest reason that a cleared action has only one pass:
+there is no earlier fingerprint to compare against, and `gates.verify_cleared`
+says so in its own docstring rather than implying a check it is not running.
+
+**Audit honesty, non-negotiable.** Every grant record carries `cleared_by`,
+distinguishing `human`, `grade`, `preauth`, and `grant`. A trail that recorded
+a grade-cleared action as though a human answered would be a false record, and
+the audit's framing as an operational log for the user cannot survive one.
+
+**Unattended sessions refuse; they do not queue** (author ruling, 2026-09-07).
+No-human is DETECTED from the confirmation channel's behavior, never assumed.
+The flag never widens consent; it only changes what happens after a refusal,
+and what happens is an immediate honest refusal instead of a 150-second wait
+for an answer nobody will give. A queue was specced and cut: the gate TTL is
+180 seconds and the TOCTOU fingerprint expires with it, so a decision approved
+later could not execute the original target anyway, and a queue that pretended
+otherwise would be the stale-intent hole this whole system exists to close.
+
+**What deliberately stays broken on a client with no confirmation channel,
+and it should be published as a feature.** Tier 2 remains unreachable there. A
+client that cannot ask cannot buy things, cannot submit credentials, cannot
+post to other humans, and cannot accept legal terms. That is not a missing
+feature; that is fail-closed doing its job.
+
 ### 5.5 P6: action budgets and loop detection
 
 Only browser-use documents any of this, and no MCP server does. It also maps to

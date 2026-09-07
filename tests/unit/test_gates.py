@@ -130,6 +130,15 @@ def test_no_gate_class_touches_policy_state():
         "storage_clear", "storage_load", "evaluate_script", "dialog_accept",
         "navigation_offlist", "action_offlist", "budget_reset",
         "clipboard_read",
+        # The consent ladder's seven (2026-09-07). The first four are what
+        # `form_submit` SPLITS INTO, so the table grew to say what a
+        # submission actually is; the last three are classes the old table
+        # had no member for at all. Every one of them still authorizes an
+        # ACTION and none names policy, which the loop at the bottom of this
+        # test re-proves over the whole grown table.
+        "credential_submit", "broadcast_submit", "destructive_submit",
+        "legal_assent", "age_gate_detected", "sensitive_origin",
+        "credential_injection",
     }
     # dialog_accept joined 2026-09-06 with handle_dialog. It gates ANSWERING
     # a native dialog with OK and never dismissal, because dismissal is the

@@ -98,6 +98,17 @@ async def _verdict(call) -> str:
         text = str(exc)
         if "payment-shaped" in text:
             return "payment_form"
+        # THE FINER CLASSES ARE TESTED FIRST, and the order is load-bearing:
+        # `credential_submit`'s sentence BEGINS "submitting a form that
+        # carries...", so a generic prefix test above it reports the class
+        # the ladder exists to stop reporting.
+        for phrase, cls in (
+                ("password or a one-time code", "credential_submit"),
+                ("reaches other people", "broadcast_submit"),
+                ("deletes, cancels", "destructive_submit"),
+                ("agreeing to terms", "legal_assent")):
+            if phrase in text:
+                return cls
         if "submitting a form" in text:
             return "form_submit"
         return "gated"
@@ -161,8 +172,14 @@ def test_the_card_number_never_lands_when_the_gate_refuses(g2_site):
 def test_enter_in_a_plain_form_is_a_submission(g2_site):
     """H1: implicit form submission is the oldest submit path on the web and
     was the one path that computed no gate class. `plain.html` is a delete-
-    account form with no payment field anywhere on it, so the verdict is
-    `form_submit` and it matches what clicking the button gives."""
+    account form with no payment field anywhere on it.
+
+    The verdict was `form_submit` until the consent ladder landed and is
+    `destructive_submit` now, which is the whole point of the split: the old
+    class covered a library catalog query and this button with one sentence,
+    so the human read "submitting a form" about deleting their account. What
+    this test pins is unchanged and is the thing that matters: the key path
+    and the click path reach the SAME verdict on the SAME fixture."""
     async def go():
         session, page = await _open(g2_site, "plain.html")
         live = session.page(page).page
@@ -171,7 +188,7 @@ def test_enter_in_a_plain_form_is_a_submission(g2_site):
         by_click = await _verdict(lambda: lite.find_and_act(
             page=page, query="Delete my account permanently", action="click",
             timeout_ms=3000))
-        assert by_key == by_click == "form_submit"
+        assert by_key == by_click == "destructive_submit"
         assert "plain.html" in live.url        # nothing submitted
     run(go())
 
@@ -185,7 +202,7 @@ def test_a_global_enter_on_a_focused_form_field_still_gates(g2_site):
         live = session.page(page).page
         await live.evaluate("() => document.getElementById('u').focus()")
         assert await _verdict(lambda: lite.press_keys(
-            page=page, keys="Enter")) == "form_submit"
+            page=page, keys="Enter")) == "destructive_submit"
     run(go())
 
 

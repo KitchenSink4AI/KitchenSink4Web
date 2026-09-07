@@ -123,6 +123,14 @@ function ksDelegatedActivation(el) {
     type: ksSubmitTypeOf(target, !!form),
     in_form: !!form,
     form_payment: ksFormPayment(form),
+    // The DELEGATE'S form census (consent ladder, 2026-09-07), for the same
+    // reason its payment facts are here: a `<label>` parked outside the
+    // `<form>` tag still submits the form its control belongs to, so the
+    // classifier has to read that form and not the touched element's.
+    // Guarded because `consent.js` is spliced into the ACTING scripts only:
+    // the extractor splices this block too and has no census to compute.
+    form_census: (typeof ksFormCensus === 'function'
+      ? ksFormCensus(form) : null),
     payment: ksPaymentField(target),
     name: (target.getAttribute && (target.getAttribute('aria-label')
       || target.getAttribute('name'))) || target.id || ''

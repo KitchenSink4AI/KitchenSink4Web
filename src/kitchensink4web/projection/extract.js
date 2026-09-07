@@ -31,6 +31,7 @@
 // @@KS4WEB_PAYMENT@@
 // @@KS4WEB_ACTIVATION@@
 // @@KS4WEB_ARIA@@
+// @@KS4WEB_CONSENT@@
   opts = opts || {};
   // `location=` scoping. The read is the same read, run over a subtree: the
   // same blocks, the same ladder, the same completeness discipline, over a
@@ -1249,6 +1250,14 @@
                 area: Math.round(geo.rect.width * geo.rect.height),
                 form: formEl ? true : false,
                 form_payment: formPayment(formEl),
+                // THE FORM CENSUS (consent ladder, 2026-09-07). Carried on
+                // the affordance so the LADDER-resolved path classifies the
+                // same way the live-resolved path does: a rebind must not
+                // quietly demote a "Delete account" button to the
+                // undifferentiated class by losing the facts that named it.
+                // Memoized per form, so a checkout page with one form and
+                // thirty controls pays for the walk once.
+                form_census: ksFormCensus(formEl),
                 heading: currentHeading ? currentHeading.ref : null
               });
             } else {

@@ -48,7 +48,7 @@ from .. import pagedata as _pagedata
 from ..anchors import Outcome, ladder
 from ..errors import (AmbiguousLocation, BadParams, ModalBlocked, StaleAnchor,
                       TargetChanged, TargetNotFound, Timeout)
-from ..policy import credentials
+from ..policy import consent, credentials, submissions
 from ..projection import extract, instrument
 
 # --------------------------------------------------------------- selectors
@@ -145,6 +145,7 @@ _RESOLVE_JS = r"""
 // @@KS4WEB_VISIBILITY@@
 // @@KS4WEB_PAYMENT@@
 // @@KS4WEB_ACTIVATION@@
+// @@KS4WEB_CONSENT@@
   const loc = opts.location || {};
   const squash = (s) => (typeof s === 'string' ? s : '').replace(/\s+/g, ' ').trim();
   const clip = (s, n) => { s = squash(s); return s.length <= n ? s : s.slice(0, n) + '...'; };
@@ -357,6 +358,13 @@ _RESOLVE_JS = r"""
       tag: el.tagName, type: type, autocomplete: ac, secret: (type === 'password'),
       in_form: inForm, form_action: formEl ? (formEl.getAttribute('action') || '') : '',
       form_payment: ksFormPayment(formEl),
+      // THE FORM CENSUS (consent ladder, 2026-09-07). Facts only: the
+      // effective method, whether any field in `form.elements` classifies
+      // secret, the file and enctype facts, the structural signals, the
+      // default submitter's name, and the checkbox labels, all squashed.
+      // `policy/submissions.py` owns what those names MEAN.
+      form_census: ksFormCensus(formEl),
+      page_age_declared: ksAgeDeclared(),
       payment: ksPaymentField(el),
       pattern: (el.getAttribute && el.getAttribute('pattern')) || '',
       inputmode: (el.getAttribute && el.getAttribute('inputmode')) || '',
@@ -554,6 +562,13 @@ def target_descriptor(unit: dict) -> dict:
         # anywhere in it, which is what `payment_form` has always claimed to
         # be about.
         "form_payment": unit.get("form_payment"),
+        # THE FORM CENSUS, which is what lets the classifier say WHICH KIND
+        # of submission this is instead of only "a form was submitted". The
+        # facts are computed in-page beside `ksFormPayment`; the vocabulary
+        # that reads them lives in `policy/submissions.py`.
+        "form_census": unit.get("form_census"),
+        # The page's own age declaration, relayed and never judged.
+        "page_age_declared": unit.get("page_age_declared"),
     }
 
 
@@ -649,8 +664,37 @@ def action_class_for(desc: dict, *, submitting: bool = False) -> str | None:
         # label parked outside the <form> tag still submits the form its
         # control belongs to.
         payment_form = desc.get("form_payment") or delegate.get("form_payment")
-        return "payment_form" if payment_form else "form_submit"
+        if payment_form:
+            return "payment_form"
+        return submission_class_for(desc, delegate)
     return None
+
+
+def submission_class_for(desc: dict, delegate: dict | None = None) -> str:
+    """WHICH KIND of submission this is, once payment has already lost.
+
+    `form_submit` used to be the answer for everything from a library
+    catalog query to a "Delete account" button, which is the author's whole
+    complaint about the approval system: one class, one prompt, one sentence,
+    fired on research the granted mode already implied consent for. The
+    class is the consent unit, so the class has to be finer than "a form was
+    submitted".
+
+    Returns one of `credential_submit`, `destructive_submit`, `legal_assent`,
+    `broadcast_submit`, or the residual `form_submit`. The residual is NOT
+    the same as ungated: `policy/consent.py` decides its tier, and a
+    query-shaped GET submission is in-grade there under both scopes while a
+    POST residual asks under `research`.
+
+    The vocabulary lives in `policy/submissions.py` and the facts come from
+    the in-page census, so a delegated click reads the DELEGATE'S form, which
+    is the form that actually submits."""
+    census = consent.census_of(desc)
+    if not census and isinstance(delegate, dict):
+        census = delegate.get("form_census") or {}
+    found = submissions.classify(
+        census, desc.get("name"), (delegate or {}).get("name"))
+    return found[0] if found else "form_submit"
 
 
 #: Keys that submit a form implicitly. Enter in a single-line control inside a
@@ -758,6 +802,7 @@ _LIVE_FIELD_JS = r"""
 // @@KS4WEB_VISIBILITY@@
 // @@KS4WEB_PAYMENT@@
 // @@KS4WEB_ACTIVATION@@
+// @@KS4WEB_CONSENT@@
   const f = ksFormOf(el);
   const grp = ksPanGroup(el);
   return {
@@ -782,6 +827,10 @@ _LIVE_FIELD_JS = r"""
     action: (f && f.getAttribute('action')) || '',
     payment: ksPaymentField(el),
     form_payment: ksFormPayment(f),
+    // Re-taken with the rest (gauntlet 2 M6): a focus handler that flips a
+    // field to `type=password` flips the form's census with it.
+    form_census: ksFormCensus(f),
+    page_age_declared: ksAgeDeclared(),
     activates: ksDelegatedActivation(el),
     // THE CLOAK, RE-CHECKED AFTER FOCUS AND IN THE SAME JS TURN (A7). See
     // `recheck_at_write`: the caller focuses, the focus handler runs
@@ -840,7 +889,7 @@ async def recheck_at_write(page, handle, desc: dict, *, tool: str) -> dict:
     merged = dict(desc)
     for key in ("type", "autocomplete", "in_form", "action", "attr_id",
                 "attr_name", "pattern", "inputmode", "form_payment",
-                "payment"):
+                "payment", "form_census", "page_age_declared"):
         if live.get(key) not in (None, ""):
             merged[key] = live[key]
     merged["secret"] = None         # re-derived from the live type, not reused

@@ -498,10 +498,18 @@ async def _create(url, condition, value, selector, interval, label) -> dict:
     # there could only fail closed.
     verdict = _origins.check_navigation(checked_url, readonly.grade())
     if verdict == "off-list":
-        from ..policy import gates as _gates
-        _gates.ENGINE.ask(
+        # ONE DOOR. This asked the gate engine directly, which is the
+        # twelfth door the consent wave closed on 2026-09-07 and the two
+        # waves never saw each other: a door outside `policy.engine.confirm`
+        # never sees the consent scope, so a pre-authorization a human wrote
+        # applies to `navigate` and not to the monitor that navigates on a
+        # timer. `confirm` also carries the unattended refusal, which is the
+        # honest answer when a scheduler has nobody to ask.
+        from ..policy import engine as _policy
+        _policy.confirm(
             "navigation_offlist", tool="monitor", session=None, page=None,
-            target=None,
+            target=None, url=checked_url, kind="navigate",
+            origin_verdict=verdict,
             summary=f"Create a monitor that will re-check {checked_url} "
                     f"every {minutes} minutes? That origin is outside "
                     f"{_origins.ENV_ALLOW}, and a scheduled check has no "

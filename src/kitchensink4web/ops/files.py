@@ -111,7 +111,7 @@ async def download(
                     tool="download", kind="download",
                     session=sess.session_id, page=record.handle,
                     url=record.page.url, target=resolved["descriptor"],
-                    action_class="download_to_disk",
+                    action_class="download_to_disk", dest_path=path,
                     args={"action": "click", "path": path},
                     summary=f"download via {resolved['descriptor'].get('name')}"
                             f" on {record.handle}"))
@@ -123,7 +123,7 @@ async def download(
                 _policy.approve(_policy.ActionRequest(
                     tool="download", kind="download",
                     session=sess.session_id, page=record.handle, url=url,
-                    action_class="download_to_disk",
+                    action_class="download_to_disk", dest_path=path,
                     args={"action": "goto", "url": url, "path": path},
                     summary=f"download {url} on {record.handle}"))
                 try:
@@ -156,7 +156,7 @@ async def download(
     _policy.approve(_policy.ActionRequest(
         tool="download", kind="download", session=sess.session_id,
         page=record.handle, action_class="download_to_disk",
-        args={"action": "wait", "path": path},
+        dest_path=path, args={"action": "wait", "path": path},
         summary=f"save the download on {record.handle}"))
     return await _finish(sess, record, download_obj, path)
 
@@ -189,7 +189,7 @@ async def _fetch(sess, record, url, path, timeout_ms) -> dict:
     _policy.approve(_policy.ActionRequest(
         tool="download", kind="download", session=sess.session_id,
         page=record.handle, url=target, action_class="download_to_disk",
-        args={"action": "fetch", "url": target, "path": path},
+        dest_path=path, args={"action": "fetch", "url": target, "path": path},
         summary=f"fetch and save {target} through the session on "
                 f"{record.handle}"))
     try:
@@ -341,6 +341,7 @@ async def upload_file(
         tool="upload_file", kind="act", session=sess.session_id,
         page=record.handle, url=record.page.url,
         target=resolved["descriptor"], action_class="file_upload",
+        dest_path=checked[0] if checked else None,
         args={"files": len(checked), "via": "input"},
         summary=f"upload {len(checked)} file(s) to the input on "
                 f"{record.handle}"))
@@ -376,6 +377,7 @@ async def _upload_via_chooser(sess, record, location, checked, timeout_ms
         tool="upload_file", kind="act", session=sess.session_id,
         page=record.handle, url=record.page.url,
         target=resolved["descriptor"], action_class="file_upload",
+        dest_path=checked[0] if checked else None,
         args={"files": len(checked), "via": "chooser"},
         summary=f"upload {len(checked)} file(s) through the file chooser "
                 f"opened by {resolved['descriptor'].get('name')!r} on "

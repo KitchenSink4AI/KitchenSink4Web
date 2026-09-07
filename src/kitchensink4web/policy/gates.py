@@ -86,6 +86,43 @@ GATED_CLASSES: dict[str, str] = {
     "navigation_offlist": "navigating to an origin outside the allowlist",
     "action_offlist": "acting inside an origin outside the allowlist",
     "budget_reset": "resetting the session's action budgets",
+    # ------------------------------------------------------------------
+    # THE CONSENT LADDER'S SEVEN (2026-09-07). `form_submit` covered a
+    # library catalog query and a "Delete account" button with one class,
+    # one prompt, and one sentence, so the gate could not name its own harm
+    # and fired on research the granted mode already implied consent for.
+    # The four submission classes below are what it splits into; the last
+    # three are the classes the old table had no member for at all.
+    #
+    # EACH ONE NEEDS ITS OWN SENTENCE, and the `storage_load` incident four
+    # entries up is the standing reminder why: a borrowed sentence asked a
+    # human to allow "clearing cookies or site storage" for an operation
+    # that clears nothing, and someone reading carefully declines the wrong
+    # thing. The sentences below are COPY PLACEHOLDERS pending the author's
+    # own words (build report FACTS TO CONVEY 1-7); each states the FACT
+    # the final wording must convey and nothing beyond it.
+    # ------------------------------------------------------------------
+    # Credential blindness refuses the tool WRITING a password. Nothing
+    # refused it PRESSING the button that sends one a human typed, so an
+    # authentication attempt could happen that the human never authorized.
+    "credential_submit": "submitting a form that carries a password or a "
+                         "one-time code",
+    # The human's name attached to words they did not write, irreversibly,
+    # in public or in somebody's inbox.
+    "broadcast_submit": "sending a submission that reaches other people",
+    "destructive_submit": "submitting something that deletes, cancels, "
+                          "revokes, or deactivates",
+    "legal_assent": "agreeing to terms, a contract, a waiver, or a consent",
+    # The PAGE declared this, and the server relays the claim rather than
+    # judging the content. There is no topic classifier in this build.
+    "age_gate_detected": "acting on a page that declares itself adult-only",
+    "sensitive_origin": "acting on an origin you listed as one to always "
+                        "ask about",
+    # Feature #12. It authorizes ONE data flow to ONE origin, names no
+    # policy, unlocks no mode, widens no origin list, and loads no pack, so
+    # it satisfies the closed-set invariant the table is held to.
+    "credential_injection": "attaching a stored credential to requests sent "
+                            "to one origin",
 }
 
 #: A pending gate lives this long. A confirmation arriving later than this
@@ -116,6 +153,12 @@ class Gate:
     page: str | None
     target: dict
     summary: str
+    #: The page origin this gate was raised on, carried so an in-session
+    #: "remember this" answer can be scoped to (origin, class) without any
+    #: caller supplying either. Never a URL with a query: a grant scoped to
+    #: a query string would be the string-matching blanket approval the
+    #: consent ladder exists to replace.
+    origin: str | None = None
     created: float = field(default_factory=time.monotonic)
     redeemed: bool = False
 
@@ -162,14 +205,30 @@ class GateEngine:
     # ----------------------------------------------------------------- ask
 
     def ask(self, action_class: str, *, tool: str, session: str,
-            page: str | None, target: dict | None, summary: str) -> Gate:
+            page: str | None, target: dict | None, summary: str,
+            live_only: bool = False, unattended: bool = False,
+            origin: str | None = None) -> Gate:
         """Record the gate and refuse with the confirmation payload.
 
         Raises on the first pass. On a confirmation re-run (the elicitation
         plumbing redeemed the gate and deposited it), a deposit matching this
         action class is CONSUMED and returned instead, and the caller runs
         the TOCTOU re-validation (`verify_execute`) before acting. The
-        captured fingerprint is what EXECUTE will be held to."""
+        captured fingerprint is what EXECUTE will be held to.
+
+        `live_only` marks a Tier 2 class, where the refusal must say that no
+        configuration makes this proceed without a human. `unattended` says
+        this process has EVIDENCE that no human is answering (a client with
+        no confirmation channel, or repeated instant cancels), in which case
+        the refusal is raised immediately rather than after a round trip
+        nobody will answer.
+
+        **The refusal is a refusal and never a queue** (author ruling,
+        2026-09-07). A pending decision approved forty minutes later cannot
+        execute the original target, because `GATE_TTL_S` is 180 seconds and
+        the TOCTOU fingerprint expires with it. Extending the TTL to make
+        deferred execution work would open precisely the hole this whole
+        system exists to close, so the honest answer is to refuse now."""
         granted = peek_grant(action_class)
         if granted is not None:
             clear_grant()          # single-use, like the redemption it holds
@@ -179,11 +238,14 @@ class GateEngine:
                 f"unknown gated action class {action_class!r}; the closed "
                 f"set is {sorted(GATED_CLASSES)}. A class is added in the "
                 f"design, not at a call site.")
+        if unattended:
+            raise self._unattended_refusal(action_class, summary, live_only)
         self._sweep()
         token = _secrets.token_urlsafe(18)
         gate = Gate(token=token, action_class=action_class, tool=tool,
                     session=session, page=page,
-                    target=fingerprint(target or {}), summary=summary)
+                    target=fingerprint(target or {}), summary=summary,
+                    origin=origin)
         self._pending[token] = gate
         exc = ConfirmationRequired(
             f"{GATED_CLASSES[action_class]} needs a human confirmation "
@@ -216,6 +278,34 @@ class GateEngine:
             }],
         }
         raise exc
+
+    #: COPY PLACEHOLDER (build report FACTS TO CONVEY 8-9): the
+    #: unattended-session refusal. The facts it must carry: nothing was
+    #: done; no human answered and this process has evidence that none can;
+    #: the work is NOT queued, because a decision made later cannot execute
+    #: the target this one named; and either the pre-authorization route
+    #: (Tier 1) or the statement that no setting makes this proceed
+    #: unattended (Tier 2).
+    def _unattended_refusal(self, action_class: str, summary: str,
+                            live_only: bool) -> ConfirmationRequired:
+        route = (
+            "No setting makes this proceed without a human. Paying, "
+            "submitting a credential, sending something that reaches other "
+            "people, deleting, accepting terms, acting off an allowlist, "
+            "and resetting the budgets are irreducible by design."
+            if live_only else
+            "A human can pre-authorize this class for a named origin at the "
+            "settings surface with KS4WEB_PREAUTH, which is a launch-time "
+            "choice no tool call can make.")
+        return ConfirmationRequired(
+            f"{GATED_CLASSES[action_class]} needs a human confirmation and "
+            f"no human is answering in this session. {summary} Nothing has "
+            f"been done and nothing was queued: a confirmation gate expires "
+            f"in {int(GATE_TTL_S)}s together with the fingerprint of the "
+            f"element it named, so a decision made later could not execute "
+            f"this action anyway, and a queue that pretended otherwise "
+            f"would be the stale-intent hole this system exists to close. "
+            f"{route}")
 
     # -------------------------------------------------------------- redeem
 
@@ -285,6 +375,16 @@ class GateEngine:
 
     # ------------------------------------------------------------ plumbing
 
+    def peek_pending(self, request_state: str) -> Gate | None:
+        """The pending gate for a correlation token, WITHOUT redeeming it.
+
+        The confirmation plumbing needs two facts before it can word the
+        prompt: which class is being asked about (Tier 2 gets no "remember
+        this" answer) and which origin a grant would be scoped to. Reading
+        them here keeps both off the tool boundary; `redeem` is still the
+        only door that consumes anything."""
+        return self._pending.get(request_state)
+
     def pending(self) -> list[dict]:
         self._sweep()
         return [{"requestState": g.token, "action_class": g.action_class,
@@ -297,6 +397,40 @@ class GateEngine:
         for token in [t for t, g in self._pending.items()
                       if now - g.created > GATE_TTL_S]:
             self._pending.pop(token, None)
+
+
+def verify_cleared(action_class: str, current_target: dict | None, *,
+                   resolution_outcome: str = "ok",
+                   summary: str = "") -> dict:
+    """The verification a CONSENT-CLEARED action still runs, and an honest
+    account of which half of it survives.
+
+    A clearance skips the ASK. The ask is also what produced the SECOND
+    read: a gated action refuses, the server re-runs the tool body, the
+    target is resolved again, and `verify_execute` compares the fingerprint
+    captured at ask time against the fresh one. A cleared action has one
+    pass, so there is no earlier fingerprint to compare against and this
+    function does not pretend to make one.
+
+    What DOES survive, and it is the half that catches the live attack: the
+    REBIND INTERLOCK. `resolution_outcome` is the rebind ladder's verdict for
+    this target on this pass, and a target that rebound aborts here exactly
+    as it aborts behind a redeemed gate. A rebind may be legitimate on its
+    own terms and it still never launders a consent scope: the human granted
+    a class, not a moved element.
+
+    The fingerprint is captured into the returned record so the audit says
+    WHAT was cleared, which is what makes a cleared action reviewable after
+    the fact."""
+    if resolution_outcome == "rebound":
+        raise TargetChanged(
+            f"the target REBOUND while this action was being authorized "
+            f"({summary or action_class}). A rebind may be legitimate on its "
+            f"own terms and it still never launders a standing consent: the "
+            f"scope covers a class of action, not an element that moved "
+            f"underneath one. Nothing was done; re-read the page and retry.")
+    return {"gate": None, "action_class": action_class,
+            "confirmed_target": fingerprint(current_target or {})}
 
 
 #: The process engine. The choke point asks it; the confirmation plumbing

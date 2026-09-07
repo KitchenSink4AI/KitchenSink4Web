@@ -3518,3 +3518,105 @@ STRINGS: every user-facing sentence in this wave is flagged for the main
 thread. The enriched refusal, the auto-pick announcement, the declaration
 payload's labels, the identification block, and the rate-limit line are all
 FACTS TO CONVEY, not final English, and `docs/` was deliberately not touched.
+---
+
+## 2026-09-08 — the consent ladder, and credential injection shipped dark
+
+Branch `build/consent` off `45fc986`. Two features from banked specs
+(`20260907_dream_approvals.md`, `20260907_dream_boundary.md` part B), built
+together because the second one needs a gate class and the first one owns the
+gate table.
+
+**The defect, and it was never in the gate mechanism.** The policy grade and
+the gate table were two orthogonal systems that never consulted each other.
+`readonly.py` decided which tools EXIST, `gates.py` decided which actions ASK,
+and the gate table was byte-identical at every grade. Unlocking acting bought
+the tools and bought nothing at all in the approval budget, which is why a
+library catalog query and a bank transfer raised the same prompt with the same
+sentence. `policy/consent.py` is Axis B: a grade is now a CONSENT DECLARATION,
+and gates fire on exceeds-grade events. Design record: DESIGN 5.4a.
+
+**The single highest-value line is a citation.** RFC 9110 section 9.2.1
+defines GET as a safe method, so a GET form submission with no secret,
+payment, or file field is Tier 0 under both scopes. Search boxes, catalog
+queries, database filters, and advanced-search panels stop prompting, and they
+stop for a stated reason rather than for convenience. The rule is an admission
+test and never an exemption: a GET checkout form still gates as payment,
+pinned through four write paths at both scopes.
+
+**`form_submit` was the complaint and it is now four classes that can name
+their harm**: `credential_submit`, `broadcast_submit`, `destructive_submit`,
+`legal_assent`. Multilingual from day one across nine languages, because the
+payment list was English-only until a live PAN arrived in `Kartennummer`.
+The decision lives in Python and the projection supplies facts, which is the
+opposite of the payment split and deliberate: one list, one home, nothing to
+drift, and the mirror that IS pinned is the squash both sides share.
+
+**A real seam the pins found.** `fill_form`'s submit branch called
+`gates.ENGINE.ask()` DIRECTLY with a hardcoded `"form_submit"`, so it never
+reached the policy choke point at all: it asked the same undifferentiated
+question about a catalog query and a sign-in, at every scope, and could not
+see the finer class. Three of the four write paths reported
+`credential_submit` on a password-carrying form and the batch path reported
+`form_submit`, which is the parity property failing on the one path nobody had
+re-checked since the class table grew. It classifies through the same function
+the others use now.
+
+**Credential injection: built, tested, and SHIPPED DARK** (author ruling).
+`set_routing(action='modify')` attaches ONE header to ONE named origin,
+re-checked inside the route handler so a redirect's second hop and a page's
+own CDN subresource carry nothing; `action='headers'` next to it is
+context-wide and always was. The value never crosses the tool boundary:
+`KS4WEB_SECRET_<NAME>` is vaulted at startup BEFORE it is stored anywhere,
+which is the single call that converts every downstream redaction row from
+audited-by-inspection to covered. Off-allowlist REFUSES rather than gating,
+which is the deliberate departure from the ladder everywhere else, because a
+prompt is a weak defense against an attack whose whole method is producing a
+plausible reason to say yes. Default off, and off means no scan, no
+registration, nothing vaulted, and a refusal that names the switch.
+`strip_params` and ordinary-header modify ship live: they are not the
+dangerous capability and do not wait behind its switch.
+
+**Three existing browser expectations moved from `form_submit` to
+`destructive_submit`.** That is the split working rather than a regression:
+those fixtures are Delete-account forms, and the old class asked a human to
+allow "submitting a form" about deleting their account. The parity property
+those tests exist for is untouched.
+
+**The finding that justified the wire pins.** dream-boundary B7.16 was
+written as the pin that decides whether credential injection ships at all: a
+matched request that 302s to another origin must not carry the header on the
+second hop, and if the route handler cannot enforce it the capability is CUT
+rather than shipped with a caveat. It could not, as first built, and the first
+run of the new live pin proved it at the wire. `route.continue_(headers=...)`
+hands the headers to the network stack and the stack re-sends them itself on a
+302, with the route handler never consulted for the second hop, so the
+in-handler origin re-check never ran. The STRUCTURAL pin was green the whole
+time, which is the lesson: the handler's re-check is a property of this code
+and what the network stack does after the handler returns is not. Fixed by
+fetching with `max_redirects=0` and fulfilling the redirect back, so the
+second hop is a new request the browser issues and the matcher rejects.
+
+**A ladder with eleven doors around it is not a ladder.** Eleven sites in
+`ops/` reached a gate without `approve()` and every one called
+`gates.ENGINE.ask()` directly, so none of them saw the consent scope:
+`storage_clear` under `full` still asked, and
+`KS4WEB_PREAUTH=storage_load@github.com` cleared `load_auth_state` while
+leaving `manage_session(open, auth_state=...)` asking, which is the same
+operation spelled differently. Step 7 is `policy.engine.confirm()` now and
+there is one door. An AST pin over `ops/` fails on a twelfth.
+
+**Cut from the spec, by author ruling:** the queue-and-hold buffer. The gate
+TTL is 180 seconds and the TOCTOU fingerprint expires with it, so a decision
+approved later could not execute the original target anyway; an unattended
+session gets an honest refusal instead of a 150-second wait for an answer
+nobody will give.
+
+Gate: **1,112 green, 0 failed**, run SEQUENTIALLY (unit first, then each
+browser file on its own so every verdict is durable), with the unit half green
+under a randomized order as well. 74 new unit pins and 14 new live pins across
+seven new `corpus/consent` fixtures and two local origins; 39 of the 50 spec
+pins are negative. Every new unit pin errors on `45fc986` at the import of a
+module that does not exist there. Zero orphaned browser processes attributable
+to this wave; the four `chrome-headless-shell` alive at exit trace to sibling
+agents' pytest processes.

@@ -697,7 +697,11 @@ def test_an_ignored_preset_argument_refuses():
     import inspect
     from kitchensink4web.ops import net
     source = inspect.getsource(net.set_routing)
-    assert 'preset is not None and action != "throttle"' in source
+    # `strip_params` joined the preset-taking actions on 2026-09-07 with its
+    # curated 'tracking' list, and it has its own unknown-preset refusal;
+    # every OTHER action still refuses a preset rather than ignoring it.
+    assert ('preset is not None and action not in ("throttle", '
+            '"strip_params")') in source
     assert "block_ads" in source
 
 

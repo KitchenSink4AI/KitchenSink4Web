@@ -42,7 +42,7 @@ from . import confirm, envelope, packs
 from .errors import (BadParams, ConfirmationRequired, ReadOnlyMode,
                      Timeout, ValidationFailed)
 from .ops import lite
-from .policy import audit, credentials, gates, readonly
+from .policy import audit, consent, credentials, gates, readonly
 
 # Redaction lives in the serializer (DESIGN 5.3): installed at import, before
 # any tool can run, so there is no window where a payload rides out unscrubbed.
@@ -414,17 +414,25 @@ def configure(
     mode: str | None = None,
     cli_packs: list[str] | None = None,
     read_only: str | bool | None = None,
+    consent_scope: str | None = None,
 ) -> dict:
     """Resolve launch-time configuration, then register. Called once by
-    main(), and by tests that need a specific launch shape."""
+    main(), and by tests that need a specific launch shape.
+
+    The ORDER of the two policy applies is the contract: Axis A (which tools
+    exist) is resolved first, because Axis B (what asks) is inert under every
+    read-only grade and has to know that before it resolves anything."""
     deregister_all()
     readonly.apply(read_only)
+    consent.apply(consent_scope)
+    credentials.register_secret_refs()
     selected = packs.resolve_startup_packs(mode=mode, cli_packs=cli_packs)
     packs.apply_startup_packs(selected)
     names = register_all()
     return {
         "packs": packs.loaded_packs(),
         "read_only": readonly.grade(),
+        "consent": consent.scope(),
         "registered": names,
     }
 

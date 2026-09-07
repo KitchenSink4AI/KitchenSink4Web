@@ -91,6 +91,26 @@ def active() -> bool:
     return bool(_allowed_roots())
 
 
+def contains(path: str | os.PathLike) -> bool:
+    """Whether a path resolves inside the sandbox, WITHOUT raising.
+
+    `check_path` is the enforcement door and it refuses; this is the QUESTION
+    door, added for the consent ladder (2026-09-07), which needs to know
+    whether a download destination is contained in order to decide whether
+    the class is in-grade. It runs the identical canonicalize-then-contain
+    algorithm rather than a second one, because re-deriving a path-escape
+    check is how you introduce a path-escape bug. With no sandbox configured
+    it answers False: the caller's question is "is this contained", and with
+    no roots configured nothing is."""
+    if not active():
+        return False
+    try:
+        check_path(path, purpose="consent check")
+    except Exception:
+        return False
+    return True
+
+
 # --------------------------------------------------------- canonicalization
 
 
