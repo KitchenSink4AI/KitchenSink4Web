@@ -61,6 +61,28 @@ class _Remembered:
     remember_30_minutes: bool = False
 
 
+def _client_declared_elicitation(ctx) -> bool:
+    """Did this client advertise an elicitation channel at `initialize`?
+
+    UNKNOWN IS TREATED AS YES, deliberately and in one direction only. A
+    build of the SDK that does not expose the capability check, or a
+    transport that has no session behind it, must not turn every gated
+    action into an instant unattended refusal on a machine where a human is
+    sitting there waiting to answer. False here costs a five-minute wait
+    that already existed; a wrong False would cost the human the ability to
+    say yes at all."""
+    try:
+        import mcp.types as _t
+        session = ctx.session
+        check = getattr(session, "check_client_capability", None)
+        if check is None:
+            return True
+        return bool(check(_t.ClientCapabilities(
+            elicitation=_t.ElicitationCapability())))
+    except Exception:                                    # noqa: BLE001
+        return True
+
+
 async def attempt(exc: ConfirmationRequired) -> gates.Gate | None:
     """Put a raised gate's question to the client; a redeemed Gate on an
     explicit human ACCEPT, None on everything else. None means the caller
@@ -91,6 +113,28 @@ async def attempt(exc: ConfirmationRequired) -> gates.Gate | None:
         ctx = get_context()
     except Exception:
         return None                     # no live request context: fail closed
+
+    # ASK THE CLIENT WHAT IT SAID IT COULD DO, BEFORE ASKING IT ANYTHING.
+    #
+    # The detection above is real and it is why a headless client that
+    # auto-cancels is caught in 0.0 s: a client whose transport RAISES on
+    # `elicit` advertises no channel. What it does not cover is a client
+    # whose transport accepts the request and then nobody answers. The
+    # integration's own harness declared no `elicitation` capability, its
+    # transport took the request anyway, and the call blocked for the full
+    # 150-second cap before failing closed. With UNATTENDED_AFTER = 2 that
+    # is two full waits, five minutes, before the third refusal becomes
+    # instant.
+    #
+    # The client's capabilities are known at `initialize` and the SDK
+    # exposes them, so this is still DETECTION and never assumption: it
+    # reads what the client declared about itself rather than guessing from
+    # how it behaved. Nothing about the fail-closed default moves, and
+    # nothing in the ladder moves: this takes the SAME `no_channel` branch
+    # the transport error takes, five minutes earlier. (Verify round V-20.)
+    if not _client_declared_elicitation(ctx):
+        consent.note_confirmation("no_channel", 0.0)
+        return None
 
     pending = gates.ENGINE.peek_pending(token)
     action_class = pending.action_class if pending is not None else None
