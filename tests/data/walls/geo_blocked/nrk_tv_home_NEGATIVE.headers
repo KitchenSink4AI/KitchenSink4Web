@@ -1,0 +1,20 @@
+HTTP/1.1 200 OK
+Content-Type: text/html; charset=utf-8
+Cache-Control: public, max-age=600, stale-while-revalidate=1200, stale-if-error=3600
+Content-Security-Policy: frame-ancestors https://*.nrk.no https://*.nrk.cloud
+x-content-type-options: nosniff
+referrer-policy: strict-origin-when-cross-origin
+Permissions-Policy: autoplay=(self)
+X-Akamai-Transformed: 9 13315 0 pmb=mRUM,2
+Vary: Accept-Encoding
+Content-Encoding: br
+Date: Mon, 07 Sep 2026 11:44:41 GMT
+Content-Length: 14782
+Connection: keep-alive
+Server-Timing: cdn-cache; desc=REVALIDATE
+Server-Timing: edge; dur=758
+Server-Timing: origin; dur=75
+Alt-Svc: h3=":443"; ma=93600
+Strict-Transport-Security: max-age=15768000
+Server-Timing: ak_p; desc="1788781480227_389183878_658284471_83141_348763_5_152_-";dur=1
+

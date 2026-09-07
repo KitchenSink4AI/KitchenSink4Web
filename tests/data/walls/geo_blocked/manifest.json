@@ -1,0 +1,115 @@
+[
+  {
+    "url": "https://www.pandora.com/",
+    "fetched_utc": "2026-09-07T11:43:12Z",
+    "fetched_kst": "2026-09-07T20:43:12+09:00",
+    "category": "geo_blocked",
+    "http_status": 200,
+    "status_chain": [
+      "302",
+      "200"
+    ],
+    "final_url": "https://www.pandora.com/restricted",
+    "content_length": 17549,
+    "robots_allowed": true,
+    "markers": [
+      "Pandora is unavailable in this country or region",
+      "<!-- restricted.vm -->",
+      "Currently traveling outside the US?"
+    ],
+    "distinguishing_from": "vs login_required: also a 302-then-200 redirect, but the destination path is /restricted and the copy names a COUNTRY OR REGION rather than an account. Region language is the separator, not the redirect.",
+    "body_text_chars": 412,
+    "status": "collected",
+    "files": {
+      "html": "pandora_home.html",
+      "headers": "pandora_home.headers"
+    },
+    "notes": "Only genuine geo-block body collected. Egress IP was South Korea. Explicit HTTP 302 to a dedicated restricted page."
+  },
+  {
+    "url": "https://www.bbc.co.uk/iplayer",
+    "fetched_utc": "2026-09-07T11:43:07Z",
+    "fetched_kst": "2026-09-07T20:43:07+09:00",
+    "category": "geo_blocked",
+    "http_status": 200,
+    "status_chain": [
+      "200"
+    ],
+    "final_url": "https://www.bbc.co.uk/iplayer",
+    "content_length": 823266,
+    "robots_allowed": true,
+    "markers": [
+      "BBC iPlayer - Home"
+    ],
+    "distinguishing_from": "NEGATIVE CONTROL. BBC iPlayer is UK-only, yet from a Korean IP it served the complete 823KB homepage with HTTP 200 and no region notice anywhere in the HTML.",
+    "body_text_chars": 5309,
+    "status": "collected",
+    "files": {
+      "html": "bbc_iplayer_NEGATIVE.html",
+      "headers": "bbc_iplayer_NEGATIVE.headers"
+    },
+    "notes": "Geo enforcement happens at the playback/API layer, not the landing document. Proves geo_blocked is largely UNDETECTABLE from landing-page HTML.",
+    "negative_control": true
+  },
+  {
+    "url": "https://www.channel4.com/",
+    "fetched_utc": "2026-09-07T11:44:37Z",
+    "fetched_kst": "2026-09-07T20:44:37+09:00",
+    "category": "geo_blocked",
+    "http_status": 200,
+    "status_chain": [
+      "200"
+    ],
+    "final_url": "https://www.channel4.com/",
+    "content_length": 13994,
+    "robots_allowed": true,
+    "markers": [
+      "Channel 4 | Stream &amp; Watch Live TV"
+    ],
+    "distinguishing_from": "NEGATIVE CONTROL. UK-only service, HTTP 200, 44 visible-text chars (empty SPA shell). Near-zero text would trip an emptiness heuristic even though nothing is blocked at this layer.",
+    "body_text_chars": 44,
+    "status": "collected",
+    "files": {
+      "html": "channel4_home_NEGATIVE.html",
+      "headers": "channel4_home_NEGATIVE.headers"
+    },
+    "notes": "Akamai-served (X-Akamai-Transformed header, _abck cookie) but NOT challenged.",
+    "negative_control": true
+  },
+  {
+    "url": "https://tv.nrk.no/",
+    "fetched_utc": "2026-09-07T11:44:41Z",
+    "fetched_kst": "2026-09-07T20:44:41+09:00",
+    "category": "geo_blocked",
+    "http_status": 200,
+    "status_chain": [
+      "200"
+    ],
+    "final_url": "https://tv.nrk.no/",
+    "content_length": 49981,
+    "robots_allowed": true,
+    "markers": [
+      "Forsiden - NRK TV"
+    ],
+    "distinguishing_from": "NEGATIVE CONTROL. Norway-only catalogue, HTTP 200, full Norwegian chrome, no geo notice.",
+    "body_text_chars": 339,
+    "status": "collected",
+    "files": {
+      "html": "nrk_tv_home_NEGATIVE.html",
+      "headers": "nrk_tv_home_NEGATIVE.headers"
+    },
+    "notes": "Third independent confirmation that broadcaster geo-blocks are invisible in the landing HTML.",
+    "negative_control": true
+  },
+  {
+    "slug": "itv_network_level_block",
+    "status": "not_collected",
+    "url": "https://www.itv.com/robots.txt",
+    "category": "geo_blocked",
+    "robots_allowed": "not_checked - could not retrieve robots.txt",
+    "markers": [],
+    "http_status": null,
+    "distinguishing_from": "Not an HTML wall at all: the connection simply never returned data.",
+    "notes": "curl error 28, timed out after 25s with 0 bytes received, on robots.txt. A network-level geo-drop produces NO document to classify. Detectable only from timing plus zero bytes, never from HTML."
+  }
+]

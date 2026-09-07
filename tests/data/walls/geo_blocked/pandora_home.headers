@@ -1,0 +1,25 @@
+HTTP/1.1 302 Found
+Date: Mon, 07 Sep 2026 11:43:11 GMT
+Server: Apache
+Content-Type: text/html;charset=utf-8
+Expires: Thu, 01 Jan 1970 00:00:00 GMT
+Location: https://www.pandora.com/restricted
+Content-Length: 0
+Set-Cookie: v2regbstage=;Path=/;Domain=.pandora.com;Expires=Thu, 01-Jan-1970 00:00:00 GMT;Max-Age=0
+Content-Security-Policy-Report-Only: script-src   'self'   'unsafe-inline'   'unsafe-eval'   'report-sample'   https://*.savagebeast.com   https://pandora.com   https://*.pandora.com   https://staging.cdn-net.com   https://cdn.cookielaw.org   https://assets.adobedtm.com   https://*.adsafeprotected.com   https://ep2.adtrafficquality.google   https://fundingchoicesmessages.google.com   https://*.googlesyndication.com   https://*.google-analytics.com   https://www.googletagmanager.com   https://www.googletagservices.com   https://imasdk.googleapis.com   https://storage.googleapis.com   https://*.doubleclick.net   https://*.doubleverify.com   https://pagead2.googlesyndication.com   https://s0.2mdn.net   https://cdn.branch.io   https://app.link   https://client.px-cloud.net   https://connect.facebook.net   https://sb.scorecardresearch.com   https://secure-us.imrworldwide.com   https://z.moatads.com   https://lex.33across.com   https://s.adroll.com   https://d.adroll.com   https://*.adswizz.com   https://ads.revjet.com   https://pix.revjet.com   https://seal.verisign.com   https://code.jquery.com   https://snap.licdn.com; report-uri https://browser-intake-datadoghq.com/api/v2/logs?dd-api-key=pub16b313e1658347a16504b662a893cd7e&dd-evp-origin=content-security-policy&ddsource=csp-report&ddtags=env%3Aproduction; report-to csp-endpoint;
+Reporting-Endpoints: csp-endpoint="https://browser-intake-datadoghq.com/api/v2/logs?dd-api-key=pub16b313e1658347a16504b662a893cd7e&dd-evp-origin=content-security-policy&ddsource=csp-report&ddtags=env%3Aproduction"
+Strict-Transport-Security: max-age=31536000
+
+HTTP/1.1 200 OK
+Date: Mon, 07 Sep 2026 11:43:12 GMT
+Server: Apache
+Content-Type: text/html;charset=utf-8
+Expires: Thu, 01 Jan 1970 00:00:00 GMT
+Vary: Accept-Encoding,User-Agent
+Set-Cookie: v2regbstage=;Path=/;Domain=.pandora.com;Expires=Thu, 01-Jan-1970 00:00:00 GMT;Max-Age=0
+Content-Encoding: gzip
+Content-Security-Policy-Report-Only: script-src   'self'   'unsafe-inline'   'unsafe-eval'   'report-sample'   https://*.savagebeast.com   https://pandora.com   https://*.pandora.com   https://staging.cdn-net.com   https://cdn.cookielaw.org   https://assets.adobedtm.com   https://*.adsafeprotected.com   https://ep2.adtrafficquality.google   https://fundingchoicesmessages.google.com   https://*.googlesyndication.com   https://*.google-analytics.com   https://www.googletagmanager.com   https://www.googletagservices.com   https://imasdk.googleapis.com   https://storage.googleapis.com   https://*.doubleclick.net   https://*.doubleverify.com   https://pagead2.googlesyndication.com   https://s0.2mdn.net   https://cdn.branch.io   https://app.link   https://client.px-cloud.net   https://connect.facebook.net   https://sb.scorecardresearch.com   https://secure-us.imrworldwide.com   https://z.moatads.com   https://lex.33across.com   https://s.adroll.com   https://d.adroll.com   https://*.adswizz.com   https://ads.revjet.com   https://pix.revjet.com   https://seal.verisign.com   https://code.jquery.com   https://snap.licdn.com; report-uri https://browser-intake-datadoghq.com/api/v2/logs?dd-api-key=pub16b313e1658347a16504b662a893cd7e&dd-evp-origin=content-security-policy&ddsource=csp-report&ddtags=env%3Aproduction; report-to csp-endpoint;
+Reporting-Endpoints: csp-endpoint="https://browser-intake-datadoghq.com/api/v2/logs?dd-api-key=pub16b313e1658347a16504b662a893cd7e&dd-evp-origin=content-security-policy&ddsource=csp-report&ddtags=env%3Aproduction"
+Content-Length: 9472
+Strict-Transport-Security: max-age=31536000
+

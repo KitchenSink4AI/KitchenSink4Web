@@ -1,0 +1,5 @@
+# The corpus is raw HTTP responses and its whole value is that they are
+# byte-for-byte what the server sent. Git line-ending normalization would
+# rewrite them on the way in and on the way out, so every file here is
+# treated as opaque bytes.
+* -text -diff

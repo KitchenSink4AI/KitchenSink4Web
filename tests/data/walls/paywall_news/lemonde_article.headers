@@ -1,0 +1,23 @@
+HTTP/1.1 200 OK
+Connection: keep-alive
+Content-Length: 75110
+content-encoding: gzip
+content-security-policy: default-src data: 'unsafe-inline' 'unsafe-eval' https:; script-src data: 'unsafe-inline' 'unsafe-eval' https: blob:; style-src data: 'unsafe-inline' https:; img-src data: https: blob:; font-src data: https:; connect-src https: wss:; media-src https: blob: data:; object-src https:; child-src https: data: blob:; form-action https:; block-all-mixed-content; frame-ancestors 'self' https://apps.lemonde.fr;
+via: 1.1 varnish, 1.1 varnish, 1.1 varnish
+x-content-type-options: nosniff
+x-xss-protection: 1; mode=block
+x-frame-options: SAMEORIGIN
+content-type: text/html;charset=UTF-8
+Accept-Ranges: bytes
+Age: 70
+Date: Mon, 07 Sep 2026 11:39:33 GMT
+X-Served-By: cache-lcy-eglc8600049-LCY, cache-lcy-eglc8600049-LCY, cache-lcy-eglc8600049-LCY, cache-icn1450040-ICN
+X-Cache: MISS, HIT, MISS
+X-Cache-Hits: 0, 40, 0
+X-Timer: S1788781173.190546,VS0,VE287
+Vary: Accept-Encoding
+Set-Cookie: lmd_a_c=0; Path=/; Domain=.lemonde.fr; Expires=Thu, 01 Jan 1970 00:00:00 GMT
+Set-Cookie: lmd_rand_id=47749635310336917; Path=/; Domain=.lemonde.fr; max-age=31536000; path=/; secure; httponly
+Cache-Control: private, must-revalidate, max-age=0
+Strict-Transport-Security: max-age=31557600
+

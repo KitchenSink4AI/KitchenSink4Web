@@ -57,9 +57,16 @@ EDGE_HEADERS: tuple[tuple[str, str, str], ...] = (
     ("cf-ray", "", "Cloudflare"),
     ("server", "akamaighost", "Akamai"),
     ("akamai-grn", "", "Akamai"),
+    ("x-akamai-transformed", "", "Akamai"),
     ("x-datadome", "", "DataDome"),
     ("x-cdn", "imperva", "Imperva"),
     ("x-iinfo", "", "Imperva"),
+    # AWS CloudFront serves an enormous share of the ordinary web and says
+    # nothing whatever about a block. It sits here on exactly the same
+    # footing as `server: cloudflare`, for naming only, and its block-only
+    # companion is `x-amzn-waf-action` below.
+    ("server", "cloudfront", "AWS CloudFront"),
+    ("x-amz-cf-id", "", "AWS CloudFront"),
 )
 
 
@@ -79,6 +86,18 @@ BLOCK_HEADERS: tuple[tuple[str, str | None, str, str], ...] = (
      "challenged request rather than ordinary protected traffic"),
     ("x-px-blocked", None, "HUMAN (PerimeterX)",
      "HUMAN set the x-px-blocked response header"),
+    # AWS WAF, from a live capture: SimilarWeb answered `HTTP 202 Accepted`
+    # with `Server: CloudFront`, `x-amzn-waf-action: challenge`, an empty
+    # title and no body text. PRESENCE is the signal and the value is
+    # deliberately not matched here: the observed value was `challenge`, AWS
+    # documents `captcha` and `block` as well, and pinning a matcher to one
+    # string is how the `x-dd-b` matcher would have failed (vendor docs said
+    # 1, a live block carried 3). The value is consulted in exactly one
+    # place, `classify.py`'s choice between the botwall and captcha
+    # categories, and never to decide that anything fired at all.
+    ("x-amzn-waf-action", None, "AWS WAF",
+     "AWS WAF set the x-amzn-waf-action response header, which it sends "
+     "only when it has challenged, captcha'd, or blocked the request"),
 )
 
 
@@ -145,6 +164,217 @@ BLOCK_COMBINATIONS: tuple[tuple[int, str, str, str, str], ...] = (
     (403, "access denied", "you don't have permission to access", "Akamai",
      "an Akamai Access Denied page"),
 )
+
+
+# ------------------------------------------------------ tier: SOFT-BLOCK
+#
+# THE RUNG THE FIELD TEST ASKED FOR, and the reason it needed asking. Two
+# independent model runs (2026-09-08) drove the same finding: the detector
+# above recognizes a wall only when it recognizes the VENDOR, and it says
+# nothing at all otherwise. Reddit answered a "You've been blocked by
+# network security" page and JSTOR answered an Akamai "Client Challenge"
+# CAPTCHA, and both came back `ok: true, status: 200, wall: null`, which is
+# strictly worse than a refusal because nothing downstream thinks to look
+# twice. Both runs recommended the same shape independently: a vendor-
+# agnostic backstop for HTTP 200 pages that carry a challenge signal and no
+# readable prose.
+#
+# WHY THIS DOES NOT REOPEN F1, and this is the whole argument. The status
+# gate on the visible-text tiers exists because `innerText` includes
+# offscreen text, so one absolutely-positioned div of wall phrases let a
+# hostile 200 page cloak itself from every agent while a human read the page
+# unchanged. The cost of that misfire was the PAGE: a false wall verdict
+# withholds real content. A soft block cannot pay that cost, because it
+# fires only when there is no readable prose to withhold. A page carrying an
+# article cannot cloak itself this way; the prose test fails.
+#
+# AND IT IS NOT A LENGTH HEURISTIC. The fixture corpus is emphatic that body
+# length is not a wall signal in either direction: a paywalled Science
+# article carries 32,248 visible characters and a perfectly working Channel 4
+# homepage carries 44. Length here is a NECESSARY CONDITION on a rung whose
+# firing signal is something else entirely, never a signal in its own right.
+# Channel 4 and the 6-character Notion shell both sit under the floor and
+# neither classifies, because neither carries a challenge signal.
+
+#: A page with fewer visible characters than this has nothing on it a caller
+#: could have wanted. It is a floor on "is there anything to read", not a
+#: threshold on "is this a wall": nothing in this module fires on it alone.
+NO_READABLE_PROSE_CHARS = 200
+
+#: Titles a challenge or block interstitial carries when no vendor header
+#: does. Every one of them is generic enough that it fires ONLY as half of
+#: the soft-block pair, never alone.
+CHALLENGE_TITLES: tuple[tuple[str, str, str], ...] = (
+    # JSTOR, live 2026-09-08, HTTP 200. Akamai Bot Manager's interactive
+    # challenge; the body was the single line "Enter the characters seen in
+    # the image below".
+    ("client challenge", "Akamai", "the Akamai Client Challenge title"),
+    ("access denied", None, "an access-denied title"),
+    ("attention required", "Cloudflare", "the Cloudflare challenge title"),
+    ("just a moment", "Cloudflare", "the Cloudflare challenge title"),
+    # Crunchbase served this instead of "Just a moment...", with a different
+    # ellipsis character, from the same vendor. Vendor title matching is a
+    # corroborator and never a gate, and this pair is why.
+    ("one moment, please", "Cloudflare", "the Cloudflare challenge title"),
+    ("security check", None, "a security-check title"),
+    ("bot verification", None, "a bot-verification title"),
+    ("are you a robot", None, "a bot-check title"),
+    ("blocked", None, "a block title"),
+    ("forbidden", None, "a forbidden title"),
+)
+
+#: Visible-text needles a challenge shell carries. Same rule: half of a
+#: pair, never alone.
+CHALLENGE_TEXT: tuple[tuple[str, str, str], ...] = (
+    ("enter the characters seen in the image", None,
+     "an image-CAPTCHA prompt"),
+    ("blocked by network security", None,
+     "a network-security block notice"),
+    ("you've been blocked", None, "a block notice"),
+    ("verify you are a human", None, "a human-verification prompt"),
+    ("verifying you are human", None, "a human-verification prompt"),
+    ("enable javascript and cookies to continue", "Cloudflare",
+     "the Cloudflare challenge instruction"),
+    ("checking if the site connection is secure", "Cloudflare",
+     "the Cloudflare connection-check line"),
+    ("additional security check is required", None,
+     "an additional-security-check notice"),
+)
+
+#: QUERY PARAMETERS THE SITE ITSELF PUT ON THE LANDED URL. This is the
+#: strongest signal on the rung and the one that caught Reddit, whose block
+#: page rendered no title and no readable text at all: the redirect landed on
+#: `?js_challenge=1&jsc_token=...`. A query parameter on the landed URL is
+#: written by the SERVER's redirect, not by the document, so it is not the
+#: page-controlled channel the F1 gate exists to distrust.
+CHALLENGE_URL_PARAMS: tuple[tuple[str, str | None, str], ...] = (
+    ("js_challenge", None, "a js_challenge parameter on the landed URL"),
+    ("jsc_token", None, "a jsc_token parameter on the landed URL"),
+    ("__cf_chl_tk", "Cloudflare", "a Cloudflare challenge token on the URL"),
+    ("__cf_chl_rt_tk", "Cloudflare",
+     "a Cloudflare challenge token on the URL"),
+    ("cf_chl_jschl_tk", "Cloudflare",
+     "a Cloudflare challenge token on the URL"),
+    ("awswaf", "AWS WAF", "an AWS WAF parameter on the landed URL"),
+    ("px-captcha", "HUMAN (PerimeterX)",
+     "a HUMAN captcha parameter on the landed URL"),
+    ("incident_id", "Imperva", "an Imperva incident id on the landed URL"),
+)
+
+
+def soft_block(status: int | None, *, title: str, body: str,
+               landed_url: str | None = None,
+               visible_chars: int | None = None
+               ) -> tuple[str | None, str] | None:
+    """A block a vendor header never named, on a status that says nothing.
+
+    Returns `(vendor_or_None, evidence)` or None. Two halves, and BOTH are
+    required: a challenge signal, and a document with no readable prose. See
+    the section comment above for why the pair is what keeps the F1 cloaking
+    property intact.
+
+    SOFT means soft, and the status bound is load-bearing. At a refusing
+    status the vendor tables and the status branches already own the verdict,
+    and this rung's title needles are generic enough ("forbidden", "access
+    denied", "blocked") that letting them run there reclassified an
+    application's own explained 403 as a bot wall, which is a shape
+    `tests/browser/test_wall_headers.py` protects on purpose: a refusal that
+    speaks for itself is not an edge refusal. The rung exists for the case
+    nothing else covers, a 200 that is not a page."""
+    if status is not None and (status >= 400 or status == 202):
+        return None
+    chars = visible_chars if visible_chars is not None else len(
+        (body or "").strip())
+    if chars >= NO_READABLE_PROSE_CHARS:
+        return None
+    low_title = (title or "").lower()
+    low_body = (body or "").lower()
+    low_url = (landed_url or "").lower()
+    for needle, vendor, evidence in CHALLENGE_URL_PARAMS:
+        if needle in low_url:
+            return vendor, (f"{evidence}, and the document carries "
+                            f"{chars} characters of readable text")
+    for needle, vendor, evidence in CHALLENGE_TITLES:
+        if needle in low_title:
+            return vendor, (f"{evidence}, and the document carries "
+                            f"{chars} characters of readable text")
+    for needle, vendor, evidence in CHALLENGE_TEXT:
+        if needle in low_body or needle in low_title:
+            return vendor, (f"{evidence}, and the document carries "
+                            f"{chars} characters of readable text")
+    return None
+
+
+#: DataDome ships one template for a solvable CAPTCHA and for a flat refusal.
+#: `captcha/datadome_captcha_nytimes.html` and
+#: `botwall/datadome_block_economist.html` are the same 403, the same markup,
+#: and the same visible string. The ONLY discriminators are the vendor's own
+#: config field and the script it loads, so there is no text needle to write
+#: for this boundary and inventing one would be a guess.
+DATADOME_KIND: tuple[tuple[str, str], ...] = (
+    ("'rt':'c'", "captcha"),
+    ('"rt":"c"', "captcha"),
+    ("/c.js", "captcha"),
+    ("'rt':'i'", "botwall"),
+    ('"rt":"i"', "botwall"),
+    ("/i.js", "botwall"),
+)
+
+
+def datadome_kind(source: str) -> str | None:
+    """`captcha` or `botwall` for a DataDome page, from its own config."""
+    lowered = (source or "").lower()
+    for needle, kind in DATADOME_KIND:
+        if needle in lowered:
+            return kind
+    return None
+
+
+def all_vendors(headers: dict | None, title: str = "", body: str = "",
+                source: str = "") -> list[str]:
+    """EVERY vendor this response names, not the first one matched.
+
+    G2 answered a DataDome body while setting Cloudflare's `__cf_bm` cookie
+    in the same response. A scan that stops at the first match reports one of
+    two walls and hides the other, and which one it reports depends on table
+    order rather than on the page."""
+    found: list[str] = []
+    lookup = _lower_headers(headers)
+
+    def add(vendor: str | None) -> None:
+        if vendor and vendor not in found:
+            found.append(vendor)
+
+    for name, needle, vendor in EDGE_HEADERS:
+        value = lookup.get(name)
+        if value is None or (needle and needle not in value):
+            continue
+        add(vendor)
+    for name, needle, vendor, _evidence in BLOCK_HEADERS:
+        value = lookup.get(name)
+        if value is None or (needle is not None and needle not in value):
+            continue
+        add(vendor)
+    cookies = lookup.get("set-cookie", "")
+    for needle, vendor in (("__cf_bm", "Cloudflare"), ("cf_clearance",
+                                                       "Cloudflare"),
+                           ("datadome", "DataDome"), ("_abck", "Akamai"),
+                           ("ak_bmsc", "Akamai"), ("incap_ses", "Imperva"),
+                           ("visid_incap", "Imperva"), ("_px", "HUMAN "
+                                                        "(PerimeterX)")):
+        if needle in cookies:
+            add(vendor)
+    haystack = f"{title or ''}\n{body or ''}".lower()
+    for needle, vendor, _evidence in BLOCK_TEXT:
+        if needle in haystack:
+            add(vendor)
+    lowered = (source or "").lower()
+    for needle, vendor, _evidence in BLOCK_SOURCE:
+        if needle in lowered:
+            add(vendor)
+    if "challenges.cloudflare.com" in lowered:
+        add("Cloudflare")
+    return found
 
 
 # --------------------------------------------------------- reference numbers

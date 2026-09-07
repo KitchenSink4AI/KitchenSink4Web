@@ -1,0 +1,114 @@
+[
+  {
+    "url": "https://www.science.org/doi/10.1126/science.aac4716",
+    "fetched_utc": "2026-09-07T11:37:06Z",
+    "fetched_kst": "2026-09-07T20:37:06+09:00",
+    "category": "paywall_academic",
+    "http_status": 200,
+    "status_chain": [
+      "200"
+    ],
+    "final_url": "https://www.science.org/doi/10.1126/science.aac4716",
+    "content_length": 325748,
+    "robots_allowed": true,
+    "markers": [
+      "Log in to view the full text",
+      "Become a AAAS Member",
+      "Sign in",
+      "Subscribe"
+    ],
+    "distinguishing_from": "vs botwall: status is 200 and the page carries real article metadata plus a subscribe/sign-in offer; a botwall would be 403/202 with under 60 visible-text chars and no article title.",
+    "body_text_chars": 32248,
+    "status": "collected",
+    "files": {
+      "html": "science_aaas.html",
+      "headers": "science_aaas.headers"
+    },
+    "notes": "Atypon platform. HTTP 200 with full navigation chrome; the article body itself is replaced by a login offer. body_text_chars stays high (~32k) because of nav/footer boilerplate, so text length alone is NOT a paywall signal here."
+  },
+  {
+    "url": "https://journals.sagepub.com/doi/10.1177/01445987231208498",
+    "fetched_utc": "2026-09-07T11:37:13Z",
+    "fetched_kst": "2026-09-07T20:37:13+09:00",
+    "category": "paywall_academic",
+    "http_status": 200,
+    "status_chain": [
+      "200"
+    ],
+    "final_url": "https://journals.sagepub.com/doi/10.1177/01445987231208498",
+    "content_length": 283514,
+    "robots_allowed": true,
+    "markers": [
+      "Restricted access",
+      "Purchase 24 hour online access to",
+      "Add to cart",
+      "institutional access options",
+      "Purchase access"
+    ],
+    "distinguishing_from": "vs paywall_saas: the purchase language names a single article and an institution, not a seat or plan upgrade.",
+    "body_text_chars": 52990,
+    "status": "collected",
+    "files": {
+      "html": "sage_energy_expl.html",
+      "headers": "sage_energy_expl.headers"
+    },
+    "notes": "Also Atypon. 'Restricted access' plus a per-article purchase widget is the strongest academic-paywall pair observed."
+  },
+  {
+    "url": "https://www.nature.com/articles/s41586-019-1666-5",
+    "fetched_utc": "2026-09-07T11:38:31Z",
+    "fetched_kst": "2026-09-07T20:38:31+09:00",
+    "category": "paywall_academic",
+    "http_status": 200,
+    "status_chain": [
+      "303",
+      "302",
+      "302",
+      "200"
+    ],
+    "final_url": "https://www.nature.com/articles/s41586-019-1666-5?error=cookies_not_supported&code=c8fc4126-9c8e-4455-8698-fe72d85cef8a",
+    "content_length": 588344,
+    "robots_allowed": true,
+    "markers": [
+      "\"isAccessibleForFree\":false",
+      "\"hasPart\":{\"isAccessibleForFree\":false,\"cssSelector\":\".main-content\",\"@type\":\"WebPageElement\"}"
+    ],
+    "distinguishing_from": "vs nature_openaccess_NEGATIVE (same site, same template, HTTP 200): the ONLY reliable difference is the JSON-LD isAccessibleForFree value. Nothing in the visible chrome differs.",
+    "body_text_chars": 57051,
+    "status": "collected",
+    "files": {
+      "html": "nature_subscription.html",
+      "headers": "nature_subscription.headers"
+    },
+    "notes": "Best-case machine-readable paywall declaration: schema.org hasPart/cssSelector marks exactly which DOM subtree is gated. Redirect chain 303-302-302-200 through idp.nature.com is an IdP session bounce, NOT a login wall."
+  },
+  {
+    "url": "https://www.nature.com/articles/s41586-023-06924-6",
+    "fetched_utc": "2026-09-07T11:37:20Z",
+    "fetched_kst": "2026-09-07T20:37:20+09:00",
+    "category": "paywall_academic",
+    "http_status": 200,
+    "status_chain": [
+      "303",
+      "302",
+      "302",
+      "200"
+    ],
+    "final_url": "https://www.nature.com/articles/s41586-023-06924-6?error=cookies_not_supported&code=fb175ce0-8443-47dc-b210-6969e60c93fa",
+    "content_length": 477610,
+    "robots_allowed": true,
+    "markers": [
+      "\"isAccessibleForFree\":true",
+      "Open Access"
+    ],
+    "distinguishing_from": "NEGATIVE CONTROL. Identical template and identical 303/302/302/200 redirect chain to nature_subscription; only isAccessibleForFree flips.",
+    "body_text_chars": 75572,
+    "status": "collected",
+    "files": {
+      "html": "nature_openaccess_NEGATIVE.html",
+      "headers": "nature_openaccess_NEGATIVE.headers"
+    },
+    "notes": "Include in the test corpus as a must-not-fire case. Proves that redirect chains through an identity provider, cookie-error query params, and Nature chrome are all paywall-neutral.",
+    "negative_control": true
+  }
+]

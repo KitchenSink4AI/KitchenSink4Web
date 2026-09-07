@@ -1,0 +1,17 @@
+HTTP/1.1 200 OK
+Server: nginx
+Content-Type: text/html; charset=UTF-8
+Expires: Mon, 26 Jul 1997 05:00:00 GMT
+Cache-Control: no-cache
+Content-Security-Policy: default-src blob: data: https: 'unsafe-inline' 'unsafe-eval'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://store.fastly.steamstatic.com/ https://store.fastly.steamstatic.com/ https://recaptcha.net https://www.google.com/recaptcha/ https://www.gstatic.cn/recaptcha/ https://www.gstatic.com/recaptcha/ https://www.youtube.com/ https://s.ytimg.com; object-src 'none'; connect-src 'self' http://store.steampowered.com https://store.steampowered.com http://127.0.0.1:27060 ws://127.0.0.1:27060 https://community.fastly.steamstatic.com/ https://steamcommunity.com/ https://steamcommunity.com/ wss://community.steam-api.com/websocket/ https://api.steampowered.com/ https://login.steampowered.com/ https://help.steampowered.com/ https://steam.tv/ https://shared.fastly.steamstatic.com/ https://checkout.steampowered.com/; frame-src 'self' steam:  http://www.youtube.com https://www.youtube.com https://www.youtube-nocookie.com https://www.google.com https://sketchfab.com https://player.vimeo.com https://steamcommunity.com/ https://login.steampowered.com/ https://help.steampowered.com/ https://checkout.steampowered.com/ https://www.google.com/recaptcha/ https://recaptcha.net/recaptcha/; frame-ancestors 'none';
+X-Frame-Options: DENY
+Content-Encoding: gzip
+Vary: Accept-Encoding
+Strict-Transport-Security: max-age=63072000
+Content-Length: 7682
+Date: Mon, 07 Sep 2026 11:42:56 GMT
+Connection: keep-alive
+Set-Cookie: steamCountry=KR%7C9416c42ea2637834523b0e4dc58d8a1c; path=/; secure; HttpOnly; SameSite=None
+Set-Cookie: browserid=607576996712895347; expires=Tue, 07 Sep 2027 11:42:56 GMT; Max-Age=31536000; path=/; secure; SameSite=None
+Set-Cookie: sessionid=226367b7086656c04e1042ae; Path=/; Secure; SameSite=None
+

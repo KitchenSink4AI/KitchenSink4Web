@@ -1,0 +1,137 @@
+[
+  {
+    "url": "https://www.tandfonline.com/doi/full/10.1080/03007766.2022.2113009",
+    "fetched_utc": "2026-09-07T11:37:10Z",
+    "fetched_kst": "2026-09-07T20:37:10+09:00",
+    "category": "botwall",
+    "http_status": 403,
+    "status_chain": [
+      "403"
+    ],
+    "final_url": "https://www.tandfonline.com/doi/full/10.1080/03007766.2022.2113009",
+    "content_length": 5865,
+    "robots_allowed": true,
+    "markers": [
+      "<title>Just a moment...</title>",
+      "challenges.cloudflare.com",
+      "<meta name=\"robots\" content=\"noindex,nofollow\">",
+      "Cf-Mitigated: challenge",
+      "CF-RAY"
+    ],
+    "distinguishing_from": "vs paywall_academic: this WAS an academic article request. The response never reached the publisher's paywall logic. Cf-Mitigated: challenge is the decisive header; Server: cloudflare alone appears on science.org and journals.sagepub.com too, which both returned normal articles.",
+    "body_text_chars": 16,
+    "status": "collected",
+    "files": {
+      "html": "tandfonline_cf_challenge.html",
+      "headers": "tandfonline_cf_challenge.headers"
+    },
+    "notes": "Cloudflare Managed Challenge, 403. Body is 5.9KB decompressed (3.3KB on the wire) of inline CSS and a Turnstile mount point."
+  },
+  {
+    "url": "https://www.crunchbase.com/organization/slack",
+    "fetched_utc": "2026-09-07T11:46:55Z",
+    "fetched_kst": "2026-09-07T20:46:55+09:00",
+    "category": "botwall",
+    "http_status": 403,
+    "status_chain": [
+      "403"
+    ],
+    "final_url": "https://www.crunchbase.com/organization/slack",
+    "content_length": 8793,
+    "robots_allowed": true,
+    "markers": [
+      "One moment, please",
+      "Cf-Mitigated: challenge",
+      "Server: cloudfla"
+    ],
+    "distinguishing_from": "vs tandfonline_cf_challenge: SAME vendor, SAME Cf-Mitigated header, DIFFERENT title string (One moment please vs Just a moment). Title-string matching alone will miss one of the two.",
+    "body_text_chars": 133,
+    "status": "collected",
+    "files": {
+      "html": "cloudflare_onemoment_crunchbase.html",
+      "headers": "cloudflare_onemoment_crunchbase.headers"
+    },
+    "notes": "Kept specifically to break brittle title-only Cloudflare detectors."
+  },
+  {
+    "url": "https://www.economist.com/finance-and-economics/2026/09/06/inflation-is-back-around-the-world-as-is-the-fight-against-it",
+    "fetched_utc": "2026-09-07T11:39:29Z",
+    "fetched_kst": "2026-09-07T20:39:29+09:00",
+    "category": "botwall",
+    "http_status": 403,
+    "status_chain": [
+      "403"
+    ],
+    "final_url": "https://www.economist.com/finance-and-economics/2026/09/06/inflation-is-back-around-the-world-as-is-the-fight-against-it",
+    "content_length": 1137,
+    "robots_allowed": true,
+    "markers": [
+      "'rt':'i'",
+      "https://ct.captcha-delivery.com/i.js",
+      "Please enable JS and disable any ad blocker",
+      "X-DataDome: protected",
+      "user_geo_country=KR"
+    ],
+    "distinguishing_from": "vs captcha/datadome_captcha_nytimes.html: same template, but 'rt':'i' and i.js mean hard block rather than solvable captcha.",
+    "body_text_chars": 57,
+    "status": "collected",
+    "files": {
+      "html": "datadome_block_economist.html",
+      "headers": "datadome_block_economist.headers"
+    },
+    "notes": "Set-Cookie includes user_geo_country=KR, so the site correctly geolocated the request yet blocked on bot score, not geography. A geo-looking cookie is NOT a geo-block signal."
+  },
+  {
+    "url": "https://www.g2.com/products/slack/reviews",
+    "fetched_utc": "2026-09-07T11:44:49Z",
+    "fetched_kst": "2026-09-07T20:44:49+09:00",
+    "category": "botwall",
+    "http_status": 403,
+    "status_chain": [
+      "403"
+    ],
+    "final_url": "https://www.g2.com/products/slack/reviews",
+    "content_length": 1707,
+    "robots_allowed": true,
+    "markers": [
+      "Please enable JS and disable any ad blocker",
+      "X-DataDome: protected",
+      "X-DataDome-CID"
+    ],
+    "distinguishing_from": "Third DataDome instance, 1707 bytes, 50 visible-text chars. Confirms the DataDome body template is host-independent, so vendor detection generalizes while host heuristics do not.",
+    "body_text_chars": 50,
+    "status": "collected",
+    "files": {
+      "html": "g2_reviews.html",
+      "headers": "g2_reviews.headers"
+    },
+    "notes": "Also carries a Cloudflare __cf_bm cookie in the same response: two bot vendors stacked on one request. Do not assume one wall per response."
+  },
+  {
+    "url": "https://www.similarweb.com/website/slack.com/",
+    "fetched_utc": "2026-09-07T11:48:30Z",
+    "fetched_kst": "2026-09-07T20:48:30+09:00",
+    "category": "botwall",
+    "http_status": 202,
+    "status_chain": [
+      "202"
+    ],
+    "final_url": "https://www.similarweb.com/website/slack.com/",
+    "content_length": 2008,
+    "robots_allowed": true,
+    "markers": [
+      "window.awsWafCookieDomainList",
+      "window.gokuProps",
+      "x-amzn-waf-action: challenge",
+      "Server: CloudFront"
+    ],
+    "distinguishing_from": "THE STATUS-CODE TRAP: HTTP 202 Accepted. Any classifier that treats 2xx as success and only inspects 4xx/5xx for walls will pass this straight through as a real page.",
+    "body_text_chars": 0,
+    "status": "collected",
+    "files": {
+      "html": "awswaf_challenge_similarweb.html",
+      "headers": "awswaf_challenge_similarweb.headers"
+    },
+    "notes": "AWS WAF challenge served via CloudFront. x-amzn-waf-action: challenge is also listed in Access-Control-Expose-Headers, so it is visible to browser JS. Fourth distinct bot vendor in this corpus."
+  }
+]

@@ -1,0 +1,38 @@
+[
+  {
+    "url": "https://httpbin.org/status/503",
+    "fetched_utc": "2026-09-07T11:45:36Z",
+    "fetched_kst": "2026-09-07T20:45:36+09:00",
+    "category": "maintenance",
+    "http_status": 503,
+    "status_chain": [
+      "503"
+    ],
+    "final_url": "https://httpbin.org/status/503",
+    "content_length": 0,
+    "robots_allowed": true,
+    "markers": [
+      "503"
+    ],
+    "distinguishing_from": "SYNTHETIC. Carries the 503 status and NOTHING else - zero-byte body, no Retry-After, no maintenance copy. Distinguishing maintenance from rate_limited or a transient 5xx is impossible from this sample alone.",
+    "body_text_chars": 0,
+    "status": "collected",
+    "files": {
+      "html": "httpbin_503.html",
+      "headers": "httpbin_503.headers"
+    },
+    "notes": "Body is 0 bytes. Included only to pin the status-code branch of the classifier. Real maintenance pages usually add a Retry-After header and human copy; neither is present here.",
+    "synthetic_endpoint": true
+  },
+  {
+    "slug": "real_maintenance_page",
+    "status": "not_collected",
+    "url": "n/a",
+    "category": "maintenance",
+    "robots_allowed": "not_checked",
+    "markers": [],
+    "http_status": null,
+    "distinguishing_from": "n/a",
+    "notes": "No live maintenance window occurred across the ~37 pages fetched. Planned maintenance is short, unannounced to third parties, and cannot be induced without attacking a host. Collect opportunistically: watch production traffic for 503 responses whose body contains maintenance or back-soon copy, and archive them when they appear."
+  }
+]

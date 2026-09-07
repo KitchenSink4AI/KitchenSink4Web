@@ -1230,11 +1230,12 @@ async def read_pages(
             "detail": f"the max_pages cap of {max_pages} was reached"}
     resume = None
     while True:
-        held = await _resource.probe_page(record.page)
+        held, handoff = await _resource.probe_document(record.page)
         if held is not None:
             stop = {"reason": "unreadable-resource",
                     "detail": _resource.navigate_note(held)["why"],
-                    "route": _resource.escape_route(held)}
+                    "route": _resource.escape_route(held),
+                    **({"document_handoff": handoff} if handoff else {})}
             break
         url = record.page.url
         visited.append(url)
@@ -1349,8 +1350,10 @@ async def read_pages(
             headers = dict(response.headers) if response is not None else None
         except Exception:
             headers = None
-        verdict = await _lite._wall_verdict(record.page, status,
-                                            headers=headers)
+        verdict = await _lite._wall_verdict(
+            record.page, status, headers=headers,
+            redirect_chain=getattr(record, "last_nav_chain", None))
+        _lite._remember_classification(record, verdict)
         if verdict.get("wall"):
             stop = {"reason": "wall",
                     "detail": f'{record.page.url} answered with a '

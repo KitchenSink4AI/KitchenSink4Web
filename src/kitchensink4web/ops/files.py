@@ -224,7 +224,11 @@ async def _fetch(sess, record, url, path, timeout_ms) -> dict:
     out = sandbox.check_path(path or str(common.downloads_dir() / suggested),
                              "save fetched resource")
     written = common.write_bytes_file(out, data, "save fetched resource")
-    entry = {"suggested": suggested, "saved_to": written, "bytes": len(data)}
+    # `from` is the resource's own URL, which is what lets a later
+    # document handoff say "this one is already on disk" instead of
+    # handing back a URL somebody has already fetched.
+    entry = {"suggested": suggested, "saved_to": written,
+             "bytes": len(data), "from": target}
     _pending(sess).append(entry)
     return {
         "page": record.handle, "session": sess.session_id,
@@ -251,7 +255,8 @@ async def _finish(sess, record, download_obj, path) -> dict:
             str(common.downloads_dir() / suggested), "save download")
     await download_obj.save_as(out)
     size = os.path.getsize(out) if os.path.exists(out) else 0
-    record_entry = {"suggested": suggested, "saved_to": out, "bytes": size}
+    record_entry = {"suggested": suggested, "saved_to": out,
+                    "bytes": size, "from": download_obj.url}
     _pending(sess).append(record_entry)
     return {
         "page": record.handle, "session": sess.session_id,

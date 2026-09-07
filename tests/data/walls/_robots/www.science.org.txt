@@ -1,0 +1,50 @@
+Sitemap: https://www.science.org/sitemap_index.xml
+Sitemap: https://www.science.org/sitemap-index-1.txt
+User-agent: *
+Disallow: /action
+Disallow: /help
+Disallow: /search
+Disallow: /feedback
+Disallow: /page/account-confirmation-thanks
+Disallow: /media
+Disallow: /medical-research
+Disallow: /servlet/linkout
+Disallow: /na101/
+Disallow: /na101v1/
+Disallow: /na102/
+Disallow: /doi/mlt/
+Disallow: /pb/widgets
+Disallow: /author
+Allow: /action/showFeed
+Allow: /action/showJournal
+Allow: /action/showPublications
+Allow: /action/showXml
+Allow: /action/showTopic
+Allow: /action/showBook
+Allow: /action/showCoverImage
+Allow: /action/downloadSupplement
+
+User-agent: Google-Extended
+Disallow: /
+
+User-agent: anthropic-ai
+Disallow: /
+
+User-agent: Twitterbot
+Allow: /
+
+User-agent: GPTBot
+Disallow: /
+
+User-agent: GPTBot
+Disallow: /
+
+User-agent: ChatGPT-User
+Disallow: /
+
+User-agent: CCBot
+Disallow: /
+
+User-agent: Applebot-Extended
+Disallow: /
+

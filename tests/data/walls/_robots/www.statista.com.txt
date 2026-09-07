@@ -1,0 +1,407 @@
+# Automated access to this website by web crawlers is allowed only for the use in public search engines (e.g. Google or Bing).
+# Automated data collection, data mining or mirroring (scraping) of any content on this website for any other purpose than public search engines without explicit authorization is strictly prohibited.
+# Irresponsible or illegal access may be blocked at any time, and we reserve the right to take legal action against such activities.
+#
+User-agent: *
+#
+# Legacy URLs
+Disallow: /ads/
+Disallow: /xml/
+Disallow: /berichte/
+Disallow: /blog/
+Disallow: /data/
+Disallow: /download/
+Disallow: /hinweis/datenleck/
+Disallow: /important/dataleak/
+Disallow: /important/fuite-donnees/
+Disallow: /importante/fuga-de-datos/
+Disallow: /favorit-hinzufuegen/
+Disallow: /add-favorite/
+Disallow: /ajouter-favoris/
+Disallow: /anadir-busqueda/
+Disallow: /favorit-loeschen/
+Disallow: /remove-favorite/
+Disallow: /supprimer-favoris/
+Disallow: /eliminar-busqueda/
+Disallow: /eliminar-favoritos/
+#
+# Forms
+Disallow: /statistik/report-content/
+Disallow: /statistics/report-content/
+Disallow: /statistiques/report-content/
+Disallow: /estadisticas/report-content/
+#
+# Products (06/24 Update)
+# 03/25 companies discontinued & removed
+Disallow: /perspectiva/
+Disallow: /perspective/
+Disallow: /global-consumer-survey/tool/
+#
+# Pagination (04/22)
+Disallow: /statistics/popular/p/
+Disallow: /statistik/top/p/
+Disallow: /statistiques/populaires/p/
+Disallow: /estadisticas/populares/p/
+# Update 03/25
+Disallow: /statistics/recommendations/?p=
+Disallow: /estadisticas/recomendaciones/?p=
+Disallow: /statistiques/recommandees/?p=
+Disallow: /statistik/empfehlungen/?p=
+Disallow: /statistics/forecast/p/
+Disallow: /estadisticas/prevision/p/
+Disallow: /statistiques/prevision/p/
+Disallow: /statistik/prognose/p/
+Disallow: /statistics/updated/?p=
+Disallow: /estadisticas/actualizadas/?p=
+Disallow: /statistiques/mis-a-jour/?p=
+Disallow: /statistik/aktualisiert/?p=
+Disallow: /statistics/new/p/
+Disallow: /estadisticas/nuevas/p/
+Disallow: /statistiques/nouveau/p/
+Disallow: /statistik/neu/p/
+#
+# Editors (08/23 opened for crawler)
+#
+# Study search (04/22)
+Disallow: /studies-and-reports/*?q=
+Disallow: /studies-and-reports/*&q=
+Disallow: /studien-und-reports/*?q=
+Disallow: /studien-und-reports/*&q=
+#
+# Personal information
+Disallow: /profile/
+Disallow: /profil/
+Disallow: /perfil/
+Disallow: /login/password/
+Disallow: /login/passwort_vergessen/
+Disallow: /acceso/contrasena/
+Disallow: /login/resend-confirmation-link
+Disallow: /login/bestaetigungslink-erneut-senden
+Disallow: /login/reenviar-enlace-de-confirmacion
+Disallow: /login/renvoyer-le-lien-de-confirmation
+Disallow: /direct/purchase/
+Disallow: /request/custom-solution/
+#
+# Internal search (04/22)
+Disallow: /search/
+Disallow: /statistik/suche/
+Disallow: /buscar/
+Disallow: /recherche/
+Disallow: /serp
+#
+# Research AI (07/24)
+Disallow: /research-ai/
+Allow: /research-ai/$
+#
+User-agent: YisouSpider
+User-agent: Sogou web spider/4.0
+User-agent: Sogou web spider
+User-agent: sogou spider
+#
+# Legacy URLs
+Disallow: /ads/
+Disallow: /xml/
+Disallow: /berichte/
+Disallow: /blog/
+Disallow: /data/
+Disallow: /download/
+Disallow: /hinweis/datenleck/
+Disallow: /important/dataleak/
+Disallow: /important/fuite-donnees/
+Disallow: /importante/fuga-de-datos/
+Disallow: /favorit-hinzufuegen/
+Disallow: /add-favorite/
+Disallow: /ajouter-favoris/
+Disallow: /anadir-busqueda/
+Disallow: /favorit-loeschen/
+Disallow: /remove-favorite/
+Disallow: /supprimer-favoris/
+Disallow: /eliminar-busqueda/
+Disallow: /eliminar-favoritos/
+#
+# Forms
+Disallow: /statistik/report-content/
+Disallow: /statistics/report-content/
+Disallow: /statistiques/report-content/
+Disallow: /estadisticas/report-content/
+#
+# Products (06/24 Update)
+# 03/25 companies discontinued & removed
+Disallow: /perspectiva/
+Disallow: /perspective/
+Disallow: /global-consumer-survey/tool/
+#
+# Pagination (04/22)
+Disallow: /statistics/popular/p/
+Disallow: /statistik/top/p/
+Disallow: /statistiques/populaires/p/
+Disallow: /estadisticas/populares/p/
+# Update 03/25
+Disallow: /statistics/recommendations/?p=
+Disallow: /estadisticas/recomendaciones/?p=
+Disallow: /statistiques/recommandees/?p=
+Disallow: /statistik/empfehlungen/?p=
+Disallow: /statistics/forecast/p/
+Disallow: /estadisticas/prevision/p/
+Disallow: /statistiques/prevision/p/
+Disallow: /statistik/prognose/p/
+Disallow: /statistics/updated/?p=
+Disallow: /estadisticas/actualizadas/?p=
+Disallow: /statistiques/mis-a-jour/?p=
+Disallow: /statistik/aktualisiert/?p=
+Disallow: /statistics/new/p/
+Disallow: /estadisticas/nuevas/p/
+Disallow: /statistiques/nouveau/p/
+Disallow: /statistik/neu/p/
+#
+# Editors (08/23 opened for crawler)
+#
+# Study search (04/22)
+Disallow: /studies-and-reports/*?q=
+Disallow: /studies-and-reports/*&q=
+Disallow: /studien-und-reports/*?q=
+Disallow: /studien-und-reports/*&q=
+#
+# Personal information
+Disallow: /profile/
+Disallow: /profil/
+Disallow: /perfil/
+Disallow: /login/password/
+Disallow: /login/passwort_vergessen/
+Disallow: /acceso/contrasena/
+Disallow: /login/resend-confirmation-link
+Disallow: /login/bestaetigungslink-erneut-senden
+Disallow: /login/reenviar-enlace-de-confirmacion
+Disallow: /login/renvoyer-le-lien-de-confirmation
+Disallow: /direct/purchase/
+Disallow: /request/custom-solution/
+#
+# Internal search (04/22)
+Disallow: /search/
+Disallow: /statistik/suche/
+Disallow: /buscar/
+Disallow: /recherche/
+Disallow: /serp
+#
+# Research AI (07/24)
+Disallow: /research-ai/
+Allow: /research-ai/$
+#
+# Slowdown
+Crawl-delay: 10
+#
+User-agent: AhrefsBot
+# Legacy URLs
+Disallow: /ads/
+Disallow: /xml/
+Disallow: /berichte/
+Disallow: /blog/
+Disallow: /data/
+Disallow: /download/
+Disallow: /hinweis/datenleck/
+Disallow: /important/dataleak/
+Disallow: /important/fuite-donnees/
+Disallow: /importante/fuga-de-datos/
+Disallow: /favorit-hinzufuegen/
+Disallow: /add-favorite/
+Disallow: /ajouter-favoris/
+Disallow: /anadir-busqueda/
+Disallow: /favorit-loeschen/
+Disallow: /remove-favorite/
+Disallow: /supprimer-favoris/
+Disallow: /eliminar-busqueda/
+Disallow: /eliminar-favoritos/
+#
+# Forms
+Disallow: /statistik/report-content/
+Disallow: /statistics/report-content/
+Disallow: /statistiques/report-content/
+Disallow: /estadisticas/report-content/
+#
+# Products (06/24 Update)
+# 03/25 companies discontinued & removed
+Disallow: /perspectiva/
+Disallow: /perspective/
+Disallow: /global-consumer-survey/tool/
+#
+# Pagination (04/22)
+Disallow: /statistics/popular/p/
+Disallow: /statistik/top/p/
+Disallow: /statistiques/populaires/p/
+Disallow: /estadisticas/populares/p/
+# Update 03/25
+Disallow: /statistics/recommendations/?p=
+Disallow: /estadisticas/recomendaciones/?p=
+Disallow: /statistiques/recommandees/?p=
+Disallow: /statistik/empfehlungen/?p=
+Disallow: /statistics/forecast/p/
+Disallow: /estadisticas/prevision/p/
+Disallow: /statistiques/prevision/p/
+Disallow: /statistik/prognose/p/
+Disallow: /statistics/updated/?p=
+Disallow: /estadisticas/actualizadas/?p=
+Disallow: /statistiques/mis-a-jour/?p=
+Disallow: /statistik/aktualisiert/?p=
+Disallow: /statistics/new/p/
+Disallow: /estadisticas/nuevas/p/
+Disallow: /statistiques/nouveau/p/
+Disallow: /statistik/neu/p/
+#
+# Editors (08/23 opened for crawler)
+#
+# Study search (04/22)
+Disallow: /studies-and-reports/*?q=
+Disallow: /studies-and-reports/*&q=
+Disallow: /studien-und-reports/*?q=
+Disallow: /studien-und-reports/*&q=
+#
+# Personal information
+Disallow: /profile/
+Disallow: /profil/
+Disallow: /perfil/
+Disallow: /login/password/
+Disallow: /login/passwort_vergessen/
+Disallow: /acceso/contrasena/
+Disallow: /login/resend-confirmation-link
+Disallow: /login/bestaetigungslink-erneut-senden
+Disallow: /login/reenviar-enlace-de-confirmacion
+Disallow: /login/renvoyer-le-lien-de-confirmation
+Disallow: /direct/purchase/
+Disallow: /request/custom-solution/
+#
+# Internal search (04/22)
+Disallow: /search/
+Disallow: /statistik/suche/
+Disallow: /buscar/
+Disallow: /recherche/
+Disallow: /serp
+#
+# Research AI (07/24)
+Disallow: /research-ai/
+Allow: /research-ai/$
+#
+# Slowdown
+Crawl-delay: 2
+#
+# Scraping protection
+User-agent: sitecheck.internetseer.com
+User-agent: Zealbot
+User-agent: MSIECrawler
+User-agent: SiteSnagger
+User-agent: WebStripper
+User-agent: WebCopier
+User-agent: Fetch
+User-agent: Offline Explorer
+User-agent: Teleport
+User-agent: TeleportPro
+User-agent: WebZIP
+User-agent: linko
+User-agent: HTTrack
+User-agent: Microsoft.URL.Control
+User-agent: Xenu
+User-agent: larbin
+User-agent: libwww
+User-agent: ZyBORG
+User-agent: Download Ninja
+User-agent: Brightbot 1.0
+Disallow: /
+#
+# Disallow selected LLMs and other bots/crawlers (update 05/26)
+#
+# Amazon https://developer.amazon.com/amazonbot
+User-agent: Amazonbot
+#
+# Anthropic https://support.claude.com/en/articles/8896518-does-anthropic-crawl-data-from-the-web-and-how-can-site-owners-block-the-crawler
+User-agent: anthropic-ai
+User-agent: Claude-Web
+User-agent: ClaudeBot
+#
+# OpenAI https://developers.openai.com/api/docs/bots
+User-agent: Operator
+User-agent: GPTBot
+#
+# Cohere https://knownagents.com/operators/cohere
+User-agent: cohere-training-data-crawler
+User-agent: cohere-ai
+#
+# Facebook/Meta https://developers.facebook.com/docs/sharing/webmasters/web-crawlers/
+User-agent: Meta-ExternalFetcher
+User-agent: Meta-ExternalAgent
+User-agent: FacebookBot
+#
+# Google https://developers.google.com/search/docs/crawling-indexing/google-common-crawlers
+User-agent: Google-Extended
+User-agent: GoogleOther
+User-agent: GoogleOther-Video
+User-agent: GoogleOther-Image
+User-agent: Google-CloudVertexBot
+#
+# Perplexity https://docs.perplexity.ai/docs/resources/perplexity-crawlers#perplexity-crawlers
+User-agent: PerplexityBot
+User-agent: Perplexity-User
+#
+# Other
+User-agent: AI2Bot
+User-agent: Ai2Bot-Dolma
+User-agent: Applebot-Extended
+User-agent: Aranet-SearchBot
+User-agent: archive.org_bot
+User-agent: Arquivo-web-crawler
+User-agent: Bytespider
+User-agent: CCBot
+User-agent: Cincraw
+User-agent: Diffbot
+User-agent: DuckAssistBot
+User-agent: FriendlyCrawler
+User-agent: ia_archiver
+User-agent: ia_archiver-web.archive.org
+User-agent: ImagesiftBot
+User-agent: img2dataset
+User-agent: Kangaroo LLM
+User-agent: LinerBot
+User-agent: Magpie-crawler
+User-agent: omgili
+User-agent: omgilibot
+User-agent: PanguBot
+User-agent: Peer39_crawler
+User-agent: TerraCotta
+User-agent: Timpibot
+User-agent: VelenPublicWebCrawler
+User-agent: Webzio-Extended
+User-agent: YouBot
+Disallow: /
+Allow: /$
+Allow: /statistik/info$
+Allow: /kontakt/
+Allow: /contact/
+Allow: /contacto/
+Allow: /accounts/
+Allow: /solutions/
+Allow: /getting-started/
+Allow: /infografik/
+Allow: /chartoftheday/
+Allow: /chart/
+Allow: /graphique-du-jour/
+Allow: /infographie/
+Allow: /grafico-del-dia/
+Allow: /grafico/
+#
+Allow: /karriere/
+Allow: /working-at-statista/
+Allow: /business/
+Allow: /impressum/
+Allow: /imprint/
+Allow: /lexikonListe/
+Allow: /lexikon/
+Allow: /statistics-glossary/
+Allow: /presse/
+Allow: /press/
+Allow: /prensa/
+Allow: /research-ai/$
+Allow: /webinar$
+Allow: /webinar/
+Allow: /site/
+#
+# Sitemaps all languages
+Sitemap: https://www.statista.com/sitemap/
+Sitemap: https://de.statista.com/sitemap/

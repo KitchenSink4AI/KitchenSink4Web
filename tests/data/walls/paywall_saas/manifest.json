@@ -1,0 +1,66 @@
+[
+  {
+    "url": "https://www.statista.com/statistics/272014/global-social-networks-ranked-by-number-of-users/",
+    "fetched_utc": "2026-09-07T11:41:42Z",
+    "fetched_kst": "2026-09-07T20:41:42+09:00",
+    "category": "paywall_saas",
+    "http_status": 200,
+    "status_chain": [
+      "200"
+    ],
+    "final_url": "https://www.statista.com/statistics/272014/global-social-networks-ranked-by-number-of-users/",
+    "content_length": 346661,
+    "robots_allowed": true,
+    "markers": [
+      "data-paywall-trigger=\"true\"",
+      "data-temporary-icon=\"24-square-premium-statistics-color\"",
+      "\"isAccessibleForFree\":true"
+    ],
+    "distinguishing_from": "vs paywall_news: no subscribe-to-read barrier and no article truncation; instead individual DATA VALUES inside otherwise-complete prose are swapped for button elements carrying data-paywall-trigger. Redaction-in-place, not replacement.",
+    "body_text_chars": 9450,
+    "status": "collected",
+    "files": {
+      "html": "statista_statistic.html",
+      "headers": "statista_statistic.headers"
+    },
+    "notes": "MOST IMPORTANT AMBIGUITY IN THE CORPUS: JSON-LD says isAccessibleForFree true while the page is demonstrably partially gated. Publisher-declared access metadata is a hint, never a verdict."
+  },
+  {
+    "url": "https://medium.com/@utkarsh.patil/the-ai-tools-every-college-student-uses-and-what-they-wont-tell-you-9632df57785f",
+    "fetched_utc": "2026-09-07T11:47:50Z",
+    "fetched_kst": "2026-09-07T20:47:50+09:00",
+    "category": "paywall_saas",
+    "http_status": 200,
+    "status_chain": [
+      "200"
+    ],
+    "final_url": "https://medium.com/@utkarsh.patil/the-ai-tools-every-college-student-uses-and-what-they-wont-tell-you-9632df57785f",
+    "content_length": 153870,
+    "robots_allowed": true,
+    "markers": [
+      "\"isLockedPreviewOnly\":false",
+      "paywall",
+      "Sign in"
+    ],
+    "distinguishing_from": "NEGATIVE CONTROL. The literal token paywall appears in this FREE story's bundled JS, and 'Sign in' appears in the nav. Substring matching on either would produce a false positive.",
+    "body_text_chars": 4933,
+    "status": "collected",
+    "files": {
+      "html": "medium_free_story_NEGATIVE.html",
+      "headers": "medium_free_story_NEGATIVE.headers"
+    },
+    "notes": "Medium exposes isLockedPreviewOnly; here it is false and the full story is served. Use this to punish keyword-only classifiers.",
+    "negative_control": true
+  },
+  {
+    "slug": "crunchbase_similarweb_attempts",
+    "status": "not_collected",
+    "url": "https://www.crunchbase.com/organization/slack ; https://www.similarweb.com/website/slack.com/",
+    "category": "paywall_saas",
+    "robots_allowed": true,
+    "markers": [],
+    "http_status": null,
+    "distinguishing_from": "Both intended as SaaS upgrade-gates; both returned bot challenges instead (Cloudflare 403 and AWS WAF 202). Filed under botwall/.",
+    "notes": "paywall_saas is the thinnest category here: the SaaS products with the clearest upgrade gates are also the ones most aggressively bot-protected, so a plain HTTP client sees the botwall, never the paywall. Collect this class from authenticated production traffic instead."
+  }
+]

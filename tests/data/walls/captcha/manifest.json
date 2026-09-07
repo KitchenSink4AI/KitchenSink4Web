@@ -1,0 +1,42 @@
+[
+  {
+    "url": "https://www.nytimes.com/2026/09/07/world/europe/ukraine-russia-witkoff-kushner-trump.html",
+    "fetched_utc": "2026-09-07T11:39:21Z",
+    "fetched_kst": "2026-09-07T20:39:21+09:00",
+    "category": "captcha",
+    "http_status": 403,
+    "status_chain": [
+      "403"
+    ],
+    "final_url": "https://www.nytimes.com/2026/09/07/world/europe/ukraine-russia-witkoff-kushner-trump.html",
+    "content_length": 771,
+    "robots_allowed": true,
+    "markers": [
+      "'rt':'c'",
+      "geo.captcha-delivery.com",
+      "https://ct.captcha-delivery.com/c.js",
+      "Please enable JS and disable any ad blocker",
+      "server: DataDome",
+      "x-datadome-riskscore"
+    ],
+    "distinguishing_from": "vs botwall/datadome_block_economist.html: essentially the same template and the same 403. The only differences are the DataDome response-type field ('rt':'c' here vs 'rt':'i' there) and the script it loads (c.js vs i.js). c means interactive captcha, i means hard block. Nothing else separates a solvable captcha from a refusal.",
+    "body_text_chars": 55,
+    "status": "collected",
+    "files": {
+      "html": "datadome_captcha_nytimes.html",
+      "headers": "datadome_captcha_nytimes.headers"
+    },
+    "notes": "THE most valuable discrimination in this corpus and the least obvious. Also note x-datadome-riskscore: 0.874769287384864, the vendor telling you why it fired."
+  },
+  {
+    "slug": "recaptcha_hcaptcha_pages",
+    "status": "not_collected",
+    "url": "n/a",
+    "category": "captcha",
+    "robots_allowed": "not_checked",
+    "markers": [],
+    "http_status": null,
+    "distinguishing_from": "Classic reCAPTCHA/hCaptcha interstitials could not be triggered honestly.",
+    "notes": "Google's /sorry/index captcha is unreachable without abusive query volume and /search is robots-disallowed for *. hCaptcha and Turnstile interstitials appear only after a challenge escalates. Collect opportunistically from production traffic by matching www.google.com/recaptcha/api.js, hcaptcha.com/1/api.js, or challenges.cloudflare.com/turnstile in a live response."
+  }
+]

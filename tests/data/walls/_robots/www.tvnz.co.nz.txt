@@ -1,0 +1,9 @@
+Sitemap: https://www.tvnz.co.nz/sitemap/sitemapindex.xml
+
+User-agent: *
+Disallow: /profile/
+Disallow: /payments/
+Disallow: /search*
+Disallow: /account/*
+Disallow: /myhub*
+Allow: /

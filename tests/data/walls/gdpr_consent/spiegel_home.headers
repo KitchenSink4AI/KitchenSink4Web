@@ -1,0 +1,17 @@
+HTTP/1.1 200 OK
+Date: Mon, 07 Sep 2026 11:43:19 GMT
+Content-Type: text/html; charset=utf-8
+Transfer-Encoding: chunked
+Connection: keep-alive
+Accept-Ranges: bytes
+Cache-Control: public, max-age=0,s-maxage=90
+Content-Encoding: gzip
+Content-Security-Policy: frame-ancestors 'self'
+Strict-Transport-Security: max-age=31536000;
+Vary: X-Forwarded-Proto, X-Authorized-Sppur, Accept-Encoding
+X-Cache: HIT
+X-Cache-Grace: 3600.000
+Via: 1.1 google
+Alt-Svc: h3=":443"; ma=2592000,h3-29=":443"; ma=2592000
+X-L11-Trace: ffm7-lb1
+

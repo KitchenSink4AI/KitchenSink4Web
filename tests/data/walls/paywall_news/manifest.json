@@ -1,0 +1,66 @@
+[
+  {
+    "url": "https://www.ft.com/content/ec1396b9-185e-4a55-86d6-36a560b549fb",
+    "fetched_utc": "2026-09-07T11:39:26Z",
+    "fetched_kst": "2026-09-07T20:39:26+09:00",
+    "category": "paywall_news",
+    "http_status": 200,
+    "status_chain": [
+      "200"
+    ],
+    "final_url": "https://www.ft.com/content/ec1396b9-185e-4a55-86d6-36a560b549fb",
+    "content_length": 147975,
+    "robots_allowed": true,
+    "markers": [
+      "<title>Subscribe to read</title>",
+      "ft-access-decision-policy=DENIED_ZEPHR_ALLOTHERTRAFFIC_0_0",
+      "cp-next-barrier-page-us.in.ft.com",
+      "ft-access-decision"
+    ],
+    "distinguishing_from": "vs login_required: FT returns 200 at the ORIGINAL article URL with the article title replaced by 'Subscribe to read'; a login wall redirects to a distinct /login URL.",
+    "body_text_chars": 8652,
+    "status": "collected",
+    "files": {
+      "html": "ft_content.html",
+      "headers": "ft_content.headers"
+    },
+    "notes": "Full-body replacement paywall (Zephr). The response headers are decisive: x-host names a barrier-page origin and Set-Cookie carries an explicit DENIED access decision. Header evidence beats body evidence here."
+  },
+  {
+    "url": "https://www.lemonde.fr/economie/article/2026/09/07/en-coree-du-sud-l-ia-s-impose-au-c-ur-des-evolutions-economiques-et-societales_6767934_3234.html",
+    "fetched_utc": "2026-09-07T11:39:33Z",
+    "fetched_kst": "2026-09-07T20:39:33+09:00",
+    "category": "paywall_news",
+    "http_status": 200,
+    "status_chain": [
+      "200"
+    ],
+    "final_url": "https://www.lemonde.fr/economie/article/2026/09/07/en-coree-du-sud-l-ia-s-impose-au-c-ur-des-evolutions-economiques-et-societales_6767934_3234.html",
+    "content_length": 321954,
+    "robots_allowed": true,
+    "markers": [
+      "\"isAccessibleForFree\": \"False\"",
+      "edi_medium=paywall",
+      "abo.lemonde.fr/subscribe"
+    ],
+    "distinguishing_from": "vs gdpr_consent: THE SAME FILE is also the gdpr_consent sample. Consent and paywall co-occur on EU publishers; a classifier must be able to emit both, or it will mislabel one as the other.",
+    "body_text_chars": 11190,
+    "status": "collected",
+    "files": {
+      "html": "lemonde_article.html",
+      "headers": "lemonde_article.headers"
+    },
+    "notes": "Teaser paywall: real headline and lede are present, the rest is truncated. NOTE THE PARSING TRAP - isAccessibleForFree is the STRING \"False\", not the boolean false. A naive JSON-LD check for a false boolean misses it. Same fetch as gdpr_consent/lemonde_article.html; file copied, not re-requested."
+  },
+  {
+    "slug": "nytimes_datadome",
+    "status": "not_collected",
+    "url": "https://www.nytimes.com/2026/09/07/world/europe/ukraine-russia-witkoff-kushner-trump.html",
+    "category": "paywall_news",
+    "robots_allowed": true,
+    "markers": [],
+    "http_status": 403,
+    "distinguishing_from": "Attempted as paywall_news, actually served a DataDome captcha. Filed under captcha/datadome_captcha_nytimes.html.",
+    "notes": "NYT, WSJ (robots-disallowed anyway), Economist and Washington Post all refuse plain curl before any paywall logic runs. WaPo reset the TCP connection outright (curl error 56). To collect a real NYT/WaPo paywall body you need a real browser engine; the bot layer fires first."
+  }
+]

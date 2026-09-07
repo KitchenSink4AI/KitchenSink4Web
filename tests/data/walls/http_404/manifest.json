@@ -1,0 +1,154 @@
+[
+  {
+    "url": "https://github.com/torvalds/nonexistent-repo-zzz9",
+    "fetched_utc": "2026-09-07T11:42:53Z",
+    "fetched_kst": "2026-09-07T20:42:53+09:00",
+    "category": "http_404",
+    "http_status": 404,
+    "status_chain": [
+      "404"
+    ],
+    "final_url": "https://github.com/torvalds/nonexistent-repo-zzz9",
+    "content_length": 266866,
+    "robots_allowed": true,
+    "markers": [
+      "404"
+    ],
+    "distinguishing_from": "vs login_required: GitHub returns 404 for private repos you cannot see, so an identical 404 can mean absent or exists-but-forbidden. Unresolvable from the response.",
+    "body_text_chars": 2900,
+    "status": "collected",
+    "files": {
+      "html": "github_missing_repo.html",
+      "headers": "github_missing_repo.headers"
+    },
+    "notes": "Real HTTP 404 with a large branded error page (267KB decompressed). Page size is not a 404 signal."
+  },
+  {
+    "url": "https://www.spiegel.de/this-page-does-not-exist-zzz9",
+    "fetched_utc": "2026-09-07T11:46:08Z",
+    "fetched_kst": "2026-09-07T20:46:08+09:00",
+    "category": "http_404",
+    "http_status": 404,
+    "status_chain": [
+      "404"
+    ],
+    "final_url": "https://www.spiegel.de/this-page-does-not-exist-zzz9",
+    "content_length": 18953,
+    "robots_allowed": true,
+    "markers": [
+      "DER SPIEGEL - Fehler 404",
+      "Leider gibt es die von Ihnen gesuchte Seite nicht oder nicht mehr."
+    ],
+    "distinguishing_from": "Textbook 404: correct status AND explicit copy, in German. Note that no English not-found string appears anywhere, so English-only keyword lists fail on this file.",
+    "body_text_chars": 268,
+    "status": "collected",
+    "files": {
+      "html": "spiegel_missing.html",
+      "headers": "spiegel_missing.headers"
+    },
+    "notes": "Smallest real 404 collected (18KB, 268 visible-text chars). Also notable: this host serves a consent wall on its homepage but NOT on its 404 page."
+  },
+  {
+    "url": "https://www.statista.com/this-page-does-not-exist-zzz9",
+    "fetched_utc": "2026-09-07T11:46:59Z",
+    "fetched_kst": "2026-09-07T20:46:59+09:00",
+    "category": "http_404",
+    "http_status": 404,
+    "status_chain": [
+      "404"
+    ],
+    "final_url": "https://www.statista.com/this-page-does-not-exist-zzz9",
+    "content_length": 267590,
+    "robots_allowed": true,
+    "markers": [
+      "404"
+    ],
+    "distinguishing_from": "Correct 404 status but served with the site's FULL navigation (268KB decompressed), larger than several successful pages in this corpus. Confirms body size is orthogonal to error state.",
+    "body_text_chars": 2230,
+    "status": "collected",
+    "files": {
+      "html": "statista_softcheck.html",
+      "headers": "statista_softcheck.headers"
+    },
+    "notes": "Contrast with paywall_saas/statista_statistic.html from the same host: same chrome, different status and different gating markup."
+  },
+  {
+    "url": "https://www.jackdaniels.com/this-page-does-not-exist-zzz9",
+    "fetched_utc": "2026-09-07T11:47:15Z",
+    "fetched_kst": "2026-09-07T20:47:15+09:00",
+    "category": "http_404",
+    "http_status": 404,
+    "status_chain": [
+      "404"
+    ],
+    "final_url": "https://www.jackdaniels.com/this-page-does-not-exist-zzz9",
+    "content_length": 144446,
+    "robots_allowed": true,
+    "markers": [
+      "404",
+      "ageGate"
+    ],
+    "distinguishing_from": "A 404 page that ALSO carries the site's age-gate markup. One document, two categories. Any single-label classifier is wrong on this file no matter which label it picks.",
+    "body_text_chars": 1912,
+    "status": "collected",
+    "files": {
+      "html": "jackdaniels_missing.html",
+      "headers": "jackdaniels_missing.headers"
+    },
+    "notes": "144KB. Strong argument for multi-label output over single-label classification."
+  },
+  {
+    "url": "https://tv.nrk.no/this-page-does-not-exist-zzz9",
+    "fetched_utc": "2026-09-07T11:46:12Z",
+    "fetched_kst": "2026-09-07T20:46:12+09:00",
+    "category": "http_404",
+    "http_status": 400,
+    "status_chain": [
+      "400"
+    ],
+    "final_url": "https://tv.nrk.no/this-page-does-not-exist-zzz9",
+    "content_length": 46290,
+    "robots_allowed": true,
+    "markers": [
+      "Noe gikk galt",
+      "NRK TV"
+    ],
+    "distinguishing_from": "WRONG-STATUS CASE: a missing page answered with HTTP 400 Bad Request, not 404, and the copy says something-went-wrong rather than not-found. Neither the status nor the text says missing.",
+    "body_text_chars": 462,
+    "status": "collected",
+    "files": {
+      "html": "nrk_soft404_spa.html",
+      "headers": "nrk_soft404_spa.headers"
+    },
+    "notes": "Closest thing to a soft-404 collected. Shows that status-to-category mapping needs a 4xx bucket, not a 404 equality test."
+  },
+  {
+    "url": "https://www.notion.so/this-page-does-not-exist-zzz9",
+    "fetched_utc": "2026-09-07T11:47:36Z",
+    "fetched_kst": "2026-09-07T20:47:36+09:00",
+    "category": "http_404",
+    "http_status": 200,
+    "status_chain": [
+      "307",
+      "302",
+      "302",
+      "302",
+      "200"
+    ],
+    "final_url": "https://app.notion.com/space/this-page-does-not-exist-zzz9?session_sync_attempted=1",
+    "content_length": 19975,
+    "robots_allowed": true,
+    "markers": [
+      "<title>Notion</title>"
+    ],
+    "distinguishing_from": "NEGATIVE CONTROL and the hardest file here: HTTP 200 after a 307/302/302/302 chain across two domains, 20KB of HTML, and SIX visible-text characters. It is not a 404, not a login page, and not a wall; it is an empty client-rendered shell.",
+    "body_text_chars": 6,
+    "status": "collected",
+    "files": {
+      "html": "notion_spa_shell_NEGATIVE.html",
+      "headers": "notion_spa_shell_NEGATIVE.headers"
+    },
+    "notes": "Any almost-no-text-means-blocked rule fires here and is wrong. Without executing JavaScript the true state is genuinely unknowable.",
+    "negative_control": true
+  }
+]
