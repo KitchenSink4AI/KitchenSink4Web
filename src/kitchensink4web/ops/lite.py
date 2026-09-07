@@ -5788,12 +5788,23 @@ async def manage_session(
                 f"this token. It works once, it expires at "
                 f"{record['expires']}, and it works only in this running "
                 f"KS4Web process on this machine."),
+            # FLAGGED (fix wave 2026-09-08): placeholder wording,
+            # mechanically composed from `engine/handles`'s own docstring
+            # sentences. The note described what the token is and never
+            # mentioned that minting one WRITES A FILE (V-06), which is the
+            # fact a reader would want before minting.
             "security": (
                 "this token is not an access control. Any conversation "
                 "talking to this KS4Web can already list and use every open "
                 "session through manage_session(action='status'). What the "
                 "token adds is that the transfer is deliberate and that "
-                "import reports what state is actually being picked up."),
+                "import reports what state is actually being picked up. "
+                "A record is written to handles.json in this server's state "
+                "directory. It holds sha256(token) the way a password file "
+                "holds a digest, so a leaked handles.json cannot be "
+                "replayed, and it stores a digest of each page's URL rather "
+                "than the URL, so no path or query string is written to "
+                "disk. The record is discarded once it expires."),
         }
 
     if action == "import_handle":
@@ -5825,7 +5836,7 @@ async def manage_session(
                 f"{record.get('consumed', 'an earlier time')}. A handle "
                 f"token works once. Export again from either conversation "
                 f"to get a fresh one. Nothing was changed.")
-        if _handles.time.time() > float(record["expires_at"]):
+        if _handles.time.time() > _handles.expiry_of(record):
             raise TargetNotFound(
                 f"that token expired at {record['expires']}. Export again "
                 f"with manage_session(action='export_handle') from the "
@@ -5982,7 +5993,13 @@ async def _session_cookie_count(sess) -> int:
 
 async def _transfer_receipt(sess) -> dict:
     """What the session holds at the moment of export, so import can
-    compare it against reality rather than asserting nothing changed."""
+    compare it against reality rather than asserting nothing changed.
+
+    THIS IS THE RECEIPT THE EXPORTING CALLER SEES, and it is the whole
+    thing: that conversation is looking at its own session and its own
+    URLs. What reaches the STORE is `handles.stored_receipt`'s reduction of
+    it, which keeps the four fields the import side reads and digests the
+    URL (V-06, fix wave 2026-09-08)."""
     # EVERY jar, because the receipt describes the whole session and a
     # count from the focused jar alone would understate a session holding
     # two identities.
@@ -6023,7 +6040,13 @@ async def _transfer_report(sess, record: dict) -> dict:
     for handle, page_record in sess.pages.items():
         before = was.get(handle)
         url_now = _page_url(page_record)
-        same = bool(before) and before.get("url") == url_now \
+        # THE COMPARISON IS OVER DIGESTS (V-06, fix wave 2026-09-08). The
+        # stored receipt holds `sha256(salt + url)` rather than the URL,
+        # because an equality test is the only thing this line ever needed
+        # and a URL written to disk carries its path and its query string
+        # with it.
+        same = bool(before) \
+            and before.get("url_sha256") == _handles.url_digest(url_now) \
             and page_record.last_nav_url in (None, url_now)
         row = {
             "page": handle,
@@ -6035,7 +6058,18 @@ async def _transfer_report(sess, record: dict) -> dict:
         if before is None:
             row["opened_after_export"] = True
         elif not same:
-            row["url_at_export"] = before.get("url")
+            # The one place the human-readable URL was used, and the
+            # receipt no longer holds one. The row says what it can no
+            # longer show rather than going quiet about it: the page
+            # navigated, and where it navigated FROM is not on file.
+            # FLAGGED (fix wave 2026-09-08): placeholder wording,
+            # mechanically composed from this function's own sentences and
+            # `handles.stored_receipt`.
+            row["url_at_export"] = (
+                "not recorded; the export receipt stores a digest of each "
+                "page's URL rather than the URL, so no path or query "
+                "string is written to disk. The page navigated after the "
+                "export.")
             row["refs"] = (
                 f"{_live_refs(sess, handle)} of {before.get('live_refs', 0)} "
                 f"ref(s) minted on {handle} survive: the page navigated "

@@ -357,3 +357,127 @@ def test_every_transfer_refusal_uses_a_shipped_code(store):
             _call(**kwargs)
         seen.add(envelope.classify(caught.value))
     assert seen <= envelope.CLOSED_CODES, seen - envelope.CLOSED_CODES
+
+
+# ------------------------------------------------- V-06: what reaches disk
+#
+# `lanedb.status()` ships `never_stores`: "paths, query strings, URLs, page
+# titles, times of day, per-visit rows, and any intranet, IP-literal, or
+# non-standard-port host". `lanes.json` honours that exactly. `handles.json`
+# is written by `export_handle` into the SAME state directory and did not:
+# the receipt carried every open page's full URL, query string and all, plus
+# a filesystem path to a saved credential state that nothing on the read side
+# ever consults. These pins say what may reach disk and what may not.
+
+_SECRET_URL = ("http://127.0.0.1:51952/act?patient=12345&token=SECRETVALUE")
+
+
+def test_v06_no_page_url_reaches_the_handle_store(store):
+    _session_in(_session.MANAGER, "s1", urls=(_SECRET_URL,))
+    _call(action="export_handle", session="s1")
+    raw = store.path.read_text(encoding="utf-8")
+    assert "SECRETVALUE" not in raw, (
+        "the export receipt wrote a query string into handles.json, in the "
+        "state directory that advertises it never stores query strings")
+    assert "patient=12345" not in raw
+    assert "/act" not in raw
+
+
+def test_v06_no_auth_state_path_reaches_the_handle_store(store):
+    sess = _session_in(_session.MANAGER, "s1")
+    sess.jar_handle.record_auth_save(
+        "C:/Users/someone/secrets/shop-auth.json")
+    _call(action="export_handle", session="s1")
+    raw = store.path.read_text(encoding="utf-8")
+    assert "shop-auth.json" not in raw, (
+        "the path to a saved credential state is on disk and no read path "
+        "consults it")
+
+
+def test_v06_the_exporting_caller_still_sees_its_own_session(store):
+    """The DISK record is the problem, not the response. The conversation
+    that just exported its own session is told what it holds."""
+    sess = _session_in(_session.MANAGER, "s1", urls=(_SECRET_URL,))
+    sess.jar_handle.record_auth_save(
+        "C:/Users/someone/secrets/shop-auth.json")
+    out = _call(action="export_handle", session="s1")
+    assert out["receipt"]["pages"][0]["url"] == _SECRET_URL
+    assert out["receipt"]["auth_state_saved_to"].endswith("shop-auth.json")
+
+
+def test_v06_the_equality_test_still_works_without_the_url(store):
+    """The only load-bearing use of the stored URL is an equality test, and
+    a digest answers it exactly."""
+    sess = _session_in(_session.MANAGER, "s1",
+                       urls=(_SECRET_URL, "https://example.org/b"))
+    token = _call(action="export_handle", session="s1")["token"]
+    moved = sess.pages["s1p2"]
+    moved.page.url = "https://example.org/c"
+    report = _call(action="import_handle", token=token)
+    rows = {p["page"]: p for p in report["pages"]}
+    assert rows["s1p1"]["same_document_as_export"] is True
+    assert rows["s1p2"]["same_document_as_export"] is False
+
+
+def test_v06_the_report_does_not_claim_a_url_it_no_longer_holds(store):
+    """`url_at_export` was the one human-readable use of the stored URL. It
+    cannot be shown any more, so the row says that rather than going
+    silent."""
+    sess = _session_in(_session.MANAGER, "s1", urls=(_SECRET_URL,))
+    token = _call(action="export_handle", session="s1")["token"]
+    sess.pages["s1p1"].page.url = "https://example.org/c"
+    report = _call(action="import_handle", token=token)
+    row = report["pages"][0]
+    assert "SECRETVALUE" not in json.dumps(row)
+    assert "url_at_export" in row
+    assert "digest" in row["url_at_export"]
+
+
+def test_v06_export_says_a_file_is_written(store):
+    _session_in(_session.MANAGER, "s1")
+    out = _call(action="export_handle", session="s1")
+    assert "handles.json" in out["security"], (
+        "export_handle's security note does not mention that a record is "
+        "written to disk at all")
+
+
+# ------------------------------------------------------- the prune defects
+
+def test_v06_prune_flushes_what_it_dropped(store):
+    """`prune()` rewrote `self._records` in memory and never flushed, so a
+    stale record left disk only as a side effect of the next mint. On the
+    common import path the call RAISES before any mint, so a handles.json
+    full of expired records outlived every reason to keep it."""
+    _session_in(_session.MANAGER, "s1")
+    _call(action="export_handle", session="s1")
+    assert len(json.loads(store.path.read_text(encoding="utf-8"))
+               ["handles"]) == 1
+    later = time.time() + (_handles.DEFAULT_TTL_MIN * 60) \
+        + _handles.TOMB_GRACE_S + 60
+    store.reload()
+    fake = _handles.HandleStore(store.path)
+    real_time = time.time
+    try:
+        _handles.time.time = lambda: later
+        fake.prune()
+    finally:
+        _handles.time.time = real_time
+    on_disk = json.loads(store.path.read_text(encoding="utf-8"))["handles"]
+    assert on_disk == [], (
+        "the expired record is still on disk after a prune that dropped it")
+
+
+def test_v06_a_hand_edited_expiry_does_not_take_down_the_feature(store):
+    """`float(r.get("expires_at", 0))` raised uncaught on a record whose
+    expiry is not a number, and `prune()` runs on both the import and the
+    export path, so one unreadable record broke both. `_load` defended the
+    FILE against corruption; nothing defended a RECORD."""
+    _session_in(_session.MANAGER, "s1")
+    _call(action="export_handle", session="s1")
+    data = json.loads(store.path.read_text(encoding="utf-8"))
+    data["handles"][0]["expires_at"] = "not a number"
+    store.path.write_text(json.dumps(data), encoding="utf-8")
+    store.reload()
+    token = _call(action="export_handle", session="s1")["token"]
+    report = _call(action="import_handle", token=token)
+    assert report["imported"] == "s1"
