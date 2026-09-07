@@ -301,12 +301,20 @@ def test_every_printed_price_is_within_tolerance_on_the_statistical_page(
 
 
 def test_a_page_view_can_be_scoped_to_a_region_and_costs_less(corpus_site):
+    """Scope to the CHEAPEST priced region rather than the first one
+    listed. The whole-page read on this corpus page sits exactly on its
+    budget ceiling, so any change to what the completeness block reports
+    moves it a rung, and a rung change reorders the region listing. Taking
+    the first line made this pin measure which region happened to be
+    printed first; taking the smallest makes it measure what it says it
+    measures, which is that scoping costs less than not scoping."""
     async def go():
         _, page = await _open(corpus_site, "a/wikipedia_versailles.html")
         whole = await lite.get_page_view(page=page)
-        priced = re.search(r"^(r\d+) \|.*~([\d,]+) tok of content",
-                           whole["projection"], re.M)
-        ref = priced.group(1)
+        priced = re.findall(r"^(r\d+) \|.*~([\d,]+) tok of content",
+                            whole["projection"], re.M)
+        assert priced, whole["projection"][:2000]
+        ref = min(priced, key=lambda row: int(row[1].replace(",", "")))[0]
         scoped = await lite.get_page_view(page=page,
                                           location={"region": ref})
         assert scoped["budget"]["used"] < whole["budget"]["used"]

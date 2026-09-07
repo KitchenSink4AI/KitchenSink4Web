@@ -214,6 +214,12 @@
       "total_tokens": 198,
       "over_reference_caps": false
     },
+    "read_image_text": {
+      "description_tokens": 206,
+      "schema_tokens": 127,
+      "total_tokens": 333,
+      "over_reference_caps": true
+    },
     "read_pages": {
       "description_tokens": 210,
       "schema_tokens": 67,
@@ -257,9 +263,9 @@
       "over_reference_caps": true
     },
     "take_screenshot": {
-      "description_tokens": 156,
-      "schema_tokens": 141,
-      "total_tokens": 297,
+      "description_tokens": 254,
+      "schema_tokens": 200,
+      "total_tokens": 454,
       "over_reference_caps": true
     },
     "type_text": {

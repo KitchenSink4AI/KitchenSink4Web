@@ -150,6 +150,12 @@ NON_MUTATING: frozenset[str] = frozenset({
     "get_table", "get_list", "get_links", "get_metadata", "extract_fields",
     "get_article", "export_data", "take_screenshot", "export_pdf",
     "save_page",
+    # read_image_text captures pixels and recognizes them in this process.
+    # It writes nothing to the page, opens no network connection, and
+    # touches no file, so it is a read by every definition this table uses.
+    # It does NOT carry the readOnlyHint, for the same reason
+    # take_screenshot does not: a capture can spill an image to disk.
+    "read_image_text",
     "list_requests", "get_request", "export_har",
     "list_console", "get_page_errors", "list_workflows",
     # read_pages NAVIGATES, following the page's own next-page links, and it

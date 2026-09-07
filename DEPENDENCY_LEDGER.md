@@ -11,10 +11,13 @@ install.** Anything questionable lives behind an optional extra
 (`pip install kitchensink4web[...]`), so a dependency's license never
 becomes the server's problem.
 
-This rule is adopted regardless of which license KS4Web eventually ships
-under (Q1 is unruled), because it is the only rule that keeps the permissive
-option reachable. A copyleft dependency added today would quietly remove a
-choice the author has not made yet.
+This rule was adopted while the ship license was undecided, because it was
+the only rule that kept the permissive option reachable. **Q1 was ruled on
+2026-09-06: the ship license is AGPL-3.0-only** (`pyproject.toml`), so the
+original rationale has expired. The RULE stands on its own merits and is
+unchanged: a required dependency's license becomes every downstream user's
+problem, and an optional extra's does not. What is stale is only the
+parenthetical about an unmade choice.
 
 ## Required install
 
@@ -55,6 +58,43 @@ that enforces this ledger reads the first backticked cell of each row.
 |---|---|---|---|
 | `pytest` | MIT | `dev` | Test-time only, never distributed. |
 | `pytest-timeout` | MIT | `dev` | Test-time only. Present from Phase 0 because a hung browser test is the family's most common CI failure and an unbounded one wedges the runner. |
+| `winrt-runtime` | MIT | `ocr` | The PyWinRT runtime the four projection packages below sit on. Pinned `==3.2.1`. Windows-only wheels (win32, win_amd64, win_arm64), Python 3.9 to 3.14. Verified against the PyPI metadata of the pinned release rather than inferred from the project's documentation. |
+| `winrt-Windows.Media.Ocr` | MIT | `ocr` | The OCR engine that ships inside Windows itself, reached through the PyWinRT projection. No native install, no language-data download, no subprocess, no network, no API key: the engine is already on the machine. Pinned `==3.2.1`. |
+| `winrt-Windows.Graphics.Imaging` | MIT | `ocr` | `SoftwareBitmap` and `BitmapDecoder`, which is how PNG bytes become something the recognizer accepts. Pinned `==3.2.1`. |
+| `winrt-Windows.Storage.Streams` | MIT | `ocr` | The in-memory stream the decoder reads from, so nothing touches disk on the way. Pinned `==3.2.1`. |
+| `winrt-Windows.Globalization` | MIT | `ocr` | `Language`, for the BCP-47 tag a caller may name. Pinned `==3.2.1`. |
+| `axe-playwright-python` | MIT (wrapper); bundles axe-core under MPL-2.0 | `accessibility` | The accessibility engine, as a PINNED DEPENDENCY rather than a vendored file (author ruling 2026-09-07: a dependency yes, bundling no). Pinned `==0.1.8`. KS4Web imports the engine SOURCE from the installed package and drives the run itself, because the server decides which frames are entered and the engine's own iframe traversal would make that decision twice. |
+
+**Tesseract was evaluated for the `ocr` extra and declined.** Not on
+license: Apache-2.0 is one-way into AGPL-3.0 and would have been legal in
+either the required install or an extra. It was declined on packaging. It is
+a native binary the user installs separately plus tens of megabytes of
+language data, the Python wrappers shell out to a subprocess per call, and a
+missing binary fails at RUN time on a machine where `pip install` succeeded,
+which is the worst shape of failure this codebase has. That is a
+disproportionate install burden on a product that does not even bundle a
+browser. The one capability it has that Windows OCR lacks is a per-word
+confidence score, and `ocr.py` explains why no confidence number is worth
+that.
+
+**The `accessibility` extra carries copyleft and that is exactly why it is
+an extra.** axe-core is MPL-2.0, which is weak, file-scoped copyleft and one
+of the licenses MPL-2.0 section 1.12 names as compatible with AGPL-3.0. The
+ledger's rule keeps it out of the REQUIRED install, where a dependency's
+license becomes every user's problem, and an extra is where the rule says
+such a thing belongs. Nothing of axe-core is redistributed by this project:
+it arrives through `pip` from its own publisher, with its own license files,
+under its own name.
+
+**Engine currency, checked on 2026-09-07 rather than assumed.**
+`axe-playwright-python` 0.1.8 (released 2026-07-24) bundles axe-core 4.12.1
+(released 2026-06-10); upstream axe-core's current stable is 4.13.0
+(released 2026-08-05). The wrapper is therefore one minor version and about
+a month behind upstream, on a release cadence that has shipped four times in
+the last fourteen months. `get_accessibility` reports the engine version it
+actually ran, read from the engine itself rather than from this table, so a
+result is never attributed to a version that did not produce it. Re-check
+this row when the extra is bumped.
 
 ## Transitive obligations
 

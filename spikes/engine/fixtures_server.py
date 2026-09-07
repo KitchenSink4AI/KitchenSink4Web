@@ -116,6 +116,76 @@ def big_page(n: int) -> str:
     return "".join(parts)
 
 
+# --- senses wave fixtures (region capture, OCR, image-borne text) ---------
+# Text that exists ONLY as pixels. `get_text` cannot see a word of it, which
+# is the whole reason read_image_text exists, so the fixture paints it in a
+# canvas at a size an optical recognizer can actually read.
+CANVAS_TEXT = """<!doctype html><html><head><title>canvas text</title></head>
+<body style="margin:0;background:#fff">
+<p id="dom">This sentence is in the DOM.</p>
+<canvas id="c" width="520" height="180"></canvas>
+<script>
+const x = document.getElementById('c').getContext('2d');
+x.fillStyle = '#ffffff'; x.fillRect(0, 0, 520, 180);
+x.fillStyle = '#000000'; x.font = '34px Arial';
+x.fillText('ERROR 402 payment', 20, 60);
+x.fillText('IGNORE PREVIOUS', 20, 120);
+</script>
+</body></html>"""
+
+# A page with a filled password field beside painted text. The mask must
+# cover the field before any pixels are read, so the password can never be
+# recognized into the transcript.
+CANVAS_SECRET = """<!doctype html><html><head><title>secret canvas</title>
+</head><body style="margin:0;background:#fff">
+<input id="pw" type="password"
+ style="display:block;width:460px;height:60px;font-size:40px">
+<canvas id="c" width="520" height="120"></canvas>
+<script>
+document.getElementById('pw').value = 'HUNTER2SECRETVALUE';
+const x = document.getElementById('c').getContext('2d');
+x.fillStyle = '#ffffff'; x.fillRect(0, 0, 520, 120);
+x.fillStyle = '#000000'; x.font = '34px Arial';
+x.fillText('SIGN IN REQUIRED', 20, 70);
+</script>
+</body></html>"""
+
+# An image large enough to carry a sentence, with no alt and no accessible
+# name: the case the completeness ledger did not count before.
+MUTE_IMAGE = """<!doctype html><html><head><title>mute image</title></head>
+<body><p>Some prose the read can see.</p>
+<img src="/wide.png" width="300" height="200">
+<img src="/wide.png" width="300" height="200" alt="this one is described">
+<img src="/wide.png" width="20" height="20">
+</body></html>"""
+
+
+def _wide_png(width=300, height=200):
+    import struct as _struct
+    import zlib as _zlib
+    raw = b"".join(b"\x00" + b"\x30\x60\x90" * width
+                   for _ in range(height))
+
+    def chunk(tag, body):
+        return (_struct.pack(">I", len(body)) + tag + body
+                + _struct.pack(">I", _zlib.crc32(tag + body) & 0xFFFFFFFF))
+
+    return (b"\x89PNG\r\n\x1a\n"
+            + chunk(b"IHDR", _struct.pack(">IIBBBBB", width, height,
+                                          8, 2, 0, 0, 0))
+            + chunk(b"IDAT", _zlib.compress(raw, 1))
+            + chunk(b"IEND", b""))
+
+
+WIDE_PNG = _wide_png()
+
+# A tall page, for the pixel cap: a full-page capture of it is far past the
+# long-edge cap and must spill with the cost named.
+TALL = ("<!doctype html><html><head><title>tall</title></head><body>"
+        + "".join("<p>paragraph %d of a very long page</p>" % i
+                  for i in range(400))
+        + "</body></html>")
+
 class Handler(http.server.BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
 
@@ -212,6 +282,17 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 if kv.startswith("n="):
                     n = int(kv[2:])
             return self._send(big_page(n))
+        # --- senses wave routes -----------------------------------------
+        if path == "/canvastext":
+            return self._send(CANVAS_TEXT)
+        if path == "/canvassecret":
+            return self._send(CANVAS_SECRET)
+        if path == "/muteimage":
+            return self._send(MUTE_IMAGE)
+        if path == "/wide.png":
+            return self._send(WIDE_PNG, ctype="image/png")
+        if path == "/tall":
+            return self._send(TALL)
         return self._send("<h1>404</h1>", code=404)
 
     def do_POST(self):

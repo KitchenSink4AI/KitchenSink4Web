@@ -373,14 +373,23 @@ def test_a_shadow_free_page_pays_nothing_for_the_traversal(corpus_site):
     async def go():
         _, page = await _open(corpus_site, "a/wikipedia_versailles.html")
         result = await lite.get_page_view(page=page, budget_tokens=5000)
-        # 4,431 until 2026-09-06; 4,500 since. The completeness block grew
-        # two lines that wave 3 owes the reader: the hidden-interactive
-        # ledger now names its techniques (gauntlet 2 H2), and a page whose
-        # containers render out of source order says so (M3). The RUNG is
-        # unchanged, which is the property this test exists for: the read
-        # still lands where it landed, it just accounts for more.
-        assert result["budget"]["used"] == 4500
-        assert result["budget"]["rung"] == 6
+        # 4,431 until 2026-09-06; 4,500 after the completeness block grew
+        # two lines that wave 3 owed the reader (the hidden-interactive
+        # ledger naming its techniques, and out-of-source-order rendering).
+        #
+        # THE RUNG MOVED on 2026-09-08 and the reason is worth recording,
+        # because it is the first time a completeness addition cost this
+        # page a rung. At 4,500 the read was sitting EXACTLY on its ceiling
+        # (a 5,000 budget less the 500-token margin), so it had zero
+        # headroom: the senses wave added one clause naming the twelve
+        # images on this page that contribute no text to any read, and the
+        # ladder did what it is built to do and stepped down. Nothing is
+        # silent about it — the rung is in the payload — and the traversal
+        # itself still costs nothing, which is what this test exists for.
+        # A future addition that moves it again should update the number
+        # and say why, exactly as this comment does.
+        assert result["budget"]["used"] == 4311
+        assert result["budget"]["rung"] == 7
         text = result["projection"]
         assert "shadow roots: 0 open (traversed=no), 0 closed" in text
         assert "shadow content is reported in source order" not in text

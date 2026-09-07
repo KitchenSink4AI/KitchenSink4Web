@@ -64,8 +64,9 @@ PACK_SUMMARIES: dict[str, str] = {
         "counted, and CSV/JSON export"
     ),
     "capture": (
-        "pixels and documents: screenshots with caps and secret masking, "
-        "PDF export, MHTML page save, and device emulation"
+        "pixels and documents: screenshots with byte and visual-token caps "
+        "and secret masking, local optical reading of canvas and image "
+        "text, PDF export, MHTML page save, and device emulation"
     ),
     "network": (
         "request inspection: paginated request lists, budgeted response "
@@ -100,7 +101,8 @@ PLANNED_MEMBERS: dict[str, tuple[str, ...]] = {
     "extract": ("get_table", "get_list", "get_links", "get_metadata",
                 "extract_fields", "export_data", "get_article",
                 "read_pages"),
-    "capture": ("take_screenshot", "export_pdf", "save_page", "emulate"),
+    "capture": ("take_screenshot", "read_image_text", "export_pdf",
+                "save_page", "emulate"),
     "network": ("list_requests", "get_request", "export_har", "set_routing"),
     "diagnostics": ("list_console", "get_page_errors", "evaluate_script"),
     "storage": ("manage_cookies", "manage_storage", "save_auth_state",

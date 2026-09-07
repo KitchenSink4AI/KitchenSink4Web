@@ -44,6 +44,19 @@ dev = [
     "pytest",
     "pytest-timeout",
 ]
+# Reading text out of PIXELS, where the DOM has none: a canvas, an error
+# rendered as an image, a screenshot embedded in a page. The engine is the
+# one already inside Windows, reached through the PyWinRT projection
+# packages: MIT, wheels only, no native install and no subprocess. Optional
+# and Windows-only by nature, so `read_image_text` refuses with the reason
+# named everywhere else rather than degrading in silence.
+ocr = [
+    "winrt-runtime==3.2.1; sys_platform == 'win32'",
+    "winrt-Windows.Media.Ocr==3.2.1; sys_platform == 'win32'",
+    "winrt-Windows.Graphics.Imaging==3.2.1; sys_platform == 'win32'",
+    "winrt-Windows.Storage.Streams==3.2.1; sys_platform == 'win32'",
+    "winrt-Windows.Globalization==3.2.1; sys_platform == 'win32'",
+]
 
 [project.scripts]
 # Q11, RULED by the author 2026-09-04.
