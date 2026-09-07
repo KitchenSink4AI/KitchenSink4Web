@@ -813,28 +813,44 @@ def _partial_matches(needle: str, by_norm: dict) -> list[tuple]:
     return scored
 
 
-async def extract_fields(page: str, fields: list | dict) -> dict:
-    """Fill a caller-named schema from a page by deterministic matching, and
-    be honest about what did not fill. Pass field names (a list, or a dict
-    of name to hint); each is matched against the page's JSON-LD keys, meta
-    tags, microdata itemprops, definition lists, two-column table rows, and
+async def extract_fields(page: str, fields: list | dict | None = None
+                         ) -> dict:
+    """Fill a schema from a page by deterministic matching, and be honest
+    about what did not fill. Pass field names (a list, or a dict of name to
+    hint); each is matched against the page's JSON-LD keys, meta tags,
+    microdata itemprops, definition lists, two-column table rows, and
     labeled non-secret form values, exact name first and substring second.
-    Returns per field the value, where it was found, and the match quality,
-    or found=false with the sources that were searched, never a guess.
-    Secret fields (passwords, one-time codes) are never read and can never
-    fill a schema. No model is consulted: the same page and schema always
-    return the same answer.
+    Omit fields entirely and a matching site profile supplies the schema,
+    with the payload naming which profile it came from. Returns per field
+    the value, where it was found, and the match quality, or found=false
+    with the sources that were searched, never a guess. Secret fields
+    (passwords, one-time codes) are never read and can never fill a schema.
+    No model is consulted: the same page and schema always return the same
+    answer.
     """
-    if isinstance(fields, dict):
+    sess, record = common.locate(page)
+    schema_source = "caller"
+    if isinstance(fields, dict) and fields:
         wanted = {str(k): str(v or "") for k, v in fields.items()}
     elif isinstance(fields, list) and fields:
         wanted = {str(k): "" for k in fields}
     else:
-        raise BadParams(
-            "extract_fields needs the schema to fill: a list of field names "
-            "(['price', 'author']) or a dict of name to hint "
-            "({'price': 'the listed product price'}).")
-    sess, record = common.locate(page)
+        # THE PROFILE ROUTE. A caller-supplied schema always wins outright
+        # and is never merged with a profile's: a merged schema is one
+        # neither party asked for.
+        from .. import profiles as _profiles
+        winner, _runners = _profiles.current().match(record.page.url)
+        if winner is not None and winner.extract:
+            wanted = dict(winner.extract)
+            schema_source = f"profile:{winner.slug}"
+        else:
+            raise BadParams(
+                "extract_fields needs the schema to fill: a list of field "
+                "names (['price', 'author']) or a dict of name to hint "
+                "({'price': 'the listed product price'}). No site profile "
+                "matched this URL either, and a profile's `extract` map is "
+                "the only way this call fills a schema it was not given; "
+                "manage_session(action='profiles') lists what is loaded.")
     # THE READ GATE (gauntlet 4, G4-04/05/06): a page that moved
     # itself onto a wall, or a popup no door ever policed, is
     # refused before any of its content is returned.
@@ -888,7 +904,8 @@ async def extract_fields(page: str, fields: list | dict) -> dict:
         "fields": results,
         "accounting": {"requested": len(wanted), "filled":
                        len(wanted) - unfilled, "unfilled": unfilled,
-                       "sources_searched": got["total_sources"]},
+                       "sources_searched": got["total_sources"],
+                       "schema_source": schema_source},
         "budget": {"used": _ntok(json.dumps(results)),
                    "estimator": _ENCODING},
     }

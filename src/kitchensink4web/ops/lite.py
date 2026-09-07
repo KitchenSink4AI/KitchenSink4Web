@@ -120,6 +120,53 @@ def _identity(record, status=None, load_state=None) -> dict:
             "status": status, "load_state": load_state}
 
 
+async def _profile_block(record, status: int | None) -> dict:
+    """The site-profile advisory, or nothing at all.
+
+    A profile ANNOTATES. Everything this returns is a note; nothing here
+    can refuse, suppress content, or change the wall verdict computed
+    above, and the ordering is deliberate — the block is assembled after
+    the verdict so it cannot influence it even by accident.
+
+    A profile the user wrote and the loader skipped is named here too. A
+    skipped profile that says nothing is how somebody spends an hour
+    wondering why their file does nothing."""
+    from .. import profiles as _profiles
+
+    pset = _profiles.current()
+    if not pset.profiles and not pset.problems:
+        return {}
+    url = record.page.url
+    winner, runners = pset.match(url)
+    out: dict = {}
+    if winner is not None:
+        try:
+            title = await record.page.title()
+        except Exception:
+            title = ""
+        try:
+            body = await record.page.evaluate(
+                "() => (document.body && document.body.innerText || '')"
+                ".slice(0, 20000)")
+        except Exception:
+            body = ""
+        try:
+            metas = await record.page.evaluate(
+                "() => Array.from(document.querySelectorAll('meta[name]'))"
+                ".slice(0, 200).map(m => m.getAttribute('name'))")
+        except Exception:
+            metas = []
+        out["profile"] = _profiles.describe(
+            winner, url=url, runners_up=runners, status=status,
+            text_blob=f"{title}\n{body}", meta_names=metas or [])
+    host = _profiles._host_of(url)
+    skipped = [p for p in pset.problems if p["source"] != "shipped"]
+    if skipped and host:
+        out.setdefault("profile_problems", [
+            {"file": p["file"], "reason": p["reason"]} for p in skipped[:3]])
+    return out
+
+
 async def _robots_advisory(sess, url: str) -> dict:
     """robots.txt surfaced as an ADVISORY, per the honest-tool posture.
 
@@ -1364,6 +1411,7 @@ async def navigate(
     return {
         "session": sess.session_id, "page": record.handle,
         "lane": sess.spec.lane,
+        **(await _profile_block(record, status)),
         **({"resource": _resource.navigate_note(held)} if held else {}),
         **({"auto_session": auto_session} if auto_session else {}),
         "changed": {"effect": "navigated" if record.page.url != before
@@ -3687,12 +3735,21 @@ async def manage_session(
     degrades, and cannot do, and status reports any emulation in force. The
     status action also names the browsers installed on this machine and
     which lane suits which job, as steering: nothing switches a lane on its
-    own. Tool availability reflects the packs this server was started with.
+    own. The profiles action lists the site profiles this process loaded and
+    every profile file it skipped, with the reason. Tool availability
+    reflects the packs this server was started with.
     """
     action = _common.enum_arg(
         action, ("open", "close", "status", "capabilities", "budget",
-                 "reset_budgets", "handoff"), default="status",
+                 "reset_budgets", "handoff", "profiles"), default="status",
         tool="manage_session")
+
+    if action == "profiles":
+        # Reads a table this process loaded at launch. No session, no page,
+        # no browser: a user debugging a profile file must be able to ask
+        # what loaded before anything is open.
+        from .. import profiles as _profiles
+        return _profiles.report()
 
     if action == "open":
         checked_state = None
@@ -4099,8 +4156,8 @@ async def get_workflows(topic: str | None = None) -> dict:
     auth workflow (headed handoff plus saved state), reading strategy,
     budgeting, troubleshooting a page that will not read, the subagent
     budget setting, lanes, what each capability pack contains with the
-    exact launch flag that loads it, and how to record and replay a
-    multi-step flow. Packs are chosen at launch rather than at runtime, so this is
+    exact launch flag that loads it, what a site profile is and where it
+    lives, and how to record and replay a multi-step flow. Packs are chosen at launch rather than at runtime, so this is
     where you learn which flag you need before restarting. Tool
     availability reflects the packs this server was started with.
     """
@@ -4277,6 +4334,27 @@ async def get_workflows(topic: str | None = None) -> dict:
             "refusal is cheaper to read than the retry is to run.",
         ],
         "packs": packs.menu(),
+        "profiles": [
+            "A site profile is a JSON file describing what is known about "
+            "one site: extraction hints, what its paywall looks like, which "
+            "login route it uses, where a free copy might live, and the "
+            "names of recorded workflows.",
+            "It is DATA, never code. A profile annotates a read; it can "
+            "never refuse one, change the server's wall verdict, run "
+            "anything, or carry a credential. That is what keeps read-only "
+            "mode, the confirmation gate, and the redaction layer true.",
+            "Two directories: the one inside the wheel (project-maintained, "
+            "one labeled example ships there) and "
+            "$KS4WEB_STATE_DIR/profiles (yours). A file is named "
+            "<slug>.json and must declare the same slug inside.",
+            "Profiles load ONCE at launch, like packs, so a new or edited "
+            "file needs a restart. A broken file never breaks the server: "
+            "it is skipped, named, and reported by "
+            "manage_session(action='profiles').",
+            "When several profiles match one URL, one wins and the others "
+            "are named. They never merge, because a merged claim is one no "
+            "profile's author made and nobody can correct.",
+        ],
         "packs-are-launch-time": (
             "There is no runtime enable call. The tool set is fixed when the "
             "server starts, which is what MCP 2026-07-28 requires, so a "

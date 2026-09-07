@@ -61,7 +61,7 @@ where = ["src"]
 # The in-page extractor is the projection, and a wheel without it installs a
 # server that cannot read a page. Declared here rather than discovered at
 # ship time.
-kitchensink4web = ["projection/*.js"]
+kitchensink4web = ["projection/*.js", "profile_data/*.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
