@@ -741,6 +741,28 @@ class Renderer:
                 f'{len(suppressed)} class(es) [{detail}].{why}')
         else:
             lines.append("unlisted affordances: none, every control is listed")
+        # AND THE READ SAYS WHEN IT HAD TO WAIT TO SAY THAT.
+        #
+        # `projection.extract` pays a two-animation-frame yield when the
+        # first read came back with nothing to show, re-reads, and records
+        # `re_read_after_frames`. NOTHING READ THAT KEY BACK. So a page
+        # still materialising, which is the exact condition the yield exists
+        # for, could lose the race a second time and the block would print
+        # "none, every control is listed" over it with no trace that the
+        # read had already caught the page mid-build once. That sentence is
+        # H-06 word for word, and fix wave 8 made it rarer rather than
+        # untrue. (Found by the fix-wave measurement of the frame-gated pin,
+        # 2026-09-08, which established that the yield buys between 1 and 16
+        # frames depending on the run and the fixture needs 4.)
+        if c.get("re_read_after_frames"):
+            lines.append(
+                f'this page had nothing to show on the first read, so it was '
+                f'read again after {c["re_read_after_frames"]} animation '
+                f'frame(s): a page that builds its controls in '
+                f'requestAnimationFrame may still have been mid-build, and '
+                f'the counts above are what existed at the second read '
+                f'rather than a statement about what the page will hold. '
+                f'Re-read to check')
         lid = c.get("viewport_lid")
         if lid:
             # H-09: without this line the read said every control was
