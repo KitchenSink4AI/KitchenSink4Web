@@ -193,3 +193,27 @@ def test_the_docstring_states_the_pre_flight_difference_from_fill_form():
     target is resolved before anything executes."""
     doc = (lite.batch.__doc__ or "")
     assert "fill_form" in doc
+
+
+def test_an_assert_step_does_not_take_the_js_condition():
+    """The evaluator has ONE door and a batch does not open a second one. A
+    `wait` step delegates to wait_for, which gates a js predicate as
+    evaluate_script (union wave, IG-01). An `assert` evaluates its condition
+    once, inside this module, through the precheck: without this refusal
+    that path would run a caller-supplied predicate with none of the seven
+    ladder checks, which is the exact hole the union wave closed."""
+    with pytest.raises(BadParams) as exc:
+        call(page="p1", steps=[{"assert": {"condition": "js",
+                                           "value": "fetch('http://x')"}}])
+    text = str(exc.value)
+    assert "evaluate_script" in text
+    assert "wait" in text
+
+
+def test_a_wait_step_may_still_take_js_and_inherits_its_gate():
+    """Permitting it there grants nothing the caller did not already have
+    one call earlier, and refusing it would be a capability lie. The gate
+    rides along because the step delegates to the real tool."""
+    import inspect
+    source = inspect.getsource(lite._dispatch_step)
+    assert "wait_for(" in source

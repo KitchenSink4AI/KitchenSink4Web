@@ -3680,6 +3680,23 @@ def _batch_normalize(steps, *, timeout_ms: int, max_total_ms: int,
                     i, f"unknown condition {spec.get('condition')!r}: the "
                        f"conditions are {list(_BATCH_WAIT_CONDITIONS)}, "
                        f"which is wait_for's own set."))
+            if kind == "assert" and cond == "js":
+                # NO SECOND DOOR ONTO THE EVALUATOR. A `wait` step delegates
+                # to `wait_for`, which gates a js predicate as
+                # `evaluate_script` (union wave, IG-01). An `assert` step
+                # evaluates the condition ONCE, here, through the precheck,
+                # and a precheck reached from this module would run the
+                # predicate with none of the seven ladder checks: not the
+                # read-only grade, not the origin policy, not the budget,
+                # not the confirmation gate. A one-shot evaluation is the
+                # same capability as a repeated one, so the assert kind does
+                # not carry it.
+                raise BadParams(_batch_step_error(
+                    i, "an assert step does not take the 'js' condition. "
+                       "A JavaScript predicate is script evaluation whatever "
+                       "it is called, and it is gated on that: use a wait "
+                       "step, which delegates to wait_for and asks the gate, "
+                       "or evaluate_script, which names the capability."))
             spec["condition"] = cond
         elif kind == "navigate":
             if not isinstance(spec, dict) or not spec.get("url"):
