@@ -727,7 +727,7 @@ def report(url_or_host: str | None) -> dict:
             host = storable_host(url_or_host)
             if host is None:
                 return {"host": None, "learning": mode(), "lanes": [],
-                        "recorded": False}
+                        "recordable": False, "recorded": False}
             _load()
             rows: list[dict] = []
             for key in sorted(LANE_KEYS):
@@ -737,8 +737,14 @@ def report(url_or_host: str | None) -> dict:
                         rows.append(_view(candidate, key, entry,
                                           host_asked=host, sibling=None))
                         break
+            # TWO FACTS, AND THE WORD USED TO CARRY ONLY THE WRONG ONE.
+            # `recorded: true` meant "this host is one this database is
+            # allowed to store", and it sat beside `lanes: []` on a host the
+            # database has never seen. On a surface whose whole job is
+            # answering "what do you hold on me", that is the reading nobody
+            # takes. (Verify round V-11.)
             return {"host": host, "learning": mode(), "lanes": rows,
-                    "recorded": True}
+                    "recordable": True, "recorded": bool(rows)}
     except Exception as exc:
         _note(f"the lane database could not be read "
               f"({type(exc).__name__}); nothing else is affected.")

@@ -436,7 +436,15 @@ def _parse_sensitive() -> None:
     weapons and DPRK research corpus on day one, and would be trivially
     defeated anyway. What ships instead is this list, which the human writes,
     plus the page's own declaration (`age_gate_detected`), which relays a
-    claim the PAGE made rather than a judgment the server made."""
+    claim the PAGE made rather than a judgment the server made.
+
+    THE MATCH IS EXACT-HOST UNLESS A PATTERN SAYS OTHERWISE, and that is
+    the trap worth naming here because this is the "always consult me"
+    control. `bank.example.com` leaves `www.bank.example.com` and
+    `secure.bank.example.com` completely ungated, and a bank does not live
+    at its apex. The matcher is `policy/origins.py`'s, so
+    `*.bank.example.com` works and is almost always what somebody writing
+    this list means. (Verify round V-10.)"""
     global _sensitive
     raw = os.environ.get(ENV_SENSITIVE_ORIGINS, "")
     _sensitive = tuple(p.strip().lower() for p in raw.split(",") if p.strip())
@@ -836,8 +844,15 @@ def decide(action_class: str | None, *, url: str | None = None,
     if kind in ("act", "download") and is_sensitive_origin(url):
         return Decision(
             ASK_LIVE_ONLY, action_class,
+            # FLAGGED (fix wave 2026-09-08): placeholder wording,
+            # mechanically composed from sentences already in this file.
+            # The added clause is the exact-host trap (V-10): an entry
+            # matches one host, and a list written as bare hostnames leaves
+            # every subdomain ungated.
             f"this origin is on {ENV_SENSITIVE_ORIGINS}, the list of sites "
-            f"you asked to always be consulted about")
+            f"you asked to always be consulted about. Entries match one "
+            f"host exactly unless they are written as a pattern, so "
+            f"`*.example.com` is what covers a site's subdomains")
 
     if kind in ("act", "download") and age_declared:
         # The PAGE declared this about itself and the server relays the

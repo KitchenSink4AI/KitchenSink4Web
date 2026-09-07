@@ -711,9 +711,15 @@ def _origin_of(url: str) -> str | None:
     if parts.scheme.lower() not in ("http", "https") or not parts.hostname:
         return None
     netloc = parts.hostname.lower()
-    if parts.port:
+    # THE DEFAULT PORT IS NOT PART OF THE ORIGIN, and leaving it in made
+    # `https://example.com:443` a different origin from `https://example.com`
+    # on the surface that decides where a credential may be injected. Same
+    # shape as the workflow origin lock's host-vs-origin defect one file
+    # over, found by the same sweep (fix wave 2026-09-08).
+    scheme = parts.scheme.lower()
+    if parts.port and parts.port not in ({"http": 80, "https": 443}[scheme],):
         netloc = f"{netloc}:{parts.port}"
-    return f"{parts.scheme.lower()}://{netloc}"
+    return f"{scheme}://{netloc}"
 
 
 def _one_full_origin(origin) -> str:
