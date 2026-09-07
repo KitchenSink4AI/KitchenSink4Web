@@ -574,3 +574,201 @@ def test_park_idle_invalidates_what_it_destroys():
     source = inspect.getsource(session_mod.SessionManager.park_idle)
     assert "invalidate_page" in source
     assert source.index("invalidate_page") < source.index("PARKED_URL")
+
+
+# ---------------------------- class 10: bounds, enums, and honest counts
+
+
+def test_every_tool_call_is_bounded():
+    """chaos L-01/L-02. `session.with_timeout` existed and `navigate` used
+    it; the read, act, and capture paths did not. Against a SUSPENDED
+    browser `navigate(timeout_ms=8000)` returned honestly at 8.01 s while
+    `get_page_view` ran past 120 s, `take_screenshot` past 120 s, and
+    `click(timeout_ms=6000)` past 120 s with its EXPLICIT argument ignored,
+    twenty times over. `get_text` and `get_page_view` take no `timeout_ms`
+    at all, so a caller could not even ask for a bound."""
+    import asyncio
+    from kitchensink4web import server
+
+    async def forever():
+        await asyncio.sleep(30)
+
+    forever.__name__ = "get_page_view"
+
+    async def drive():
+        with pytest.raises(errors.Timeout) as caught:
+            await server._bounded(forever, (), {})
+        return caught.value
+
+    old = server.TOOL_CEILING_MS
+    server.TOOL_CEILING_MS = 200
+    try:
+        exc = asyncio.run(drive())
+    finally:
+        server.TOOL_CEILING_MS = old
+    assert "did not return within 200 ms" in str(exc)
+    assert "manage_session" in str(exc)
+
+
+def test_an_explicit_caller_timeout_widens_the_ceiling():
+    """The ceiling is a BACKSTOP and must never fire before the tool's own
+    honest timeout does, or a caller asking for a long wait would get the
+    wrong message about it."""
+    from kitchensink4web import server
+
+    def click():
+        pass
+    click.__name__ = "click"
+    assert server._ceiling_ms(click, {"timeout_ms": 300000}) \
+        >= 300000 + server.TOOL_CEILING_SLACK_MS
+    assert server._ceiling_ms(click, {}) == server.TOOL_CEILING_MS
+
+
+def test_enum_arguments_normalize_the_same_way_everywhere():
+    """fuzzer class 9. `manage_session` accepted "OPEN", "open " and
+    "opeN" while `manage_storage` refused "LOCAL", so case and whitespace
+    tolerance was per-tool rather than a property of the surface. And
+    `manage_session(action="")` PERFORMED `status` while `action=" "`
+    refused, though both normalize to the same empty string."""
+    from kitchensink4web.ops import common
+    allowed = ("open", "close", "status")
+    for spelling in ("OPEN", "open ", " opeN", "Open"):
+        assert common.enum_arg(spelling, allowed, default="status",
+                               tool="t") == "open"
+    assert common.enum_arg("", allowed, default="status", tool="t") \
+        == common.enum_arg("  ", allowed, default="status", tool="t") \
+        == common.enum_arg(None, allowed, default="status", tool="t")
+
+
+def test_an_unknown_enum_quotes_what_the_caller_sent():
+    """The refusal quoted the value AFTER stripping, so sending a single
+    space came back as "unknown manage_session action ''" and misreported
+    what the call contained."""
+    from kitchensink4web.ops import common
+    with pytest.raises(errors.BadParams) as caught:
+        common.enum_arg(" NOPE ", ("open", "close"), default="open",
+                        tool="manage_session")
+    assert "' NOPE '" in str(caught.value)
+
+
+def test_a_degenerate_count_refuses_instead_of_being_clamped_up():
+    """fuzzer class 8. `get_links(limit=0)` and `limit=-1` both returned
+    ONE link, because every paging site wrote `max(1, int(limit))`.
+    Clamping UP answers a caller with something it did not ask for."""
+    from kitchensink4web.ops import common
+    for bad in (0, -1, -100):
+        with pytest.raises(errors.RangeOutOfBounds):
+            common.count_arg(bad, name="limit", tool="get_links", default=40)
+    assert common.count_arg(5, name="limit", tool="get_links",
+                            default=40) == 5
+
+
+def test_both_viewport_spellings_validate_the_same_way():
+    """fuzzer class 8. `viewport="0x0"` and `"0x900"` OPENED a session with
+    a zero-pixel viewport and returned ok, while the dict spelling of the
+    same values refused: two spellings of one parameter validating
+    differently. Everything downstream is meaningless on a zero-pixel
+    viewport."""
+    from kitchensink4web.engine import lanes
+    for spelling in ("0x0", "0x900", {"width": 0, "height": 0},
+                     {"width": 0, "height": 900}):
+        with pytest.raises(errors.BadParams):
+            lanes.parse_viewport(spelling)
+    assert lanes.parse_viewport("390x844") == {"width": 390, "height": 844}
+    assert lanes.parse_viewport({"width": 1, "height": 1}) \
+        == {"width": 1, "height": 1}
+
+
+def test_a_mock_status_that_is_not_a_status_refuses():
+    """fuzzer class 8. -1, 0, 99, 600 and 2147483648 were stored verbatim
+    with ok:true and echoed back in `routing.routes`, so the caller held a
+    receipt for a mock the browser will never serve."""
+    import inspect
+    from kitchensink4web.ops import net
+    source = inspect.getsource(net.set_routing)
+    assert "100 <= code <= 599" in source
+
+
+def test_an_ignored_preset_argument_refuses():
+    """Desktop Low-21. `preset` belongs to action='throttle' alone, and
+    passing it with any other action was silently ignored: the field
+    tester asked for preset='analytics', got ok, and watched analytics
+    requests sail through."""
+    import inspect
+    from kitchensink4web.ops import net
+    source = inspect.getsource(net.set_routing)
+    assert 'preset is not None and action != "throttle"' in source
+    assert "block_ads" in source
+
+
+def test_a_write_receipt_is_checked_against_the_field():
+    """concurrency C-3. `type_text` read the field back and never COMPARED
+    the reading to what it was asked to write, so with `clear_first` on,
+    four concurrent calls all returned ok and all four reported
+    `value: 'value3'`: three writes silently lost under a success
+    receipt."""
+    from kitchensink4web.ops import lite
+    assert lite._write_mismatch("alpha", "alpha", True) is None
+    assert lite._write_mismatch("alpha", "gamma", True)
+    # With clear_first off the field legitimately holds more than this
+    # call typed, so only containment is checkable.
+    assert lite._write_mismatch("alpha", "betaalpha", False) is None
+    assert lite._write_mismatch("alpha", "beta", False)
+
+
+def test_writes_to_one_page_are_serialized():
+    """concurrency C-3. Nothing serialized writes to a page or an element:
+    `SessionManager._lock` guards session open and close and nothing else,
+    so four concurrent `type_text` calls interleaved at the KEYSTROKE level
+    and left a field holding a shuffle of all four strings while all four
+    returned ok."""
+    import inspect
+    from kitchensink4web.engine import session as session_mod
+    from kitchensink4web.ops import lite
+    assert hasattr(session_mod.PageHandle, "write_lock")
+    for fn in (lite.type_text, lite.fill_form):
+        assert "write_lock()" in inspect.getsource(fn), fn.__name__
+
+
+def test_a_navigate_that_becomes_a_download_names_the_download_route():
+    """Desktop High-6. A direct file URL makes the browser start a download
+    instead of rendering; `goto` rejected with "Download is starting",
+    which shipped as BAD_PARAMS, and the download was lost because nothing
+    had armed a listener."""
+    import inspect
+    from kitchensink4web.ops import lite
+    source = inspect.getsource(lite.navigate)
+    assert "download is starting" in source
+    assert "action='goto'" in source
+
+
+def test_a_session_closed_under_a_navigation_is_a_conflict():
+    """concurrency C-5. `manage_session(close)` racing an in-flight
+    navigate produced BAD_PARAMS with the driver's raw call log in the
+    message and a hint about location objects. The sibling
+    close-during-READ race already answered CONFLICT; this was the fourth
+    of four races disagreeing with the other three."""
+    import inspect
+    from kitchensink4web.ops import lite
+    source = inspect.getsource(lite._raise_if_unreachable)
+    assert "_session_is_gone" in source
+    assert source.index("_session_is_gone") < source.index("_NET_CAUSES")
+
+
+def test_the_redaction_vault_does_not_eat_common_words():
+    """Desktop High-4, verified rather than re-fixed: the length floor, the
+    non-security exclusion list, and token-boundary matching for short
+    values all landed in an earlier wave. The author's own username
+    redacted from every GitHub URL is the acceptance test."""
+    from kitchensink4web.policy import credentials
+    credentials.VAULT.clear()
+    try:
+        credentials.VAULT.observe_cookie(
+            {"name": "preferred_color_mode", "value": "light"})
+        credentials.VAULT.observe_cookie(
+            {"name": "dotcom_user", "value": "nometalalchemist"})
+        text = ("Community highlights on "
+                "https://github.com/nometalalchemist/web-mcp in light mode")
+        assert credentials.redactor(text) == text
+    finally:
+        credentials.VAULT.clear()

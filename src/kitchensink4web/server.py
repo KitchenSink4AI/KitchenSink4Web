@@ -26,8 +26,10 @@ own console-logging regression is the proof.
 from __future__ import annotations
 
 import argparse
+import asyncio
 import functools
 import importlib
+import os
 import sys
 
 from fastmcp import FastMCP
@@ -38,7 +40,7 @@ from pydantic import ValidationError as _PydanticValidationError
 
 from . import confirm, envelope, packs
 from .errors import (BadParams, ConfirmationRequired, ReadOnlyMode,
-                     ValidationFailed)
+                     Timeout, ValidationFailed)
 from .ops import lite
 from .policy import audit, credentials, gates, readonly
 
@@ -204,6 +206,63 @@ def _argument_message(tool: str, exc: BaseException) -> str:
 mcp.add_middleware(GuidedAbsenceMiddleware())
 
 
+#: EVERY TOOL CALL IS BOUNDED (union wave 2026-09-07, chaos L-01/L-02).
+#:
+#: `session.with_timeout` exists and its docstring is exactly right ("a hung
+#: navigation must free the server rather than wedge it"). `navigate` used
+#: it and the read, act, and capture paths did not, so against a SUSPENDED
+#: browser `navigate(timeout_ms=8000)` returned honestly at 8.01 s while
+#: `get_page_view` ran past 120 s, `take_screenshot` past 120 s, and
+#: `click(timeout_ms=6000)` past 120 s with its EXPLICIT argument ignored,
+#: twenty times over. Against a slow-loris origin a `get_text` blocked for
+#: 82 s and `get_text` and `get_page_view` accept no `timeout_ms` at all, so
+#: a caller could not even ask for a bound.
+#:
+#: One bound at the wrapper covers every tool, including the ones that take
+#: no timeout argument, which is the half a per-call parameter cannot reach.
+TOOL_CEILING_MS = int(os.environ.get("KS4WEB_TOOL_CEILING_MS", "90000"))
+
+#: Slack over a caller's own `timeout_ms`, so this ceiling never fires
+#: BEFORE the tool's own honest timeout does. An explicit caller bound must
+#: be answered by the tool that owns it, with the message that names what
+#: was awaited; this is the backstop for when that bound is not honored.
+TOOL_CEILING_SLACK_MS = 15000
+
+#: Tools whose work is legitimately N times one operation. A page walk is N
+#: navigations and a workflow replay is N actions, so one bound for both
+#: shapes would be either useless or wrong.
+_CEILING_MULTIPLIER = {"read_pages": 12, "run_workflow": 12,
+                       "export_har": 3, "export_pdf": 3}
+
+
+def _ceiling_ms(fn, kwargs: dict) -> int:
+    ceiling = TOOL_CEILING_MS * _CEILING_MULTIPLIER.get(fn.__name__, 1)
+    for key in ("timeout_ms", "budget_ms"):
+        asked = kwargs.get(key)
+        if isinstance(asked, (int, float)) and asked > 0:
+            ceiling = max(ceiling, int(asked) + TOOL_CEILING_SLACK_MS)
+    return ceiling
+
+
+async def _bounded(fn, args, kwargs):
+    """Run one tool body under a finite ceiling."""
+    ceiling = _ceiling_ms(fn, kwargs)
+    try:
+        return await asyncio.wait_for(fn(*args, **kwargs),
+                                      timeout=ceiling / 1000)
+    except asyncio.TimeoutError as exc:
+        raise Timeout(
+            f"{fn.__name__} did not return within {ceiling} ms and was "
+            f"abandoned, so the server is free even though the browser is "
+            f"not. Nothing here says the operation did not happen: it was "
+            f"still running when the bound expired. A browser that is "
+            f"suspended, thrashing, or waiting on an origin that never "
+            f"finishes answering looks exactly like this. Check the session "
+            f"with manage_session(action='status'), and close and reopen it "
+            f"if the browser is gone. KS4WEB_TOOL_CEILING_MS sets this "
+            f"bound.") from exc
+
+
 def _wrap(fn):
     """Every tool body runs inside the envelope. Success payloads pass
     through the redaction seam; anything raised becomes a typed refusal with
@@ -213,7 +272,7 @@ def _wrap(fn):
     async def inner(*args, **kwargs):
         try:
             try:
-                result = await fn(*args, **kwargs)
+                result = await _bounded(fn, args, kwargs)
             except ConfirmationRequired as gate_exc:
                 # S8 wiring: put the gate's question to the client over
                 # elicitation. An explicit human ACCEPT redeems the gate,
@@ -232,7 +291,7 @@ def _wrap(fn):
                     raise
                 gates.deposit_grant(grant)
                 try:
-                    result = await fn(*args, **kwargs)
+                    result = await _bounded(fn, args, kwargs)
                 finally:
                     gates.clear_grant()
         except envelope.CATCHABLE as exc:

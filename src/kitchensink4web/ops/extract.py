@@ -567,6 +567,10 @@ async def get_links(
     can name, and this to survey what is there.
     """
     kinds = ("all", "nav", "prose", "other")
+    kind = common.enum_arg(kind, kinds, default="all", tool="get_links",
+                           name="kind")
+    limit = common.count_arg(limit, name="limit", tool="get_links",
+                             default=40, maximum=5000)
     if kind not in kinds:
         raise BadParams(f"unknown kind {kind!r}; the kinds are {list(kinds)}.")
     sess, record = common.locate(page)

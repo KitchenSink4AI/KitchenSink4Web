@@ -245,6 +245,10 @@ class Renderer:
             self.head("IDENTITY"),
             f'url: {i["url"]}',
             f'title: {i["title"]}',
+            # THE PARTIAL-DOCUMENT LINE (chaos C-08), first thing after the
+            # title because it changes what every number below it means.
+            *([f'INCOMPLETE DOCUMENT: {self.meta["partial"]}']
+              if self.meta.get("partial") else []),
             f'status: {self.meta.get("status", "?")} | load: '
             f'{self.meta.get("load_state", "?")} | lane: {self.meta.get("lane", "?")} '
             f'| page: {self.meta.get("page", "p?")} | read: {self.meta.get("read_token", "-")} '

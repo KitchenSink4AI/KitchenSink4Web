@@ -79,11 +79,9 @@ async def download(
     byte count. Files land in the scoped downloads directory unless a path
     is named.
     """
-    actions = ("click", "goto", "fetch", "wait", "list")
-    if action not in actions:
-        raise BadParams(
-            f"unknown download action {action!r}: the actions are "
-            f"{list(actions)}.")
+    action = common.enum_arg(
+        action, ("click", "goto", "fetch", "wait", "list"),
+        default="wait", tool="download")
     sess, record = common.locate(page)
     store = _pending(sess)
 
@@ -283,6 +281,8 @@ async def upload_file(
     upload is visible rather than assumed.
     """
     routes = ("input", "chooser")
+    via = common.enum_arg(via, routes, default="input", tool="upload_file",
+                          name="route")
     if via not in routes:
         raise BadParams(
             f"unknown upload route {via!r}: the routes are {list(routes)}. "
@@ -439,6 +439,8 @@ async def manage_clipboard(
     refuse by naming the lane that has it.
     """
     actions = ("read", "write")
+    action = common.enum_arg(action, actions, default="read",
+                             tool="manage_clipboard")
     if action not in actions:
         raise BadParams(
             f"unknown clipboard action {action!r}: the actions are "

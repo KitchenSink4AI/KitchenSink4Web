@@ -162,6 +162,30 @@ class PageHandle:
     #: Where the page was when `park_idle` parked it. The recovery a later
     #: call needs is the URL, not the word "parked".
     parked_from: str | None = None
+    #: THE LAST NAVIGATION THAT DID NOT FINISH, and the URL it was for
+    #: (chaos C-08). A body reset mid-transfer, a load event that never
+    #: fires, a slow-loris origin: `navigate` refuses honestly and the very
+    #: next read used to report the half-delivered document as complete,
+    #: with `load: load` asserted for a load state the previous call had
+    #: refused to reach. Cleared by the next navigation that succeeds.
+    load_failed: dict | None = None
+    #: THE PER-PAGE WRITE LOCK (concurrency C-3). Nothing serialized writes
+    #: to a page or to an element: `SessionManager._lock` guards session
+    #: open and close and nothing else, so four concurrent `type_text` calls
+    #: interleaved at the KEYSTROKE level and left a field holding
+    #: `vvaalvl0a1vla2l3` while all four returned ok, and two concurrent
+    #: `fill_form` calls left one field holding both values concatenated
+    #: while both callers held receipts saying their own clean value was
+    #: set. The sibling document servers state the opposite property
+    #: outright ("COM calls serialize server-side: one call reaches Word at
+    #: a time, concurrent live calls queue"); here there was no queue.
+    #: Created on first use, because a Lock binds to the running loop.
+    _writes: Any = None
+
+    def write_lock(self):
+        if self._writes is None:
+            self._writes = asyncio.Lock()
+        return self._writes
 
     def frame_id(self, key: str) -> str:
         if key not in self.frame_ids:

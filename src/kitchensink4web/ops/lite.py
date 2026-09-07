@@ -48,6 +48,7 @@ from .. import dialogs as _dialogs
 from .. import envelope as _envelope
 from .. import pagedata as _pagedata
 from . import act as _act
+from . import common as _common
 from . import resource as _resource
 from ..engine import frames, lanes, session as _session
 from ..errors import (AmbiguousLocation, AuthRequired, BadParams,
@@ -453,7 +454,12 @@ async def get_page_view(
     meta = {"status": getattr(record, "last_status", None),
             "load_state": getattr(record, "last_load_state", "load"),
             "lane": sess.spec.label, "page": record.handle,
-            "read_token": token, "ts": ts}
+            "read_token": token, "ts": ts,
+            # C-08: `load: load` was asserted by the READ for a page whose
+            # load state the PREVIOUS call refused to reach, and the
+            # completeness block never once said the document had not
+            # finished arriving.
+            "partial": _incomplete_note(record)}
 
     state: dict = {}
 
@@ -528,6 +534,13 @@ async def get_page_view(
     # label names each frame's own origin and provenance: one envelope can
     # now carry text from several documents and a single origin in the label
     # would be a claim about only one of them.
+    # THE SECOND CHECK (chaos C-09). The browser's error interstitial loads
+    # AFTER the failed navigation returns, so the read gate saw about:blank
+    # and the extractor saw chrome-error://; a projection of that document
+    # printed `status: 200 | load: load | dom nodes: 3` and "unlisted
+    # affordances: none, every control is listed" for a site that answered
+    # nothing at all.
+    _refuse_error_document(record)
     projection, page_note = _pagedata.wrap(
         result.text, url=record.page.url,
         frames=[f for _, _, f in enterable])
@@ -1003,8 +1016,13 @@ async def get_text(
     # from the reference MCP fetch server because it is the best idea in the
     # extractor field: the tool teaches the model its own paging in the
     # result, with no extra schema and no documentation dependency.
+    # THE SECOND CHECK (chaos C-09). The error interstitial loads after the
+    # failed navigation returns, so the gate saw about:blank and the
+    # extractor saw chrome-error://.
+    _refuse_error_document(record, got.get("url"))
     svg_meta = got.get("svg_meta") or {"blocks": 0, "chars": 0}
     unclassified = got.get("unclassified") or {"blocks": 0, "chars": 0}
+    partial = _incomplete_note(record)
     # NO POSITIVE COMPLETENESS CLAIM OVER OMITTED TEXT (hostile H-04).
     # "this is the end of the text in scope" was printed unconditionally
     # whenever the paging finished, including on a page whose visible prose
@@ -1013,6 +1031,11 @@ async def get_text(
         more = (f'get_text(page="{record.handle}", '
                 f'start_index={got["next_start_index"]}) returns the next '
                 f'{max_chars:,} characters')
+    elif partial:
+        # C-08: never "this is the end of the text in scope" over a
+        # document that did not finish arriving.
+        more = (f'this is the end of the text that ARRIVED, and it is not '
+                f'the end of the page: {partial}')
     elif unclassified["chars"]:
         more = (f'this is the end of the text the extractor classified as '
                 f'readable, and it is NOT the end of the visible text on '
@@ -1061,6 +1084,7 @@ async def get_text(
                if unclassified["chars"] else {}),
             **({"svg_title_desc": svg_meta} if svg_meta["chars"] else {}),
         }} if (unclassified["chars"] or svg_meta["chars"]) else {}),
+        **({"document": partial} if partial else {}),
         "continue": more,
         "stripped": (
             f'{hidden["blocks"]} hidden block(s) carrying '
@@ -1146,7 +1170,9 @@ async def navigate(
     before = record.page.url
     status = None
     response = None
-    action = (action or "goto").strip().lower()
+    action = _common.enum_arg(
+        action, ("goto", "back", "forward", "reload", "stop",
+                 "wait_for_load"), default="goto", tool="navigate")
     if action == "goto" and url:
         _audit.annotate(replay={"tool": "navigate", "args": {
             "action": "goto", "url": url, "wait_until": wait_until}})
@@ -1188,7 +1214,7 @@ async def navigate(
                 else record.page.go_forward(), timeout_ms,
                 f"navigate({action})")
         except Exception as exc:
-            _raise_if_unreachable(exc, f"navigate({action})")
+            _raise_if_unreachable(exc, f"navigate({action})", record)
             raise
         status = response.status if response else None
     elif action == "reload":
@@ -1197,7 +1223,7 @@ async def navigate(
                 record.page.reload(wait_until=wait_until), timeout_ms,
                 "navigate(reload)")
         except Exception as exc:
-            _raise_if_unreachable(exc, "navigate(reload)")
+            _raise_if_unreachable(exc, "navigate(reload)", record)
             raise
         status = response.status if response else None
     elif action == "stop":
@@ -1213,7 +1239,33 @@ async def navigate(
                                  timeout=timeout_ms),
                 timeout_ms + 2000, f"navigate(goto, {url})")
         except Exception as exc:
-            _raise_if_unreachable(exc, f"navigate(goto, {url})")
+            # A NAVIGATION THAT TURNED INTO A DOWNLOAD IS NOT A FAILURE
+            # (Desktop High-6). A direct file URL makes the browser start a
+            # download instead of rendering, and `goto` then rejects with
+            # "Download is starting", which shipped as BAD_PARAMS. The
+            # download itself was lost, because nothing had armed a
+            # listener. The route that DOES work is named here rather than
+            # left for the caller to discover: `download` arms the listener
+            # before it navigates, which is the whole reason that action
+            # exists.
+            if "download is starting" in str(exc).lower():
+                raise ValidationFailed(
+                    f"{url} is a file the browser downloads rather than a "
+                    f"page it renders, so the navigation stopped and no "
+                    f"download was captured: nothing was armed to catch it. "
+                    f"download(page={record.handle!r}, action='goto', "
+                    f"url=...) arms the listener first and saves the file, "
+                    f"and download(action='fetch', url=...) re-requests it "
+                    f"through this session's own cookies when the browser "
+                    f"would rather paint it in a viewer. Both need the "
+                    f"files pack (--packs files).") from exc
+            # C-08: remember that THIS document did not finish arriving, so
+            # the next read stops calling it complete. Recorded before the
+            # refusal is built, because the refusal is what the caller sees
+            # and the mark is what every later read sees.
+            note_load_failure(record, f"{type(exc).__name__}: {exc}",
+                              target=url)
+            _raise_if_unreachable(exc, f"navigate(goto, {url})", record)
             raise
         status = response.status if response else None
         sess.counters["navigations"] += 1
@@ -1224,6 +1276,7 @@ async def navigate(
             f"'back', 'forward', 'reload', 'stop', and 'wait_for_load'.")
 
     record.touch(record.page.url)
+    record.load_failed = None       # this one arrived; C-08's mark clears
     record.last_status = status
     record.last_load_state = wait_until
     invalidated = None
@@ -1382,7 +1435,20 @@ def reported_counters(sess) -> dict:
     }
 
 
-def _raise_if_unreachable(exc: Exception, what: str) -> None:
+def sess_of(record):
+    """The session a page record belongs to, or None once it is gone."""
+    for session in MANAGER.sessions.values():
+        if record.handle in session.pages:
+            return session
+    return None
+
+
+def _session_is_gone(session) -> bool:
+    return session is None
+
+
+def _raise_if_unreachable(exc: Exception, what: str,
+                          record=None) -> None:
     """Re-raise a driver failure as the honest typed refusal, naming the
     cause.
 
@@ -1396,6 +1462,22 @@ def _raise_if_unreachable(exc: Exception, what: str) -> None:
     text = str(exc).lower()
     if any(m in text for m in _envelope.CRASH_MARKERS):
         return          # the crash path owns this; envelope builds it
+    # THE SESSION WENT AWAY UNDERNEATH THE CALL (concurrency C-5). A
+    # `manage_session(close)` racing an in-flight navigate aborts the
+    # navigation, and `net::ERR_ABORTED` is otherwise a site-authored
+    # navigation failure, so the abort was reported as one: the caller was
+    # told the site owned an outcome its own other call had caused. The
+    # sibling close-during-READ race already answered CONFLICT correctly;
+    # this is the fourth of four races finally agreeing with the other
+    # three. Asked BEFORE the marker tables, because the same driver string
+    # means something different once the session is gone.
+    if record is not None and _session_is_gone(sess_of(record)):
+        raise Conflict(
+            f"{what} was cut short because the session it belongs to was "
+            f"closed while the call was in flight. Nothing about the "
+            f"arguments was wrong and the site did not refuse: another call "
+            f"took the browser away. Open a new session with "
+            f"manage_session(action='open').") from exc
     if any(m in text for m in _envelope.DEAD_MARKERS):
         raise SessionDead(
             f"{what} could not run: the browser for this session is gone "
@@ -1724,10 +1806,124 @@ async def _recorded_wall_refusal(sess, record) -> None:
     raise _blocked_refusal(sess, record.page.url, got["status"], verdict)
 
 
+#: URL schemes the BROWSER serves when a navigation failed. The document
+#: behind one of them is the browser's own interstitial, not the site's.
+#:
+#: CHAOS C-09: with the origin dead, `navigate` honestly reported
+#: PAGE_UNREACHABLE, and the very next `get_text` answered `ok` with
+#: `{"url":"chrome-error://chromewebdata/","text":"","chars":{"returned":0}}`
+#: while `get_page_view` printed `status: 200 | load: load | dom nodes: 3`
+#: and "unlisted affordances: none, every control is listed". No read
+#: surface recognized the scheme, so an agent that read after a failed
+#: navigation concluded the site returned an empty 200, which is the most
+#: expensive wrong conclusion available here.
+ERROR_SCHEMES: tuple[str, ...] = (
+    "chrome-error://", "edge-error://",
+    "about:neterror", "about:certerror", "about:blocked",
+    "resource://gre/browser/neterror",
+)
+
+
+def _is_error_document(url: str | None) -> bool:
+    lowered = (url or "").lower()
+    return any(lowered.startswith(scheme) or scheme in lowered
+               for scheme in ERROR_SCHEMES)
+
+
+def _refuse_error_document(record, url: str | None = None) -> None:
+    """Refuse to read the browser's own interstitial as the site's page.
+
+    Called TWICE per read, before and after, and the second call is the one
+    that fires. The error document loads asynchronously after the failed
+    navigation returns, so at gate time the tab is still on `about:blank`
+    and by the time the extractor runs it is on `chrome-error://`. Checking
+    only one of the two moments answers for the wrong document."""
+    if url is None:
+        try:
+            url = record.page.url or ""
+        except Exception:
+            return
+    lowered = url.lower()
+    if not _is_error_document(lowered):
+        return
+    raise PageUnreachable(
+        f"there is no site document on {record.handle} to read: the browser "
+        f"is showing its own network-error interstitial ({url}). The last "
+        f"navigation did not reach a server, so anything read here would be "
+        f"the browser's error page and not the site's. Navigate again once "
+        f"the host is reachable; rewriting the URL does not help if the "
+        f"failure was the network.")
+
+
+def _incomplete_note(record) -> str | None:
+    """What a read has to say when the document did not finish arriving.
+
+    CHAOS C-08. A body reset at byte ~700 of a declared `Content-Length:
+    100000` made `navigate` refuse honestly (TIMEOUT on Chromium,
+    PAGE_UNREACHABLE on Firefox) and the very next `get_text` answered
+    `chars: {"returned": 668, "total_in_scope": 668, "next_start_index":
+    null}` with "this is the end of the text in scope" under it, while
+    `get_page_view`'s identity line read `status: 200 | load: load` and the
+    completeness block discussed iframes, shadow roots and hidden nodes and
+    never once said the document had not finished arriving. Slow-loris was
+    the same: 18 characters served as the whole page, `load: load`.
+
+    `load: load` is asserted by the READ for a page whose load state the
+    PREVIOUS CALL refused to reach. For a server whose thesis is that the
+    completeness block is the ledger, a half-delivered document reported as
+    complete is the wrong failure."""
+    failure = getattr(record, "load_failed", None)
+    if not failure:
+        return None
+    try:
+        here = record.page.url
+    except Exception:
+        return None
+    if here == failure.get("url"):
+        return (
+            f'the last navigation to this URL did not complete '
+            f'({failure["why"]}), so this document may be PARTIAL: what '
+            f'arrived before the transfer stopped is what is here, and the '
+            f'counts below are counts of that, not of the page the site '
+            f'would have served. Navigate again to try for a whole document')
+    # THE NAVIGATION NEVER LANDED. The tab is on `about:blank`, or on the
+    # browser's own error interstitial, or wherever it was before. An empty
+    # read here is not "the page is empty" (chaos C-09), and the mark is
+    # cleared by the next navigation that succeeds, so a stale one cannot
+    # slander a document that did arrive.
+    return (
+        f'this page is on {here or "a blank document"} because the last '
+        f'navigation, to {failure["url"]}, did not complete '
+        f'({failure["why"]}). Nothing below describes that site')
+
+
+def note_load_failure(record, why: str, target: str | None = None) -> None:
+    """Remember that a navigation on this page did not finish (chaos C-08).
+
+    Set by every door that navigates, cleared by the next navigation that
+    succeeds, so a read can tell a half-delivered document from a whole one
+    instead of asserting `load: load` for a load state the previous call
+    refused to reach.
+
+    The mark is keyed on the URL that was ASKED FOR, not on where the page
+    happens to be. A navigation that never left the old document leaves
+    that document whole, and flagging it would be the opposite error:
+    calling a complete page partial."""
+    try:
+        record.load_failed = {
+            "url": target or record.page.url,
+            "why": _envelope.scrub_driver_text(why, 120)}
+    except Exception:
+        pass
+
+
 async def _read_gate(sess, record, *, tool: str) -> None:
-    """Both re-asked policies, in the order the answers matter: an origin
-    nothing ruled on is refused before its content is classified."""
+    """Every re-asked policy, in the order the answers matter: an origin
+    nothing ruled on is refused before its content is classified, and a
+    document that is the browser's own error page is refused before it is
+    read as the site's."""
     await _ensure_vetted(sess, record, tool=tool)
+    _refuse_error_document(record)
     await _recorded_wall_refusal(sess, record)
 
 
@@ -1925,47 +2121,65 @@ async def type_text(
                     f'{record.handle}, which the page turned into a '
                     f'{late.replace("_", " ")} target when it took focus?')
     before = await _act.observe(ctx, resolved["node_ref"])
-    try:
-        if clear_first:
-            await handle.fill(text, timeout=timeout_for(delay_ms, len(text)))
-        else:
-            # ELEMENT-BOUND dispatch, the field misdirect fix (2026-09-05).
-            # This path used to be `handle.focus()` then
-            # `page.keyboard.type(...)`, and the page keyboard is PAGE-scoped:
-            # it delivers keystrokes to whatever holds focus at that instant.
-            # A re-render that replaced the target between the focus and the
-            # keystrokes dropped focus to <body>, a GitHub-style global
-            # hotkey then focused the search bar, and the comment landed
-            # there with a "\n" pressed as Enter submitting the search. The
-            # ladder had resolved the right element; the dispatch was the
-            # unanchored step. Now the focus is asserted before any key is
-            # sent and the typing itself is element-bound, so the text lands
-            # in the resolved target or the call refuses.
-            await handle.focus()
-            await _assert_focus_held(ctx, handle)
-            await _type_bound(ctx, handle, text, delay_ms)
-        if press_enter or submit:
-            await handle.press("Enter")
-        if submit:
-            # The one-call idiom must not race its own navigation (field
-            # test finding: a separate Enter call died mid-navigation). A
-            # submission that navigates settles here; one that re-renders
-            # in place times this wait out harmlessly and the verified
-            # outcome below reports what actually changed.
-            try:
-                await record.page.wait_for_load_state("load", timeout=8000)
-            except Exception:
-                pass
-    except Exception as exc:
-        _reraise_driver(exc, what="type_text", timeout_ms=15000,
-                        sess=sess, page_handle=record.handle)
-    outcome = await _act.verify(ctx, resolved["node_ref"], before)
-    try:
-        value_state = await handle.input_value()
-    except Exception:
-        value_state = None
+    # THE PER-PAGE WRITE LOCK (concurrency C-3). `handle.type` sends one
+    # keystroke at a time and nothing serialized the calls, so four
+    # concurrent writes interleaved at the keystroke level and left the
+    # field holding `vvaalvl0a1vla2l3` while all four returned ok. The lock
+    # spans the write AND the read-back, so the value a receipt quotes is
+    # the value that call left behind rather than whatever the next one had
+    # got to by then.
+    async with record.write_lock():
+        try:
+            if clear_first:
+                await handle.fill(
+                    text, timeout=timeout_for(delay_ms, len(text)))
+            else:
+                # ELEMENT-BOUND dispatch, the field misdirect fix
+                # (2026-09-05). This path used to be `handle.focus()` then
+                # `page.keyboard.type(...)`, and the page keyboard is
+                # PAGE-scoped: it delivers keystrokes to whatever holds
+                # focus at that instant. A re-render that replaced the
+                # target between the focus and the keystrokes dropped focus
+                # to <body>, a GitHub-style global hotkey then focused the
+                # search bar, and the comment landed there with a newline
+                # pressed as Enter submitting the search. The ladder had
+                # resolved the right element; the dispatch was the
+                # unanchored step. Now the focus is asserted before any key
+                # is sent and the typing itself is element-bound, so the
+                # text lands in the resolved target or the call refuses.
+                await handle.focus()
+                await _assert_focus_held(ctx, handle)
+                await _type_bound(ctx, handle, text, delay_ms)
+            if press_enter or submit:
+                await handle.press("Enter")
+            if submit:
+                # The one-call idiom must not race its own navigation
+                # (field test finding: a separate Enter call died
+                # mid-navigation). A submission that navigates settles
+                # here; one that re-renders in place times this wait out
+                # harmlessly and the verified outcome below reports what
+                # actually changed.
+                try:
+                    await record.page.wait_for_load_state("load",
+                                                          timeout=8000)
+                except Exception:
+                    pass
+        except Exception as exc:
+            _reraise_driver(exc, what="type_text", timeout_ms=15000,
+                            sess=sess, page_handle=record.handle)
+        outcome = await _act.verify(ctx, resolved["node_ref"], before)
+        try:
+            value_state = await handle.input_value()
+        except Exception:
+            value_state = None
     result = _action_result(record, "type_text", desc, resolved, outcome,
                             value_state=value_state)
+    # THE RECEIPT IS CHECKED AGAINST THE FIELD (concurrency C-3). The
+    # read-back existed and was never COMPARED to what the call was asked
+    # to write, so a lost write rode out under a success receipt.
+    warning = _write_mismatch(text, value_state, clear_first)
+    if warning:
+        result.setdefault("warnings", []).append(warning)
     result["session"] = sess.session_id
     # The origin twin (gauntlet 4, G4-06); see the note on click.
     await _post_navigation_origin(sess, record, outcome, tool="type_text")
@@ -1998,6 +2212,32 @@ async def _assert_focus_held(page, handle) -> None:
             "page first.")
 
 
+def _write_mismatch(asked: str, got, cleared: bool) -> str | None:
+    """The receipt, checked (concurrency C-3).
+
+    `type_text` read the field back and never compared the reading to what
+    it had been asked to write, so with `clear_first` on, four concurrent
+    calls all returned ok and all four reported `value: 'value3'`: three
+    writes silently lost under a success receipt. With `clear_first` off
+    the field legitimately holds more than this call typed, so only the
+    CONTAINMENT is checkable, and that is what is checked."""
+    if got is None or not isinstance(got, str):
+        return None
+    if cleared:
+        if got == asked:
+            return None
+        return (f"the field holds {got!r} after this write, not the "
+                f"{len(asked)} character(s) this call was asked to set. "
+                f"Another call wrote to the same field, or the page rewrote "
+                f"it. Nothing here is evidence that this value survived; "
+                f"re-read the page before acting on it")
+    if asked and asked not in got:
+        return (f'the field holds {got!r} after this write and the typed '
+                f'text is not in it. Another call wrote to the same field, '
+                f'or the page rewrote it')
+    return None
+
+
 async def _type_bound(page, handle, text: str, delay_ms: int) -> None:
     """Element-bound typing with the newline contract stated in the
     docstring: newlines are INSERTED in multi-line targets, never pressed
@@ -2023,6 +2263,28 @@ async def _type_bound(page, handle, text: str, delay_ms: int) -> None:
             await page.keyboard.insert_text("\n")
         if line:
             await handle.type(line, delay=delay_ms)
+
+
+async def _confirm_field(handle, set_result: dict) -> dict:
+    """Read the control back and report what it HOLDS, not what was asked.
+
+    Concurrency C-3: `set` was the caller's own value echoed, so a lost
+    write rode out under `outcome: "ok", status: "completed"`. The reading
+    is taken inside the page's write lock, so it describes the state this
+    call left behind."""
+    try:
+        held = await handle.input_value()
+    except Exception:
+        return set_result           # a select or a checkbox: no text value
+    out = dict(set_result)
+    out["value_state"] = held
+    asked = set_result.get("value")
+    if isinstance(asked, str) and isinstance(held, str) and held != asked:
+        out["mismatch"] = (
+            f"the control holds {held!r} after this write, not the value "
+            f"this item asked to set. Another call wrote to the same "
+            f"control, or the page rewrote it")
+    return out
 
 
 async def _set_field(page, resolved: dict, value) -> dict:
@@ -2184,8 +2446,17 @@ async def fill_form(
                         f'page turned into a {late.replace("_", " ")} target '
                         f'when it took focus?')
         try:
-            set_result = await _set_field(_act.context_of(rr, record), rr,
-                                          f.get("value"))
+            # Serialized per page, and the receipt is READ BACK inside the
+            # lock (concurrency C-3). `fill_form` reported a per-item
+            # `set: {"value": ...}` echoing the value the CALLER asked for,
+            # which is a positive claim about the field rather than an
+            # unverified silence; two concurrent fills left one field
+            # holding both values concatenated while both callers held
+            # receipts saying their own clean value was set.
+            async with record.write_lock():
+                set_result = await _set_field(_act.context_of(rr, record),
+                                              rr, f.get("value"))
+                set_result = await _confirm_field(rr["handle"], set_result)
         except Exception as exc:
             per_item.append({
                 "ref": rr.get("node_ref"),
@@ -2548,6 +2819,30 @@ async def scroll(
         "scroll", resolved, {"action": action, "amount": int(amount)}))
     metrics = await record.page.evaluate(_SCROLL_JS, {
         "action": action, "amount": int(amount), "ref": node_ref})
+    # AT_END IS GATED ON THE DOCUMENT BEING STABLE (hostile H-11). An
+    # infinite-scroll feed appending 300 items every 30 ms behind an
+    # IntersectionObserver answered `at_end: true` and "0 screen(s) below
+    # the current view" FOUR TIMES IN A ROW while the document went from
+    # 367,286 px to 1,428,086 px, ~357,000 px arriving below the view
+    # between each pair of calls. `scroll`'s own docstring says it reports
+    # "how much remains below ... rather than presenting a partial list as
+    # complete". One sample cannot see growth, so this takes a second one.
+    at_end = bool(metrics.get("at_end"))
+    growth = None
+    if at_end:
+        await asyncio.sleep(_SCROLL_SETTLE_S)
+        try:
+            after = await record.page.evaluate(
+                "() => document.documentElement.scrollHeight")
+        except Exception:
+            after = metrics.get("doc_at")
+        if isinstance(after, (int, float))                 and after > (metrics.get("doc_at") or 0) + 4:
+            at_end = False
+            growth = int(after - (metrics.get("doc_at") or 0))
+            metrics["docH"] = after
+            metrics["screens_below"] = round(
+                ((after - metrics["y"] - metrics["vpH"]) / metrics["vpH"])
+                * 10) / 10
     record.touch(record.page.url)
     return {
         "session": sess.session_id, "page": record.handle, "tool": "scroll",
@@ -2559,9 +2854,22 @@ async def scroll(
             f'{metrics["screens_above"]} screen(s) above, '
             f'{metrics["screens_below"]} below the current view'),
         "virtualized": metrics["virtual"],
-        "at_end": metrics["at_end"],
+        "at_end": at_end,
+        **({"growing": (
+            f'the document grew by {growth:,}px in the '
+            f'{_SCROLL_SETTLE_S:g}s after this scroll landed, so there is no '
+            f'end to be at: the page loads more as you reach the bottom. '
+            f'Scroll again for the next chunk, and stop on your own '
+            f'condition rather than on at_end')} if growth else {}),
     }
 
+
+#: How long a scroll that thinks it reached the end waits before checking
+#: whether the document is still growing. The infinite-scroll fixture the
+#: hostile round used appends every 30 ms behind an IntersectionObserver, so
+#: a quarter second is several batches; short enough that an ordinary page
+#: pays it only on the one call that lands at the bottom.
+_SCROLL_SETTLE_S = 0.25
 
 _SCROLL_JS = r"""
 (opts) => {
@@ -2586,11 +2894,24 @@ _SCROLL_JS = r"""
   // A windowed list is a scrollable box whose scroll extent is far larger
   // than what it holds, which is the shape a projection would otherwise
   // report as a complete short list.
+  // THE ROOT IS NOT A VIRTUALIZED CONTAINER (hostile H-11, second half).
+  // This list used to include HTML, so on an infinite-scroll feed `scroll`
+  // reported `virtualized: [{"tag":"HTML", ...}]` one call after
+  // `get_page_view`'s completeness block said "virtualized or
+  // infinite-scroll containers: none detected", twice, about the same page
+  // in the same session. The two were measuring different things: the
+  // projection means a WINDOWED LIST (a scrollable box holding far less
+  // than its scroll extent), and a document that is simply taller than the
+  // viewport is not one. Document growth is reported by `growing` instead,
+  // which is the fact that actually mattered.
   const virtual = [];
   const boxes = document.querySelectorAll('*');
   let scanned = 0;
   for (const b of boxes) {
     if (scanned > 4000) break; scanned++;
+    if (b === document.documentElement || b === document.body) continue;
+    const ov = getComputedStyle(b).overflowY;
+    if (ov !== 'auto' && ov !== 'scroll') continue;
     if (b.scrollHeight > b.clientHeight * 3 && b.clientHeight > 60) {
       const kids = b.children ? b.children.length : 0;
       if (kids && kids < 80) {
@@ -2603,7 +2924,11 @@ _SCROLL_JS = r"""
   return { y: Math.round(y), docH: docH, vpH: vpH,
     screens_above: Math.round((y / vpH) * 10) / 10,
     screens_below: Math.round(((docH - y - vpH) / vpH) * 10) / 10,
-    at_end: (y + vpH) >= docH - 4, virtual: virtual };
+    at_end: (y + vpH) >= docH - 4, virtual: virtual,
+    // The document height AT THE MOMENT OF THE MEASUREMENT, so the Python
+    // side can compare it against the previous call's and refuse to call a
+    // growing document finished (hostile H-11).
+    doc_at: docH };
 }
 """
 _SCROLL_JS = _instrument(_SCROLL_JS)
@@ -3116,7 +3441,9 @@ async def manage_tabs(
     """
     sess = MANAGER.session(session)
     _audit.annotate(session=sess.session_id, lane=sess.spec.label)
-    action = (action or "list").strip().lower()
+    action = _common.enum_arg(
+        action, ("list", "open", "select", "close", "focused"),
+        default="list", tool="manage_tabs")
 
     if action == "list":
         pass
@@ -3154,7 +3481,9 @@ async def manage_tabs(
                     new_page.goto(url), _session.DEFAULT_TIMEOUT_MS,
                     f"manage_tabs(open, {url})")
             except Exception as exc:
-                _raise_if_unreachable(exc, f"manage_tabs(open, {url})")
+                note_load_failure(record, f"{type(exc).__name__}: {exc}",
+                                  target=url)
+                _raise_if_unreachable(exc, f"manage_tabs(open, {url})", record)
                 raise
             record.touch(new_page.url)
             sess.counters["navigations"] += 1
@@ -3275,7 +3604,10 @@ async def manage_session(
     which lane suits which job, as steering: nothing switches a lane on its
     own. Tool availability reflects the packs this server was started with.
     """
-    action = (action or "status").strip().lower()
+    action = _common.enum_arg(
+        action, ("open", "close", "status", "capabilities", "budget",
+                 "reset_budgets", "handoff"), default="status",
+        tool="manage_session")
 
     if action == "open":
         checked_state = None

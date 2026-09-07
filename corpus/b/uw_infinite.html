@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Never-ending feed</title>
+<style>body { margin: 0 } .row { height: 40px; border-bottom: 1px solid #eee }</style>
+</head>
+<body>
+<div id="feed"></div>
+<div id="sentinel">SENTINEL</div>
+<!-- Hostile round H-11. Items append behind an IntersectionObserver, so
+     the document grows every time a scroll reaches the bottom. Four
+     consecutive scroll(action='end') calls one second apart answered
+     `at_end: true` and "0 screen(s) below the current view" every time,
+     while the document went 367,286 -> 724,286 -> 1,071,086 -> 1,428,086
+     px: roughly 357,000 px arriving BELOW the view between each pair of
+     calls. scroll's own docstring says it reports "how much remains below
+     ... rather than presenting a partial list as complete".
+
+     The second half of the same finding: `scroll` reported
+     `virtualized: [{"tag": "HTML", ...}]` one call after get_page_view's
+     completeness block said "virtualized or infinite-scroll containers:
+     none detected", about the same page in the same session. -->
+<script>
+  const feed = document.getElementById('feed');
+  let n = 0;
+  function add(count) {
+    let html = '';
+    for (let i = 0; i < count; i++) html += '<div class="row">item ' + (n++) + '</div>';
+    feed.insertAdjacentHTML('beforeend', html);
+  }
+  add(200);
+  const io = new IntersectionObserver((entries) => {
+    for (const e of entries) if (e.isIntersecting) add(300);
+  });
+  io.observe(document.getElementById('sentinel'));
+  setInterval(() => { if (window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 200) add(300); }, 30);
+</script>
+</body>
+</html>

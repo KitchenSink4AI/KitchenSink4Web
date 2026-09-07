@@ -429,6 +429,8 @@ async def set_routing(
     """
     actions = ("status", "block", "block_ads", "mock", "offline",
                "headers", "throttle", "clear")
+    action = common.enum_arg(action, actions, default="status",
+                             tool="set_routing")
     if action not in actions:
         raise BadParams(
             f"unknown set_routing action {action!r}: the actions are "
@@ -450,11 +452,37 @@ async def set_routing(
               "content_type": content_type},
         summary=f"set_routing({action}) on session {sess.session_id}"))
 
+    if preset is not None and action != "throttle":
+        # AN ARGUMENT THAT DOES NOTHING SAYS SO (Desktop Low-21). `preset`
+        # belongs to action='throttle' alone, and passing it with any other
+        # action was silently ignored: the field tester asked for
+        # preset='analytics', got `ok`, and watched analytics requests sail
+        # through. The docstring already said where preset belongs; a
+        # docstring is not a refusal.
+        raise BadParams(
+            f"preset={preset!r} applies to action='throttle' only, and this "
+            f"call asked for action={action!r}, so nothing about preset was "
+            f"applied. To stop ad and analytics requests use "
+            f"set_routing(action='block_ads'), which blocks the curated "
+            f"list; to hide them from a listing without blocking them use "
+            f"list_requests(include_analytics=False), which is the default. "
+            f"The throttle presets are named in this tool's description.")
     if action == "block":
         if not patterns:
             raise BadParams(
                 "block needs patterns, for example ['**/*.png', "
                 "'**/tracker/**'] (Playwright glob syntax).")
+        # An EMPTY pattern matches nothing and was accepted silently
+        # (fuzzer class 8), so the caller held a receipt for a block that
+        # blocks nothing.
+        empty = [i for i, x in enumerate(patterns)
+                 if not isinstance(x, str) or not x.strip()]
+        if empty:
+            raise BadParams(
+                f"pattern(s) at index {empty} are empty, so they would "
+                f"match no request at all and nothing was installed. A "
+                f"pattern is a Playwright glob, for example '**/*.png' or "
+                f"'**/tracker/**'.")
         for pattern in patterns:
             async def _abort(route):
                 await route.abort()
@@ -476,6 +504,22 @@ async def set_routing(
             raise BadParams(
                 "mock takes exactly one pattern in patterns=[...] plus "
                 "status, content_type, and body for the canned response.")
+        # A STATUS THAT IS NOT A STATUS REFUSES (fuzzer class 8). `-1`, `0`,
+        # `99`, `600` and `2147483648` were all stored verbatim with ok:true
+        # and echoed back in `routing.routes`, so the route was registered
+        # and the caller had a receipt for a mock the browser will never
+        # serve.
+        try:
+            code = int(status)
+        except (TypeError, ValueError):
+            code = -1
+        if not 100 <= code <= 599:
+            raise BadParams(
+                f"status={status!r} is not an HTTP status code, so this mock "
+                f"was not installed. HTTP statuses run 100 to 599; the ones "
+                f"a mock usually wants are 200, 204, 301, 401, 403, 404, "
+                f"429, and 500.")
+        status = code
         pattern = patterns[0]
 
         async def _fulfill(route):

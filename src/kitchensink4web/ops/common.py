@@ -34,7 +34,8 @@ from pathlib import Path
 
 from .. import envelope
 from ..engine.session import MANAGER
-from ..errors import FileWriteFailed, UnsupportedContent, ValidationFailed
+from ..errors import (BadParams, FileWriteFailed, RangeOutOfBounds,
+                      UnsupportedContent, ValidationFailed)
 from ..policy import audit as _audit
 from ..policy import credentials as _credentials
 from ..policy import sandbox
@@ -203,6 +204,72 @@ def spill_dir() -> Path:
     path = Path(sandbox.check_path(raw, "resolve the spill directory"))
     path.mkdir(parents=True, exist_ok=True)
     return path
+
+
+# ------------------------------------------------------------ enum surface
+
+
+def enum_arg(value, allowed, *, default=None, tool: str = "this tool",
+             name: str = "action", extra: str = ""):
+    """ONE normalizer for every closed-set argument in the surface.
+
+    Case and whitespace tolerance used to be per-tool rather than a property
+    of the surface (fuzzer class 9): `manage_session` accepted "OPEN",
+    "open " and "opeN" while `manage_storage` refused "LOCAL", and
+    `manage_session(action="")` PERFORMED `status` (the `or default` idiom
+    reads "" as absent) while `action=" "` refused, though both normalize to
+    the same empty string. The refusal then quoted the value AFTER
+    stripping, so sending " " produced "unknown manage_session action ''"
+    and misreported what was sent.
+
+    Three rules, uniform: whitespace and case never decide the answer, an
+    absent argument and an all-whitespace one are the same thing, and the
+    refusal quotes what the CALLER sent."""
+    given = value
+    text = ("" if value is None else str(value)).strip().lower()
+    if not text:
+        if default is not None:
+            return default
+        raise BadParams(
+            f"{tool} needs a {name}; the {name}s are {sorted(allowed)}.")
+    if text not in allowed:
+        # BAD_PARAMS, not VALIDATION_FAILED: an unknown enum value IS a
+        # malformed argument, and the whole surface answered it that way
+        # before this normalizer existed.
+        raise BadParams(
+            f"unknown {tool} {name} {given!r}: the {name}s are "
+            f"{sorted(allowed)}." + (f" {extra}" if extra else ""))
+    return text
+
+
+def count_arg(value, *, name: str, tool: str, default: int,
+              minimum: int = 1, maximum: int | None = None) -> int:
+    """A COUNT that is not a count refuses instead of being clamped up.
+
+    Fuzzer class 8: `get_links(limit=0)` and `limit=-1` both returned ONE
+    link, because every paging site in the build wrote `max(1, int(limit))`.
+    Clamping up is the wrong direction for an honesty-first surface: a
+    caller who asked for zero and got one has been answered with something
+    it did not request, and one who asked for -1 has a bug the server hid."""
+    try:
+        n = int(value)
+    except (TypeError, ValueError):
+        raise BadParams(
+            f"{tool} takes a whole number for {name}; {value!r} is not "
+            f"one.") from None
+    if n < minimum:
+        raise RangeOutOfBounds(
+            f"{name}={n} is below the floor of {minimum} for {tool}: a "
+            f"count of {n} is not a smaller answer, it is not an answer. "
+            f"Ask for {minimum} or more, or omit {name} for the default of "
+            f"{default}.")
+    if maximum is not None and n > maximum:
+        raise RangeOutOfBounds(
+            f"{name}={n} is past the ceiling of {maximum} for {tool}; the "
+            f"result would not fit a caller's context window. Ask for "
+            f"{maximum} or fewer and page with the continuation this tool "
+            f"prints.")
+    return n
 
 
 def stamp() -> str:

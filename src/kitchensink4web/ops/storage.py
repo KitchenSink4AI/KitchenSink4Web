@@ -72,11 +72,8 @@ async def manage_cookies(
     touched here are observed into the redaction vault, so a cookie can
     never ride out of any later payload either.
     """
-    actions = ("list", "count", "clear")
-    if action not in actions:
-        raise BadParams(
-            f"unknown manage_cookies action {action!r}: the actions are "
-            f"{list(actions)}.")
+    action = common.enum_arg(action, ("list", "count", "clear"),
+                             default="list", tool="manage_cookies")
     sess = common.session_of(session)
     if unmask:
         _credentials.check_unmask("manage_cookies(unmask=true)")
@@ -136,15 +133,11 @@ async def manage_storage(
     unbounded and rarely what a caller wants. Values touched here are
     observed into the redaction vault.
     """
-    actions = ("list", "clear")
-    kinds = ("local", "session", "indexeddb")
-    if action not in actions:
-        raise BadParams(
-            f"unknown manage_storage action {action!r}: the actions are "
-            f"{list(actions)}.")
-    if kind not in kinds:
-        raise BadParams(
-            f"unknown storage kind {kind!r}: the kinds are {list(kinds)}.")
+    action = common.enum_arg(action, ("list", "clear"), default="list",
+                             tool="manage_storage")
+    kind = common.enum_arg(kind, ("local", "session", "indexeddb"),
+                           default="local", tool="manage_storage",
+                           name="kind")
     sess, record = common.locate(page)
     # THE ORIGIN POLICY HERE TOO (union wave, IG-02). `manage_storage`
     # called its own gate engine for CLEARING only, so on a document no door

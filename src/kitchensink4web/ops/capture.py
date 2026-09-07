@@ -119,6 +119,8 @@ async def take_screenshot(
         raise BadParams(
             f"unknown target {target!r}: the targets are 'viewport', "
             f"'full', and 'element' (element needs a location).")
+    format = common.enum_arg(format, ("png", "jpeg"), default="png",
+                             tool="take_screenshot", name="format")
     if format not in ("png", "jpeg"):
         raise BadParams(
             f"unknown format {format!r}: the formats are 'png' and 'jpeg'.")
@@ -270,6 +272,8 @@ async def save_page(
     than degrading silently. Files land in the scoped downloads directory
     unless a path is named, checked against KS4WEB_ALLOWED_ROOTS.
     """
+    format = common.enum_arg(format, ("mhtml", "html"), default="mhtml",
+                             tool="save_page", name="format")
     if format not in ("mhtml", "html"):
         raise BadParams(
             f"unknown format {format!r}: the formats are 'mhtml' (whole "

@@ -153,6 +153,10 @@ async def list_console(
     (one uncaught error under two thousand poll ticks) is never buried.
     """
     levels = _LEVELS + ("all",)
+    level = common.enum_arg(level, levels, default="error",
+                            tool="list_console", name="level")
+    limit = common.count_arg(limit, name="limit", tool="list_console",
+                             default=40, maximum=1000)
     if level not in levels:
         raise BadParams(
             f"unknown level {level!r}: the levels are {list(levels)}. The "
@@ -226,9 +230,11 @@ async def get_page_errors(session: str | None = None,
     and says so, rather than leaving the caller unsure whether the read
     worked.
     """
+    limit = common.count_arg(limit, name="limit", tool="get_page_errors",
+                             default=20, maximum=1000)
     sess = common.session_of(session)
     store = _store(sess)
-    errors = store["errors"][-max(1, int(limit)):]
+    errors = store["errors"][-limit:]
     # Same ruling as list_console (IG-03): a thrown `Error` message and its
     # stack are page-authored prose, not keyed cells.
     body, note = _pagedata.wrap(

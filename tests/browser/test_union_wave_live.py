@@ -28,6 +28,10 @@ from kitchensink4web.ops import lite
 ROOT = Path(__file__).resolve().parents[2]
 CORPUS = ROOT / "corpus"
 
+#: The HTTP line terminator, built from code points rather than escapes so
+#: no editing pass can turn it into a real line break inside a literal.
+CRLF = bytes([13, 10])
+
 pytestmark = pytest.mark.browser
 
 
@@ -240,3 +244,199 @@ def test_a_frame_gated_page_is_read_after_the_frames_it_needs(corpus_site):
         got = await lite.get_page_view(page=page)
         assert "REVEALED" in got["projection"] or "Continue" in got["projection"]
     run(go())
+
+
+# ------------------------------- super-class 4: completion truthfulness
+
+
+def test_at_end_is_not_asserted_over_a_growing_document(corpus_site):
+    """hostile H-11. Four consecutive `scroll(action='end')` calls answered
+    `at_end: true` and "0 screen(s) below the current view" every time,
+    while the document went from 367,286 px to 1,428,086 px: roughly
+    357,000 px arriving below the view between each pair of calls."""
+    async def go():
+        _, page = await _open(corpus_site, "b/uw_infinite.html")
+        got = await lite.scroll(page=page, action="end")
+        assert got["at_end"] is False, got
+        assert "growing" in got
+        assert "no end to be at" in got["growing"]
+    run(go())
+
+
+def test_the_two_virtualization_detectors_agree(corpus_site):
+    """hostile H-11, second half. `scroll` reported
+    `virtualized: [{"tag": "HTML", ...}]` one call after get_page_view's
+    completeness block said "virtualized or infinite-scroll containers:
+    none detected", about the same page in the same session."""
+    async def go():
+        _, page = await _open(corpus_site, "b/uw_infinite.html")
+        scrolled = await lite.scroll(page=page, action="end")
+        view = await lite.get_page_view(page=page)
+        says_none = ("virtualized or infinite-scroll containers: none"
+                     in view["projection"])
+        assert says_none == (not scrolled["virtualized"]), (
+            scrolled["virtualized"], says_none)
+    run(go())
+
+
+def test_a_dead_origin_is_not_read_as_an_empty_page(corpus_site):
+    """chaos C-09. With the origin dead, `navigate` honestly reported
+    PAGE_UNREACHABLE and the very next `get_text` answered ok with
+    `{"url":"chrome-error://chromewebdata/","text":"","chars":{"returned":
+    0}}` while `get_page_view` printed `status: 200 | load: load | dom
+    nodes: 3` and "unlisted affordances: none, every control is listed".
+    An agent that read after a failed navigation concluded the site had
+    returned an empty 200, which is the most expensive wrong conclusion
+    available here.
+
+    Two shapes, one class. Bundled Chromium parks on `about:blank` when the
+    connection is refused from a fresh tab and paints `chrome-error://` when
+    a LOADED page's origin goes away under a reload; the read has to be
+    honest about both, and neither may come back as an empty page."""
+    import socket
+    import threading
+
+    class _Once(threading.Thread):
+        """Serves one real page, then stops listening."""
+
+        daemon = True
+
+        def __init__(self):
+            super().__init__()
+            self.sock = socket.socket()
+            self.sock.bind(("127.0.0.1", 0))
+            self.sock.listen(4)
+            self.port = self.sock.getsockname()[1]
+
+        def run(self):
+            while True:
+                try:
+                    conn, _ = self.sock.accept()
+                except OSError:
+                    return
+                try:
+                    conn.recv(4096)
+                    body = (b"<!doctype html><html><body>"
+                            b"<p>ORIGIN-ALIVE</p></body></html>")
+                    head = (b"HTTP/1.1 200 OK" + CRLF
+                            + b"Content-Type: text/html" + CRLF
+                            + b"Content-Length: "
+                            + str(len(body)).encode() + CRLF + CRLF)
+                    conn.sendall(head + body)
+                    conn.close()
+                except OSError:
+                    pass
+
+    async def go():
+        from kitchensink4web.errors import PageUnreachable
+        from kitchensink4web.engine.session import MANAGER
+        session = await MANAGER.open(headless=True)
+        page = session.focused
+
+        # Shape 1: a fresh tab, connection refused. The tab stays blank and
+        # the read says why rather than returning an empty page.
+        probe = socket.socket()
+        probe.bind(("127.0.0.1", 0))
+        free = probe.getsockname()[1]
+        probe.close()
+        with pytest.raises(Exception):
+            await lite.navigate(page=page, url=f"http://127.0.0.1:{free}/x")
+        # The interstitial loads AFTER the failed navigation returns, so
+        # the read gate sees about:blank and the extractor sees
+        # chrome-error://. Either way the read refuses rather than
+        # answering ok with an empty page.
+        with pytest.raises(PageUnreachable) as caught:
+            await lite.get_text(page=page)
+        assert "network-error interstitial" in str(caught.value)
+        with pytest.raises(PageUnreachable):
+            await lite.get_page_view(page=page)
+
+        # Shape 2: a loaded page whose origin dies under it.
+        await lite.navigate(page=page, url=f"http://127.0.0.1:{once.port}/")
+        once.sock.close()
+        with pytest.raises(Exception):
+            await lite.navigate(page=page, action="reload")
+        # Either the browser painted its interstitial (a refusal) or it
+        # left the old document up (a note). Both are honest; an empty page
+        # served as the site's is not.
+        try:
+            reread = await lite.get_text(page=page)
+        except PageUnreachable as exc:
+            assert "network-error interstitial" in str(exc)
+        else:
+            assert "ORIGIN-ALIVE" in reread["text"], reread["text"][:200]
+
+    once = _Once()
+    once.start()
+    try:
+        run(go())
+    finally:
+        try:
+            once.sock.close()
+        except OSError:
+            pass
+
+
+def test_a_truncated_document_never_reads_back_as_complete():
+    """chaos C-08. A body reset mid-transfer made `navigate` refuse
+    honestly and the very next `get_text` answered `total_in_scope: 668`
+    with "this is the end of the text in scope" under it, while
+    `get_page_view`'s identity line read `status: 200 | load: load` and the
+    completeness block never once said the document had not finished
+    arriving. `load: load` asserted by the READ for a load state the
+    PREVIOUS call refused to reach."""
+    import socket
+    import threading
+
+    class _Loris(threading.Thread):
+        """Declares a long body and sends a fraction of it, then closes."""
+
+        daemon = True
+
+        def __init__(self):
+            super().__init__()
+            self.sock = socket.socket()
+            self.sock.bind(("127.0.0.1", 0))
+            self.sock.listen(4)
+            self.port = self.sock.getsockname()[1]
+            self.stop = False
+
+        def run(self):
+            while not self.stop:
+                try:
+                    conn, _ = self.sock.accept()
+                except OSError:
+                    return
+                try:
+                    conn.recv(4096)
+                    conn.sendall(
+                        b"HTTP/1.1 200 OK\r\n"
+                        b"Content-Type: text/html\r\n"
+                        b"Content-Length: 100000\r\n\r\n"
+                        b"<!doctype html><html><body><p>"
+                        b"TRUNCATED-BODY-MARKER</p>")
+                    conn.close()
+                except OSError:
+                    pass
+
+    async def go():
+        from kitchensink4web.engine.session import MANAGER
+        session = await MANAGER.open(headless=True)
+        page = session.focused
+        with pytest.raises(Exception):
+            await lite.navigate(page=page,
+                                url=f"http://127.0.0.1:{loris.port}/cut",
+                                timeout_ms=4000)
+        got = await lite.get_text(page=page)
+        assert "not the end of the page" in got["continue"], got["continue"]
+        assert "document" in got
+        view = await lite.get_page_view(page=page)
+        assert "INCOMPLETE DOCUMENT" in view["projection"]
+
+    loris = _Loris()
+    loris.start()
+    try:
+        run(go())
+    finally:
+        loris.stop = True
+        loris.sock.close()

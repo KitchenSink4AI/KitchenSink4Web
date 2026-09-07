@@ -584,15 +584,51 @@ def parse_viewport(value) -> dict:
     if isinstance(value, str):
         parts = value.lower().replace(" ", "").split("x")
         if len(parts) == 2 and all(p.isdigit() for p in parts):
-            return {"width": int(parts[0]), "height": int(parts[1])}
+            return _checked_viewport(int(parts[0]), int(parts[1]), value)
         raise BadParams(
             f"viewport {value!r} is not a size: use '1280x900' or "
             f"{{'width': 1280, 'height': 900}} in CSS pixels.")
     if isinstance(value, dict) and value.get("width") and value.get("height"):
-        return {"width": int(value["width"]), "height": int(value["height"])}
+        return _checked_viewport(int(value["width"]), int(value["height"]),
+                                 value)
     raise BadParams(
         "viewport takes {'width': N, 'height': N} in CSS pixels, or the "
         "'1280x900' spelling.")
+
+
+#: The smallest viewport this build will open. One pixel is a legitimate
+#: test case (the hostile round read a 1x1 page successfully); zero is not a
+#: window at all.
+MIN_VIEWPORT_PX = 1
+
+#: Past this, the browser refuses at launch with a protocol error whose text
+#: names nothing a caller can act on, so the refusal happens here instead.
+MAX_VIEWPORT_PX = 32767
+
+
+def _checked_viewport(width: int, height: int, given) -> dict:
+    """ONE validator for BOTH spellings (fuzzer class 8).
+
+    `manage_session(viewport="0x0")` and `"0x900"` opened a session with a
+    zero-pixel viewport and returned ok, while the dict spelling of the same
+    values refused BAD_PARAMS: two spellings of one parameter validating
+    differently, because the string branch only asked whether the parts were
+    digits and the dict branch happened to be falsy-checked. Everything
+    downstream is meaningless on a zero-pixel viewport -- in-view,
+    occlusion, screenshots, scroll -- so it never opens."""
+    if width < MIN_VIEWPORT_PX or height < MIN_VIEWPORT_PX:
+        raise BadParams(
+            f"viewport {given!r} has a zero dimension, so nothing would be "
+            f"in view and no screenshot, scroll, or visibility answer from "
+            f"it would mean anything. The smallest this opens is "
+            f"{MIN_VIEWPORT_PX}x{MIN_VIEWPORT_PX} CSS pixels.")
+    if width > MAX_VIEWPORT_PX or height > MAX_VIEWPORT_PX:
+        raise BadParams(
+            f"viewport {given!r} is past what the browser accepts "
+            f"({MAX_VIEWPORT_PX} CSS pixels per side); a launch with it "
+            f"fails inside the driver with a protocol error that names "
+            f"nothing you can act on.")
+    return {"width": width, "height": height}
 
 
 def device_names(pw: object) -> list[str]:
