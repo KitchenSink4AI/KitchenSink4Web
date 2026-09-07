@@ -1,0 +1,24 @@
+<!doctype html><meta charset=utf-8><title>compose</title>
+<body>
+<h1>Write a comment</h1>
+<!-- TIER 2: a submission that reaches other people. Free text plus a
+     submitter named in the send vocabulary. -->
+<form id="c" action="publish" method="post">
+  <textarea id="body" name="body"></textarea>
+  <button id="go" type="submit">Post comment</button>
+</form>
+<!-- CONTROL ARM on the same page: an ordinary POST search must stay out of
+     every Tier 2 class in the same run. A gate that fires on everything is
+     the same failure as a gate that fires on nothing. -->
+<form id="s" action="find" method="post">
+  <input id="needle" name="q" value="">
+  <button id="find" type="submit">Search</button>
+</form>
+<script>
+window.__submitted = null;
+for (const id of ['c', 's']) {
+  document.getElementById(id).addEventListener('submit', function (e) {
+    window.__submitted = id; e.preventDefault();
+  });
+}
+</script>

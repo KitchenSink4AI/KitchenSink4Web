@@ -100,6 +100,17 @@ async def _verdict(call) -> str:
         text = str(exc)
         if "payment-shaped" in text:
             return "payment_form"
+        # THE FINER CLASSES ARE TESTED FIRST, and the order is load-bearing:
+        # `credential_submit`'s sentence BEGINS "submitting a form that
+        # carries...", so a generic prefix test above it reports the class
+        # the ladder exists to stop reporting.
+        for phrase, cls in (
+                ("password or a one-time code", "credential_submit"),
+                ("reaches other people", "broadcast_submit"),
+                ("deletes, cancels", "destructive_submit"),
+                ("agreeing to terms", "legal_assent")):
+            if phrase in text:
+                return cls
         if "submitting a form" in text:
             return "form_submit"
         return "gated"
@@ -114,10 +125,14 @@ def test_the_mechanism_battery(ra_site):
     """SAME tool, SAME expected verdict, EVERY native submission mechanism.
 
     Six ways to submit a form and one way not to. The plain form has no card
-    field anywhere and every mechanism on it must give `form_submit`; the
-    payment form's only card field is ASSOCIATED to it by `form=` rather than
-    contained in it, and every mechanism on that one must give
-    `payment_form`. The `type=button` control arm must run ungated, because a
+    field anywhere and every mechanism on it must give the SAME verdict
+    (`destructive_submit` since the consent ladder landed, because every one
+    of its submitters says "Delete by ..."; `form_submit` before it, and the
+    property being pinned is agreement across mechanisms rather than the
+    name of the class). The payment form's only card field is ASSOCIATED to
+    it by `form=` rather than contained in it, and every mechanism on that
+    one must give `payment_form`, because payment still wins over every
+    other class. The `type=button` control arm must run ungated, because a
     gate that fires on everything is a gate people route around.
 
     This is the test R1 and R2 would have failed. Gate parity across the four
@@ -141,7 +156,7 @@ def test_the_mechanism_battery(ra_site):
                 lambda: lite.press_keys(page=page, keys="Space",
                                         location={"css": "#p_submit"})),
         }
-        assert set(plain.values()) == {"form_submit"}, plain
+        assert set(plain.values()) == {"destructive_submit"}, plain
 
         pay = {
             "input type=submit": await _verdict(lambda: lite.click(
@@ -234,8 +249,12 @@ def test_a_global_space_on_a_focused_submitter_gates(ra_site):
         session, page = await _open(ra_site, "spacesubmit.html")
         live = session.page(page).page
         await live.evaluate("() => document.getElementById('go').focus()")
+        # `spacesubmit.html` is a Delete-account form, so the class is
+        # `destructive_submit` since the consent ladder landed. What R2
+        # pins is unchanged: Space on a focused submitter reaches a gate,
+        # and the same gate Enter reaches.
         assert await _verdict(lambda: lite.press_keys(
-            page=page, keys="Space")) == "form_submit"
+            page=page, keys="Space")) == "destructive_submit"
         assert await live.evaluate("() => window.__submitted") is False
     run(go())
 
@@ -251,7 +270,7 @@ def test_space_and_enter_agree_about_one_element(ra_site):
             await live.evaluate("() => document.getElementById('go').focus()")
             seen.append(await _verdict(
                 lambda k=key: lite.press_keys(page=page, keys=k)))
-        assert seen == ["form_submit", "form_submit"], seen
+        assert seen == ["destructive_submit", "destructive_submit"], seen
     run(go())
 
 

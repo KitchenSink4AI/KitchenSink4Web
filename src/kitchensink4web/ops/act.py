@@ -562,6 +562,13 @@ def target_descriptor(unit: dict) -> dict:
         # anywhere in it, which is what `payment_form` has always claimed to
         # be about.
         "form_payment": unit.get("form_payment"),
+        # THE FORM CENSUS, which is what lets the classifier say WHICH KIND
+        # of submission this is instead of only "a form was submitted". The
+        # facts are computed in-page beside `ksFormPayment`; the vocabulary
+        # that reads them lives in `policy/submissions.py`.
+        "form_census": unit.get("form_census"),
+        # The page's own age declaration, relayed and never judged.
+        "page_age_declared": unit.get("page_age_declared"),
     }
 
 
@@ -882,7 +889,7 @@ async def recheck_at_write(page, handle, desc: dict, *, tool: str) -> dict:
     merged = dict(desc)
     for key in ("type", "autocomplete", "in_form", "action", "attr_id",
                 "attr_name", "pattern", "inputmode", "form_payment",
-                "payment"):
+                "payment", "form_census", "page_age_declared"):
         if live.get(key) not in (None, ""):
             merged[key] = live[key]
     merged["secret"] = None         # re-derived from the live type, not reused

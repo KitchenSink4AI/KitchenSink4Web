@@ -40,6 +40,18 @@ def launch(monkeypatch):
     monkeypatch.delenv("KS4WEB_READ_ONLY", raising=False)
     monkeypatch.delenv("KS4WEB_ALLOW_ACTING", raising=False)
     monkeypatch.delenv("KS4WEB_ALL_PACKS", raising=False)
+    # Axis B is launch-time too (consent ladder, 2026-09-07), and it is
+    # process-global for exactly the reason the grade is, so a test that
+    # inspects the surface needs a known consent shape as much as it needs a
+    # known grade. A stray KS4WEB_PREAUTH in the developer's environment
+    # would otherwise clear gates in tests that exist to prove they fire.
+    for _consent_env in ("KS4WEB_CONSENT", "KS4WEB_PREAUTH",
+                         "KS4WEB_SENSITIVE_ORIGINS", "KS4WEB_REMEMBER",
+                         "KS4WEB_CREDENTIAL_INJECTION"):
+        monkeypatch.delenv(_consent_env, raising=False)
+    for _name in [k for k in list(__import__("os").environ)
+                  if k.startswith("KS4WEB_SECRET_")]:
+        monkeypatch.delenv(_name, raising=False)
     for _pack in ("EXTRACT", "CAPTURE", "NETWORK", "STORAGE", "FILES",
                   "DIAGNOSTICS", "WORKFLOWS"):
         monkeypatch.delenv(f"KS4WEB_PACK_{_pack}", raising=False)

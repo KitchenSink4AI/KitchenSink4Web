@@ -2570,20 +2570,44 @@ async def fill_form(
         # filled either way and the form state read-back is the authority on
         # what the page now holds.
         first = prepared[0][2] if prepared else None
-        granted = _gates.ENGINE.ask(
-            "form_submit", tool="fill_form", session=sess.session_id,
-            page=record.handle,
-            target=first["descriptor"] if first else None,
-            summary=f"Submit the form after filling {batch['completed']} "
-                    f"field(s) on {record.handle}?")
-        # Only a confirmed re-run reaches this line. Re-resolve the anchor
-        # field NOW so the fingerprint comparison is against the page as it
-        # is at execution, not as it was at the ask.
+        # WHICH KIND of submission this is, and it was hardcoded
+        # `form_submit` until the consent ladder landed: the batch path
+        # asked the same undifferentiated question about a catalog query and
+        # a sign-in, and it asked it at every scope because it called the
+        # gate engine directly and never reached the consent ladder at all.
+        # The class now comes from the SAME classifier the other three write
+        # paths use, against the first filled field's own form.
+        first_desc = first["descriptor"] if first else None
+        submit_class = (_act.action_class_for(first_desc, submitting=True)
+                        if first_desc else None) or "form_submit"
+        decision = _consent.decide(
+            submit_class, url=record.page.url, desc=first_desc,
+            origin_verdict=_origins.evaluate(record.page.url or ""))
+        granted = None
+        if not decision.clears:
+            granted = _gates.ENGINE.ask(
+                submit_class, tool="fill_form", session=sess.session_id,
+                page=record.handle, target=first_desc,
+                summary=f"Submit the form after filling {batch['completed']} "
+                        f"field(s) on {record.handle}?",
+                live_only=decision.outcome == _consent.ASK_LIVE_ONLY,
+                unattended=_consent.unattended(),
+                origin=_consent.origin_of(record.page.url))
+        # Only a cleared decision or a confirmed re-run reaches this line.
+        # Re-resolve the anchor field NOW so the verification is against the
+        # page as it is at execution, not as it was at the ask: an earlier
+        # field in the batch can legitimately re-render a later one.
         fresh = await _act.resolve(sess, record, prepared[0][1],
                                    tool="fill_form") if prepared else None
-        _gates.ENGINE.verify_execute(
-            granted, fresh["descriptor"] if fresh else None,
-            resolution_outcome=fresh["resolution"] if fresh else "ok")
+        if granted is not None:
+            _gates.ENGINE.verify_execute(
+                granted, fresh["descriptor"] if fresh else None,
+                resolution_outcome=fresh["resolution"] if fresh else "ok")
+        else:
+            _gates.verify_cleared(
+                submit_class, fresh["descriptor"] if fresh else None,
+                resolution_outcome=fresh["resolution"] if fresh else "ok",
+                summary="submit the form after filling it")
         fctx = _act.context_of(fresh or {}, record)
         before = await _act.observe(fctx,
                                     fresh["node_ref"] if fresh else None)
@@ -2591,8 +2615,13 @@ async def fill_form(
         outcome = await _act.verify(fctx,
                                     fresh["node_ref"] if fresh else None,
                                     before)
-        _audit.annotate(gate={"action_class": "form_submit",
-                              "gate": granted.token[:8]},
+        _audit.annotate(gate={"action_class": submit_class,
+                              "gate": (granted.token[:8] if granted
+                                       else None),
+                              "cleared_by": ("human" if granted
+                                             else decision.cleared_by),
+                              **({"cleared_because": decision.reason}
+                                 if granted is None else {})},
                         effect=outcome["effect"])
         submitted = {"submitted": True, "how": submitted,
                      "changed": {"effect": outcome["effect"],
