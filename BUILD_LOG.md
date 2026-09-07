@@ -3468,14 +3468,37 @@ those fixtures are Delete-account forms, and the old class asked a human to
 allow "submitting a form" about deleting their account. The parity property
 those tests exist for is untouched.
 
+**The finding that justified the wire pins.** dream-boundary B7.16 was
+written as the pin that decides whether credential injection ships at all: a
+matched request that 302s to another origin must not carry the header on the
+second hop, and if the route handler cannot enforce it the capability is CUT
+rather than shipped with a caveat. It could not, as first built, and the first
+run of the new live pin proved it at the wire. `route.continue_(headers=...)`
+hands the headers to the network stack and the stack re-sends them itself on a
+302, with the route handler never consulted for the second hop, so the
+in-handler origin re-check never ran. The STRUCTURAL pin was green the whole
+time, which is the lesson: the handler's re-check is a property of this code
+and what the network stack does after the handler returns is not. Fixed by
+fetching with `max_redirects=0` and fulfilling the redirect back, so the
+second hop is a new request the browser issues and the matcher rejects.
+
+**A ladder with eleven doors around it is not a ladder.** Eleven sites in
+`ops/` reached a gate without `approve()` and every one called
+`gates.ENGINE.ask()` directly, so none of them saw the consent scope:
+`storage_clear` under `full` still asked, and
+`KS4WEB_PREAUTH=storage_load@github.com` cleared `load_auth_state` while
+leaving `manage_session(open, auth_state=...)` asking, which is the same
+operation spelled differently. Step 7 is `policy.engine.confirm()` now and
+there is one door. An AST pin over `ops/` fails on a twelfth.
+
 **Cut from the spec, by author ruling:** the queue-and-hold buffer. The gate
 TTL is 180 seconds and the TOCTOU fingerprint expires with it, so a decision
 approved later could not execute the original target anyway; an unattended
 session gets an honest refusal instead of a 150-second wait for an answer
 nobody will give.
 
-Gate: **631 unit green, 8 new live green, browser suite green**, run
-SEQUENTIALLY. 69 new unit pins and 8 new live pins across seven new
-`corpus/consent` fixtures; 39 of the 50 spec pins are negative. Every new unit
-pin errors on `45fc986` at the import of a module that does not exist there.
-Zero orphaned browser processes.
+Gate: **633 unit green in both orders, 14 new live green, browser suite
+green**, run SEQUENTIALLY. 71 new unit pins and 14 new live pins across seven
+new `corpus/consent` fixtures and two local origins; 39 of the 50 spec pins
+are negative. Every new unit pin errors on `45fc986` at the import of a module
+that does not exist there. Zero orphaned browser processes.

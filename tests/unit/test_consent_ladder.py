@@ -388,6 +388,33 @@ def test_n20_offlist_still_gates_under_full_and_under_a_wrong_preauth(
             == consent.ASK_LIVE_ONLY
 
 
+def test_n20b_a_wildcard_preauth_does_not_clear_a_configured_allowlist(
+        monkeypatch):
+    """PIN 20's other half, and it is a hole that was open until it was
+    looked for.
+
+    `navigation_offlist` and `action_offlist` are Tier 2, but the choke point
+    only ASSIGNS them when the action carries no class of its own. So
+    `evaluate_script` on an off-list origin arrives at the ladder wearing its
+    OWN class, and a `evaluate_script@*` pre-authorization would have cleared
+    it -- quietly widening an allowlist the human configured, using a setting
+    they wrote for a different purpose. The allowlist is the narrower of the
+    two settings and it wins."""
+    setup(monkeypatch, scope="full", allow="example.com",
+          preauth="evaluate_script@*,download_to_disk@*,clipboard_read@*")
+    for klass in ("evaluate_script", "download_to_disk", "clipboard_read",
+                  "form_submit", "storage_clear"):
+        d = consent.decide(klass, url="https://elsewhere.test/x",
+                           desc=desc(method="GET"),
+                           origin_verdict="off-list")
+        assert d.outcome == consent.ASK_LIVE_ONLY, klass
+        assert not d.clears, klass
+    # And ON the allowlist the same preauth works, which is the point of
+    # having written it.
+    assert consent.decide("evaluate_script", url="https://example.com/x",
+                          origin_verdict="allowed").outcome == consent.PREAUTH
+
+
 def test_n21_a_grant_for_origin_a_does_not_clear_origin_b(monkeypatch):
     """PIN 21. The scope of a grant is (origin, class, ttl) and never a raw
     string: that is the difference between a consent unit and the useless

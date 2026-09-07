@@ -668,7 +668,25 @@ def query_shaped(census: dict) -> bool:
 
     THE RULE IS AN ADMISSION TEST, NEVER AN EXEMPTION. A GET checkout form
     still gates, because payment is classified before this is ever consulted
-    and a Tier 2 class never reaches here."""
+    and a Tier 2 class never reaches here.
+
+    THE RESIDUAL, NAMED RATHER THAN PAPERED OVER. Everywhere else in this
+    build, page-authored text may classify UP into a gate and may never
+    classify DOWN out of one. This rule is the exception: `method` is page
+    authored and reading it as GET is a DOWN classification. A form declaring
+    `method="get"` whose own `submit` listener rewrites the method, or which
+    posts by `fetch()` from that listener, is Tier 0 on the declaration and
+    something else in fact.
+
+    Three things bound it and none of them closes it. The declaration is what
+    the site published about itself, so a site doing this is lying about its
+    own markup rather than exploiting a parser. The write paths that focus a
+    field re-take the census at the write (`recheck_at_write`), so a flip
+    visible at focus time is caught and re-classified. And nothing Tier 2 can
+    ride it: payment, credentials, sends, deletions, and assent are all
+    classified before the method is consulted, so what a successful flip buys
+    is an unprompted ORDINARY POST, which is exactly what the `full` scope
+    grants anyway. Under `research` it is a real gap of one prompt."""
     if not census:
         return False
     if (census.get("method") or "").strip().upper() != "GET":
@@ -787,6 +805,20 @@ def decide(action_class: str | None, *, url: str | None = None,
     if action_class in IRREDUCIBLE:
         return Decision(ASK_LIVE_ONLY, action_class,
                         "this class always asks a human")
+
+    if origin_verdict == "off-list":
+        # AN ALLOWLIST THE HUMAN CONFIGURED IS NOT CLEARED BY ANYTHING HERE.
+        # `navigation_offlist` and `action_offlist` are Tier 2 already, but
+        # they are only ASSIGNED when the action carries no class of its own
+        # (`engine.approve` step 3), so `evaluate_script` on an off-list
+        # origin arrives here wearing its own class. Without this line a
+        # `evaluate_script@*` pre-authorization would quietly clear the
+        # allowlist for that class, which is not what a human who wrote both
+        # settings asked for: the whole point of the allowlist is that it is
+        # the narrower of the two.
+        return Decision(ASK_LIVE_ONLY, action_class,
+                        f"this origin is outside {origins.ENV_ALLOW}, the "
+                        f"allowlist you configured")
 
     if action_class == "dialog_accept" and (desc or {}).get(
             "dialog_destructive"):
