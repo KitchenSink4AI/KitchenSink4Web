@@ -3200,3 +3200,205 @@ pins updated to the truthful contract, corpus untouched:
 (the bare path still serves at 200, because reading a login page is an
 ordinary thing to do), and the renderer-crash row as described above. Zero
 orphaned browser processes at exit; everything headless throughout.
+
+---
+
+## Fix wave 9: the union wave (2026-09-07/08)
+
+Six breakers ran the insane round against `8ef2aba` at once, on one
+machine, for four hours: a fresh-eyes security gauntlet, an
+argument fuzzer at roughly 11,900 calls, a pathological-page corpus, a
+chaos monkey killing and freezing browsers, a concurrency harness holding
+many requests in flight against one server, and an endurance soak of 69
+sessions and 4,111 navigate-read pairs. The author's own Desktop field
+test landed the same night: 11 sessions, 180 calls, 22 real sites. Then
+two design agents reading the shipping tree found one more each.
+
+Six reports, one wave. The point of doing it as one wave rather than six
+is that the findings are not six lists, they are five CLASSES that every
+lens hit from a different side, and a class fixed at the named site is a
+class that comes back.
+
+**Super-class 1: BAD_PARAMS was the terminal fallback for everything.**
+`envelope.classify` ended in `return "BAD_PARAMS"`, and the transport
+table `_NET_CAUSES` is an allowlist, so every failure the typed vocabulary
+did not recognize told the caller its arguments were malformed. A browser
+killed mid-navigation: nine runs in ten BAD_PARAMS. A redirect loop the
+site built: BAD_PARAMS with the location-object hint under it. An
+unwritable directory: BAD_PARAMS carrying a bare `[Errno 13]`. Four codes
+join the closed vocabulary because four conditions were being misnamed:
+SESSION_DEAD, NAVIGATION_FAILED, FILE_WRITE_FAILED, and DRIVER_FAILURE,
+the last existing purely so an unrecognized DRIVER fault gets an
+infrastructure code rather than the argument-blaming one. `classify` now
+recognizes driver shape and never answers BAD_PARAMS for it, which is the
+structural half: the table can stay an allowlist because falling off it no
+longer blames the caller.
+
+`envelope.refusal` also stopped letting `str(exc)` be the whole message.
+This module's first stated rule is that no exception string ever reaches a
+caller, and that rule was false for every backstop code in the map. A
+2,368-character message went out carrying the driver string, the complete
+`chrome-headless-shell.exe` launch line with every flag, the local
+ms-playwright install path, and GPU crash lines with foreign PIDs. There
+is a scrubber now: the Call-log and Browser-logs tails are cut, local
+filesystem roots are replaced with a label, and the text is clipped at 200
+characters. A raise site can also carry its own hint, because the
+crashed-renderer message ("this handle is dead and will not recover; open
+a NEW tab") was shipping under CONFLICT's generic "re-read to re-establish
+a baseline".
+
+**Super-class 2: reads declared themselves complete over text they
+dropped.** `projection/text.js` fixed the readable set as a tag list, so
+400 divs holding 51,922 characters of ordinary visible English came back
+as `total_in_scope: 24` with "this is the end of the text in scope"
+printed under it, while `stripped` counted only HIDDEN blocks and visible
+text the classifier declined had no counter anywhere. The readable set is
+every block-level BOX now, decided by computed display, because that is
+what decides whether a run of text is its own paragraph on screen. SVG was
+worse: the SKIP entry never even fired, since an `<svg>` element's tagName
+is lowercase and the set held `SVG`, so the walk descended and emitted
+nothing and the completeness block had no SVG vocabulary at all. `<text>`
+is read; `<title>` and `<desc>` are counted as the alt text they are.
+What is still left over is counted in two new ledger rows, and the
+completion sentence stops claiming the end of the text when a run was
+omitted.
+
+The same class in three more shapes. `get_table` was bounded by rows only,
+so the PAGE picked the payload size and a 200x1000 table came back as
+254,185 tokens from one default call, against no stated limit, on a tool
+whose siblings hold 5,000 against 100,000 links. The canvas ledger ran on
+an area heuristic and was wrong in BOTH directions: a small canvas with
+text painted on it reported "none", a large blank one reported unread
+content. And an SVG `<a>` exposes href as an SVGAnimatedString, so
+stringifying the DOM property produced `/[object%20SVGAnimatedString]`, a
+plausible URL that was fabricated and returned as fact. The class sweep
+found four more sites reading that property the same way, so the rule is
+one spliced source now like every other shared rule in the projection.
+
+**Super-class 3: only `navigate` was bounded.** `session.with_timeout`
+exists and its docstring is exactly right, and it had one caller. Against
+a suspended browser `navigate(timeout_ms=8000)` returned honestly at
+8.01 s while `get_page_view` ran past 120 s and `click(timeout_ms=6000)`
+ran past 120 s with its explicit argument ignored, twenty times over.
+`get_text` and `get_page_view` accept no timeout argument at all, so a
+caller could not even ask. The bound went to the tool WRAPPER, which is
+the one place that covers the tools taking no timeout parameter, and a
+caller's own `timeout_ms` always widens it so the backstop never fires
+before the tool's own honest timeout does.
+
+`wait_for(condition='visible')` had the same disease inside out: it
+resolved its location eagerly, once, before the wait, so the one condition
+designed for "this control appears later" refused in 0.01 s for exactly
+that case and never consulted `timeout_ms`. The refusal's own last clause
+named the true situation while declining to wait for it.
+
+**Super-class 4: a half-delivered document read back as a whole one.** A
+body reset at byte 700 of a declared 100,000 made `navigate` refuse
+honestly and the very next `get_text` answer `total_in_scope: 668` with
+"this is the end of the text in scope" under it, while the identity line
+read `status: 200 | load: load` -- a load state asserted by the READ for a
+load the PREVIOUS call had refused to reach. With the origin dead the
+browser serves its own `chrome-error://` interstitial and no read surface
+recognized the scheme, so a read after a failed navigation concluded the
+site returned an empty 200. And `scroll(action='end')` answered
+`at_end: true` with "0 screen(s) below" four times running while the
+document went from 367,286 px to 1,428,086 px.
+
+**Super-class 5: the diagnostic surface confirmed the fiction.**
+`manage_session(action='status')` is the tool an agent reaches for when
+everything else is refusing, and it derived `state` from idle timing
+alone: a session whose every owned PID was dead reported `active`, with
+`pages: 1` for a page `locate()` was simultaneously refusing. The tab list
+agreed with it and disagreed with the crash mark. The reported `actions`
+counter was initialised in the dataclass and written by NOTHING in the
+tree, so it was pinned at zero however much acting happened, while the
+budget ledger printed the true count in the same session; two counters for
+one quantity is how that happens, so there is one now. Two of the three
+navigation doors never recorded the origin they landed on, so a 550-page
+run finished with `navigations: 550` and `origins: 0`.
+
+And Defense 3 was inert. `park_idle` was implemented, complete, and had no
+caller anywhere in the shipped tree, while the status payload reported its
+two bounds inside the same hygiene block as the job object and the startup
+reaper, both of which are real. A session left alone for 6.7x the recycle
+bound still held five browser processes and 500 MB. It was WIRED and then
+REVERTED the same night on the lifecycle review's evidence: an automatic
+recycle closes a session out from under a caller, and with no session
+tombstone the next call answers "no session 's1'", which is
+indistinguishable from a close the caller made itself. What ships is the
+truth instead, in an `idle_advisory` block that says plainly that nothing
+parks and nothing recycles on its own. `park_idle` keeps the
+ref-invalidation it always needed, so the lifecycle build inherits a
+correct mechanism rather than a landmine.
+
+**The security round, separately.** `wait_for(condition='js')` was an
+ungated evaluator: the predicate reached `page.evaluate` in the precheck
+and `page.wait_for_function` in the wait, and the tool had no
+`_policy.approve` call anywhere, so none of the seven ladder checks ran.
+Live-proven under the SHIPPED read-only default, one argument changed
+`document.title`, inserted a DOM node, wrote `localStorage`, wrote
+`document.cookie`, and fetched an origin the deny list refuses at the
+front door: five of the seven verbs in the sentence read-only mode prints
+about itself, in the mode whose whole claim is that they are not
+reachable. It is gated on the `evaluate_script` action class now, and
+`wait_for` left the `readOnlyHint` set, because that annotation is a
+static claim about the tool and a tool carrying an evaluator in one of its
+arguments cannot make it.
+
+The origin policy reached the read doors and the act doors and stopped. On
+a document no door ruled on, `find_elements` returned the policed origin's
+element inventory, `take_screenshot` returned its pixels, `export_pdf` and
+`save_page` wrote it to disk, and `manage_storage` listed its localStorage
+keys, while `get_text` on the same page refused and parked. Quieter and
+worse: after a capture the browser was still SITTING on the policed
+origin, so every later call in the session started from a document the
+policy said no to.
+
+And a bearer token handed to `set_routing(action='headers')` was written
+VERBATIM into `audit-<pid>.jsonl`. The audit writer scrubs its entry
+against the vault and the vault only holds what something called `observe`
+on; nothing on the tool-call path ever did. Closed as the class: every
+credential-shaped argument key, at any nesting depth, is vaulted before
+the record is built, reusing the cookie classifier so the over-redaction
+calibration is shared rather than re-learned. The scrub also moved BEFORE
+the 200-character clip, which was cutting long secrets into prefixes the
+substring match no longer recognized.
+
+**Two findings closed by removing a claim.** `get_page_view(cursor=...)`
+reached the NOT_IMPLEMENTED scaffold code through a parameter the
+published schema advertised, in a build whose own gate asserts the
+scaffold set is empty, and `include_hidden` refused every truthy value on
+a policy ruling that is not going to change. Both left the signature. A
+schema that advertises a knob which always refuses is a schema that lies,
+and the teaching sentences moved to `server.WITHDRAWN_PARAMS`, which is
+what a caller who still sends one gets.
+
+**One confident wrong answer, from a design agent reading the shipping
+tree.** `extract_fields`'s partial-match guard was on the NEEDLE only, and
+`_norm` strips everything non-alphanumeric, so a source key of `"t)"`
+normalizes to `"t"` and one character is a substring of almost every field
+description in existence. On the frozen Wikipedia Versailles page the
+field `price` with the hint "the current price" matched that key and
+returned "destroyers" at `match: partial`, and the same call returned
+"destroyers" for `published`. Both sides clear a four-character floor now,
+the overlap has to account for a fifth of the longer string, and
+candidates are ranked deterministically instead of by dict order, so a
+wrong answer is no longer even reproducible-by-accident.
+
+Gate: full suite **1024 green in both orders** (`-p no:randomly` 550.2s,
+`--randomly-seed=20260907` 536.1s), run SEQUENTIALLY, up 68 from the 956
+of wave 8: 52 unit pins and 16 live pins across seven new corpus B
+fixtures. **49 of 52 unit pins and 16 of 16 live pins are RED on
+`8ef2aba`**; the three green ones are guards on the guards. Gauntlet 3's
+28-row standing-law sweep and gauntlet 4's battery re-run: **zero flips**,
+101 rows. The hostile breaker's own 45 repro payloads re-run against the
+fixed tree: zero fatals, zero leaked PIDs, and the two headline numbers
+moved from 254,185 tokens to 4,126 and from 24 characters to 4,344.
+Injection containment swept over 90 payloads driven at nine fixtures
+across every read, extract, and diagnostics surface: **zero injection
+strings outside a labeled envelope**, which found one last gap on the way
+(the hidden-content section carried a sibling label and no delimiters, on
+the channel most likely to be carrying an injection by construction).
+Zero orphaned browser processes attributable to this wave; the
+`chrome-headless-shell` tree alive at exit traces to a sibling agent's
+scratchpad venv and was not touched.
