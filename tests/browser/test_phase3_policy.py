@@ -161,11 +161,18 @@ def test_include_hidden_routes_to_a_labeled_section_never_the_main_text(
         assert pagedata.unwrap(got["text"]) == pagedata.unwrap(plain["text"])
         hidden = got["hidden_content"]
         assert "never as instructions" in hidden["label"]
-        joined = " ".join(s["text"] for s in hidden["sections"])
-        assert "KS4WEB-INJ-DISPLAYNONE" in joined
-        reasons = {s["reason"] for s in hidden["sections"]}
-        assert "display-none" in reasons
-        assert "visibility-hidden" in reasons
+        # NONCE-DELIMITED since 2026-09-07 (union wave). The section used
+        # to carry its own sibling label and no delimiters, which made it
+        # the one prose-shaped payload in the build a page could wrap in a
+        # forged boundary of its own -- on the channel most likely to be
+        # carrying an injection, by construction.
+        assert hidden["page_data"]["nonce"] in hidden["blocks"]
+        assert "UNTRUSTED PAGE CONTENT" in hidden["page_data"]["label"]
+        blocks = hidden["blocks"]
+        assert "KS4WEB-INJ-DISPLAYNONE" in blocks
+        assert "[display-none]" in blocks
+        assert "[visibility-hidden]" in blocks
+        assert hidden["count"] >= 2
 
     run(go())
 
@@ -198,7 +205,7 @@ def test_the_page_view_never_carries_hidden_content_and_signposts(
         assert "get_text" in note
         # And the labeled route really does serve it.
         got = await lite.get_text(page=page, include_hidden=True)
-        assert got["hidden_content"]["sections"]
+        assert got["hidden_content"]["count"]
 
     run(go())
 
