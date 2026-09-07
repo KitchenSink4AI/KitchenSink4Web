@@ -404,7 +404,52 @@ def test_aggregate_default_batch_is_derived_from_the_budget(monkeypatch):
     assert extract_ops.default_batch_size() == extract_ops.AGGREGATE_URL_CEILING
 
 
-# ------------------------------------------------------------- 5. the wait
+# ------------------------------------------------------- 5. strict grade
+
+
+def test_aggregate_strict_mode_holds_every_hop(site, monkeypatch):
+    """Under `--read-only strict` the origin allowlist binds every hop, not
+    only the first, and an off-list URL refuses in its OWN slot while the
+    on-list ones succeed. Nothing here is re-expressed: it falls out of the
+    choke point, which is the whole reason the walk goes through it per URL."""
+    from kitchensink4web.policy import origins, readonly
+    port = site.rsplit(":", 1)[1]
+    # The allowlist names the HOST. `localhost` is a different host name that
+    # resolves to the same server, so the off-list row is a URL that WOULD
+    # have worked: the refusal is the allowlist doing its job rather than the
+    # request failing for an unrelated reason.
+    monkeypatch.setenv(origins.ENV_ALLOW, "127.0.0.1")
+    readonly.apply("strict")
+    try:
+        async def go():
+            _s, page = await _session()
+            return await extract_ops.aggregate(
+                urls=[f"{site}/p/1", f"http://localhost:{port}/p/9",
+                      f"{site}/p/2"],
+                schema=["price"], page=page)
+        got = run(go())
+    finally:
+        readonly.apply(False)
+    assert got["succeeded"] == 2, got["results"]
+    assert got["results"][1]["ok"] is False, got["results"][1]
+    assert got["results"][1]["error"]["code"] in (
+        "READ_ONLY_MODE", "NAVIGATION_BLOCKED"), got["results"][1]
+
+
+# ------------------------------------------------------------- 6. the wait
+
+
+def test_aggregate_opens_its_own_session_and_says_so(site):
+    """The manage_session round trip is optional here for the same reason it is
+    optional on navigate, and the payload names the session it opened rather
+    than leaving the caller to discover one appeared."""
+    async def go():
+        got = await extract_ops.aggregate(
+            urls=[f"{site}/p/1"], schema=["price"])
+        assert got["succeeded"] == 1
+        assert "auto_session" in got, sorted(got)
+        assert "headless" in got["auto_session"]
+    run(go())
 
 
 def test_aggregate_wait_is_applied_per_url(site):

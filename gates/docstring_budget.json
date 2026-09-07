@@ -66,8 +66,8 @@
     },
     "extract_page": {
       "description_tokens": 263,
-      "schema_tokens": 97,
-      "total_tokens": 360,
+      "schema_tokens": 109,
+      "total_tokens": 372,
       "over_reference_caps": true
     },
     "fill_form": {

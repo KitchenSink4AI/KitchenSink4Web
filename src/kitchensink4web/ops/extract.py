@@ -75,6 +75,7 @@ _NO_LISTS = (
 
 _TABLE_JS = r"""
 (arg) => {
+// @@KS4WEB_RENDERED@@
   const opts = arg.opts || {};
   const squash = (s) => (typeof s === 'string' ? s : '').replace(/\s+/g, ' ').trim();
   const CLIP = opts.cell_clip || 200;
@@ -89,10 +90,10 @@ _TABLE_JS = r"""
     return role === 'grid' || role === 'treegrid' ? 'div-grid' : 'div-table';
   }
   function captionOf(el) {
-    if (el.tagName === 'TABLE' && el.caption) return squash(el.caption.textContent);
+    if (el.tagName === 'TABLE' && el.caption) return squash(ksRenderedText(el.caption));
     const al = el.getAttribute('aria-label'); if (al) return squash(al);
     const lb = el.getAttribute('aria-labelledby');
-    if (lb) { const t = document.getElementById(lb.split(/\s+/)[0]); if (t) return squash(t.textContent); }
+    if (lb) { const t = document.getElementById(lb.split(/\s+/)[0]); if (t) return squash(ksRenderedText(t)); }
     return '';
   }
   function rowsOf(el) {
@@ -144,7 +145,7 @@ _TABLE_JS = r"""
       while (matrix[r][c] !== undefined) c++;
       const rs = parseInt(cell.getAttribute('rowspan') || cell.getAttribute('aria-rowspan') || '1', 10) || 1;
       const cs = parseInt(cell.getAttribute('colspan') || cell.getAttribute('aria-colspan') || '1', 10) || 1;
-      const text = clip(cell.textContent);
+      const text = clip(ksRenderedText(cell));
       const th = real ? cell.tagName === 'TH'
         : /columnheader|rowheader/.test(cell.getAttribute('role') || '');
       const inHead = real && !!cell.closest('thead');
@@ -192,6 +193,10 @@ _TABLE_JS = r"""
   };
 }
 """
+# The shared RENDERED-TEXT reader is SPLICED, not duplicated (2026-09-08 field
+# test). `textContent` on a Wikipedia infobox cell returns the TemplateStyles
+# rules the cell carries, so a table read of one came back with CSS in a cell.
+_TABLE_JS = _instrument(_TABLE_JS)
 
 
 async def _table_data(sess, record, location, index, start_row, max_rows):
@@ -369,6 +374,7 @@ def _fit_table(table: dict, budget: int, max_columns: int | None) -> dict:
 _LIST_JS = r"""
 (arg) => {
 // @@KS4WEB_HREF@@
+// @@KS4WEB_RENDERED@@
   const opts = arg.opts || {};
   const squash = (s) => (typeof s === 'string' ? s : '').replace(/\s+/g, ' ').trim();
   const clip = (s, n) => { s = squash(s); return s.length <= n ? s : s.slice(0, n) + '...'; };
@@ -378,7 +384,7 @@ _LIST_JS = r"""
     if (el.tagName === 'DL') {
       const out = []; let dt = null;
       for (const child of el.children) {
-        if (child.tagName === 'DT') dt = squash(child.textContent);
+        if (child.tagName === 'DT') dt = squash(ksRenderedText(child));
         else if (child.tagName === 'DD')
           out.push({ term: dt, el: child });
       }
@@ -408,7 +414,7 @@ _LIST_JS = r"""
       return { choose: top.slice(0, 12).map((el, i) => ({
         index: i, tag: el.tagName.toLowerCase(),
         items: itemsOf(el).length,
-        first: clip(itemsOf(el)[0].el.textContent, 80) })),
+        first: clip(ksRenderedText(itemsOf(el)[0].el), 80) })),
         count: top.length };
     }
   }
@@ -419,7 +425,7 @@ _LIST_JS = r"""
   const limit = Math.max(1, opts.max_items || 50);
   const out = items.slice(start, start + limit).map((x, i) => {
     const link = x.el.querySelector ? x.el.querySelector('a[href]') : null;
-    const rec = { i: start + i, text: clip(x.el.textContent, 200) };
+    const rec = { i: start + i, text: clip(ksRenderedText(x.el), 200) };
     if (x.term) rec.term = x.term;
     // ksHref, not link.href (fuzzer class 10): an SVG anchor's href is an
     // SVGAnimatedString and stringifying it fabricates a URL.
@@ -686,6 +692,7 @@ async def get_metadata(page: str) -> dict:
 
 _FIELDS_JS = r"""
 () => {
+// @@KS4WEB_RENDERED@@
   const squash = (s) => (typeof s === 'string' ? s : '').replace(/\s+/g, ' ').trim();
   const clip = (s, n) => { s = squash(s); return s.length <= n ? s : s.slice(0, n) + '...'; };
   const sources = [];  // {key, value, by}
@@ -721,24 +728,24 @@ _FIELDS_JS = r"""
   // 3. microdata itemprops.
   for (const el of document.querySelectorAll('[itemprop]')) {
     const key = el.getAttribute('itemprop');
-    const value = squash(el.getAttribute('content') || el.textContent);
+    const value = squash(el.getAttribute('content') || ksRenderedText(el));
     if (key && value) sources.push({ key: key, value: clip(value, 300), by: 'microdata' });
   }
   // 4. definition lists.
   for (const dl of document.querySelectorAll('dl')) {
     let dt = null;
     for (const child of dl.children) {
-      if (child.tagName === 'DT') dt = squash(child.textContent);
+      if (child.tagName === 'DT') dt = squash(ksRenderedText(child));
       else if (child.tagName === 'DD' && dt)
-        sources.push({ key: dt, value: clip(child.textContent, 300), by: 'definition-list' });
+        sources.push({ key: dt, value: clip(ksRenderedText(child), 300), by: 'definition-list' });
     }
   }
   // 5. two-column tables: row header -> row value.
   for (const table of document.querySelectorAll('table')) {
     for (const tr of table.rows) {
       if (tr.cells.length === 2) {
-        const k = squash(tr.cells[0].textContent);
-        const v = squash(tr.cells[1].textContent);
+        const k = squash(ksRenderedText(tr.cells[0]));
+        const v = squash(ksRenderedText(tr.cells[1]));
         if (k && v && k.length < 80) sources.push({ key: k, value: clip(v, 300), by: 'table-row' });
       }
     }
@@ -750,16 +757,19 @@ _FIELDS_JS = r"""
     const ac = (el.getAttribute('autocomplete') || '').toLowerCase();
     if (/current-password|new-password|one-time-code/.test(ac)) continue;
     let label = '';
-    if (el.labels && el.labels.length) label = squash(el.labels[0].textContent);
+    if (el.labels && el.labels.length) label = squash(ksRenderedText(el.labels[0]));
     if (!label) label = squash(el.getAttribute('aria-label') || el.getAttribute('placeholder') || el.name || '');
     const value = el.tagName === 'SELECT'
-      ? (el.selectedOptions.length ? squash(el.selectedOptions[0].textContent) : '')
+      ? (el.selectedOptions.length ? squash(ksRenderedText(el.selectedOptions[0])) : '')
       : squash(el.value);
     if (label && value) sources.push({ key: label, value: clip(value, 300), by: 'form-field' });
   }
   return { sources: sources.slice(0, 800), total_sources: sources.length };
 }
 """
+# Same splice, same reason: this is the reader the field test caught answering
+# `Official languages` with three CSS rules.
+_FIELDS_JS = _instrument(_FIELDS_JS)
 
 
 def _norm(key: str) -> str:
@@ -959,9 +969,14 @@ SCHEMA_CAPS = {
 AMBIGUOUS_CANDIDATE_CAP = 6
 DISAGREEMENT_CAP = 4
 
-#: The most fields one call will match. A schema larger than this is a
-#: different tool's job, and the refusal says so before anything is extracted.
+#: The default and the hard ceiling on how many fields one call will match.
+#: The caller may lower `max_fields` and may raise it as far as the ceiling,
+#: because the cost of a wide schema is payload size and the caller is the one
+#: paying it. The CEILING is not caller-settable: the per-tier retention caps
+#: bound the search and this bounds the answer, and a bound the caller sets is
+#: not a bound. Either way the refusal says so before anything is extracted.
 MAX_SCHEMA_FIELDS = 40
+SCHEMA_FIELD_CEILING = 200
 
 
 def _words(text: str) -> frozenset[str]:
@@ -1012,8 +1027,14 @@ def _quality(key: str, name: str, description: str):
     return None
 
 
-def _schema_arg(schema) -> dict:
+def _schema_arg(schema, max_fields: int | None = None) -> dict:
     """The two accepted shapes, and a refusal that shows one of each."""
+    cap = MAX_SCHEMA_FIELDS if max_fields is None else int(max_fields)
+    if cap < 1 or cap > SCHEMA_FIELD_CEILING:
+        raise BadParams(
+            f"max_fields={max_fields} is outside 1 to "
+            f"{SCHEMA_FIELD_CEILING}; the default is {MAX_SCHEMA_FIELDS}. "
+            f"Nothing was extracted.")
     if isinstance(schema, dict) and schema:
         wanted = {str(k): str(v or "") for k, v in schema.items()}
     elif isinstance(schema, (list, tuple)) and schema:
@@ -1025,11 +1046,12 @@ def _schema_arg(schema) -> dict:
             "a natural-language description ({'price': 'the listed product "
             "price'}). The description sharpens the match and is never "
             "required. Nothing was extracted.")
-    if len(wanted) > MAX_SCHEMA_FIELDS:
+    if len(wanted) > cap:
         raise BadParams(
-            f"the schema names {len(wanted)} fields and the cap is "
-            f"{MAX_SCHEMA_FIELDS}; no extraction ran. Split the schema across "
-            f"calls, or scope the read with location= and ask for less.")
+            f"the schema names {len(wanted)} fields and max_fields is {cap}; "
+            f"no extraction ran. Raise max_fields (the ceiling is "
+            f"{SCHEMA_FIELD_CEILING}), split the schema across calls, or "
+            f"scope the read with location= and ask for less.")
     return wanted
 
 
@@ -1323,13 +1345,14 @@ def _render_fields(fields: dict) -> str:
     return "\n".join(lines)
 
 
-async def _schema_read(sess, record, location, schema, tiers):
+async def _schema_read(sess, record, location, schema, tiers,
+                       max_fields=None):
     """The shared body of `extract_page` and one `aggregate` row.
 
     Everything both tools do to ONE page lives here, so the batch tool cannot
     drift from the single-page tool: same collector, same ladder, same refusal
     contract, same accounting."""
-    wanted = _schema_arg(schema)
+    wanted = _schema_arg(schema, max_fields)
     enabled = _tiers_arg(tiers)
     from .lite import _scope_root
     root = _scope_root(sess, record, location)
@@ -1392,6 +1415,7 @@ async def extract_page(
     schema: dict | list,
     location: dict | None = None,
     tiers: str = "all",
+    max_fields: int = MAX_SCHEMA_FIELDS,
 ) -> dict:
     """FLAGGED: placeholder wording, composed mechanically from the spec's
     FACTS TO CONVEY. The author or the main thread writes the shipped prose.
@@ -1417,7 +1441,7 @@ async def extract_page(
     await _lite._read_gate(sess, record, tool="extract_page")
     sess.counters["reads"] += 1
     fields, accounting, raw = await _schema_read(
-        sess, record, location, schema, tiers)
+        sess, record, location, schema, tiers, max_fields)
     # Every extracted value, every matched key, and every candidate in an
     # ambiguous outcome is PAGE-AUTHORED, and this is the single most direct
     # injection channel the tool has: a schema-extraction tool exists to lift
@@ -1705,7 +1729,7 @@ async def aggregate(
             f"before the budget trips. Nothing is truncated here: the walk "
             f"runs until the budget refuses, and that refusal carries every "
             f"row collected up to it.")
-    results, stopped = [], None
+    results = []
     for url in cleaned:
         try:
             results.append(await _aggregate_one(
@@ -1771,7 +1795,12 @@ async def aggregate(
         "summary": _rollup(list(_schema_arg(schema)), results),
         "dataset_text": wrapped,
         "page_data": note,
-        "stopped": stopped,
+        # `read_pages` reports its stop in the payload because a walk that
+        # ends early still has a next page to name. A batch has no next page:
+        # every URL it was given either got a slot or was never reached, so a
+        # stop is a RAISE carrying the partial dataset on the refusal's detail,
+        # and a payload that returns at all reached the end of its list.
+        "stopped": None,
         "continue": (
             f"this dataset covers the {succeeded} URL(s) whose slot says "
             f"ok=true and NOT the {failed} that failed; each failure carries "

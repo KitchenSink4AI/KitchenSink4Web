@@ -196,6 +196,40 @@ def test_schema_js_splices_the_one_visibility_rule():
     assert "ksHiddenAnywhere" in projection.SCHEMA_JS
 
 
+def test_every_text_reader_splices_the_one_rendered_text_rule():
+    """`textContent` is not what an element says: it is every character in the
+    subtree including the ones no browser paints. Four readers called it and a
+    Wikipedia infobox answered with CSS. There is one implementation now and
+    every consumer splices it."""
+    from kitchensink4web.ops import extract as ops
+    for name in ("_TABLE_JS", "_LIST_JS", "_FIELDS_JS"):
+        source = getattr(ops, name)
+        assert "ksRenderedText(" in source, name
+        assert projection.RENDERED_JS in source, name
+        assert "@@KS4WEB_" not in source, f"{name} has an unspliced marker"
+    assert projection.RENDERED_JS in projection.SCHEMA_JS
+    assert "ksRenderedText(" in projection.SCHEMA_JS
+    # No private re-implementation anywhere in the projection or the pack.
+    for path in ((ROOT / "src" / "kitchensink4web" / "projection").glob("*.js")):
+        if path.name == "rendered.js":
+            continue
+        assert "function ksRenderedText" not in path.read_text(
+            encoding="utf-8"), path.name
+
+
+def test_the_unrendered_set_is_the_unambiguous_four():
+    """`<style>`, `<script>`, `<noscript>`, and `<template>` are never painted
+    by any browser under any stylesheet, so excluding them is a statement about
+    HTML. `<title>` is deliberately NOT excluded: an SVG title is the
+    accessible name of the graphic, and the union wave put SVG text into the
+    readable set on purpose."""
+    source = projection.RENDERED_JS
+    assert "SCRIPT: 1" in source and "STYLE: 1" in source
+    assert "NOSCRIPT: 1" in source and "TEMPLATE: 1" in source
+    assert "TITLE:" not in source
+    assert "KS_TEXT_MAX_DEPTH" in source      # a page picks its own nesting
+
+
 def test_the_matcher_is_server_side():
     """A matcher running in page script is a matcher the page can profile
     against, and every confident-wrong-answer defect in this feature lives in

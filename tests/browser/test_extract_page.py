@@ -488,7 +488,42 @@ def test_extract_page_microdata_and_definition_list(corpus_site):
     run(go())
 
 
-# ------------------------------------------------------------ 9. bad params
+# ------------------------------------------- 9. text that no browser paints
+
+
+def test_stylesheet_text_is_never_a_value(corpus_site):
+    """A Wikipedia infobox inlines a TemplateStyles `<style>` element into the
+    cell that needs it, so `textContent` on that cell is three CSS rules
+    followed by the value. The 2026-09-08 field test watched `extract_fields`
+    answer `Official languages` with 100 percent stylesheet garbage: right row,
+    right key, correct provenance, and the value was CSS, with nothing in the
+    payload saying anything was wrong.
+
+    Every reader that quotes an element's text is held to it, because they all
+    splice the same rule now."""
+    async def go():
+        _s, page = await _open(corpus_site, "b/xp_infobox_style.html")
+        schema = ["official languages", "capital", "population"]
+        fresh = await extract_ops.extract_page(page=page, schema=schema)
+        assert fresh["fields"]["official languages"]["value"] == \
+            "English, Fixturese", fresh["fields"]["official languages"]
+        assert fresh["fields"]["population"]["value"] == "4,120"
+        assert "mw-parser-output" not in _flat(fresh)
+        assert "not a value" not in _flat(fresh)
+        # The shipped schema tool, on the same cell.
+        legacy = await extract_ops.extract_fields(page=page, fields=schema)
+        assert legacy["fields"]["official languages"]["value"] == \
+            "English, Fixturese", legacy["fields"]["official languages"]
+        assert "mw-parser-output" not in _flat(legacy)
+        # And the table reader, which quotes every cell.
+        table = await extract_ops.get_table(page=page)
+        assert table["table"]["rows"][0] == ["Official languages",
+                                             "English, Fixturese"]
+        assert "mw-parser-output" not in _flat(table)
+    run(go())
+
+
+# ----------------------------------------------------------- 10. bad params
 
 
 def test_extract_page_bad_arguments_refuse(corpus_site):
@@ -501,6 +536,15 @@ def test_extract_page_bad_arguments_refuse(corpus_site):
             await extract_ops.extract_page(
                 page=page, schema=[f"f{i}" for i in range(41)])
         assert "41" in str(many.value) and "40" in str(many.value)
+        # The caller may raise it as far as the ceiling and no further: a
+        # bound the caller sets is not a bound.
+        wide = await extract_ops.extract_page(
+            page=page, schema=[f"f{i}" for i in range(41)], max_fields=50)
+        assert wide["accounting"]["requested"] == 41
+        with pytest.raises(BadParams) as ceiling:
+            await extract_ops.extract_page(
+                page=page, schema=["price"], max_fields=5000)
+        assert "200" in str(ceiling.value)
         with pytest.raises(BadParams) as tier:
             await extract_ops.extract_page(
                 page=page, schema=["price"], tiers="prose")

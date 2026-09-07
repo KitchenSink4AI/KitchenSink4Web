@@ -34,6 +34,7 @@
 (opts) => {
 // @@KS4WEB_INSTRUMENT@@
 // @@KS4WEB_VISIBILITY@@
+// @@KS4WEB_RENDERED@@
   const caps = opts.caps || {};
   const KEY_CLIP = caps.key_clip || 90;
   const VALUE_CLIP = caps.value_clip || 300;
@@ -99,7 +100,7 @@
   function visibleText(el) {
     const reason = ksHiddenAnywhere(el);
     if (reason) { counts.hidden_values_excluded++; return null; }
-    return squash(el.textContent);
+    return squash(ksRenderedText(el));
   }
 
   // ------------------------------------------------------ TIER 1: DECLARED
@@ -211,7 +212,7 @@
     const cell = leaf.matches(CELL) ? leaf
       : (leaf.closest ? leaf.closest(CELL) : null);
     if (cell && cell.nextElementSibling
-        && squash(cell.textContent) === label) {
+        && squash(ksRenderedText(cell)) === label) {
       return { el: cell.nextElementSibling, relation: 'same-row-next-cell' };
     }
     return null;
@@ -309,7 +310,7 @@
     if (tag === 'DL') {
       let dt = null;
       for (const child of el.children) {
-        if (child.tagName === 'DT') dt = squash(child.textContent);
+        if (child.tagName === 'DT') dt = squash(ksRenderedText(child));
         else if (child.tagName === 'DD' && dt) {
           const text = visibleText(child);
           if (text !== null) {
@@ -319,7 +320,7 @@
       }
     }
     if (tag === 'TR' && el.cells && el.cells.length === 2) {
-      const k = squash(el.cells[0].textContent);
+      const k = squash(ksRenderedText(el.cells[0]));
       if (k && k.length < 80) {
         const text = visibleText(el.cells[1]);
         if (text !== null) {
@@ -331,7 +332,7 @@
       const type = (el.type || '').toLowerCase();
       const ac = (el.getAttribute('autocomplete') || '').toLowerCase();
       let label = '';
-      if (el.labels && el.labels.length) label = squash(el.labels[0].textContent);
+      if (el.labels && el.labels.length) label = squash(ksRenderedText(el.labels[0]));
       if (!label) {
         label = squash(el.getAttribute('aria-label')
           || el.getAttribute('placeholder') || el.name || '');
@@ -348,7 +349,7 @@
         pushLabeled(label, pageSecret ? '' : (
           tag === 'SELECT'
             ? (el.selectedOptions.length
-               ? squash(el.selectedOptions[0].textContent) : '')
+               ? squash(ksRenderedText(el.selectedOptions[0])) : '')
             : squash(el.value)),
           'form-field', el, 'attr', {
             secret: pageSecret, type: type, autocomplete: ac,
@@ -363,7 +364,7 @@
       let key = squash(aria);
       if (!key && ariaBy) {
         const t = document.getElementById(String(ariaBy).split(/\s+/)[0]);
-        key = t ? squash(t.textContent) : '';
+        key = t ? squash(ksRenderedText(t)) : '';
       }
       if (key) {
         const text = visibleText(el);
@@ -374,7 +375,7 @@
     // --- tier 3 ---------------------------------------------------------
     if (el.children.length === 0 && counts.leaves_scanned < MAX_LEAVES) {
       counts.leaves_scanned++;
-      const raw = squash(el.textContent);
+      const raw = squash(ksRenderedText(el));
       if (labelShaped(raw)) {
         const label = raw.replace(/:$/, '').trim();
         if (label && !ksHiddenAnywhere(el)) {
@@ -398,7 +399,7 @@
       const tokens = hintTokens(el);
       if (tokens.length) {
         const hidden = ksHiddenAnywhere(el);
-        const text = hidden ? null : squash(el.textContent);
+        const text = hidden ? null : squash(ksRenderedText(el));
         for (const token of tokens) {
           note(hint, 'hint', MAX_HINT, {
             key: clip(token, KEY_CLIP),
