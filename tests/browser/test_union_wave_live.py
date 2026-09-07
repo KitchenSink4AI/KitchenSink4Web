@@ -279,21 +279,23 @@ def test_a_frame_gated_page_is_read_after_the_frames_it_needs(corpus_site):
     deterministic and meaningful.
 
     WHAT THE INVESTIGATION FOUND UNDERNEATH, and the reason this is a
-    quarantine rather than a deletion: the H-06 defect is still live. When
-    the yield loses the race the read returns "unlisted affordances: none,
-    every control is listed" and "affordances (no interactive elements)",
-    word for word the claim the finding was about. `extract()` records
-    `completeness["re_read_after_frames"] = 2` when it pays the yield and
-    NOTHING anywhere reads that key back, so a page that was still
-    materialising is reported exactly like a page that has nothing on it.
-    The shipped fix made the lie rarer; it did not remove it.
+    quarantine rather than a deletion: when the yield lost the race the read
+    returned "unlisted affordances: none, every control is listed" and
+    "affordances (no interactive elements)", word for word the claim H-06
+    was about. `extract()` had been recording
+    `completeness["re_read_after_frames"] = 2` whenever it paid the yield
+    and nothing anywhere read that key back, so a page still materialising
+    was reported exactly like a page with nothing on it. The frame yield
+    made the lie rarer; it did not remove it. That half is now closed
+    (`b6094fd`): the completeness block says the read waited.
 
-    THE REPAIR, for the author to rule on: make the completeness block
-    honest when the re-read is still empty, then this pin asserts that
-    honesty instead of asserting a frame count, and it is deterministic,
-    because the first read on this fixture came back empty in 15 runs out of
-    15. That is a projection change and it belongs to whoever owns that
-    file; the exact diff is in the fix-wave report."""
+    WHAT IS LEFT FOR THE AUTHOR is what this pin should assert. The honesty
+    is deterministic, because the first read on this fixture came back empty
+    in 15 runs out of 15, so a pin on "the read said it waited" holds every
+    time. The reveal is not, for the reasons measured above. Pointing the
+    assertion at the honesty makes the pin deterministic and drops the only
+    check anyone has that the content itself arrives, which is a trade
+    rather than a fix, and it is the author's call."""
     async def go():
         _, page = await _open(corpus_site, "b/uw_raf.html")
         got = await lite.get_page_view(page=page)
