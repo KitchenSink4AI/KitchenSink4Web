@@ -44,6 +44,7 @@ from ..engine.session import MANAGER
 from ..errors import (AmbiguousLocation, BadParams, Conflict,
                       ConfirmationRequired, NavigationBlocked,
                       TargetNotFound, ValidationFailed)
+from .. import envelope as _envelope
 from ..policy import audit as _audit
 from ..policy import gates as _gates
 from ..policy import sandbox
@@ -111,6 +112,15 @@ _SLOT_KEYS = frozenset({"param", "field", "span", "recorded_origin"})
 _PARAM_KEYS = frozenset({"name", "required", "kind", "default",
                          "description", "allow_origin_change"})
 
+#: WHAT A `kind` MAY BE, CLOSED (V-15, fix wave 2026-09-08). `_PARAM_KEYS`
+#: permitted the KEY and nothing anywhere checked the VALUE, so `kind:
+#: 'banana'` was stored, listed back to the caller, and validated as text by
+#: the `else` arm of every branch that reads it. An unrecognized kind is
+#: refused rather than treated as text, for the reason an unknown slot key
+#: is: this is the field V-05 turned into a bypass, and a value nobody
+#: checks is where the next one comes from.
+_PARAM_KINDS: tuple[str, ...] = ("text", "url", "bool")
+
 #: The value cap. Refuse past it, never truncate.
 PARAM_VALUE_CAP = 8192
 
@@ -160,16 +170,104 @@ def _slottable_fields(step: dict) -> list[str]:
 
 
 def _kind_of(step: dict, field: str, value) -> str:
-    if step.get("tool") == "navigate" and field == "args.url":
+    if _is_origin_bearing(step, field):
         return "url"
     if isinstance(value, bool):
         return "bool"
     return "text"
 
 
+def _is_origin_bearing(step: dict, field: str) -> bool:
+    """Does this (tool, field) pair send the browser somewhere?
+
+    THE ORIGIN LOCK IS DERIVED, NEVER DECLARED (V-05, fix wave 2026-09-08).
+    `recorded_origin` used to be written only when the parameter's `kind`
+    came out "url", and `kind` is caller-supplied: `_bind_parameters` read
+    the declaration first and short-circuited the derivation, so declaring
+    `kind: 'text'` on a navigate URL slot saved a workflow that
+    `_check_origins` never looked at. A navigate URL slot gets an origin
+    because of WHAT IT IS, and a declaration cannot change what it is.
+
+    `wait_for(condition='url')` is deliberately NOT here, and the reason is
+    what the condition actually does: its value is a MATCH PATTERN over the
+    URL the page is already on, a substring or a glob ("template=bug_report"
+    is the documented example), not a navigation target. Splicing it issues
+    no request and reaches no site; the worst a spliced pattern does is
+    match early or wait out its timeout. Requiring an origin there would
+    also refuse every legitimate recording of a bare fragment.
+    """
+    tool = step.get("tool")
+    return tool == "navigate" and field == "args.url"
+
+
+#: A scheme's default port, dropped from an origin so that
+#: `https://example.com:443` and `https://example.com` are one origin, which
+#: is what the term means everywhere else.
+_DEFAULT_PORTS = {"http": 80, "https": 443}
+
+
 def _origin_of(url: str) -> str:
-    host = urlparse(str(url or "")).hostname or ""
-    return host.lower()
+    """The web origin of a URL: `scheme://host[:port]`, lowercased, or "" for
+    anything that is not an http or https URL.
+
+    FULL ORIGIN, NOT BARE HOST (class sweep on V-05, 2026-09-08). This
+    returned `urlparse(...).hostname` alone, so the security comparison in
+    `_check_origins` ignored the scheme and the port: a slot recorded on
+    `https://example.com` compared equal to a spliced
+    `http://example.com`, which puts everything the flow types on the wire in
+    the clear, and to a spliced `https://example.com:8443`, which is a
+    different service on the same box. Both passed and both ran.
+    """
+    parsed = urlparse(str(url or ""))
+    scheme = (parsed.scheme or "").lower()
+    if scheme not in _DEFAULT_PORTS:
+        return ""
+    try:
+        host, port = (parsed.hostname or "").lower(), parsed.port
+    except ValueError:              # a port that is not a number
+        return ""
+    if not host:
+        return ""
+    if port is not None and port == _DEFAULT_PORTS[scheme]:
+        port = None
+    return f"{scheme}://{host}" + (f":{port}" if port is not None else "")
+
+
+def _host_of(text: str) -> str:
+    """The host in whatever a caller typed: a bare host, a host with a port,
+    or a whole URL. Lowercased, since host comparison is case-insensitive
+    and a workflow recorded on Example.com is the same site.
+
+    ONE PARSER, TWO SHAPES (2026-09-08). This used to split the string by
+    hand while `_origin_of` used urlparse, and two extractors in one file
+    disagree on exactly the input that matters: `[::1]:8080` came back whole
+    from the manual splitter and its caller then cut it at the first colon,
+    leaving `[`. Both shapes come off urlparse now, which is also the parser
+    the rest of the tree trusts.
+    """
+    value = (text or "").strip()
+    if "://" not in value:
+        value = f"//{value}"
+    try:
+        return (urlparse(value).hostname or "").lower()
+    except ValueError:              # a malformed IPv6 literal
+        return ""
+
+
+def _origin_holds(recorded: str, url: str) -> bool:
+    """Does a spliced URL still sit on the origin the slot was recorded on?
+
+    A file written by an earlier build carries a BARE HOST here rather than
+    an origin, and it keeps comparing by host. That is a stated limit of the
+    legacy shape, not a judgment that the scheme does not matter: a workflow
+    re-saved on this build records the full origin and gets the full check.
+    """
+    now = _origin_of(url)
+    if not now:
+        return False
+    if "://" in recorded:
+        return now == recorded.strip().lower()
+    return _host_of(now) == recorded.strip().lower()
 
 
 def _workflow_dir() -> Path:
@@ -254,6 +352,18 @@ def _validate_slots(doc: dict, filename: str) -> None:
                 f"{entry['name']!r} with unknown key(s) {unknown}. A "
                 f"declaration this build did not write is not honored by "
                 f"accident. Re-record the workflow.")
+        if "kind" in entry and entry["kind"] not in _PARAM_KINDS:
+            # V-15 at load, the same closed set the save side now checks.
+            # FLAGGED (fix wave 2026-09-08): placeholder wording,
+            # mechanically composed.
+            raise ValidationFailed(
+                f"workflow file {filename} declares parameter "
+                f"{entry['name']!r} as kind {entry['kind']!r}, which is not "
+                f"one of {list(_PARAM_KINDS)} and is not what save_workflow "
+                f"writes; the file may have been edited. A kind decides how "
+                f"a supplied value is checked, so an unrecognized one is "
+                f"refused rather than treated as text. Re-record the "
+                f"workflow.")
         names.add(entry["name"])
     for i, step in enumerate(doc.get("steps") or []):
         if not isinstance(step, dict):
@@ -302,6 +412,23 @@ def _validate_slots(doc: dict, filename: str) -> None:
                     f"selector, a wait condition, a key, or a piece of "
                     f"script. The slottable fields here are {offered}. "
                     f"Re-record the workflow.")
+            if _is_origin_bearing(step, field) \
+                    and not slot.get("recorded_origin"):
+                # V-05 BYPASS 2 (fix wave 2026-09-08). This function checked
+                # a slot's field, its param, its span, and its unknown keys,
+                # and never required the ONE key `_check_origins` runs on,
+                # so a hand-edited file that dropped a single line retargeted
+                # the flow freely and passed validation on the way through.
+                # FLAGGED: placeholder wording, mechanically composed.
+                raise ValidationFailed(
+                    f"workflow file {filename} carries a slot at step {i} on "
+                    f"field {field!r} with no `recorded_origin`, which "
+                    f"save_workflow always writes for one that fills in part "
+                    f"of a navigation URL; the file may have been edited. A "
+                    f"workflow you trust by name is not silently retargeted "
+                    f"at another site, and the check that holds that line "
+                    f"has nothing to compare against here. Re-record the "
+                    f"workflow.")
             if slot.get("param") not in names:
                 raise ValidationFailed(
                     f"workflow file {filename} carries a slot at step {i} "
@@ -493,6 +620,15 @@ def _bind_parameters(steps: list[dict], declared: list) -> tuple[list, list]:
                 f"parameter {name!r} is declared twice; every name in the "
                 f"list is distinct, and nothing is merged by position.")
         seen.add(name)
+        if "kind" in decl and decl["kind"] not in _PARAM_KINDS:
+            # FLAGGED (fix wave 2026-09-08): placeholder wording,
+            # mechanically composed.
+            raise BadParams(
+                f"parameter {name!r} is declared as kind "
+                f"{decl['kind']!r}, which this build does not recognize; the "
+                f"kinds are {list(_PARAM_KINDS)}. A kind decides how a "
+                f"supplied value is checked, so an unrecognized one is "
+                f"refused rather than treated as text. Nothing was saved.")
         bound = _bind_one(decl, name, available, listing)
         kind = decl.get("kind") or _kind_of(steps[bound[0]["step"]],
                                             bound[0]["field"],
@@ -508,13 +644,33 @@ def _bind_parameters(steps: list[dict], declared: list) -> tuple[list, list]:
                     f"run. Nothing was saved.")
             slot = {"param": name, "field": hit["field"],
                     "span": [hit["start"], hit["end"]]}
-            if kind == "url":
-                origin = _origin_of(value)
+            # THE LOCK COMES OFF THE FIELD, THE DISCLOSURE COMES OFF THE KIND
+            # (V-05). `_is_origin_bearing` decides whether this slot is a
+            # navigation target, which no declaration can change; a declared
+            # `kind: 'url'` still records an origin for a URL that gets TYPED
+            # rather than navigated to, because that was already the
+            # behavior and it is a tightening rather than a hole.
+            if kind == "url" or _is_origin_bearing(step, hit["field"]):
+                # FLAGGED (fix wave 2026-09-08): placeholder wording,
+                # mechanically composed. Both refusals below used to be one
+                # sentence that named the DECLARATION ("is declared as a
+                # url"), which is no longer why either fires.
                 if not str(value or "").startswith(("http://", "https://")):
                     raise BadParams(
-                        f"parameter {name!r} is declared as a url and the "
-                        f"recorded value at step {hit['step']} is not an "
-                        f"http or https URL. Nothing was saved.")
+                        f"parameter {name!r} binds a value that fills in part "
+                        f"of a URL and the recorded value at step "
+                        f"{hit['step']} is not an http or https URL. Nothing "
+                        f"was saved.")
+                origin = _origin_of(value)
+                if not origin:
+                    raise BadParams(
+                        f"parameter {name!r} binds a value that fills in part "
+                        f"of a URL and the recorded value at step "
+                        f"{hit['step']} carries no host to record as its "
+                        f"origin. A slot that fills in part of a URL is "
+                        f"checked against the origin the flow was recorded "
+                        f"on, and there is nothing here to check against. "
+                        f"Nothing was saved.")
                 slot["recorded_origin"] = origin
             slots.append((hit["step"], slot))
             step.setdefault("slots", []).append(slot)
@@ -756,11 +912,15 @@ def _check_origins(filled: dict, by_name: dict) -> None:
         for slot in step.get("slots") or []:
             recorded = slot.get("recorded_origin")
             if not recorded:
+                # `_validate_slots` REQUIRES the key on every slot that fills
+                # in part of a navigation URL, so reaching here means the
+                # slot fills in something that is not one (V-05 bypass 2).
                 continue
             param = by_name.get(slot["param"]) or {}
-            now = _origin_of(_field_get(step, slot["field"]))
-            if now == recorded:
+            value = _field_get(step, slot["field"])
+            if _origin_holds(recorded, value):
                 continue
+            now = _origin_of(value)
             if param.get("allow_origin_change"):
                 continue
             raise NavigationBlocked(
@@ -857,28 +1017,21 @@ def _step_line(i: int, step: dict) -> str:
 # ----------------------------------------------------------------- listing
 
 
-def _host_of(text: str) -> str:
-    """The host in whatever a caller typed: a bare host, a host with a port,
-    or a whole URL. Lowercased, since host comparison is case-insensitive
-    and a workflow recorded on Example.com is the same site."""
-    value = (text or "").strip().lower()
-    if "://" in value:
-        value = value.split("://", 1)[1]
-    value = value.split("/", 1)[0].split("?", 1)[0]
-    if "@" in value:
-        value = value.rsplit("@", 1)[1]
-    return value
-
-
 def _origin_matches(recorded: str, wanted: str) -> bool:
     """A recorded origin answers for a wanted one when the hosts are equal
     or when the recorded host is a subdomain of it. `www.example.com` is
     what the recorder stored and `example.com` is what a caller types, so a
     strict equality filter would answer "no workflows" for the site the
     user is standing on. It never widens the other way: asking for
-    `www.example.com` does not match a workflow recorded on `evil.com`."""
-    have = _host_of(recorded).split(":", 1)[0]
-    want = wanted.split(":", 1)[0]
+    `www.example.com` does not match a workflow recorded on `evil.com`.
+
+    The recorded side comes through `_host_of`, which drops the port; the
+    wanted side arrives already normalized by it. The two manual
+    `split(':', 1)` calls that used to drop the port here went with the
+    manual extractor (2026-09-08): on an IPv6 literal they cut `::1` down to
+    the empty string and matched nothing."""
+    have = _host_of(recorded)
+    want = (wanted or "").strip().lower()
     return bool(have) and (have == want or have.endswith("." + want))
 
 
@@ -1110,30 +1263,23 @@ async def _execute(sess, record, doc: dict, dry_report: list[dict],
             from .. import confirm
             grant = await confirm.attempt(exc)
             if grant is None:
-                per_step.append({
-                    "step": i, "line": _step_line(i, step),
-                    "status": "failed", "outcome": "CONFIRMATION_REQUIRED",
-                    "error": ("the step is a gated class and no human "
-                              "accepted the confirmation; it FAILS CLOSED. "
-                              + str(exc)[:200])})
+                per_step.append(_failed_step(
+                    i, step, exc, outcome="CONFIRMATION_REQUIRED",
+                    prefix="the step is a gated class and no human accepted "
+                           "the confirmation; it FAILS CLOSED."))
                 stopped = i
                 continue
             _gates.deposit_grant(grant)
             try:
                 result = await _run_step(sess, record, step)
             except Exception as exc2:  # noqa: BLE001 - reported per step
-                per_step.append({"step": i, "line": _step_line(i, step),
-                                 "status": "failed",
-                                 "outcome": _err_code(exc2),
-                                 "error": str(exc2)[:200]})
+                per_step.append(_failed_step(i, step, exc2))
                 stopped = i
                 continue
             finally:
                 _gates.clear_grant()
         except Exception as exc:  # noqa: BLE001 - reported per step
-            per_step.append({"step": i, "line": _step_line(i, step),
-                             "status": "failed", "outcome": _err_code(exc),
-                             "error": str(exc)[:200]})
+            per_step.append(_failed_step(i, step, exc))
             stopped = i
             continue
         entry = {"step": i, "line": _step_line(i, step),
@@ -1160,8 +1306,51 @@ async def _execute(sess, record, doc: dict, dry_report: list[dict],
     }
 
 
-def _err_code(exc: Exception) -> str:
-    return getattr(exc, "code", None) or exc.__class__.__name__
+#: What one failed step's refusal carries back, per PART. Generous, because
+#: neither number is a security bound: they exist so a report holding several
+#: failures stays a report. The 200-character clip they replace was neither
+#: (V-13).
+_STEP_MESSAGE_CAP = 2000
+_STEP_HINT_CAP = 800
+
+
+def _failed_step(i: int, step: dict, exc: Exception,
+                 outcome: str | None = None, prefix: str = "") -> dict:
+    """One failed step's record, carrying the refusal's own STRUCTURE.
+
+    V-13 (fix wave 2026-09-08). All three sites wrote `str(exc)[:200]`, and
+    the gated-class one appended it after ~90 characters of fixed prefix, so
+    a house refusal arrived cut mid-word with its recovery sentence gone:
+    the caller got half a diagnosis and no next move, which is the one thing
+    this tree's refusals are for. A refusal here is the same refusal the tool
+    would have returned had it been called directly, so it is built by the
+    same builder, and its parts ride separately rather than as one rendered
+    string with a knife through it: the message, the hint that names the
+    recovery, the candidates an ambiguity refusal lists, and any detail. Each
+    part is bounded on its own and an over-long message states its full
+    length rather than being silently shortened.
+
+    `outcome` keeps the closed code from `envelope`, which is what the gated
+    site already hard-coded for itself while the other two published a Python
+    class name.
+    """
+    error = _envelope.refusal(exc)["error"]
+    message = str(error.get("message") or "")
+    if prefix:
+        message = f"{prefix} {message}".strip()
+    entry = {"step": i, "line": _step_line(i, step), "status": "failed",
+             "outcome": outcome or error.get("code")
+             or exc.__class__.__name__,
+             "error": message[:_STEP_MESSAGE_CAP]}
+    if len(message) > _STEP_MESSAGE_CAP:
+        entry["error_length"] = len(message)
+    if error.get("hint"):
+        entry["hint"] = str(error["hint"])[:_STEP_HINT_CAP]
+    if error.get("matches"):
+        entry["matches"] = error["matches"]
+    if error.get("detail"):
+        entry["detail"] = error["detail"]
+    return entry
 
 
 async def _run_step(sess, record, step: dict) -> dict:

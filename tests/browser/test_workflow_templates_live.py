@@ -13,6 +13,7 @@ from __future__ import annotations
 import asyncio
 import functools
 import http.server
+import json
 import socketserver
 import threading
 from pathlib import Path
@@ -20,6 +21,7 @@ from pathlib import Path
 import pytest
 
 from kitchensink4web.engine.session import MANAGER
+from kitchensink4web.errors import NavigationBlocked
 from kitchensink4web.ops import lite, workflows
 from kitchensink4web.policy import audit, budgets, credentials, readonly
 
@@ -134,6 +136,43 @@ def test_the_dry_run_shows_the_filled_value_not_the_template(site):
         assert out["would_fail"] == []
         _sess, record = MANAGER.locate(page2)
         assert await record.page.evaluate("() => window.__added") == 0
+
+    run(go())
+
+
+def test_a_declared_kind_cannot_unlock_a_recorded_navigate(site):
+    """V-05 end to end (fix wave 2026-09-08). The unit file pins the
+    mechanism; this pins it on a flow that was actually recorded by a
+    browser, because the bypass was in what save_workflow WRITES and a
+    hand-built document cannot prove that.
+
+    `kind` is caller-supplied, and declaring it used to short-circuit the
+    derivation that writes `recorded_origin`, so this exact save produced a
+    workflow the origin check never looked at. Both refusals below then did
+    not happen: the flow navigated wherever the parameter pointed it."""
+    async def go():
+        session, page = await _open(site)
+        await _do(lite.navigate, page=page, url=f"{site}/{PATH}")
+        await workflows.save_workflow(
+            session=session.session_id, name="lock",
+            parameters=[{"name": "u", "step": 0, "field": "args.url",
+                         "kind": "text"}])
+        doc = json.loads(
+            workflows._path_of("lock").read_text(encoding="utf-8"))
+        assert doc["steps"][0]["slots"][0]["recorded_origin"] == site
+
+        _s2, page2 = await _open(site)
+        with pytest.raises(NavigationBlocked):
+            await workflows.run_workflow(
+                name="lock", page=page2, dry_run=True,
+                parameters={"u": "https://evil.example/pwn"})
+        # The port is part of the origin, so the same host on a different
+        # service is a different site here too.
+        other = site.rsplit(":", 1)[0] + ":1"
+        with pytest.raises(NavigationBlocked):
+            await workflows.run_workflow(
+                name="lock", page=page2, dry_run=True,
+                parameters={"u": f"{other}/{PATH}"})
 
     run(go())
 

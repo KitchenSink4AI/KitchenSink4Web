@@ -279,7 +279,13 @@ def test_the_emulate_tool_no_longer_promises_a_route_that_does_not_exist():
     ("example.com", "example.com"),
     ("https://example.com/reports/2026", "example.com"),
     ("HTTPS://Example.COM", "example.com"),
-    ("http://user:pw@example.com:8443/x", "example.com:8443"),
+    # The port used to ride along here and its one consumer, _origin_matches,
+    # cut it off again. It comes off at the source since 2026-09-08, when the
+    # two host extractors in workflows.py were merged onto urlparse: the
+    # manual `split(':', 1)` that did the cutting turned an IPv6 literal into
+    # the empty string.
+    ("http://user:pw@example.com:8443/x", "example.com"),
+    ("http://[::1]:8080/x", "::1"),
 ])
 def test_for_origin_takes_a_host_or_any_url_on_it(typed, host):
     assert workflows._host_of(typed) == host

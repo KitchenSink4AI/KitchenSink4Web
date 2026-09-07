@@ -137,11 +137,16 @@ def test_save_reports_parity_and_the_next_call():
 
 
 def test_a_url_slot_records_its_origin():
+    """The FULL origin since 2026-09-08, scheme included: a host alone let a
+    recorded https flow be spliced down to http and compare equal. Files
+    written by earlier builds carry a bare host and still compare by host,
+    which is pinned in test_workflow_origin_lock."""
     _log([_record("navigate", {"url": "https://example.com/issues/new"})])
     out = save(name="wf", parameters=[{"name": "path", "example": "issues"}])
     assert out["parameters"][0]["kind"] == "url"
     doc = json.loads(workflows._path_of("wf").read_text(encoding="utf-8"))
-    assert doc["steps"][0]["slots"][0]["recorded_origin"] == "example.com"
+    assert doc["steps"][0]["slots"][0]["recorded_origin"] \
+        == "https://example.com"
 
 
 # ------------------------------------------------------------ at LOAD
