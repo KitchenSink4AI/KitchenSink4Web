@@ -56,6 +56,18 @@ ocr = [
     "winrt-Windows.Graphics.Imaging==3.2.1; sys_platform == 'win32'",
     "winrt-Windows.Storage.Streams==3.2.1; sys_platform == 'win32'",
     "winrt-Windows.Globalization==3.2.1; sys_platform == 'win32'",
+    # THE ASYNC PLUMBING, and it is not optional (found by the seven-branch
+    # integration, 2026-09-08). PyWinRT awaits an IAsyncOperation by setting
+    # `op.completed`, which imports `winrt.windows.foundation` at that moment.
+    # Without these two the extra installs, `probe()` answers "available"
+    # because the OCR engine really is there, and then every call HANGS until
+    # the module's own wall clock expires: the completion callback raises
+    # ModuleNotFoundError inside the runtime's waiter and the awaitable never
+    # resolves. A hang is the one failure mode this tool exists not to have,
+    # so the dependency that makes the await complete is pinned beside the
+    # engine that does the reading.
+    "winrt-Windows.Foundation==3.2.1; sys_platform == 'win32'",
+    "winrt-Windows.Foundation.Collections==3.2.1; sys_platform == 'win32'",
 ]
 # The accessibility engine, as a PINNED DEPENDENCY rather than a vendored
 # file (author ruling 2026-09-07). axe-core arrives inside this MIT wrapper

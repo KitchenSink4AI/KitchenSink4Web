@@ -63,6 +63,8 @@ that enforces this ledger reads the first backticked cell of each row.
 | `winrt-Windows.Graphics.Imaging` | MIT | `ocr` | `SoftwareBitmap` and `BitmapDecoder`, which is how PNG bytes become something the recognizer accepts. Pinned `==3.2.1`. |
 | `winrt-Windows.Storage.Streams` | MIT | `ocr` | The in-memory stream the decoder reads from, so nothing touches disk on the way. Pinned `==3.2.1`. |
 | `winrt-Windows.Globalization` | MIT | `ocr` | `Language`, for the BCP-47 tag a caller may name. Pinned `==3.2.1`. |
+| `winrt-Windows.Foundation` | MIT | `ocr` | The async plumbing, and it is not optional. PyWinRT awaits an `IAsyncOperation` by assigning `op.completed`, which imports this module at that moment; without it the extra installs, the capability probe answers "available" because the OCR engine really is present, and every call HANGS until the module's own wall clock expires. Found by the seven-branch integration on 2026-09-08. Pinned `==3.2.1`. |
+| `winrt-Windows.Foundation.Collections` | MIT | `ocr` | The collection projections the Foundation package's own types return. Pinned `==3.2.1`. |
 | `axe-playwright-python` | MIT (wrapper); bundles axe-core under MPL-2.0 | `accessibility` | The accessibility engine, as a PINNED DEPENDENCY rather than a vendored file (author ruling 2026-09-07: a dependency yes, bundling no). Pinned `==0.1.8`. KS4Web imports the engine SOURCE from the installed package and drives the run itself, because the server decides which frames are entered and the engine's own iframe traversal would make that decision twice. |
 
 **Tesseract was evaluated for the `ocr` extra and declined.** Not on
