@@ -1,6 +1,6 @@
 {
   "ruling": "2026-09-05: token budgets are SOFT; these figures are published honestly rather than enforced as caps. Estimator: chars/4 (approximate; page-read numbers use tiktoken o200k_base and the two are never mixed).",
-  "lite_total_tokens": 3598,
+  "lite_total_tokens": 3674,
   "reference_targets": {
     "lite": 1500,
     "description": [
@@ -185,9 +185,9 @@
       "over_reference_caps": true
     },
     "manage_session": {
-      "description_tokens": 469,
-      "schema_tokens": 283,
-      "total_tokens": 752,
+      "description_tokens": 489,
+      "schema_tokens": 339,
+      "total_tokens": 828,
       "over_reference_caps": true
     },
     "manage_storage": {

@@ -34,6 +34,7 @@ import shutil
 import subprocess
 import sys
 from dataclasses import dataclass, field
+from pathlib import Path
 
 from ..errors import BadParams, LaneUnsupported
 from . import FIREFOX_SAFETY_ARGS
@@ -198,6 +199,88 @@ URL_UNTRUSTED_AFTER_HISTORY = ("firefox_bidi",)
 def capability_key(spec: LaneSpec) -> str:
     """Which column of the truth table a lane reads."""
     return "firefox_bidi" if spec.is_bidi_firefox else "chromium"
+
+
+def lane_key(spec: LaneSpec) -> str:
+    """The key the lane database records this lane under.
+
+    The same move `capability_key` makes, at a finer grain: a verdict does not
+    generalize by channel name, it generalizes by what a site can OBSERVE.
+    `engine:backend:headless` is that, and it is what makes a record portable
+    between a user driving installed Chrome and one driving bundled Chromium,
+    since the thing that got them turned away (the `HeadlessChrome` user agent,
+    the driver's TLS signature) is the same on both.
+
+    Headed and headless are separate keys because headless is the block vector
+    on Chromium. Collapsing them would teach the database the wrong lesson
+    about a headed lane that works fine."""
+    if spec.engine == "firefox":
+        backend = "bidi" if spec.is_bidi_firefox else "juggler"
+    elif spec.engine == "webkit":
+        backend = "wk"
+    else:
+        backend = "cdp"
+    return (f"{spec.engine}:{backend}:"
+            f"{'headless' if spec.headless else 'headed'}")
+
+
+#: The `lane=` argument that opens each lane key, for the refusal that names
+#: a lane worth trying. A key is what a SITE sees; this is what a CALLER
+#: types, and the two are deliberately different vocabularies.
+_LANE_ARGUMENT: dict[str, str] = {
+    "chromium:cdp": "A",
+    "firefox:juggler": "A:firefox",
+    "firefox:bidi": "B:moz-firefox",
+    "webkit:wk": "A:webkit",
+}
+
+
+def lane_argument(key: str) -> str | None:
+    """The `manage_session(action='open', lane=...)` value for a lane key."""
+    try:
+        engine, backend, headless = key.split(":")
+    except ValueError:
+        return None
+    base = _LANE_ARGUMENT.get(f"{engine}:{backend}")
+    if base is None:
+        return None
+    return base if headless == "headless" else base + "+headed"
+
+
+def _bundled_present(engine: str) -> bool:
+    """Whether a Playwright download for this engine is already on disk.
+
+    Asked WITHOUT a running driver and without launching anything, because the
+    only caller is the session-birth lane choice and a choice that triggers a
+    two-hundred-megabyte download nobody asked for is not a better default."""
+    root = os.environ.get("PLAYWRIGHT_BROWSERS_PATH")
+    if root in ("0", ""):
+        root = None
+    base = Path(root) if root else (
+        Path(os.environ.get("LOCALAPPDATA", Path.home())) / "ms-playwright"
+        if sys.platform.startswith("win")
+        else Path.home() / ".cache" / "ms-playwright")
+    try:
+        return any(base.glob(f"{engine}-*"))
+    except OSError:
+        return False
+
+
+def lane_available(key: str) -> bool:
+    """Whether this machine can open the lane a database record names.
+
+    Lane B needs the browser installed (a stat, never a launch); lane A needs
+    the Playwright download already fetched."""
+    try:
+        engine, backend, _headless = key.split(":")
+    except ValueError:
+        return False
+    if backend == "bidi":
+        return any(b["channel"] == "moz-firefox" for b in detect_installed())
+    if backend == "cdp":
+        return _bundled_present("chromium") or any(
+            b["channel"] in ("chrome", "msedge") for b in detect_installed())
+    return _bundled_present(engine)
 
 
 def capability(spec: LaneSpec, name: str) -> str:
@@ -555,7 +638,84 @@ def launch_kwargs(spec: LaneSpec, profile_dir: str,
         kwargs["args"] = list(spec.args)
     if emulation:
         kwargs.update(emulation)
+    identity = agent_identity()
+    if identity:
+        kwargs["extra_http_headers"] = dict(identity["headers"])
     return kwargs
+
+# ------------------------------------------------------ agent identification
+
+#: The header KS4Web sends when the caller has switched identification ON.
+#: A dedicated field rather than the User-Agent, and the reason is a fidelity
+#: one: Playwright takes a user agent at CONTEXT CONSTRUCTION, so appending a
+#: product token to the real one would mean either guessing the base string
+#: (which is a lie waiting to happen) or setting it as a request header after
+#: launch, which leaves `navigator.userAgent` saying one thing and the wire
+#: saying another. An inconsistent fingerprint is the class of thing the
+#: no-spoofing rule exists to prevent, so identification rides its own field
+#: and the browser keeps saying exactly what it is.
+AGENT_HEADER = "X-KS4Web-Agent"
+
+ENV_AGENT_ID = "KS4WEB_AGENT_ID"
+
+
+def _agent_toggle() -> bool:
+    """The install-screen boolean, with the family's loud-typo rule.
+
+    Same shape as the pack toggles (`packs._toggle_env`): empty is off, the
+    literal 'true' is on, 'false' is off, anything else refuses. It is a
+    CHECKBOX and not a free-text field on purpose: a caller who could type the
+    header value could type a claim about who they are, and this feature only
+    exists because it never does that."""
+    raw = os.environ.get(ENV_AGENT_ID)
+    if raw is None:
+        return False
+    value = raw.strip().lower()
+    if value in ("", "false", "0", "off", "no"):
+        return False
+    if value in ("true", "1", "on", "yes"):
+        return True
+    raise BadParams(
+        f"{ENV_AGENT_ID}={raw!r} is not an identification toggle value: use "
+        f"'true' or 'false' (empty means off). It is a switch rather than a "
+        f"field, because the identity KS4Web declares is not something a "
+        f"caller gets to compose.")
+
+
+def _product_version() -> str:
+    try:
+        from importlib.metadata import version
+        return version("kitchensink4web")
+    except Exception:
+        return "unknown"
+
+
+def agent_identity() -> dict | None:
+    """The identification headers this session sends, or None when off.
+
+    DEFAULT OFF, and the default is not timidity: a context-level header goes
+    out on every request the session makes, to every host it touches, so
+    turning it on is a decision to announce this machine's tooling broadly.
+    Turned on, it states one true thing (the product and its version) and
+    claims nothing else: no operator, no purpose, no permission, and no
+    assertion that any site has granted access. KS4Web never lies about what
+    it is in either setting, and nothing here is a bot-verification
+    credential."""
+    if not _agent_toggle():
+        return None
+    version = _product_version()
+    return {
+        "headers": {AGENT_HEADER: f"KitchenSink4Web/{version}"},
+        "on": True,
+        "version": version,
+        "applies_to": "every request this session makes, on every host",
+        "user_agent": "unchanged; the browser reports its own",
+        "verification": ("this is a self-declaration and not a signed "
+                         "credential: a site can read it and cannot verify "
+                         "it"),
+        "off_switch": f"{ENV_AGENT_ID}=false",
+    }
+
 
 
 # -------------------------------------------------- context emulation at open

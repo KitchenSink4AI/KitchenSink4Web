@@ -59,6 +59,62 @@ LOOP_CYCLE_THRESHOLD = 4
 #: When a 429 arrives without a Retry-After header, this is the honored wait.
 DEFAULT_RETRY_AFTER_S = 60.0
 
+#: Statuses that carry a rate limit or a temporary refusal with a wait
+#: attached. 503 belongs here and was missing: an edge under load and a
+#: Cloudflare "come back later" both answer 503 with `Retry-After`, and the
+#: header was read on 429 alone, so the one case that most needs the number
+#: reported was the case that dropped it.
+RETRY_AFTER_STATUSES: frozenset[int] = frozenset({429, 503})
+
+#: Nothing longer than this is honored as a backoff window. A header saying
+#: "come back in three weeks" is a real answer and a useless timer: it is
+#: reported as the fact it is and clamped for the purpose of the in-memory
+#: window, which exists to stop a retry loop rather than to schedule one.
+MAX_RETRY_AFTER_S = 24 * 3600.0
+
+
+def parse_retry_after(raw: str | None, *, now: float | None = None
+                      ) -> float | None:
+    """`Retry-After` in seconds, from either spelling RFC 9110 allows.
+
+    Two forms are legal and only one was read before: delta-seconds, and an
+    HTTP-date. A date-form header parsed as a number is a header thrown away,
+    and the sites most likely to send the date form are exactly the edges that
+    rate-limit hardest.
+
+    A date already in the past yields 0.0 rather than a negative wait, which
+    means "the window has passed" and is a different fact from "there was no
+    header". Anything unparseable yields None, and None is honest: the caller
+    then falls back to the documented default instead of inventing a number
+    from a malformed string."""
+    text = (raw or "").strip()
+    if not text:
+        return None
+    try:
+        seconds = float(text)
+    except ValueError:
+        pass
+    else:
+        if seconds != seconds or seconds in (float("inf"), float("-inf")):
+            return None
+        return max(0.0, min(seconds, MAX_RETRY_AFTER_S))
+    try:
+        from email.utils import parsedate_to_datetime
+        when = parsedate_to_datetime(text)
+    except (TypeError, ValueError, IndexError):
+        return None
+    if when is None:
+        return None
+    try:
+        from datetime import timezone
+        if when.tzinfo is None:
+            when = when.replace(tzinfo=timezone.utc)
+        current = time.time() if now is None else now
+        delta = when.timestamp() - current
+    except (OverflowError, OSError, ValueError):
+        return None
+    return max(0.0, min(delta, MAX_RETRY_AFTER_S))
+
 RESET_ROUTE = (
     "manage_session(action='reset_budgets') is the reset route, and it runs "
     "through the confirmation gate so a human answers it. A budget the model "
@@ -212,10 +268,48 @@ class BudgetBook:
         refuse until the window passes."""
         wait = retry_after_s if (retry_after_s and retry_after_s > 0) \
             else DEFAULT_RETRY_AFTER_S
+        wait = min(float(wait), MAX_RETRY_AFTER_S)
         until = time.monotonic() + wait
         self._backoff[domain.lower()] = max(
             self._backoff.get(domain.lower(), 0), until)
         return wait
+
+    def note_retry_after(self, domain: str, raw_header: str | None, *,
+                         status: int | None = None,
+                         budget_ms: int | None = None) -> dict:
+        """Honor a rate-limit response and report what was honored.
+
+        KS4Web does not sleep here, and the reason is the caller's budget:
+        `timeout_ms` is what the caller allotted for a navigation, and burning
+        it inside a wait would turn an honest "the site asked for 90 seconds"
+        into a timeout that blames the wrong thing. The window is recorded so
+        the next request to the domain refuses instead of retrying into the
+        wall, and the number is handed back as a fact for the caller to
+        schedule around.
+
+        `fits_in_budget` is the honest half of "respect it within the tool's
+        bounds": it says whether the wait would have fitted inside the
+        allotment this call was given, so the caller can tell a two-second
+        pause from a two-hour one without doing the arithmetic."""
+        parsed = parse_retry_after(raw_header)
+        wait = self.note_429(domain, parsed)
+        report = {
+            "seconds": round(wait, 1),
+            "source": "Retry-After header" if parsed is not None
+                      else "no Retry-After header; KS4Web's default window",
+            "header": (raw_header or "").strip() or None,
+            "honored": True,
+            "waited": False,
+            "domain": domain.lower(),
+        }
+        if status is not None:
+            report["status"] = status
+        if raw_header and parsed is None:
+            report["header_unparsed"] = True
+        if budget_ms:
+            report["call_budget_s"] = round(budget_ms / 1000.0, 1)
+            report["fits_in_budget"] = wait <= (budget_ms / 1000.0)
+        return report
 
     def check_domain(self, domain: str) -> None:
         until = self._backoff.get(domain.lower(), 0)

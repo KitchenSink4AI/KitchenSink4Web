@@ -50,7 +50,9 @@ from .. import pagedata as _pagedata
 from . import act as _act
 from . import common as _common
 from . import resource as _resource
-from ..engine import frames, handles as _handles, lanes, session as _session
+from . import wellknown as _wellknown
+from ..engine import (frames, handles as _handles, lanedb as _lanedb, lanes,
+                      session as _session)
 from ..errors import (AmbiguousLocation, AuthRequired, BadParams,
                       BlockedBySite, Conflict, LaneUnsupported, ModalBlocked,
                       NavigationFailed, NotImplementedYet, PageUnreachable,
@@ -1188,12 +1190,24 @@ async def navigate(
         # windows, and multi-session work; with SEVERAL sessions open the
         # server refuses to guess which one you meant.
         if not MANAGER.sessions:
-            opened = await MANAGER.open()
+            # THE ONE AUTOMATIC LANE CHOICE, and it is a choice rather than a
+            # switch. At this instant there is no session: no cookies, no
+            # loaded auth, no open pages, no lane the caller picked. Opening
+            # the browser the database has watched this host serve is the
+            # initial decision made with better information, and it is the
+            # only place in the product where the database decides anything.
+            # A session that already exists is never switched, no matter what
+            # the record says.
+            picked = _autopick(
+                url if (action or "goto").strip().lower() == "goto" else None)
+            opened = await MANAGER.open(**(picked["open"] if picked else {}))
             auto_session = (
                 f"no session was open, so navigate opened one: "
                 f"{opened.session_id} ({opened.spec.label}, headless). Use "
                 f"manage_session(action='open', lane=...) instead when you "
                 f"need a headed window or a different browser.")
+            if picked:
+                auto_session += " " + picked["why"]
         page = MANAGER.session(None).focused
     sess, record = MANAGER.locate(page)
     _audit.annotate(session=sess.session_id, page=record.handle,
@@ -1296,7 +1310,8 @@ async def navigate(
             # and the mark is what every later read sees.
             note_load_failure(record, f"{type(exc).__name__}: {exc}",
                               target=url)
-            _raise_if_unreachable(exc, f"navigate(goto, {url})", record)
+            _raise_if_unreachable(exc, f"navigate(goto, {url})", record,
+                                  target=url)
             raise
         status = response.status if response else None
         sess.bump("navigations", page=record.handle)
@@ -1329,15 +1344,36 @@ async def navigate(
     # for rather than the one that answered.
     await _landed_origin_check(sess, record, tool="navigate")
 
-    # A site that said 429 stays said: the Retry-After window is recorded
-    # and later requests to the domain refuse until it passes.
+    # A site that said slow down stays said: the Retry-After window is
+    # recorded and later requests to the domain refuse until it passes.
+    #
+    # Two things changed here (the CF-era wave). The header is parsed in BOTH
+    # spellings RFC 9110 allows, so an HTTP-date is honored instead of thrown
+    # away, and 503 is honored alongside 429, because an edge under load and a
+    # "come back later" both answer 503 with the header and the number was
+    # being dropped on exactly the responses that carry it most.
+    #
+    # Nothing sleeps. `timeout_ms` is the caller's allotment for a
+    # navigation, and spending it inside a wait would turn "the site asked for
+    # ninety seconds" into a timeout that blames the wrong party. The window
+    # is honored by refusing the next request to the domain, and the number
+    # is reported as a fact for the caller to schedule around.
+    #
+    # A 503 is honored only when it CARRIES the header. A bare 503 is a
+    # server having a bad minute, and starting a sixty-second domain backoff
+    # from a default nobody sent would be inventing a rate limit out of an
+    # outage. A 429 keeps the documented default, because 429 is the site
+    # saying the words whether or not it attached a number.
     retry_after_s = None
-    if status == 429:
+    rate_limit = None
+    if status in _budgets.RETRY_AFTER_STATUSES:
         raw = (response.headers.get("retry-after", "")
-               if response is not None else "").strip()
-        retry_after_s = _budgets.BOOK.note_429(
-            urlparse(record.page.url).hostname or "",
-            float(raw) if raw.replace(".", "", 1).isdigit() else None)
+               if response is not None else "")
+        if status == 429 or (raw or "").strip():
+            rate_limit = _budgets.BOOK.note_retry_after(
+                urlparse(record.page.url).hostname or "", raw,
+                status=status, budget_ms=timeout_ms)
+            retry_after_s = rate_limit["seconds"]
 
     # The response headers are the wall signal that does not race the
     # renderer, so they are handed to the classifier rather than left on the
@@ -1361,11 +1397,32 @@ async def navigate(
     # names the route to disk, which is the move the demand data says every
     # caller wants next.
     held = await _resource.probe_page(record.page)
+    # THE LANE LEARNED SOMETHING. A navigation that came back with no wall and
+    # a non-error status is the only success this database records, and it is
+    # recorded against the LANDED host, which is what `page.url` holds after
+    # redirects: a hop from a.com to b.com that ends well is b.com's answer.
+    #
+    # Only `goto` and `reload` count. `stop` cancelled the load, `back` and
+    # `forward` can be served entirely from the back-forward cache, and
+    # `wait_for_load` made no request at all: counting any of them would let a
+    # loop of history calls manufacture confidence in a lane that fetched
+    # nothing.
+    if action in ("goto", "reload") and (status is None or status < 400):
+        _note_lane(sess, record.page.url, "ok")
+    declared = await _wellknown.declarations(sess, record.page.url)
+    # The lane database's degraded note rides ONCE, in the next result that
+    # asks for it, because every operation in that module is wrapped so it
+    # cannot raise and a failure that surfaces nowhere is a failure nobody
+    # can act on.
+    db_note = _lanedb.take_note()
     return {
         "session": sess.session_id, "page": record.handle,
         "lane": sess.spec.lane,
         **({"resource": _resource.navigate_note(held)} if held else {}),
         **({"auto_session": auto_session} if auto_session else {}),
+        **({"rate_limit": rate_limit} if rate_limit else {}),
+        **({"agent_declarations": declared} if declared else {}),
+        **({"lane_database": {"note": db_note}} if db_note else {}),
         "changed": {"effect": "navigated" if record.page.url != before
                     else "same-url", "from": before, "to": record.page.url},
         "url": record.page.url, "status": status,
@@ -1479,7 +1536,7 @@ def _session_is_gone(session) -> bool:
 
 
 def _raise_if_unreachable(exc: Exception, what: str,
-                          record=None) -> None:
+                          record=None, target: str | None = None) -> None:
     """Re-raise a driver failure as the honest typed refusal, naming the
     cause.
 
@@ -1518,6 +1575,15 @@ def _raise_if_unreachable(exc: Exception, what: str,
             f"one.") from exc
     for marker, cause in _NET_CAUSES:
         if marker in text:
+            # A CONNECTION THAT OPENED AND DIED is a lane fact; a name that
+            # would not resolve and a machine with no network are not. Only
+            # the narrow set gets recorded, and a timeout gets nothing at all,
+            # because a slow site and a silent drop look identical from here
+            # and a wrong `dropped` on a good lane is the expensive error.
+            if marker in _DROP_CAUSES and record is not None:
+                session = sess_of(record)
+                if session is not None:
+                    _note_lane(session, target or _page_url(record), "dropped")
             raise PageUnreachable(
                 f"{what} never reached a server: {cause} (driver reported "
                 f"{marker.strip('&=')}). The URL itself is not the problem, "
@@ -1722,28 +1788,135 @@ async def _ensure_vetted(sess, record, *, tool: str) -> None:
         await _landed_origin_check(sess, record, tool=tool)
 
 
+#: Wall verdicts that describe a LANE being turned away rather than an
+#: account, a moment, or this machine. Only these are learned from, and the
+#: contract in `engine/lanedb.py` says why each of the others is not.
+_LANE_WALLS: frozenset[str] = frozenset({
+    "bot-wall-or-captcha", "forbidden-challenge",
+    "service-unavailable-or-bot-wall",
+})
+
+#: Driver causes that mean the CONNECTION died rather than that the name
+#: failed to resolve, this machine went offline, or the request ran long. A
+#: wrong `dropped` on a good lane is the expensive error, so the set is
+#: narrow and every member describes a socket that opened and then failed.
+_DROP_CAUSES: frozenset[str] = frozenset({
+    "err_connection_closed", "err_connection_reset",
+    "err_connection_timed_out", "err_empty_response",
+    "err_address_unreachable", "ns_error_net_reset",
+})
+
+
+def _note_lane(sess, url: str | None, outcome: str, *,
+               vendor: str | None = None, wall: str | None = None) -> None:
+    """Hand one observed outcome to the lane database. Never raises."""
+    try:
+        _lanedb.record(url, lanes.lane_key(sess.spec), outcome,
+                       vendor=vendor, wall=wall)
+    except Exception:
+        pass
+
+
+def _autopick(url: str | None) -> dict | None:
+    """The lane to open for this URL, or None to open the default.
+
+    Four conditions, all required, and each one is load-bearing: the session
+    is being opened by navigate rather than by a caller who chose a lane; the
+    database has a fresh, believed-good, directly observed record for the
+    host; that lane can actually be opened on this machine without a download
+    nobody asked for; and the lane that would otherwise open is one this host
+    has already turned away. Miss any of them and the default opens."""
+    try:
+        if not url or not _lanedb.autopick_enabled():
+            return None
+        default_key = lanes.lane_key(lanes.resolve())
+        current = _lanedb.lookup(url, default_key)
+        if not current or current["from_sibling_lane"] \
+                or current["belief"] != "believed_bad":
+            return None
+        for row in _lanedb.good_lanes(url):
+            if row["stale"] or row["lane_key"] == default_key:
+                continue
+            if not lanes.lane_available(row["lane_key"]):
+                continue
+            argument = lanes.lane_argument(row["lane_key"])
+            if not argument:
+                continue
+            return {
+                "open": _parse_lane(argument),
+                "why": (
+                    f'The lane was chosen rather than defaulted: this '
+                    f'machine recorded {row["host"]} refusing '
+                    f'{default_key} and serving {row["lane_key"]} '
+                    f'(last read {row["last_ok"]}, {row["ok"]} observation(s)). '
+                    f'Open a different one with '
+                    f'manage_session(action="open", lane=...) before '
+                    f'navigating, or set KS4WEB_LANE_AUTOPICK=0 to always '
+                    f'take the default. A session already open is never '
+                    f'switched.'),
+            }
+        return None
+    except Exception:
+        return None
+
+
+def _lane_hint(sess, url: str, wall: str | None) -> str:
+    """The lane sentence in a wall refusal, built from what was measured.
+
+    This used to be a hardcoded guess: "sites that turn away automated
+    Chromium often serve Firefox normally", true on the sample it came from
+    and unfalsifiable in front of the user. The database turns it into a
+    statement with a host, a lane, a date, and a count behind it, and into
+    silence in the case that matters most, where every lane this machine has
+    tried was refused and naming another one would cost the caller turns for
+    nothing."""
+    if wall not in _LANE_WALLS:
+        return ""
+    try:
+        current = lanes.lane_key(sess.spec)
+        fresh = [row for row in _lanedb.good_lanes(url)
+                 if not row["stale"] and row["lane_key"] != current]
+        if fresh:
+            row = fresh[0]
+            argument = lanes.lane_argument(row["lane_key"])
+            return (
+                f'This machine read {row["host"]} on {row["lane_key"]} '
+                f'({row["ok"]} observation(s), last on {row["last_ok"]}), so '
+                f'manage_session(action="open", lane="{argument}") is the '
+                f'lane with a measured chance here. ')
+        if _lanedb.all_lanes_failed(url):
+            return (
+                'Every lane this machine has tried on this host was refused '
+                'too, so switching lanes is not the move here. ')
+    except Exception:
+        pass
+    if sess.spec.engine == "chromium":
+        # THE FALLBACK, unchanged, for a database that knows nothing yet. It
+        # ships empty on every machine, so this sentence is what a new user
+        # sees, and it is still what the 2026-09-05 field test measured.
+        return (
+            'Sites that turn away automated Chromium often serve '
+            'Firefox normally, so manage_session(action="open", '
+            'lane="B:moz-firefox") (your installed Firefox) or '
+            'lane="A:firefox" (the bundled one) is worth one try before '
+            'the handoff. ')
+    return ""
+
+
 def _blocked_refusal(sess, url: str, status: int | None, verdict: dict,
                      retry_after_s: float | None = None):
     """`navigate`'s wall refusal, as one sentence every surface can raise.
 
     Factored out unchanged (gauntlet 4, G4-04) so a read surface that finds a
     recorded wall verdict says the same thing `navigate` says about the same
-    page, rather than a second wording of the same fact."""
-    lane_hint = ""
-    if sess.spec.engine == "chromium" and verdict["wall"] in (
-            "bot-wall-or-captcha", "forbidden-challenge",
-            "service-unavailable-or-bot-wall"):
-        # LANE STEERING, not evasion (standing rule): nothing here patches a
-        # user agent or pretends to be a browser it is not. The field test
-        # 2026-09-05 measured that both Firefox lanes read pages the Chromium
-        # lane was turned away from, so the refusal names the lane that has a
-        # real chance instead of leaving the agent to retry the same one.
-        lane_hint = (
-            'Sites that turn away automated Chromium often serve '
-            'Firefox normally, so manage_session(action="open", '
-            'lane="B:moz-firefox") (your installed Firefox) or '
-            'lane="A:firefox" (the bundled one) is worth one try before '
-            'the handoff. ')
+    page, rather than a second wording of the same fact.
+
+    The block is RECORDED before the sentence is built, so the lane the site
+    just refused is part of the evidence the sentence is built from."""
+    if verdict.get("wall") in _LANE_WALLS:
+        _note_lane(sess, url, "blocked", wall=verdict.get("wall"),
+                   vendor=verdict.get("vendor"))
+    lane_hint = _lane_hint(sess, url, verdict.get("wall"))
     return BlockedBySite(
         f'{url} answered with a {verdict["wall"]} rather than '
         f'the page (HTTP {status}). KS4Web does not retry against a wall '
@@ -3671,6 +3844,13 @@ def _tab_list(sess) -> list[dict]:
     return out
 
 
+#: INTEGRATION FLAG (2026-09-08, the seven-branch merge). Four waves each
+#: added a clause to this ONE description and the union blew the hard
+#: 2,048-character client-truncation ceiling. The transfer clause was
+#: relocated, not rewritten: every fact it carried is already published
+#: verbatim in get_workflows(task="session-transfer"), so the description
+#: now points at the topic. The description is a MERGED PLACEHOLDER and
+#: needs the author's pass as one string, not four.
 async def manage_session(
     action: str = "status",
     session: str | None = None,
@@ -3686,6 +3866,9 @@ async def manage_session(
     expires_minutes: int = _handles.DEFAULT_TTL_MIN,
     contexts: int = 1,
     context: str | None = None,
+    site: str | None = None,
+    op: str | None = None,
+    path: str | None = None,
 ) -> dict:
     """Open, close, or inspect a browser session, report the current lane's
     capabilities, read the budget counters, or hand the headed window to the
@@ -3702,24 +3885,28 @@ async def manage_session(
     degrades, and cannot do, and status reports any emulation in force. The
     status action also names the browsers installed on this machine and
     which lane suits which job, as steering: nothing switches a lane on its
-    own. 'export_handle' mints a single-use token plus a receipt of what a
-    session holds, and 'import_handle' redeems it in another conversation
-    and reports per page what is still the same document; the transfer
-    works only inside this running server on this machine, and a session
-    that is gone is refused with the reason it ended rather than a bare
-    'not found'. `contexts=2` on open gives one session two independent
+    own. 'export_handle' and 'import_handle' move a live session between
+    conversations; get_workflows(task='session-transfer') states the limits
+    and what is lost. `contexts=2` on open gives one session two independent
     cookie jars, so two logins to the same site can run side by side; each
     jar is its own browser process on its own profile, the action budget is
     shared across them, and any call that acts on one jar takes
     `context='c1'` and refuses rather than guessing when there is more than
-    one. Closing with `context=...` closes that jar alone. Tool
-    availability reflects the packs this server was started with.
+    one. Closing with `context=...` closes that jar alone. The lanes action
+    reads the learned site database (which browser has actually read a given
+    host on this machine): `op='show'` with `site=`, `op='export'` or
+    'export_all' to a `path=`, `op='import'` (a dry run) and 'import_apply',
+    and `op='forget'` with `site=` or `site='all'`. Tool availability
+    reflects the packs this server was started with.
     """
     action = _common.enum_arg(
         action, ("open", "close", "status", "capabilities", "budget",
                  "reset_budgets", "handoff", "export_handle",
-                 "import_handle"), default="status",
+                 "import_handle", "lanes"), default="status",
         tool="manage_session")
+
+    if action == "lanes":
+        return _lanes_action(site=site, op=op, path=path)
 
     if action == "open":
         if session:
@@ -3810,6 +3997,11 @@ async def manage_session(
                                        "this is not")}}
                if sess.emulation else {}),
             **({"auth_state": loaded} if loaded else {}),
+            # Stated only when it is ON. A session that announces itself to
+            # every host it touches is a fact the caller should read in the
+            # same result that opened it, and a session that does not needs
+            # no line at all.
+            **_identification_line(),
             "profile": (
                 "a freshly created KS4Web-owned directory. KS4Web never opens "
                 "your real browser profile, and every Firefox launch carries "
@@ -3849,6 +4041,11 @@ async def manage_session(
                 jars[label]["saved_now"] = await _storage.save_auth_state(
                     session=sess.session_id, context=label, path=path)
         result = await MANAGER.close(sess.session_id)
+        # The learned lane records are flushed here rather than only on the
+        # debounce, because a conversation that opens a session, hits a wall,
+        # and closes is exactly the shape that would otherwise learn something
+        # and lose it.
+        _lanedb.flush()
         rows = {row["context"]: row for row in result.get("contexts", [])}
         for label, state in jars.items():
             row = rows.get(label)
@@ -4106,6 +4303,17 @@ async def manage_session(
             # Reattaching to an orphan is the expensive half and is not here.
             **({"idle_sessions": _idle_summary(stale)} if stale else {}),
             "read_only": readonly.describe(),
+            # The lane database, where lane steering already lives. It ships
+            # EMPTY on every machine and learns only from what this machine
+            # observed, so the honest thing to publish here is the file, the
+            # host count, and what the file can and cannot contain.
+            "lane_database": _lanedb.status(),
+            # A MISCONFIGURED toggle is REPORTED here rather than raised.
+            # Opening a session refuses on it loudly, which is where a typo
+            # should cost something; status is the surface an agent reaches
+            # for precisely when everything else is refusing, and it has to
+            # be able to say what is wrong.
+            **_identification_line(),
             # What this machine has and which lane suits what (field log 2
             # item 44, the user's own ask). Detected once per process from
             # stats and a registry read, never by launching anything, and it
@@ -4134,7 +4342,7 @@ async def manage_session(
     raise BadParams(
         f"unknown manage_session action {action!r}: the actions are 'open', "
         f"'close', 'status', 'capabilities', 'budget', 'reset_budgets', "
-        f"'handoff', 'export_handle', and 'import_handle'.")
+        f"'handoff', 'export_handle', 'import_handle', and 'lanes'.")
 
 
 def _live_refs(sess, handle: str) -> int:
@@ -4254,6 +4462,95 @@ async def _transfer_report(sess, record: dict) -> dict:
                  f"to see the tabs, get_page_view(page=...) to re-read."),
     }
 
+
+def _identification_line() -> dict:
+    """The agent-identification block for a status report, or nothing."""
+    try:
+        identity = lanes.agent_identity()
+    except BadParams as exc:
+        return {"agent_identification": {
+            "on": False, "misconfigured": str(exc)}}
+    return {"agent_identification": identity} if identity else {}
+
+
+#: What `manage_session(action='lanes', op=...)` accepts. Import is TWO ops
+#: rather than a boolean flag, so the dry run is what a caller gets by
+#: spelling the ordinary word and the merge has to be asked for by name.
+_LANE_OPS: tuple[str, ...] = (
+    "show", "export", "export_all", "import", "import_apply", "forget",
+)
+
+
+def _lanes_action(site: str | None, op: str | None,
+                  path: str | None) -> dict:
+    """The lane database's read and maintenance surface.
+
+    Everything a user needs to see what was learned, share the useful half of
+    it, take somebody else's, and erase their own. The erase route is one call
+    with no ceremony, which is what taking the privacy claim seriously looks
+    like in a tool surface rather than in a paragraph."""
+    op = _common.enum_arg(op or "show", _LANE_OPS, default="show",
+                          tool="manage_session(action='lanes')")
+    if op == "show":
+        if not site:
+            return {"lane_database": _lanedb.status(),
+                    "lane_keys": sorted(_lanedb.LANE_KEYS)}
+        return {"lane_database": _lanedb.status(),
+                **_lanedb.report(site)}
+    if op in ("export", "export_all"):
+        payload = _lanedb.export(
+            scope="all" if op == "export_all" else "blocked-only")
+        hosts = len(payload["hosts"])
+        written = None
+        if path:
+            import json as _json
+            written = _common.write_text_file(
+                path, _json.dumps(payload, indent=1),
+                "export the lane database")
+        return {
+            "exported": hosts,
+            "scope": payload["scope"],
+            **({"file": written} if written else {"payload": payload}),
+            "leaves_the_machine": (
+                f"{hosts} hostname(s) and the dates they were measured. The "
+                f"store holds no paths, no URLs, and no times of day, so "
+                f"there are none to strip."),
+        }
+    if op in ("import", "import_apply"):
+        if not path:
+            raise BadParams(
+                "manage_session(action='lanes', op='import') needs path= "
+                "pointing at a database somebody exported.")
+        import json as _json
+        from pathlib import Path as _Path
+
+        from ..policy import sandbox
+        checked = sandbox.check_path(path, "import a lane database")
+        try:
+            with open(checked, encoding="utf-8") as handle:
+                data = _json.load(handle)
+        except (OSError, ValueError) as exc:
+            raise BadParams(
+                f"{path} could not be read as a lane database "
+                f"({type(exc).__name__}). An export written by "
+                f"op='export' is what this takes.") from exc
+        label = _Path(checked).stem[:60]
+        result = _lanedb.import_payload(
+            data, label=label, dry_run=(op == "import"))
+        if op == "import":
+            result["apply_with"] = (
+                f"manage_session(action='lanes', op='import_apply', "
+                f"path={path!r})")
+        return result
+    if not site:
+        raise BadParams(
+            "manage_session(action='lanes', op='forget') needs site= naming "
+            "one host, or site='all' to erase the whole learned record.")
+    if site.strip().lower() == "all":
+        return _lanedb.forget(all_records=True)
+    if site.strip().lower().startswith("imported:"):
+        return _lanedb.forget(source=site.strip().lower())
+    return _lanedb.forget(site=site)
 
 def _session_status(sess) -> dict:
     """One session's row in the status report, with its age and its idleness.
