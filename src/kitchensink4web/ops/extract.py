@@ -270,7 +270,7 @@ async def get_table(
     # itself onto a wall, or a popup no door ever policed, is
     # refused before any of its content is returned.
     await _lite._read_gate(sess, record, tool="get_table")
-    sess.counters["reads"] += 1
+    sess.bump("reads", page=record.handle)
     budget = int(budget_tokens or TABLE_BUDGET_TOKENS)
     if budget < TABLE_BUDGET_FLOOR:
         raise RangeOutOfBounds(
@@ -454,7 +454,7 @@ async def get_list(
     # itself onto a wall, or a popup no door ever policed, is
     # refused before any of its content is returned.
     await _lite._read_gate(sess, record, tool="get_list")
-    sess.counters["reads"] += 1
+    sess.bump("reads", page=record.handle)
     el = None
     if location:
         resolved = await _act.resolve(sess, record, location, tool="get_list")
@@ -578,7 +578,7 @@ async def get_links(
     # itself onto a wall, or a popup no door ever policed, is
     # refused before any of its content is returned.
     await _lite._read_gate(sess, record, tool="get_links")
-    sess.counters["reads"] += 1
+    sess.bump("reads", page=record.handle)
     el = None
     if location:
         resolved = await _act.resolve(sess, record, location, tool="get_links")
@@ -667,7 +667,7 @@ async def get_metadata(page: str) -> dict:
     # itself onto a wall, or a popup no door ever policed, is
     # refused before any of its content is returned.
     await _lite._read_gate(sess, record, tool="get_metadata")
-    sess.counters["reads"] += 1
+    sess.bump("reads", page=record.handle)
     got = await record.page.evaluate(_META_JS)
     return {
         "page": record.handle, "session": sess.session_id,
@@ -839,7 +839,7 @@ async def extract_fields(page: str, fields: list | dict) -> dict:
     # itself onto a wall, or a popup no door ever policed, is
     # refused before any of its content is returned.
     await _lite._read_gate(sess, record, tool="extract_fields")
-    sess.counters["reads"] += 1
+    sess.bump("reads", page=record.handle)
     got = await record.page.evaluate(_FIELDS_JS)
     sources = got["sources"]
     by_norm: dict[str, dict] = {}
@@ -1020,7 +1020,7 @@ async def get_article(
     # itself onto a wall, or a popup no door ever policed, is
     # refused before any of its content is returned.
     await _lite._read_gate(sess, record, tool="get_article")
-    sess.counters["reads"] += 1
+    sess.bump("reads", page=record.handle)
     # The SAME ref-to-node-ref resolver `get_page_view` and `get_text` scope
     # with, imported rather than reimplemented: the extractor keys its in-page
     # registry by the id IT assigned in the last read, and a pack tool that
@@ -1238,7 +1238,7 @@ async def read_pages(
             break
         url = record.page.url
         visited.append(url)
-        sess.counters["reads"] += 1
+        sess.bump("reads", page=record.handle)
         got = await read_text(record.page, root=None, start_index=0,
                               max_chars=max_chars, include_hidden=False)
         wrapped, note = _pagedata.wrap(got["text"], url=got["url"])
@@ -1321,7 +1321,7 @@ async def read_pages(
             resume = candidate["url"]
             break
         record.touch(record.page.url)
-        sess.counters["navigations"] += 1
+        sess.bump("navigations", page=record.handle)
         # Endurance F2: this door charged the ledger and never recorded the
         # origin it landed on, so the reported list silently omitted every
         # site reached by a page-walk hop.

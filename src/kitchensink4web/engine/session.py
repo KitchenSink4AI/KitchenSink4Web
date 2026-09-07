@@ -39,7 +39,8 @@ from .. import anchors
 from .. import dialogs as _dialogs
 from ..envelope import CRASHED_HINT as CRASHED_PAGE_HINT
 from ..errors import (BadParams, Conflict, LaneUnsupported, ModalBlocked,
-                      SessionDead, StaleAnchor, TargetNotFound, Timeout)
+                      SessionDead, StaleAnchor, TargetNotFound, Timeout,
+                      ValidationFailed)
 from ..projection import CLOSED_SHADOW_HOOK
 from ..projection.meter import warm as _warm_estimator
 from . import hygiene, lanes
@@ -95,6 +96,13 @@ PENDING_NAV_MAX = 512
 #: imported-but-unselected pack records nothing. Hooks are synchronous and
 #: their failures propagate: a recorder that cannot attach is a launch
 #: problem to surface, not one to swallow.
+#:
+#: SIGNATURE: `hook(session, contexts)`, where `contexts` is the list of
+#: ContextHandles this call is responsible for. A recorder must attach to
+#: EVERY cookie jar or a page in the second one records nothing while its
+#: tool reports an empty list as though that were the truth, and passing
+#: only the new jars is what lets a context added to a live session get its
+#: listeners without the existing jars getting a second copy.
 SESSION_OPEN_HOOKS: list = []
 
 #: HOW MANY CLOSED SESSIONS ARE REMEMBERED (defect D3, lifecycle review).
@@ -115,6 +123,21 @@ TOMBSTONE_MAX = 32
 #: happen the way an explicit close does, and saying so is free.
 CLOSE_REASONS = ("explicit_close", "idle_recycle", "crash", "shutdown")
 
+#: HOW MANY COOKIE JARS ONE SESSION MAY HOLD. Each is a separate browser
+#: process on its own profile directory, so the cap is about memory on this
+#: machine rather than about anything the driver limits.
+ENV_MAX_CONTEXTS = "KS4WEB_MAX_CONTEXTS"
+
+
+def _max_contexts() -> int:
+    try:
+        return max(1, int(os.environ.get(ENV_MAX_CONTEXTS, "4")))
+    except ValueError:
+        return 4
+
+
+MAX_CONTEXTS = _max_contexts()
+
 
 @dataclass
 class PageHandle:
@@ -122,6 +145,11 @@ class PageHandle:
 
     handle: str
     page: Any
+    #: WHICH COOKIE JAR THIS PAGE LIVES IN. Handles stay flat and globally
+    #: unique, so this is reporting rather than addressing: every payload
+    #: that lists pages says which context each belongs to, and a per-jar
+    #: call reaches the right one without the caller having to know.
+    context: str = "c1"
     history: list[str] = field(default_factory=list)
     opened: float = field(default_factory=time.time)
     last_used: float = field(default_factory=time.time)
@@ -223,21 +251,81 @@ class PageHandle:
         return self.history[-2] if len(self.history) > 1 else None
 
 
-@dataclass
-class Session:
-    """One browser context, its pages, and everything owned alongside it."""
+def _fresh_counters() -> dict[str, int]:
+    return {"navigations": 0, "reads": 0, "actions": 0, "pages_opened": 0,
+            "origins": 0}
 
-    session_id: str
-    spec: lanes.LaneSpec
+
+@dataclass
+class ContextHandle:
+    """ONE COOKIE JAR: a browser context, the profile it runs on, and the
+    processes it owns.
+
+    A persistent context has no `.browser`, so `browser.new_context()` is
+    not reachable from the way this server launches (`lanes` builds
+    `launch_persistent_context` kwargs). A second cookie jar is therefore a
+    second browser process on its own KS4Web-owned profile directory, which
+    costs real memory and is stated rather than hidden, and which buys
+    isolation strictly stronger than sibling contexts give: separate
+    profiles, separate processes, no shared storage partition, and crash
+    isolation for free. Every existing mechanism (the launch kwargs, the
+    `-no-remote` Firefox rule, the owned-PID journal, `adopt_descendants`,
+    profile-tree removal, the instrument channel, the dialog desk, the
+    context-level page adoption hook and response recorder) then works per
+    context with no change to its own logic."""
+
+    label: str
     context: Any
     profile_dir: str
     journal: hygiene.OwnedProcesses
+    spec: lanes.LaneSpec
+    opened: float = field(default_factory=time.time)
+    #: THE REPORTING COUNTERS LIVE HERE, not on the session, so the
+    #: per-context breakdown is real rather than derived and the session
+    #: line is the sum of real numbers rather than a second copy of them.
+    #: The ENFORCING ledger stays session-wide in `policy/budgets`.
+    counters: dict[str, int] = field(default_factory=_fresh_counters)
+    #: An auth save is per cookie jar by definition, so the save history
+    #: that lets the close message tell the truth (field finding 41) is per
+    #: jar too. A session-level "none were saved" while c2 was in fact
+    #: saved is that same wrong answer in a new shape.
+    saved_auth_at: float | None = None
+    saved_auth_path: str | None = None
+
+    def alive(self) -> bool | None:
+        """Is this jar's browser actually running? None means cannot tell."""
+        pids = list(self.journal.pids)
+        if not pids:
+            return None
+        if self.journal.survivors():
+            return True
+        if not hygiene.WINDOWS:
+            return None
+        return False
+
+    def record_auth_save(self, path: str) -> None:
+        self.saved_auth_at = time.time()
+        self.saved_auth_path = path
+
+
+@dataclass
+class Session:
+    """One or more cookie jars, their pages, and everything owned alongside.
+
+    PAGE HANDLES STAY FLAT AND GLOBALLY UNIQUE (`p1`, `p2`, `p3`) rather
+    than being namespaced per context. `MANAGER.locate` scans every session
+    and every page and the whole codebase depends on a bare handle being
+    unambiguous; refs are session-unique for the same reason. What changes
+    under multiple contexts is that every payload listing pages says which
+    jar each page belongs to."""
+
+    session_id: str
+    spec: lanes.LaneSpec
+    contexts: dict[str, ContextHandle] = field(default_factory=dict)
+    focused_context: str = "c1"
     pages: dict[str, PageHandle] = field(default_factory=dict)
     focused: str | None = None
     opened: float = field(default_factory=time.time)
-    counters: dict[str, int] = field(
-        default_factory=lambda: {"navigations": 0, "reads": 0, "actions": 0,
-                                 "pages_opened": 0, "origins": 0})
     origins: set[str] = field(default_factory=set)
     #: NAVIGATION RESPONSES THAT ARRIVED BEFORE THEIR PAGE DID (gauntlet
     #: 4, G4-05). A popup's own first navigation is issued BEFORE the
@@ -266,19 +354,21 @@ class Session:
     #: package never learns what a browser is.
     element_map: Any = field(default_factory=anchors.ElementMap)
     reads: Any = field(default_factory=anchors.ReadStore)
-    #: Where and when this session's auth state was last written, if it ever
-    #: was. Field finding 41 (2026-09-05): close reported "none were saved"
-    #: minutes after an explicit save_auth_state, because it consulted only
-    #: the close call's own arguments. A save history the session remembers
-    #: is what lets the close message tell the truth.
-    saved_auth_at: float | None = None
-    saved_auth_path: str | None = None
     #: What the caller asked this context to look like at open (device
     #: preset, viewport, locale, time zone). Empty means every default is
     #: untouched, which is the common case and is worth being able to SAY:
     #: a status that reports an emulation nobody set is as misleading as one
     #: that hides an emulation somebody did.
     emulation: dict = field(default_factory=dict)
+    #: The launch kwargs that emulation resolved to, kept so a context
+    #: added later is built the same way. Every context in a session shares
+    #: the session's lane and its emulation: a session is one lane by
+    #: definition, `sess.spec` is read all over the ops layer for
+    #: capability reporting, and a per-context lane would turn the
+    #: capabilities truth table into a per-page question. A caller who
+    #: wants two lanes wants two sessions. Per-context locale and time
+    #: zone is the natural later extension and is not in this version.
+    emulation_kwargs: dict = field(default_factory=dict)
     #: WHO OPENED THIS SESSION AND WHAT IT IS FOR. `user` is a session some
     #: conversation asked for; `monitor` is the one the monitor scheduler
     #: owns (feature #8). The distinction is load-bearing in three places:
@@ -289,9 +379,95 @@ class Session:
     #: then fight it for the same page.
     role: str = "user"
 
-    def record_auth_save(self, path: str) -> None:
-        self.saved_auth_at = time.time()
-        self.saved_auth_path = path
+    # ----------------------------------------------------- the focused jar
+
+    @property
+    def jar_handle(self) -> ContextHandle:
+        handle = self.contexts.get(self.focused_context)
+        if handle is None:
+            handle = next(iter(self.contexts.values()))
+        return handle
+
+    @property
+    def context(self) -> Any:
+        """The FOCUSED jar's Playwright context, so nothing breaks on a
+        single-context session. Every call site that means "one cookie jar"
+        should reach it through `jar()` instead, which refuses rather than
+        guessing when there is more than one."""
+        return self.jar_handle.context
+
+    @property
+    def journal(self) -> Any:
+        return self.jar_handle.journal
+
+    @property
+    def profile_dir(self) -> str:
+        return self.jar_handle.profile_dir
+
+    @property
+    def saved_auth_at(self) -> float | None:
+        return self.jar_handle.saved_auth_at
+
+    @property
+    def saved_auth_path(self) -> str | None:
+        return self.jar_handle.saved_auth_path
+
+    @property
+    def counters(self) -> dict[str, int]:
+        """The session line, SUMMED from the per-context counters rather
+        than kept as a second copy of them. Read-only by construction: a
+        `counters[k] += 1` against this would be lost, which is why every
+        writer goes through `bump()`."""
+        total = _fresh_counters()
+        for handle in self.contexts.values():
+            for key, value in handle.counters.items():
+                total[key] = total.get(key, 0) + value
+        total["origins"] = len(self.origins)
+        return total
+
+    def bump(self, kind: str, page: str | None = None,
+             context: str | None = None) -> None:
+        """Increment one reporting counter on the jar that earned it."""
+        label = context
+        if label is None and page is not None:
+            record = self.pages.get(page)
+            label = getattr(record, "context", None)
+        handle = self.contexts.get(label or self.focused_context)
+        if handle is None and self.contexts:
+            handle = next(iter(self.contexts.values()))
+        if handle is not None:
+            handle.counters[kind] = handle.counters.get(kind, 0) + 1
+
+    def record_auth_save(self, path: str, context: str | None = None) -> None:
+        self.jar(context).record_auth_save(path)
+
+    def jar(self, label: str | None = None) -> ContextHandle:
+        """Resolve one cookie jar, REFUSING rather than guessing.
+
+        The same doctrine `SessionManager.session(None)` applies when
+        several sessions are open: name the one you mean rather than
+        letting the server pick. A single-context session keeps the current
+        implicit behaviour exactly, so nothing existing changes."""
+        if label is None:
+            if len(self.contexts) <= 1:
+                return self.jar_handle
+            raise BadParams(
+                f"session {self.session_id} has {len(self.contexts)} "
+                f"separate cookie jars ({sorted(self.contexts)}) and this "
+                f"call acts on one of them, so name the one you mean with "
+                f"context=... rather than letting the server pick. This is "
+                f"the same rule that applies when several sessions are "
+                f"open.")
+        if label not in self.contexts:
+            raise TargetNotFound(
+                f"no context {label!r} in session {self.session_id}. The "
+                f"contexts are {sorted(self.contexts)}. Context labels are "
+                f"minted at open and are never reused.")
+        return self.contexts[label]
+
+    def pages_in(self, label: str) -> list[str]:
+        return [h for h, r in self.pages.items()
+                if getattr(r, "context", "c1") == label]
 
     # ------------------------------------------------------- ground truth
 
@@ -306,20 +482,53 @@ class Session:
         is the one an agent reaches for when everything else is refusing,
         and it was the one confirming the fiction.
 
-        None means "cannot tell" (no PIDs recorded, or a platform where the
-        liveness probe does not answer), and None is never reported as
-        health either way."""
-        pids = list(self.journal.pids)
-        if not pids:
+        Under multiple contexts the aggregate is the CONSERVATIVE one: True
+        only when every jar that can answer is alive, False when every one
+        of them is dead, and None when nothing can tell. A session reported
+        alive because one of its two browsers is would be the
+        completeness-over-omissions failure the doctrine names; `health()`
+        is what says `degraded` and names which jar died."""
+        verdicts = [h.alive() for h in self.contexts.values()]
+        answered = [v for v in verdicts if v is not None]
+        if not answered:
             return None
-        survivors = self.journal.survivors()
-        if survivors:
+        if all(v is False for v in answered):
+            return False
+        if all(v is True for v in answered):
             return True
-        # No survivor by creation time. On a platform where `alive` cannot
-        # answer at all, say so rather than declaring death.
-        if not hygiene.WINDOWS:
-            return None
-        return False
+        return None
+
+    def health(self) -> dict:
+        """Per-jar liveness plus the honest aggregate word."""
+        rows = []
+        for label, handle in self.contexts.items():
+            alive = handle.alive()
+            row = {"context": label,
+                   "health": ("alive" if alive else
+                              "dead" if alive is False else "unknown"),
+                   "pages": len(self.pages_in(label)),
+                   "owned_pids": sorted(handle.journal.pids)}
+            if alive is False:
+                row["reason"] = ("every process this context owns has "
+                                 "exited")
+                others = [o for o in self.contexts if o != label]
+                row["recommendation"] = (
+                    f"close this context with manage_session("
+                    f"action='close', session={self.session_id!r}, "
+                    f"context={label!r}) and open another"
+                    + (f"; {sorted(others)} are unaffected" if others else
+                       ", or close the session and open a new one"))
+            rows.append(row)
+        words = {r["health"] for r in rows}
+        if words == {"alive"}:
+            aggregate = "alive"
+        elif words == {"dead"}:
+            aggregate = "dead"
+        elif "alive" in words and "dead" in words:
+            aggregate = "degraded"
+        else:
+            aggregate = "unknown"
+        return {"health": aggregate, "contexts": rows}
 
     def dead_pages(self) -> list[str]:
         """Handles whose renderer crashed. `manage_tabs(list)` used to print
@@ -532,8 +741,13 @@ class SessionManager:
                    channel: str | None = None, headless: bool | None = None,
                    device: str | None = None, viewport=None,
                    locale: str | None = None, timezone: str | None = None,
-                   role: str = "user") -> Session:
+                   role: str = "user", contexts: int = 1) -> Session:
         """Launch a browser on an owned profile and mint a session handle.
+
+        `contexts` is how many independent cookie jars this session gets.
+        Two jars means two logins to the same site side by side, and it
+        costs one browser process and one profile directory each, which is
+        real memory and is reported rather than hidden.
 
         The startup reaper runs here rather than at import: it is the first
         thing that happens before the first browser of the process starts, so
@@ -547,6 +761,15 @@ class SessionManager:
         default exactly where it was."""
         spec = lanes.resolve(lane=lane, engine=engine, channel=channel,
                              headless=headless)
+        jars = contexts if isinstance(contexts, int) else 0
+        if jars < 1 or jars > MAX_CONTEXTS:
+            raise BadParams(
+                f"contexts must be between 1 and {MAX_CONTEXTS}, and "
+                f"{contexts!r} is not. Each cookie jar is a separate "
+                f"browser process on its own profile directory, which is "
+                f"real memory on this machine, so the cap is deliberate. "
+                f"{ENV_MAX_CONTEXTS} raises it at the next launch. Nothing "
+                f"was opened.")
         async with self._lock:
             if self.startup_reap is None:
                 self.startup_reap = hygiene.reap_orphans()
@@ -557,101 +780,173 @@ class SessionManager:
             emulation, emulation_report = lanes.emulation_kwargs(
                 spec, pw, device=device, viewport=viewport, locale=locale,
                 timezone=timezone)
-            profile = hygiene.new_profile_dir(spec.engine[:2])
             sid = self._next_session_id()
-            journal = hygiene.OwnedProcesses(sid, str(profile), spec.label)
-            before = {p["pid"] for p in hygiene.snapshot_processes()}
-            kwargs = lanes.launch_kwargs(spec, str(profile), emulation)
-            browser_type = getattr(pw, spec.engine)
+            session = Session(session_id=sid, spec=spec,
+                              emulation=emulation_report,
+                              emulation_kwargs=dict(emulation), role=role)
+            built: list[ContextHandle] = []
             try:
-                context = await browser_type.launch_persistent_context(**kwargs)
-            except Exception as exc:
-                hygiene._remove_tree(profile)
-                raise _launch_refusal(spec, exc, emulation_report) from exc
-            context.set_default_timeout(DEFAULT_TIMEOUT_MS)
-            # THE INSTRUMENT CHANNEL, bound before any page script in any
-            # document of this session runs. It carries the closed-root
-            # counter (counted as roots are created, because a closed root is
-            # unreachable afterward and a guess is not a completeness figure)
-            # and the ref registry, both of which used to be page-writable
-            # globals: gauntlet 2 rewrote one and subclassed the other to
-            # redirect a trusted click.
-            await context.add_init_script(CLOSED_SHADOW_HOOK)
-            # The launch page already has a document, so the init script has
-            # not run in it. Every read would answer INSTRUMENT_MISSING until
-            # the first navigation; installing it directly costs one evaluate
-            # on an about:blank page with no scripts in it.
-            for page in context.pages:
-                try:
-                    await page.evaluate(CLOSED_SHADOW_HOOK)
-                except Exception:
-                    pass            # a page mid-navigation gets it from the hook
-            journal.adopt_descendants(since=before)
-            session = Session(session_id=sid, spec=spec, context=context,
-                              profile_dir=str(profile), journal=journal,
-                              emulation=emulation_report, role=role)
-            for page in context.pages:
-                self._attach_page(session, page)
-            if not session.pages:
-                self._attach_page(session, await context.new_page())
-            # POPUPS ARE ADOPTED (gauntlet 4, G4-05). `_attach_page` used to
-            # run for `context.pages` at open and for `manage_tabs(open)` and
-            # nowhere else, so a page a click opened in a new tab really
-            # existed in the browser and had no handle, was absent from
-            # `manage_tabs(list)`, and carried no policy of any kind — no
-            # origin check, no wall verdict, nothing. The context event is
-            # the only place the browser reports one. Attaching here gives it
-            # the same handle, the same dialog desk, the same crash mark and
-            # the same navigation-response recorder every other page has; its
-            # `vetted_url` stays unset, so the first read or act on it runs
-            # the origin check the popup itself never got.
-            try:
-                context.on("page", lambda p: self._attach_page(
-                    session, p, adopted=True))
+                for index in range(jars):
+                    built.append(await self._launch_context(
+                        session, spec, emulation, emulation_report, pw,
+                        label=f"c{index + 1}"))
             except Exception:
-                pass            # a lane without the event keeps the old shape
-            # THE CONTEXT-LEVEL RESPONSE RECORDER (gauntlet 4, G4-05). The
-            # per-page recorder in `_attach_page` cannot see a popup's own
-            # first navigation response, because the response is dispatched
-            # before the `page` event hands us the page to attach it to.
-            # This listener exists from before the first popup can be
-            # created and parks such a response for `_attach_page` to
-            # drain. It writes nothing when a record already exists: the
-            # per-page recorder owns that case and the two must not
-            # disagree about which response is the last one.
-            def on_context_response(response):
-                try:
-                    if not response.request.is_navigation_request():
-                        return
-                except Exception:
-                    return
-                try:
-                    response.request.frame
-                    return          # a frame exists; the per-page
-                except Exception:   # recorder owns that case
-                    pass
-                try:
-                    session.pending_nav[response.url] = {
-                        "url": response.url, "status": response.status,
-                        "headers": dict(response.headers)}
-                    while len(session.pending_nav) > PENDING_NAV_MAX:
-                        session.pending_nav.pop(
-                            next(iter(session.pending_nav)))
-                        session.pending_nav_evicted += 1
-                except Exception:
-                    pass
-
-            try:
-                context.on("response", on_context_response)
-            except Exception:
-                pass
+                # A FAILURE AT CONTEXT K TEARS DOWN 1..K-1 BEFORE RE-RAISING.
+                # Half a session is a state nothing else in this code
+                # expects, and inventing one to be permissive is how a
+                # TargetNotFound surfaces three calls later with no
+                # explanation.
+                for handle in built:
+                    await self._teardown_context(session, handle)
+                raise
+            session.focused_context = built[0].label
             self.sessions[sid] = session
             for hook in SESSION_OPEN_HOOKS:
-                hook(session)
+                hook(session, built)
             return session
 
+    async def _launch_context(self, session: Session, spec, emulation,
+                              emulation_report, pw,
+                              label: str) -> ContextHandle:
+        """One cookie jar: its own profile, its own browser, its own journal.
+
+        Three lines here are order-sensitive and one of them is the single
+        most damaging thing in the feature to get wrong:
+
+        - `before` is re-taken IMMEDIATELY BEFORE EACH LAUNCH. It is the
+          baseline `adopt_descendants` uses to decide which processes this
+          launch created, so taking it once outside the loop would make c2's
+          journal adopt c1's browser processes, and closing c2 would then
+          kill c1's browser. It fails silently until a close.
+        - the profile directory is created PER CONTEXT. Two contexts sharing
+          one profile share a cookie jar, which is the feature not working
+          while appearing to.
+        - the journal is named `{sid}-{label}` with a HYPHEN. The journal
+          writes `session-{owner_pid}-{session_id}.json`, and a colon in a
+          Windows filename fails the write, which would leave a live browser
+          with no journal and therefore nothing the reaper is ever permitted
+          to kill.
+        """
+        profile = hygiene.new_profile_dir(spec.engine[:2])
+        journal = hygiene.OwnedProcesses(f"{session.session_id}-{label}",
+                                         str(profile), spec.label)
+        before = {p["pid"] for p in hygiene.snapshot_processes()}
+        kwargs = lanes.launch_kwargs(spec, str(profile), emulation)
+        browser_type = getattr(pw, spec.engine)
+        try:
+            context = await browser_type.launch_persistent_context(**kwargs)
+        except Exception as exc:
+            hygiene._remove_tree(profile)
+            raise _launch_refusal(spec, exc, emulation_report) from exc
+        context.set_default_timeout(DEFAULT_TIMEOUT_MS)
+        # THE INSTRUMENT CHANNEL, bound before any page script in any
+        # document of this context runs. It carries the closed-root
+        # counter (counted as roots are created, because a closed root is
+        # unreachable afterward and a guess is not a completeness figure)
+        # and the ref registry, both of which used to be page-writable
+        # globals: gauntlet 2 rewrote one and subclassed the other to
+        # redirect a trusted click.
+        await context.add_init_script(CLOSED_SHADOW_HOOK)
+        # The launch page already has a document, so the init script has
+        # not run in it. Every read would answer INSTRUMENT_MISSING until
+        # the first navigation; installing it directly costs one evaluate
+        # on an about:blank page with no scripts in it.
+        for page in context.pages:
+            try:
+                await page.evaluate(CLOSED_SHADOW_HOOK)
+            except Exception:
+                pass            # a page mid-navigation gets it from the hook
+        journal.adopt_descendants(since=before)
+        handle = ContextHandle(label=label, context=context,
+                               profile_dir=str(profile), journal=journal,
+                               spec=spec)
+        session.contexts[label] = handle
+        for page in context.pages:
+            self._attach_page(session, page, context_label=label)
+        if not session.pages_in(label):
+            self._attach_page(session, await context.new_page(),
+                              context_label=label)
+        # POPUPS ARE ADOPTED (gauntlet 4, G4-05). `_attach_page` used to
+        # run for `context.pages` at open and for `manage_tabs(open)` and
+        # nowhere else, so a page a click opened in a new tab really
+        # existed in the browser and had no handle, was absent from
+        # `manage_tabs(list)`, and carried no policy of any kind — no
+        # origin check, no wall verdict, nothing. The context event is
+        # the only place the browser reports one. Attaching here gives it
+        # the same handle, the same dialog desk, the same crash mark and
+        # the same navigation-response recorder every other page has; its
+        # `vetted_url` stays unset, so the first read or act on it runs
+        # the origin check the popup itself never got.
+        try:
+            context.on("page", lambda p: self._attach_page(
+                session, p, adopted=True, context_label=label))
+        except Exception:
+            pass                # a lane without the event keeps the old shape
+        # THE CONTEXT-LEVEL RESPONSE RECORDER (gauntlet 4, G4-05). The
+        # per-page recorder in `_attach_page` cannot see a popup's own
+        # first navigation response, because the response is dispatched
+        # before the `page` event hands us the page to attach it to.
+        # This listener exists from before the first popup can be
+        # created and parks such a response for `_attach_page` to
+        # drain. It writes nothing when a record already exists: the
+        # per-page recorder owns that case and the two must not
+        # disagree about which response is the last one.
+        def on_context_response(response):
+            try:
+                if not response.request.is_navigation_request():
+                    return
+            except Exception:
+                return
+            try:
+                response.request.frame
+                return          # a frame exists; the per-page
+            except Exception:   # recorder owns that case
+                pass
+            try:
+                session.pending_nav[response.url] = {
+                    "url": response.url, "status": response.status,
+                    "headers": dict(response.headers)}
+                while len(session.pending_nav) > PENDING_NAV_MAX:
+                    session.pending_nav.pop(
+                        next(iter(session.pending_nav)))
+                    session.pending_nav_evicted += 1
+            except Exception:
+                pass
+
+        try:
+            context.on("response", on_context_response)
+        except Exception:
+            pass
+        return handle
+
+    async def add_context(self, session: Session) -> ContextHandle:
+        """A second identity discovered after the first one is logged in.
+
+        The comparison flow ("what does an admin see that a regular user
+        does not") reaches this point already signed in as one of them, and
+        forcing a whole new session there throws that login away."""
+        if len(session.contexts) >= MAX_CONTEXTS:
+            raise BadParams(
+                f"session {session.session_id} already holds "
+                f"{len(session.contexts)} cookie jar(s) against a cap of "
+                f"{MAX_CONTEXTS} ({ENV_MAX_CONTEXTS}). Each one is a "
+                f"separate browser process and a separate profile "
+                f"directory, which is real memory on this machine.")
+        async with self._lock:
+            pw = await self._playwright()
+            label = f"c{len(session.contexts) + 1}"
+            while label in session.contexts:
+                label = f"c{int(label[1:]) + 1}"
+            handle = await self._launch_context(
+                session, session.spec, dict(session.emulation_kwargs),
+                session.emulation, pw, label=label)
+            for hook in SESSION_OPEN_HOOKS:
+                hook(session, [handle])
+            return handle
+
     def _attach_page(self, session: Session, page: Any,
-                     adopted: bool = False) -> PageHandle:
+                     adopted: bool = False,
+                     context_label: str | None = None) -> PageHandle:
         # IDEMPOTENT BY PAGE IDENTITY (gauntlet 4, G4-05). `context.new_page()`
         # fires the context's own `page` event before it returns, so the
         # adoption hook and `manage_tabs(open)`'s explicit call both arrive
@@ -662,7 +957,11 @@ class SessionManager:
             if existing.page is page:
                 return existing
         handle = self._next_page_handle()
-        record = PageHandle(handle=handle, page=page, adopted=bool(adopted))
+        label = context_label or session.focused_context
+        if label not in session.contexts and session.contexts:
+            label = next(iter(session.contexts))
+        record = PageHandle(handle=handle, page=page, context=label,
+                            adopted=bool(adopted))
         # The renderer-crash mark (M1). The event is the reliable signal:
         # whichever call OBSERVES the crash, the handle is dead from the
         # moment it fires, and locate() refuses reuse with the recovery
@@ -705,7 +1004,7 @@ class SessionManager:
             pass  # a lane without the event keeps navigate's own response
         self._attach_dialog_desk(session, record)
         session.pages[handle] = record
-        session.counters["pages_opened"] += 1
+        session.bump("pages_opened", context=label)
         if session.focused is None and not adopted:
             # A popup never steals the focused handle: the caller is working
             # on the page it opened from, and a tool call with no `page`
@@ -877,44 +1176,127 @@ class SessionManager:
             desk = getattr(session, "_dialogs", None)
             for task in list(desk.tasks) if desk is not None else ():
                 task.cancel()
-            try:
-                await asyncio.wait_for(session.context.close(), timeout=30)
-            except Exception:
-                pass
+            # EVERY jar is asked to close before ANY of them is verified, so
+            # the grace window is spent once rather than once per context.
+            for handle in session.contexts.values():
+                try:
+                    await asyncio.wait_for(handle.context.close(), timeout=30)
+                except Exception:
+                    pass
             if not self.sessions and self._pw is not None:
                 try:
                     await self._pw.stop()
                 finally:
                     self._pw = None
                     self._loop = None
-            survivors = await self._await_exit(session)
-            for pid in survivors:
-                hygiene.kill(pid)
-            session.journal.close()
-            hygiene._remove_tree(session.profile_dir)
+            rows = []
+            for handle in session.contexts.values():
+                survivors = await self._await_exit(handle.journal)
+                for pid in survivors:
+                    hygiene.kill(pid)
+                handle.journal.close()
+                hygiene._remove_tree(handle.profile_dir)
+                rows.append({"context": handle.label,
+                             "owned_pids": sorted(handle.journal.pids),
+                             "survivors_killed": survivors,
+                             "profile_removed": True})
             # The enforcing budget ledger dies with the session. Not a
             # reset: budgets are per-session by definition (policy/budgets).
             from ..policy import budgets as _budgets
             _budgets.BOOK.drop(session_id)
             return {
                 "session": session_id,
-                "owned_pids": sorted(session.journal.pids),
-                "survivors_killed": survivors,
+                "owned_pids": sorted(pid for row in rows
+                                     for pid in row["owned_pids"]),
+                "survivors_killed": sorted(pid for row in rows
+                                           for pid in row["survivors_killed"]),
                 "profile_removed": True,
+                "contexts": rows,
                 "ended": stone["reason"],
             }
 
+    async def close_context(self, session: Session, label: str) -> dict:
+        """Close ONE cookie jar and leave the rest of the session working.
+
+        Closing the LAST one refuses. A session with zero contexts is a
+        state nothing else in this code expects, and inventing one to be
+        permissive is how a TargetNotFound surfaces three calls later with
+        no explanation."""
+        handle = session.jar(label)
+        if len(session.contexts) <= 1:
+            raise ValidationFailed(
+                f"context {handle.label} is the only cookie jar in session "
+                f"{session.session_id}, and a session with none is a state "
+                f"nothing else here expects. To close the session, call "
+                f"manage_session(action='close', "
+                f"session={session.session_id!r}). Nothing was closed.")
+        async with self._lock:
+            closed_pages = session.pages_in(handle.label)
+            invalidated = 0
+            tokens = 0
+            for page_handle in closed_pages:
+                dropped = session.invalidate_page(
+                    page_handle,
+                    f"context {handle.label} was closed and every page in "
+                    f"it with it")
+                invalidated += dropped["refs_invalidated"]
+                tokens += dropped["read_tokens_invalidated"]
+                session.pages.pop(page_handle, None)
+            try:
+                await asyncio.wait_for(handle.context.close(), timeout=30)
+            except Exception:
+                pass
+            survivors = await self._await_exit(handle.journal)
+            for pid in survivors:
+                hygiene.kill(pid)
+            handle.journal.close()
+            hygiene._remove_tree(handle.profile_dir)
+            session.contexts.pop(handle.label, None)
+            if session.focused_context == handle.label:
+                session.focused_context = next(iter(session.contexts))
+            if session.focused in closed_pages or session.focused is None:
+                session.focused = next(iter(session.pages), None)
+            return {
+                "session": session.session_id,
+                "closed_context": handle.label,
+                "pages_closed": closed_pages,
+                "refs_invalidated": invalidated,
+                "read_tokens_invalidated": tokens,
+                "owned_pids": sorted(handle.journal.pids),
+                "survivors_killed": survivors,
+                "profile_removed": True,
+                "contexts": sorted(session.contexts),
+                "focused_context": session.focused_context,
+                "focused": session.focused,
+            }
+
+    async def _teardown_context(self, session: Session,
+                                handle: ContextHandle) -> None:
+        """Undo one context that a failed multi-context launch already
+        built. Nothing is reported: the launch refusal is the answer."""
+        for page_handle in session.pages_in(handle.label):
+            session.pages.pop(page_handle, None)
+        try:
+            await asyncio.wait_for(handle.context.close(), timeout=30)
+        except Exception:
+            pass
+        for pid in await self._await_exit(handle.journal, grace_s=3.0):
+            hygiene.kill(pid)
+        handle.journal.close()
+        hygiene._remove_tree(handle.profile_dir)
+        session.contexts.pop(handle.label, None)
+
     @staticmethod
-    async def _await_exit(session: Session, grace_s: float = 6.0) -> list[int]:
+    async def _await_exit(journal, grace_s: float = 6.0) -> list[int]:
         """Two-phase verify with a grace window, inherited from the family's
         COM gates. A process that has been asked to exit is not the same as a
         process that has exited, and polling with a bound is the difference
         between a teardown and a hope."""
         deadline = time.monotonic() + grace_s
-        survivors = session.journal.survivors()
+        survivors = journal.survivors()
         while survivors and time.monotonic() < deadline:
             await asyncio.sleep(0.25)
-            survivors = session.journal.survivors()
+            survivors = journal.survivors()
         return survivors
 
     async def close_all(self) -> list[dict]:
@@ -983,17 +1365,32 @@ class SessionManager:
                 # browser is gone (that call answers "Target page, context
                 # or browser has been closed"), and it blamed deep DOM
                 # nesting for a browser somebody killed from outside.
-                if session.browser_alive() is False:
+                # THE PAGE'S OWN JAR is what decides this, not the session
+                # as a whole: under multiple contexts one browser can die
+                # while the other lives, and a page in the dead one has to
+                # refuse even though the session is only degraded.
+                jar = session.contexts.get(
+                    getattr(record, "context", session.focused_context))
+                if jar is not None and jar.alive() is False:
+                    survivors = sorted(
+                        set(session.contexts) - {jar.label})
                     raise SessionDead(
-                        f"the browser for session {session.session_id} is "
-                        f"gone: every process it owns has exited "
-                        f"({sorted(session.journal.pids)}). Page {page_handle}"
-                        f" and every other handle in this session are dead "
-                        f"with it, and opening a fresh tab fails the same "
-                        f"way. Close the session with manage_session("
-                        f"session={session.session_id!r}, action='close') "
-                        f"and open a new one; refs, read tokens, and page "
-                        f"handles do not carry over.")
+                        f"the browser for session {session.session_id} "
+                        f"context {jar.label} is gone: every process it owns "
+                        f"has exited ({sorted(jar.journal.pids)}). Page "
+                        f"{page_handle} and every other handle in that "
+                        f"context are dead with it, and opening a fresh tab "
+                        f"there fails the same way. "
+                        + (f"Contexts {survivors} are unaffected; close this "
+                           f"one with manage_session(action='close', "
+                           f"session={session.session_id!r}, "
+                           f"context={jar.label!r})."
+                           if survivors else
+                           f"Close the session with manage_session("
+                           f"session={session.session_id!r}, "
+                           f"action='close') and open a new one")
+                        + " Refs, read tokens, and page handles do not carry "
+                          "over.")
                 if record.crashed:
                     # A crashed renderer never recovers on the same page:
                     # replaying the driver's "Page crashed" against a dead
@@ -1097,7 +1494,8 @@ class SessionManager:
 
     def owned_pids(self) -> list[int]:
         return sorted({pid for s in self.sessions.values()
-                       for pid in s.journal.pids})
+                       for c in s.contexts.values()
+                       for pid in c.journal.pids})
 
 
 #: The process-wide manager. One browser tree, one journal, one lock.

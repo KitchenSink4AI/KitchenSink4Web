@@ -1,6 +1,6 @@
 {
   "ruling": "2026-09-05: token budgets are SOFT; these figures are published honestly rather than enforced as caps. Estimator: chars/4 (approximate; page-read numbers use tiktoken o200k_base and the two are never mixed).",
-  "lite_total_tokens": 3416,
+  "lite_total_tokens": 3598,
   "reference_targets": {
     "lite": 1500,
     "description": [
@@ -168,8 +168,8 @@
     },
     "load_auth_state": {
       "description_tokens": 290,
-      "schema_tokens": 47,
-      "total_tokens": 337,
+      "schema_tokens": 66,
+      "total_tokens": 356,
       "over_reference_caps": true
     },
     "manage_clipboard": {
@@ -180,14 +180,14 @@
     },
     "manage_cookies": {
       "description_tokens": 130,
-      "schema_tokens": 98,
-      "total_tokens": 228,
+      "schema_tokens": 118,
+      "total_tokens": 248,
       "over_reference_caps": true
     },
     "manage_session": {
-      "description_tokens": 373,
-      "schema_tokens": 251,
-      "total_tokens": 624,
+      "description_tokens": 469,
+      "schema_tokens": 283,
+      "total_tokens": 752,
       "over_reference_caps": true
     },
     "manage_storage": {
@@ -197,10 +197,10 @@
       "over_reference_caps": true
     },
     "manage_tabs": {
-      "description_tokens": 100,
-      "schema_tokens": 80,
-      "total_tokens": 180,
-      "over_reference_caps": false
+      "description_tokens": 134,
+      "schema_tokens": 100,
+      "total_tokens": 234,
+      "over_reference_caps": true
     },
     "monitor": {
       "description_tokens": 230,
@@ -234,8 +234,8 @@
     },
     "save_auth_state": {
       "description_tokens": 174,
-      "schema_tokens": 55,
-      "total_tokens": 229,
+      "schema_tokens": 75,
+      "total_tokens": 249,
       "over_reference_caps": true
     },
     "save_page": {
@@ -258,8 +258,8 @@
     },
     "set_routing": {
       "description_tokens": 194,
-      "schema_tokens": 180,
-      "total_tokens": 374,
+      "schema_tokens": 200,
+      "total_tokens": 394,
       "over_reference_caps": true
     },
     "take_screenshot": {

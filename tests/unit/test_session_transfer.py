@@ -63,11 +63,10 @@ class _FakePage:
 
 def _session_in(manager, sid: str, urls=("https://example.org/a",),
                 role: str = "user", cookies: int = 0):
-    sess = _session.Session(session_id=sid, spec=SPEC,
-                            context=_FakeContext(cookies),
-                            profile_dir=f"C:/tmp/{sid}",
-                            journal=_FakeJournal())
-    sess.role = role
+    sess = _session.Session(session_id=sid, spec=SPEC, role=role)
+    sess.contexts["c1"] = _session.ContextHandle(
+        label="c1", context=_FakeContext(cookies),
+        profile_dir=f"C:/tmp/{sid}", journal=_FakeJournal(), spec=SPEC)
     for i, url in enumerate(urls, start=1):
         handle = f"{sid}p{i}"
         record = _session.PageHandle(handle=handle, page=_FakePage(url))

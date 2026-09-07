@@ -193,8 +193,11 @@ async def _fetch(sess, record, url, path, timeout_ms) -> dict:
         summary=f"fetch and save {target} through the session on "
                 f"{record.handle}"))
     try:
-        response = await sess.context.request.get(target,
-                                                  timeout=timeout_ms)
+        # The page's OWN jar, which is right under multiple contexts: a
+        # fetch made "through the session" has to carry the cookies of the
+        # identity the page is signed in as.
+        response = await sess.jar(record.context).context.request.get(
+            target, timeout=timeout_ms)
     except Exception as exc:
         raise Timeout(
             f"fetching {target} through the session failed: "
@@ -470,7 +473,8 @@ async def manage_clipboard(
     permission = ("clipboard-read" if action == "read"
                   else "clipboard-write")
     try:
-        await sess.context.grant_permissions([permission], origin=origin)
+        await sess.jar(record.context).context.grant_permissions(
+            [permission], origin=origin)
     except Exception as exc:
         raise LaneUnsupported(
             f"[lane {sess.spec.label}] this engine does not grant "

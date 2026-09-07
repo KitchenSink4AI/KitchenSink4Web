@@ -62,6 +62,7 @@ async def manage_cookies(
     name: str | None = None,
     url: str | None = None,
     unmask: bool = False,
+    context: str | None = None,
 ) -> dict:
     """List, count, or clear the session's cookies. Listing returns each
     cookie's name, domain, path, flags, and expiry with the VALUE masked by
@@ -75,10 +76,14 @@ async def manage_cookies(
     action = common.enum_arg(action, ("list", "count", "clear"),
                              default="list", tool="manage_cookies")
     sess = common.session_of(session)
+    # ONE COOKIE JAR, named rather than guessed. On a session with several,
+    # `jar()` refuses and lists the labels; on a single-jar session it is
+    # the jar there has always been and nothing changes.
+    jar = sess.jar(context)
     if unmask:
         _credentials.check_unmask("manage_cookies(unmask=true)")
-    cookies = await sess.context.cookies(url) if url \
-        else await sess.context.cookies()
+    cookies = await jar.context.cookies(url) if url \
+        else await jar.context.cookies()
     if name:
         cookies = [c for c in cookies if c.get("name") == name]
     if action == "count":
@@ -94,6 +99,7 @@ async def manage_cookies(
                      + (f" for {url}" if url else "") + "?"))
     return {
         "session": sess.session_id,
+        **({"context": jar.label} if len(sess.contexts) > 1 else {}),
         "cookies": [_mask_cookie(c, unmask) for c in cookies],
         "count": len(cookies),
         "note": ("values are masked by default; unmask=true is per-call and "
@@ -191,6 +197,7 @@ async def manage_storage(
 async def save_auth_state(
     session: str | None = None,
     path: str | None = None,
+    context: str | None = None,
 ) -> dict:
     """Write the session's authentication state (cookies and origin
     storage) to a file, so a login done once can be reused across runs
@@ -210,14 +217,19 @@ async def save_auth_state(
     # Chromium file and a Firefox file wants to say which is which, and the
     # cross-engine load question the field log raised is unanswerable when
     # both are called auth_<timestamp>.
+    # AN AUTH SAVE IS PER COOKIE JAR BY DEFINITION, so a session with two
+    # of them names the one it means rather than letting the server pick.
+    jar = sess.jar(context)
+    label = (f"_{jar.label}" if len(sess.contexts) > 1 else "")
     out = path or str(common.downloads_dir()
-                      / f"auth_{sess.spec.engine}_{common.stamp()}.json")
+                      / f"auth_{sess.spec.engine}{label}"
+                        f"_{common.stamp()}.json")
     # Union wave: ONE resolution for every output path (fuzzer class 4).
     # `~`, `%TEMP%`, and a relative path were echoed back unresolved here
     # too, and this is the receipt a caller quotes into load_auth_state.
     checked = str(common.resolve_out_path(out, "save auth state"))
     try:
-        state = await sess.context.storage_state(path=checked)
+        state = await jar.context.storage_state(path=checked)
     except OSError as exc:
         raise common.write_failed(Path(checked), "save auth state",
                                   exc) from exc
@@ -231,15 +243,21 @@ async def save_auth_state(
     state["ks4web"] = {
         "saved_at": time.time(),
         "engine": sess.spec.engine,
+        # WHICH JAR THIS LOGIN CAME OUT OF. A directory holding two files
+        # from one session should say which identity each is, exactly the
+        # argument that put the engine tag in the filename (field finding
+        # U17).
+        "context_label": jar.label,
         "auth_expiry": expiry,
     }
     common.write_text_file(checked, json.dumps(state), "save auth state")
     # The session remembers the save, so close can say "saved earlier" (field
     # finding 41) instead of contradicting a save made minutes ago.
-    sess.record_auth_save(checked)
+    sess.record_auth_save(checked, context=jar.label)
     warning = common.expiry_note(expiry)
     return {
         "session": sess.session_id, "saved_to": checked,
+        **({"context": jar.label} if len(sess.contexts) > 1 else {}),
         "cookies_saved": n_cookies, "origins_saved": n_origins,
         "auth_expiry": _expiry_report(expiry),
         **({"warnings": [warning]} if warning else {}),
@@ -273,6 +291,7 @@ def _expiry_report(expiry: dict | None) -> str:
 async def load_auth_state(
     session: str | None = None,
     path: str = "",
+    context: str | None = None,
 ) -> dict:
     """Load a previously saved authentication state file into the session,
     so a login captured in an earlier run is restored without any
@@ -299,6 +318,7 @@ async def load_auth_state(
             "load_auth_state needs the path to a state file previously "
             "written by save_auth_state.")
     sess = common.session_of(session)
+    jar = sess.jar(context)
     checked = sandbox.check_path(path, "load auth state")
     _gates.ENGINE.ask(
         "storage_load", tool="load_auth_state", session=sess.session_id,
@@ -318,7 +338,7 @@ async def load_auth_state(
     cookies = data.get("cookies", [])
     if cookies:
         try:
-            await sess.context.add_cookies(cookies)
+            await jar.context.add_cookies(cookies)
         except Exception as exc:
             # Names the file, the offending cookie, and the units. The
             # generic BAD_PARAMS this used to raise carried a hint about
@@ -334,6 +354,7 @@ async def load_auth_state(
     warning = common.expiry_note(expiry)
     return {
         "session": sess.session_id, "loaded_from": checked,
+        **({"context": jar.label} if len(sess.contexts) > 1 else {}),
         "cookies_loaded": len(cookies),
         "origins_pending": len(data.get("origins", [])),
         "auth_expiry": _expiry_report(expiry),

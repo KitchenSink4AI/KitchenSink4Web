@@ -64,14 +64,30 @@ def _store(sess) -> dict:
     return store
 
 
-def _attach_recorder(session) -> None:
-    """Session-open hook, loaded-pack-guarded per the seam contract."""
+def _attach_recorder(session, contexts=None) -> None:
+    """Session-open hook, loaded-pack-guarded per the seam contract.
+
+    ATTACHES PER CONTEXT (dream-specs observation 5). The recorder used to
+    bind to `session.context` once, so under multiple cookie jars a page in
+    the second one produced no console messages at all and `list_console`
+    reported an empty list as though it were the truth. Silent loss, not an
+    error, which is the failure shape this build refuses everywhere else.
+    `contexts` names the jars this call is responsible for, so adding one
+    to a live session attaches to the new jar without double-attaching to
+    the old ones."""
     from .. import packs
     if not packs.is_pack_loaded("diagnostics"):
         return
-    if getattr(session, "_console_attached", False):
+    handles = (list(contexts) if contexts is not None
+               else list(session.contexts.values()))
+    attached = getattr(session, "_console_attached", None)
+    if attached is None:
+        attached = session._console_attached = set()
+    handles = [h for h in handles if h.label not in attached]
+    if not handles:
         return
-    session._console_attached = True
+    for handle in handles:
+        attached.add(handle.label)
     store = _store(session)
 
     def on_console(msg):
@@ -106,12 +122,16 @@ def _attach_recorder(session) -> None:
                 pass
         return on_pageerror
 
+    labels = {h.label for h in handles}
     for page in session.pages.values():
+        if getattr(page, "context", "c1") not in labels:
+            continue
         page.page.on("console", on_console)
         page.page.on("pageerror", on_pageerror_for(page.page))
-    # New pages in the context inherit the listeners too.
-    session.context.on("page", lambda p: (
-        p.on("console", on_console), p.on("pageerror", on_pageerror_for(p))))
+    # New pages in each context inherit the listeners too.
+    for handle in handles:
+        handle.context.on("page", lambda p: (
+            p.on("console", on_console), p.on("pageerror", on_pageerror_for(p))))
 
 
 def _page_url(page) -> str | None:
