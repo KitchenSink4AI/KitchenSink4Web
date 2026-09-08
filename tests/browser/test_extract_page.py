@@ -375,19 +375,35 @@ def wall_site():
 
 def test_extract_page_read_gate(wall_site):
     """A page parked on a recorded bot wall refuses before a field is read,
-    and the wall's own text never reaches the payload."""
+    and the wall's own text never reaches the payload.
+
+    WHICH SURFACE REPORTS IT IS A RACE, and the assertions are on the answer
+    rather than on the surface (fix wave 10). The shell meta-refreshes with
+    `content='0;...'`, so whether `navigate` sees the shell or the already
+    painted challenge is a matter of milliseconds. That race has always been
+    here; adding "checking your browser" to the challenge vocabulary made
+    `navigate` win it often enough to notice. A wall caught one call EARLIER
+    is the safer direction and the same true answer, so the test accepts
+    either surface and holds both properties that matter on whichever one
+    speaks: the category is named, and the challenge page's own words never
+    ride out in the message."""
     async def go():
         from kitchensink4web.engine.session import MANAGER
         session = await MANAGER.open(headless=True)
         page = session.focused
-        await lite.navigate(page=page, url=f"{wall_site}/shell")
+        try:
+            await lite.navigate(page=page, url=f"{wall_site}/shell")
+        except BlockedBySite as exc:
+            return str(exc)
         await asyncio.sleep(1.5)
         with pytest.raises(BlockedBySite) as exc:
             await extract_ops.extract_page(
                 page=page, schema=["title", "price"])
-        assert "bot-wall-or-captcha" in str(exc.value)
-        assert "Just a moment" not in str(exc.value)
-    run(go())
+        return str(exc.value)
+
+    message = run(go())
+    assert "bot-wall-or-captcha" in message, message
+    assert "Just a moment" not in message, message
 
 
 # -------------------------------------------------- 8. the prototype battery

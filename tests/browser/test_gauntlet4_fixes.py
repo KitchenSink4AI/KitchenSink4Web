@@ -395,11 +395,23 @@ def test_g4_04_a_self_navigated_wall_is_reported_by_the_reads(site, path):
     interstitial usually arrives. `navigate` classifies the 200 shell it was
     handed; the response listener then records the 403 and the cf-mitigated
     header on the very object the read surfaces hold, and nothing used to
-    ask for it."""
+    ask for it.
+
+    WHICH SURFACE REPORTS IT IS A RACE (fix wave 10). `/g4/meta-refresh`
+    redirects with `content='0;...'`, so whether `navigate` is handed the
+    shell or the already-painted challenge is a matter of milliseconds. That
+    race has always been here; adding "checking your browser" to the
+    challenge vocabulary made `navigate` win it often enough to notice. What
+    this test is for is that a self-navigated wall is REPORTED rather than
+    served as content, and a wall caught one call earlier is the same true
+    answer arriving sooner, so `navigate` counts as one of the surfaces."""
     async def go():
-        _session, page = await _open(site, path)
-        await asyncio.sleep(1.5)
         out = {}
+        try:
+            _session, page = await _open(site, path)
+        except BlockedBySite as exc:
+            return {"navigate": str(exc)}
+        await asyncio.sleep(1.5)
         for name, call in (("get_text", lambda: lite.get_text(page=page)),
                            ("get_page_view",
                             lambda: lite.get_page_view(page=page))):
