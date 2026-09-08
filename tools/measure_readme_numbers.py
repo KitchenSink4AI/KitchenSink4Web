@@ -27,6 +27,14 @@ the shape snapshot-based browser tools emit. The published figure is the
 CHEAPEST of the three, so the comparison understates the gap rather than
 flattering it. All three are printed.
 
+**The measurement environment is part of the figure.** Published figures are
+measured in a DEFAULT INSTALL, with no optional extras (the `dev` extra is
+present only so pytest can count itself; `ocr` and `accessibility` are not
+installed). This is not a formality: with both extras installed the demo
+page's projection cost reads 4,437 instead of the published 4,445, on the
+same tree, so a run from a working venv that happens to carry them will
+disagree with what ships.
+
 Run:  .venv/Scripts/python.exe -X utf8 tools/measure_readme_numbers.py
       .venv/Scripts/python.exe -X utf8 tools/measure_readme_numbers.py --json
 """

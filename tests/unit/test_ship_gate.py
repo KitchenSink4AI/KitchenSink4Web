@@ -151,6 +151,12 @@ FIGURE_SURFACES = (
 #: (figure, what it measures, the script that produces it). Values are the
 #: measurement at the commit that adds this guard. Change one only together
 #: with a re-run of the named script.
+#:
+#: Published figures are measured in a DEFAULT INSTALL, no optional extras.
+#: The projection cost is the one figure that moves with the environment: a
+#: venv carrying the `ocr` and `accessibility` extras reads 4,437 where a
+#: default install reads the published 4,445, so a re-run from a working
+#: venv has to check what is installed before it believes its own output.
 PUBLISHED_FIGURES = (
     ('4,445', 'tokens for the first read of the demo page', 'tools/measure_readme_numbers.py'),
     ('2,065', 'tests', 'pytest --collect-only'),

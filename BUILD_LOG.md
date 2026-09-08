@@ -4887,3 +4887,52 @@ changed: `test_ship_gate`, `test_copy_guards`, `test_gates`,
 widened scope: **10 passed**. Zero orphaned browser processes.
 
 Zero orphaned WINWORD, EXCEL, POWERPNT or soffice processes before or after.
+
+## 2026-09-09 (push shepherd): the projection figure, settled by experiment
+
+The overnight brief carried a ruling: the default install defines published
+figures, the stamp wave's 4,445 came from an extras-loaded venv, so restamp
+every surface back to 4,437. The principle is adopted. The premise behind it
+was backwards, and the number does not move.
+
+### Three measurements, one tree, one variable
+
+Same commit, same corpus, same playwright build. Only the extras changed.
+
+| environment | PROJECTION_TOKENS |
+| --- | --- |
+| fresh scratchpad venv, `pip install -e ".[dev]"` | **4,445** |
+| that same venv after adding `ocr` and `accessibility` | **4,437** |
+| this repo's own `.venv` | **4,437**, twice, deterministic |
+
+Every other figure held across all three: 33,073 raw dump, 82 delta, 19 lite
+tools at 5.8k, 52 full at 15.3k, 16 rungs, 733 browser tests, 2,065 collected.
+
+So the extras-loaded environment is the one that reads 4,437, and the default
+install reads 4,445. The closer wave's flag assumed the opposite because it
+believed this repo's `.venv` had no extras. It has both:
+`axe-playwright-python==0.1.8` and the five `winrt-*` pins are installed in it
+right now. That single misreading is where the inverted premise came from.
+
+Applying the ruling's own principle to the real measurement gives 4,445, which
+is what all four surfaces already carry. Nothing was restamped. 4,437 stays in
+`SUPERSEDED_FIGURES`, which is where a figure the default install does not
+produce belongs.
+
+### The snapshot, regenerated rather than hand-edited
+
+`tools/readme_numbers_snapshot.json` was regenerated in the clean
+default-install venv, which is what the closer wave deliberately left undone so
+that regeneration would decide the question. The regenerated output diffs
+byte-identical to the committed file. The hand edit landed on the right values.
+
+### The environment is now written down
+
+One sentence each in `tools/measure_readme_numbers.py`'s module docstring and
+in the figure gate's `PUBLISHED_FIGURES` comment: published figures are
+measured in a default install, no optional extras. Both name the 4,437/4,445
+split explicitly, because the direction is counter-intuitive (more capability
+installed, fewer tokens in the first read) and reading it backwards is exactly
+what happened once already.
+
+Nothing pushed for web. No figure moved, no locale string touched.
