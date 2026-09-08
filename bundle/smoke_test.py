@@ -52,7 +52,6 @@ PACKS = ("extract", "capture", "network", "storage", "files", "diagnostics",
 #: The boxes that are not packs, and their variables.
 PLAIN = {
     "allow_acting": "KS4WEB_ALLOW_ACTING",
-    "all_packs": "KS4WEB_ALL_PACKS",
     "consent_scope": "KS4WEB_CONSENT",
 }
 
@@ -69,10 +68,17 @@ DEFAULT_ON = ("extract", "capture")
 #: pre-authorization box joined them on 2026-09-08 for the same reason,
 #: after one wave on the screen: it is a launch-file setting now, and the
 #: teaching string says so.
+#:
+#: `all_packs` joined them the same day, for a reason only an install test
+#: could find: the form is STATIC, so a master switch cannot make the ten
+#: boxes below it visibly change, and a control that looks inert reads as
+#: broken. KS4WEB_ALL_PACKS still works at launch. Every entry here is a
+#: variable the server still honors and a box the screen no longer shows.
 RETIRED = {
     "browser_lane": "KS4WEB_LANE",
     "browser_channel": "KS4WEB_CHANNEL",
     "preauth": "KS4WEB_PREAUTH",
+    "all_packs": "KS4WEB_ALL_PACKS",
 }
 
 

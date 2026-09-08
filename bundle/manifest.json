@@ -43,7 +43,6 @@
       ],
       "env": {
         "KS4WEB_ALLOW_ACTING": "${user_config.allow_acting}",
-        "KS4WEB_ALL_PACKS": "${user_config.all_packs}",
         "KS4WEB_PACK_EXTRACT": "${user_config.pack_extract}",
         "KS4WEB_PACK_CAPTURE": "${user_config.pack_capture}",
         "KS4WEB_PACK_NETWORK": "${user_config.pack_network}",
@@ -124,13 +123,6 @@
       "type": "boolean",
       "title": "Warning: DANGEROUS. Run page scripts (advanced)",
       "description": "Lets Claude run JavaScript on a page, one script at a time, each one shown to you for approval first. This is the most powerful and most dangerous setting on this page. Leave it off unless you know you need it.",
-      "default": false,
-      "required": false
-    },
-    "all_packs": {
-      "type": "boolean",
-      "title": "Everything at once",
-      "description": "Turns on all the capability packs above in one click. The click-and-type and routine-forms switches stay separate.",
       "default": false,
       "required": false
     }

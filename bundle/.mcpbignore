@@ -5,3 +5,5 @@ README-bundle.md
 pack.py
 dev/
 .mcpbignore
+__pycache__/
+*.pyc

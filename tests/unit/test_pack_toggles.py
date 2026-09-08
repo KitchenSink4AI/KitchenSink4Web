@@ -120,16 +120,14 @@ DANGEROUS_BOXES = {"allow_acting", "pack_diagnostics"}
 
 def test_manifest_source_carries_every_toggle():
     """Parity between the pack table and the .mcpb manifest source: every
-    pack has its checkbox and its env mapping, plus the master toggle and
-    the acting checkbox, and every boolean outside DEFAULT_ON starts off."""
+    pack has its checkbox and its env mapping, plus the acting checkbox, and
+    every boolean outside DEFAULT_ON starts off."""
     manifest = json.loads((ROOT / "bundle" / "manifest.json")
                           .read_text(encoding="utf-8"))
     config = manifest["user_config"]
     env = manifest["server"]["mcp_config"]["env"]
     assert "allow_acting" in config
     assert env["KS4WEB_ALLOW_ACTING"] == "${user_config.allow_acting}"
-    assert "all_packs" in config
-    assert env[packs.ENV_ALL_PACKS] == "${user_config.all_packs}"
     for pack in ALL:
         key = f"pack_{pack}"
         assert key in config, f"manifest misses the {pack} checkbox"
@@ -155,6 +153,37 @@ def test_manifest_source_carries_every_toggle():
     assert consent.ENV_PREAUTH not in env
 
 
+def test_the_master_toggle_is_not_on_the_install_screen():
+    """THE SECOND WITHDRAWAL, and the same shape as the first.
+
+    `all_packs` was a checkbox that turned on every capability pack at once.
+    The author found the real problem by installing it: the mcpb install form
+    is STATIC, so ticking a master switch cannot make the ten boxes below it
+    visibly change, and a control that looks like it did nothing reads as
+    broken. The ruling was keep-only-if-visually-verifiable, and the platform
+    cannot do that, so the box goes.
+
+    What does NOT go is the capability. `KS4WEB_ALL_PACKS` is still read at
+    launch, still beaten by KS4WEB_MODE and by --packs, and still refuses
+    loudly on garbage; the tests above this one cover all of that and are
+    untouched. Exactly the `preauth` precedent: the setting survives for the
+    people who edit a launch file, and only the checkbox that could not
+    explain itself is gone.
+
+    Both directions and both manifests, so a future wave that re-adds the box
+    has to fail here and say why."""
+    for rel in ("manifest.json", "dev/manifest.json"):
+        manifest = json.loads((ROOT / "bundle" / rel)
+                              .read_text(encoding="utf-8"))
+        assert "all_packs" not in manifest["user_config"], (
+            f"{rel}: the master toggle is back on the install screen. The "
+            f"form is static; this box cannot show what it did.")
+        assert packs.ENV_ALL_PACKS not in \
+            manifest["server"]["mcp_config"]["env"], (
+            f"{rel}: {packs.ENV_ALL_PACKS} is wired to a box that no longer "
+            f"exists")
+
+
 def test_nothing_that_can_change_anything_starts_on():
     """THE BOTH-DIRECTION PIN on the default change. Whatever the read
     defaults become, the write switch and every pack that can alter a page,
@@ -166,7 +195,7 @@ def test_nothing_that_can_change_anything_starts_on():
     manifest = json.loads((ROOT / "bundle" / "manifest.json")
                           .read_text(encoding="utf-8"))
     config = manifest["user_config"]
-    for key in ("allow_acting", "all_packs", "pack_storage", "pack_files",
+    for key in ("allow_acting", "pack_storage", "pack_files",
                 "pack_diagnostics", "pack_network", "pack_workflows",
                 "consent_scope"):
         assert config[key]["default"] is False, (

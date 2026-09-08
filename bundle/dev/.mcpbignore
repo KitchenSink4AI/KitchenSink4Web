@@ -1,2 +1,4 @@
 *.mcpb
 .mcpbignore
+__pycache__/
+*.pyc
