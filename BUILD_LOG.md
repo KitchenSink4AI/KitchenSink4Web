@@ -4585,3 +4585,76 @@ thing it might replace.
 
 Full report:
 `Draft/Working Files/Agent Results/20260908_web_polish.md`.
+
+## Fix wave 11: the install screen a stranger reads (2026-09-08)
+
+The author installed the release candidate and rejected its install screen.
+The catch was right and the audit that followed found the same defect class
+underneath: six `[COPY PENDING]` blocks visible in the Claude Desktop UI, two
+free-text fields, zero danger labels, a master toggle that counted seven packs
+against eight listed, and four link fields in a namespace the project had
+decided six hours earlier not to use. Every one was one `cat manifest.json`
+away from being caught, and the wave that produced the bundle had reported
+compliance instead of opening it.
+
+The ratified copy (`Agent Results/20260908_2152_install_screen_copy.md`)
+replaces the info card and all eleven checkbox strings. Applied verbatim and
+checked back: a script parses the source document independently, pulls each
+blockquote and bolded title out of it, and compares character for character
+against what was written. 24 of 24 strings match; the manifest contains no
+non-ASCII character at all, which is the em-dash and smart-quote checks at
+once.
+
+The screen was also REORDERED to the document's sequence. The ratified
+"Everything at once" text says it turns on all the capability packs ABOVE it,
+and `all_packs` was the second key in the old manifest.
+
+STRUCTURE. The `preauth` free-text field leaves the install screen entirely,
+box and env wiring, in both manifests. It had been added one wave earlier so
+that `consent.PREAUTH_TEACHING` would stop naming a control nobody had built,
+which was the wrong half of the trade. `consent_scope` becomes the checkbox
+its two values always were, wired to the same `KS4WEB_CONSENT`, and
+`parse_scope` learns the literal `true` and `false` Claude Desktop writes for
+a boolean, the way `readonly.parse_allow` already had to for
+`KS4WEB_ALLOW_ACTING`. The typed spelling still works from a launch file,
+where a human can read the refusal. `PREAUTH_TEACHING` loses the clause
+naming the Desktop field, by deletion; its FACTS block was corrected for the
+fill wave rather than rewritten here.
+
+THE GATE. `tests/unit/test_ship_gate.py` is the check that opens the artifact:
+`COPY PENDING`, `FACTS TO CONVEY`, `PLACEHOLDER`, the em dash, any non-boolean
+`user_config` entry, and any absolute `C:\Users\` path, across both manifests,
+both packed `.mcpb`, and `llms.txt`. All clean, so it is green from the commit
+that adds it. `README.md` sits in a named `PENDING_FILL` constant with its
+activation step written down, because it still carries the update-check
+marker the fill wave owns.
+
+`bundle/smoke_test.py` went from six failures to one on this tree. Three were
+stale constants nobody had opened in several waves: `PACKS` was missing
+`accessibility`, `PLAIN` was missing `consent_scope`, and the default-packs
+check predated extract and capture being turned on. The surviving failure is
+the uvx handshake, which is correct until the package is on PyPI.
+
+GATES. Full suite sequential on the merged tree, both orders: deterministic
+**2,057 passed / 0 failed / 5 skipped / 1 xpassed** in 14m14s, and seed
+20260908 **2,057 passed / 0 failed / 5 skipped / 1 xpassed** in 14m35s.
+Baseline was 2,049; the delta is the seven gate tests plus the net one from
+splitting the typed-field pin in two. Red-first proven against a `git archive`
+of `main` at `cf26f7b` extracted outside every worktree: three of the seven
+new gate tests and all six updated pins fail there, and the three that pass
+are regression guards for defects this repo does not have.
+
+RC v2 on the Desktop, `ks4web-rc.mcpb`, sha256
+`febf002c1cbb0280a82a7eaed014a502edda474a3abc9545a4c713546da15ce3`. Thirty
+verification checks, zero failures: `mcpb validate` clean, every
+`${user_config.X}` resolving in both directions, a silent stdio launch on the
+shipped defaults listing exactly the 25 tools computed independently from the
+pack rosters and the read-only tables, all eight acting tools absent, the
+consent checkbox arriving as `research` unticked and `full` ticked, rc=0 on
+stdin close, and every PID the verifier started confirmed gone. The RC venv
+was reinstalled from this tree first; the old one still refused `true` as a
+consent value, so an unreinstalled venv would have shipped a bundle that could
+not start.
+
+Full report:
+`Draft/Working Files/Agent Results/20260908_rc2_rebuild.md`.
