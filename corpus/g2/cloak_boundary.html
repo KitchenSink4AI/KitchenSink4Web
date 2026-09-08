@@ -1,0 +1,55 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Read-cloak boundary probes</title></head>
+<body>
+<h1>Boundary probes</h1>
+<p id="p-visible">MARK VISIBLE: this paragraph is ordinary readable prose.</p>
+
+<!-- Probe 1: TRANSLUCENT backdrop (alpha 0.6, same as an ordinary modal
+     scrim). Documented rule: a human reads dimmed text through this, so it
+     must NOT be treated as read-cloaked even though it is out-of-flow and
+     fully overlapping. -->
+<div id="translucent-wrap" style="position:relative; height:40px">
+  <p id="p-translucent" style="position:absolute; top:0; left:0; margin:0">MARK TRANSLUCENT: covered only by a 60 percent alpha scrim, must remain ordinary prose.</p>
+  <div style="position:absolute; top:0; left:0; width:1200px; height:40px; background:rgba(0,0,0,.6)"></div>
+</div>
+
+<!-- Probe 2: PARTIAL cover. An out-of-flow opaque box covers only the left
+     half of the paragraph's box, so at least some of the 25 sample points
+     must read as clear. Must NOT be treated as read-cloaked. -->
+<div id="partial-wrap" style="position:relative; height:40px">
+  <p id="p-partial" style="position:absolute; top:0; left:0; width:400px; margin:0">MARK PARTIAL: only the left half of this box is covered by an opaque sibling, so it must remain ordinary prose.</p>
+  <div style="position:absolute; top:0; left:0; width:200px; height:40px; background:#ffffff"></div>
+</div>
+
+<!-- Probe 3: control - fully opaque, out-of-flow, total coverage. This one
+     SHOULD be read-cloaked (paint-cloaked), same construction as
+     cloak_light.html's #behind case, included here so the boundary probes
+     have a positive control on the same page. -->
+<div id="total-wrap" style="position:relative; height:40px">
+  <p id="p-total" style="position:absolute; top:0; left:0; margin:0">MARK TOTAL: fully covered by an opaque same-size sibling, must be excluded and counted.</p>
+  <div style="position:absolute; top:0; left:0; width:1200px; height:40px; background:#ffffff"></div>
+</div>
+
+<!-- Probe 4: near-threshold alpha, just under 0.95 (0.9), must NOT cloak. -->
+<div id="near-wrap" style="position:relative; height:40px">
+  <p id="p-near" style="position:absolute; top:0; left:0; margin:0">MARK NEAR: covered by a 90 percent alpha box, just under the 0.95 threshold, must remain ordinary prose.</p>
+  <div style="position:absolute; top:0; left:0; width:1200px; height:40px; background:rgba(255,255,255,.9)"></div>
+</div>
+
+<!-- Probe 5: over-threshold alpha (0.97), must cloak. -->
+<div id="over-wrap" style="position:relative; height:40px">
+  <p id="p-over" style="position:absolute; top:0; left:0; margin:0">MARK OVER: covered by a 97 percent alpha box, just over the 0.95 threshold, must be excluded and counted.</p>
+  <div style="position:absolute; top:0; left:0; width:1200px; height:40px; background:rgba(255,255,255,.97)"></div>
+</div>
+
+<!-- Probe 6: IN-FLOW static box covering text (the documented residual gap:
+     acting path catches static covers, the read side does not, by design,
+     because widening to static produced 53 false positives on Wikipedia).
+     Included to CONFIRM the documented gap rather than assume it. -->
+<div id="static-wrap" style="position:relative; height:40px; overflow:hidden">
+  <p id="p-static" style="margin:0">MARK STATIC: covered by an in-flow (non-positioned) opaque sibling painted after it in source order.</p>
+  <div style="width:1200px; height:40px; background:#ffffff; margin-top:-40px"></div>
+</div>
+
+<script>window.__probe = true;</script>
+</body></html>

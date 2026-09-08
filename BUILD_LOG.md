@@ -4121,3 +4121,150 @@ false-positive arms. Four of them fail on `fcda053` and pass here, verified
 mechanically by `git stash push -- src` and re-running: 4 failed / 7 passed
 stashed, 11 passed restored. Zero orphans: no `chrome.exe` and no
 `chrome-headless-shell` at exit.
+
+## 2026-09-08 11:50 KST — fix wave 9c (the sonnet-2 pair, plus the 9b false positive)
+
+Three items. Two are `20260908_insane_sonnet2.md`'s findings; the third
+arrived mid-wave from the parallel re-verify (`20260908_reverify.md`, R-01)
+and belongs here because it is the same subsystem pointed the other way.
+
+**The blocker was not a missing wire. It was a checked unit that was not the
+returned unit.** Fix wave 9b did splice the paint-cloak rule into
+`schema.js`, and `extract_page` still handed back
+`CLOAKED-VALUE-99999-do-not-trust` as a `found: true, confidence: proximate,
+match: exact` fact with `hidden_values_excluded: 0`, in the same tool-call
+batch where `get_text` on the same page stripped and counted the same string.
+The ladder asks the rule of the element it MATCHED and then reads that
+element's text with `ksRenderedText`, which recurses through the subtree and
+asks nothing of anything. On the round's own fixture the match is a
+`position:relative` wrapper holding both the value paragraph and the lid, so
+the lid is INSIDE the checked box and `ksPaintCloaked` skips it by its own
+containment guard. A page picks its own nesting, so a gap of that shape is a
+page-controlled channel rather than one fixture's geometry — which is why the
+round reproduced it on two fixtures it built independently.
+
+So the rule went into the walk. `rendered.js` gains `ksVisibleRenderedText`,
+the value sibling of `ksRenderedText`: the same recursion, asking
+`ksHiddenAnywhere(n) || ksPaintCloaked(n)` of every element it descends into,
+skipping that subtree, and recording the exclusion and its technique into the
+caller's sink. `ksVisibleTextOf` asks the same of the node it was handed.
+`rendered.js` now REQUIRES `visibility.js` in the same scope and says so, so a
+consumer that splices one marker and not the other gets a ReferenceError on
+its first harvest rather than a quietly weaker check.
+
+**VALUES get the rule, KEYS do not, and that line is what makes the fix
+shippable.** `ksHiddenAnywhere` flags `clip: rect(0 0 0 0)`, which is exactly
+how the accessible web writes an `sr-only` label. Running the rule over keys
+would blind every value harvest on the build to every screen-reader-labelled
+control on the page, which is a far larger hole than the one this closes. A
+value is a claim about what a human sees; a label is a lookup token. Pinned in
+both directions.
+
+**The class, swept.** `ksRenderedText` had eleven call sites across four
+in-page scripts, and three of the four asked no visibility question at all:
+`get_table` read cell text, `get_list` read item text, and `extract_fields`
+read definition lists and two-column rows with nothing between the page and
+the payload. A page could park an instruction under an opaque box in a data
+cell and have the tabular read hand it back as the row's value while the prose
+read on the same page stripped and counted it. All of them now harvest through
+the visible walk and all of them now carry a withheld-content ledger where
+they previously had no counter at all — `get_table` and `export_data` in
+`accounting` plus the `continue` sentence, `get_list` the same, `extract_page`
+and `extract_fields` in `hidden_values_excluded` with the technique named
+beside it. `aggregate` shares `_schema_read` and is fixed by construction,
+pinned anyway. `find_elements` is deliberately untouched: 9b established that
+retrieval is not reporting and that filtering there turned "an opaque panel is
+painted over it" into "nothing visible matches", a worse answer about the same
+fact.
+
+**A third fact both ladders can now state.** A value that is present and
+entirely unreadable is not `empty`. `empty` reads as "the page left the field
+blank", which is the ordinary unfilled-form case and its own small confident
+wrong answer about a page that wrote a value and then painted over it. Both
+`extract_page` and `extract_fields` answer `reason: "hidden"`, name the
+technique, and point at `get_text(include_hidden=true)` as the route that
+returns hidden content AS hidden content.
+
+**The second finding was an accounting lie with no leak underneath it.**
+`get_text` on `g2/shadow_cloak.html` filtered three hidden components' prose
+correctly — three prompt-injection payloads never reached the payload — and
+then reported `0 hidden block(s) carrying 0 characters ... [none]`, because it
+measured what it had withheld with `el.textContent`, which stops dead at every
+shadow boundary and returns the empty string for a component with no light
+children. `get_page_view` counted the same page correctly on the same read, so
+two reads told one caller two stories about one document. `ksDeepTextContent`
+in `visibility.js` is the shared answer: an element's text plus every open
+shadow root beneath it, bounded at 500 roots, with slotted content not
+double-counted because a `<slot>`'s own text is its fallback content. The
+ledger now reads `3 hidden block(s) carrying 411 characters ...
+[details-collapsed=1, content-visibility-hidden=1, offscreen=1]`.
+
+**And the third item, which is 9b's own fix running the other way.** The
+re-verify put the seven constructions the pixel arbiter exists to clear
+through the READ's question and six came back cloaked: a `clip-path` lid, a
+transparent mask, a decorative full-viewport `<svg>`, an undrawn `<canvas>`, a
+spacer `<img>`, and `mix-blend-mode: multiply`. A publisher's continue-reading
+fade — `position:absolute; bottom:0; background:linear-gradient(rgba(255,255,
+255,.15), rgba(255,255,255,.35))`, ordinary markup on a large fraction of the
+web — took the whole article body out of `get_text` and reported it as hidden
+content "with the shape of an injected instruction". That is this build's
+cardinal defect class running in the direction that costs a reader content.
+
+The three documented conditions were never the problem; thirteen boundary
+shapes were attacked and all thirteen landed on their documented side. The
+defect is the ALPHA the lid is credited with BEFORE the 0.95 threshold sees
+it. `ksLidAlpha` hands out 1.0 on the mere presence of a background image, and
+a CSS gradient IS a background image, so no narrowing of the threshold could
+ever have reached it — the number being compared did not mean what its name
+said. The other half is `ksPaintsOwnContent`, which answers on the tag for
+`IMG, CANVAS, VIDEO, IFRAME, FRAME, EMBED, OBJECT, SVG, MODEL`, so a
+transparent spacer GIF and an out-of-flow ad iframe are both totally opaque.
+
+Those shortcuts are right for the consumer they were written for. The acting
+path treats box math as a PROPOSAL and confirms it against a screenshot, so a
+generous alpha there costs a second measurement. The read has no arbiter and
+cannot afford one, so it must not consume a number calibrated for one. The
+read now computes its own alpha in `ksReadLidAlpha` and DROPS any lid whose
+paint it cannot compute from CSS: `clip-path`, `mask`, `mix-blend-mode`,
+`background-image`, and the replaced tags, checked on the box and on its
+ancestor chain because a clip above the lid clips the lid too. Everything else
+is a background colour with an alpha channel, which is arithmetic.
+`backdrop-filter` still counts as total, because it changes what is behind it
+past legibility by its own declaration rather than by a paint this file has to
+guess at. THE READ FAILS TOWARD READING; the acting path is untouched,
+`ksOccluders` and `ksLidAlpha` are untouched, `ksReadLids` copies its records
+rather than writing the read alpha onto the shared objects, and no acting-path
+caller reads any of the new functions. What the read gives up is the genuinely
+cloaked gradient, which needs a screenshot to tell from a publisher's fade.
+
+`corpus/g2/cloak_ordinary.html` is the battery: nine out-of-flow lids that
+satisfy every box condition and paint nothing, plus one plain opaque box as
+the control. On `c0145ac` that page's `get_text` returns its `<h1>` and
+nothing else. The control arm is what stops the fix from being a revert.
+
+Six new corpus fixtures, four of them the hostile rounds' own (`cloak_extract`,
+`cloak_extract2`, `cloak_boundary`, `cloak_article`), tracked rather than left
+in a scratchpad so every finding keeps a permanent repro. `cloak_values`
+carries one cloaked value per harvesting surface so the whole class is
+checkable in one run; `cloak_ordinary` is R-01's.
+
+Gate: full suite **1,888 passed, 4 skipped, ZERO FAILED in both orders**, run
+SEQUENTIALLY: forward `-p no:randomly` (895.5s, 1 xfailed) and
+`--randomly-seed=20260909` (966.5s, 1 xpassed). That is the 1,876 baseline
+plus exactly the seventeen new pins, and the quarantined frame-gated pin
+reports xfailed one way and xpassed the other, both green. The two
+fix-wave pin files run together are 28 passed, nothing failed.
+
+The seventeen new pins in `tests/browser/test_fixwave9c_fixes_live.py` are the
+three items' repros, the class sweep, the two scope arms (keys, and
+`find_elements`), the boundary battery, and R-01's nine-lid false-positive
+arm with its control. Nine of them fail on `c0145ac` and pass here, verified
+mechanically by `git stash push -- src` and re-running: 9 failed / 8 passed
+stashed, 17 passed restored. Fix wave 9b's eleven pins are all still green.
+Zero orphans: no `chrome.exe` and no `chrome-headless-shell.exe` at exit.
+
+FLAGGED, not fixed here: `test_published_numbers_match_the_measuring_snapshot`
+compares the README's test count against a snapshot written by the same script
+that fills the README, so it compares the doc to itself and passes green while
+the README claims 905 against a live suite near 1,880. This wave moves the
+real number again; whoever owns the stamp step should see it.

@@ -214,7 +214,16 @@
       return;
     }
     if (reason) {
-      const text = squash(el.textContent || '');
+      // THE WITHHELD TEXT INCLUDES WHAT THE OPEN ROOTS UNDER IT HOLD (fix
+      // wave 9c). This walk descends into `el.shadowRoot` below, so a hidden
+      // host's shadow prose is correctly never printed -- and it was measured
+      // with `textContent`, which stops at the boundary, so on a component
+      // with no light children the ledger reported nothing withheld while
+      // three injection payloads had in fact been suppressed. The content was
+      // right and the accounting was false, which this build treats as the
+      // same defect: `get_page_view` counted the same page correctly and the
+      // two reads contradicted each other.
+      const text = squash(ksDeepTextContent(el));
       if (text) {
         hiddenBlocks++;
         hiddenChars += text.length;

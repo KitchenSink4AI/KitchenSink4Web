@@ -162,6 +162,43 @@ function ksOpenRoots(root, onEl) {
   return out;
 }
 
+// THE TEXT OF A SUBTREE INCLUDING ITS OPEN SHADOW ROOTS, for the ledgers.
+//
+// `textContent` stops dead at every shadow boundary, and fix wave 9c is where
+// that showed up as a false completeness claim rather than a leak.
+// `corpus/g2/shadow_cloak.html` parks seven components inside seven
+// containers, three of them hidden, and each component keeps its prose in its
+// own OPEN root with no light children at all. `get_text` filtered the three
+// correctly and then measured what it had withheld with `el.textContent`,
+// which on a host with no light children is the empty string: three
+// prompt-injection payloads suppressed, and a `stripped` line reading "0
+// hidden block(s) carrying 0 characters ... [none]". `get_page_view` counted
+// the same page correctly on the same read, because its walk is `ksDeepEach`.
+// A caller comparing the two ledgers was told two different stories about one
+// document, which is the disagreement this file exists to end.
+//
+// SLOTTED CONTENT IS NOT DOUBLE-COUNTED: a `<slot>`'s own text is its
+// FALLBACK content, so a shadow root's `textContent` never contains the light
+// nodes assigned into it, and those are already in the host's own.
+var KS_DEEP_TEXT_MAX_ROOTS = 500;
+function ksDeepTextContent(node, state) {
+  if (!node) return '';
+  var st = state || { roots: 0 };
+  var out = node.textContent || '';
+  if (node.shadowRoot && st.roots++ < KS_DEEP_TEXT_MAX_ROOTS) {
+    out += ' ' + ksDeepTextContent(node.shadowRoot, st);
+  }
+  if (node.querySelectorAll) {
+    var all = node.querySelectorAll('*');
+    for (var i = 0; i < all.length; i++) {
+      if (all[i].shadowRoot && st.roots++ < KS_DEEP_TEXT_MAX_ROOTS) {
+        out += ' ' + ksDeepTextContent(all[i].shadowRoot, st);
+      }
+    }
+  }
+  return out;
+}
+
 // Containment across shadow boundaries. `a.contains(b)` is light-tree only,
 // so a host does not contain its own shadow content by that measure, and the
 // occlusion scan's "skip my own ancestors and descendants" filter needs the
@@ -1046,15 +1083,133 @@ function ksOccludedReason(el) {
 // Widening to static boxes is what produced the 53 false positives above.
 var KS_READ_CLOAK_ALPHA = 0.95;
 
+// -------------------------------------------- AND AN ALPHA IT CAN TRUST
+//
+// FIX WAVE 9C, and the finding is 9b's own fix pointed the other way. The
+// re-verify round ran the seven constructions the pixel arbiter exists to
+// clear through the READ's question and six of them came back cloaked: a
+// `clip-path` lid, a transparent mask, a decorative full-viewport `<svg>`, an
+// undrawn `<canvas>`, a 1x1 spacer `<img>`, and `mix-blend-mode: multiply`.
+// A publisher's continue-reading fade -- `position:absolute; bottom:0;
+// background:linear-gradient(rgba(255,255,255,.15), rgba(255,255,255,.35))`,
+// which is ordinary markup on a large fraction of the web -- took the whole
+// article body out of `get_text` and reported it as hidden content "with the
+// shape of an injected instruction". That is this build's cardinal defect
+// class running in the direction that costs a reader content.
+//
+// THE THREE CONDITIONS WERE NEVER THE PROBLEM. Thirteen boundary shapes were
+// attacked and all thirteen landed on their documented side: 0.94 reads,
+// 0.95 cloaks, two stacked 0.8 lids composite to 0.96 and cloak, in-flow
+// static stays the stated residual. The defect is in the ALPHA the lid is
+// credited with BEFORE the 0.95 threshold ever sees it. `ksLidAlpha` has two
+// shortcuts that hand out 1.0 on a tag name or on the mere presence of a
+// background image:
+//
+//     if (ksPaintsOwnContent(el)) base = 1;
+//     else if (s.backgroundImage && s.backgroundImage !== 'none') base = 1;
+//
+// A CSS gradient IS a background-image, so every gradient lid is opaque by
+// construction and no narrowing of the threshold can reach it -- the number
+// being compared does not mean what its name says. And `ksPaintsOwnContent`
+// answers on the tag for `IMG, CANVAS, VIDEO, IFRAME, FRAME, EMBED, OBJECT,
+// SVG, MODEL`, so a transparent spacer GIF and an out-of-flow ad iframe are
+// both totally opaque lids.
+//
+// Those shortcuts are CORRECT for the consumer they were written for. The
+// acting path takes the box math as a PROPOSAL and confirms it against a
+// screenshot, so a generous alpha there costs a second measurement and
+// nothing else. The read has no arbiter and cannot afford one, so it must
+// not consume a number that was calibrated for one.
+//
+// SO THE READ FAILS TOWARD READING. A lid whose alpha this file cannot
+// compute from CSS alone is not a read lid at all: unknown paint means the
+// prose comes back. The acting path is unchanged and still refuses the click
+// on every one of these, with the arbiter still deciding, so the safety
+// property 9b bought is exactly where it was. What the read gives up is the
+// cloaked-gradient case, which needs a screenshot to tell from a publisher's
+// fade and which no box can answer.
+//
+// What "cannot compute" means, and it is a closed list rather than a
+// judgement: paint clipped away (`clip-path`), paint masked away (`mask`),
+// paint composited by something other than source-over (`mix-blend-mode`),
+// paint that comes from an image or gradient rather than a colour
+// (`background-image`), and paint that IS the element's content (the
+// replaced tags). Everything else is a background colour with an alpha
+// channel, which is arithmetic. `backdrop-filter` still counts as total,
+// because it changes what is behind it past legibility by its own
+// declaration rather than by a paint this file has to guess at.
+function ksReadPaintUnknown(el, s) {
+  if (s.clipPath && s.clipPath !== 'none') return 'clipped';
+  var mask = s.maskImage || s.webkitMaskImage || '';
+  if (mask && mask !== 'none') return 'masked';
+  if (s.mixBlendMode && s.mixBlendMode !== 'normal') return 'blended';
+  if (s.backgroundImage && s.backgroundImage !== 'none') return 'image';
+  if (el && ksPaintsOwnContent(el)) return 'replaced';
+  return null;
+}
+
+//: A clip or a mask on an ANCESTOR clips the lid's paint too, and the climb
+//: is affordable because it runs only over boxes that already survived the
+//: out-of-flow filter. Bounded by the same document-element stop every other
+//: climb in this file uses.
+function ksReadPaintUnknownChain(el, s) {
+  var own = ksReadPaintUnknown(el, s);
+  if (own) return own;
+  for (var n = ksUp(el); n && n !== document.documentElement; n = ksUp(n)) {
+    var ns = ksCS(n);
+    if (ns.clipPath && ns.clipPath !== 'none') return 'clipped-ancestor';
+    var m = ns.maskImage || ns.webkitMaskImage || '';
+    if (m && m !== 'none') return 'masked-ancestor';
+    if (ns.mixBlendMode && ns.mixBlendMode !== 'normal') return 'blended-ancestor';
+  }
+  return null;
+}
+
+// The read's own alpha for one occluder. Returns null when the paint is not
+// computable, which drops the candidate rather than rounding it up to 1.
+function ksReadLidAlpha(cand) {
+  var el = cand.el;
+  var s = cand.ksPseudo ? cand.ps : ksCS(el);
+  // A pseudo-element has no element of its own, so the replaced-tag half of
+  // the question does not apply to it; its generator's chain still does.
+  if (cand.ksPseudo) {
+    if (ksReadPaintUnknown(null, s)) return null;
+    if (ksReadPaintUnknownChain(el, ksCS(el))) return null;
+  } else if (ksReadPaintUnknownChain(el, s)) {
+    return null;
+  }
+  var base = 0;
+  var bgc = ksParseColor(s.backgroundColor);
+  if (bgc) base = bgc.a;
+  if (base < 1 && ksBackdropObliterates(s)) base = 1;
+  if (base <= KS_LID_ALPHA_FLOOR) return 0;
+  if (cand.ksPseudo) {
+    var own = parseFloat(s.opacity);
+    if (own === own) base *= own;
+    base *= ksFilterOpacity(s);
+    return base * ksPaintOpacity(el, ksCS(el));
+  }
+  return base * ksPaintOpacity(el, s);
+}
+
 var ksReadLidCache = null;
 function ksReadLids() {
   if (ksReadLidCache) return ksReadLidCache;
   var out = [], all = ksOccluders();
   for (var i = 0; i < all.length; i++) {
     var c = all[i];
-    if (c.ksPseudo) { out.push(c); continue; }
-    var pos = ksCS(c.el).position;
-    if (pos === 'fixed' || pos === 'absolute' || pos === 'sticky') out.push(c);
+    if (!c.ksPseudo) {
+      var pos = ksCS(c.el).position;
+      if (pos !== 'fixed' && pos !== 'absolute' && pos !== 'sticky') continue;
+    }
+    var a = ksReadLidAlpha(c);
+    if (a === null || a <= KS_LID_ALPHA_FLOOR) continue;
+    // A COPY, never the acting path's record. The two paths credit the same
+    // box with different alphas on purpose and they run in the same process
+    // over the same cache, so writing this number onto the shared object
+    // would silently re-grade every click on the page.
+    out.push({ el: c.el, rect: c.rect, a: a, ksPseudo: c.ksPseudo,
+               ps: c.ps });
   }
   ksReadLidCache = out;
   return out;

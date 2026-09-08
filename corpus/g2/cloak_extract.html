@@ -1,0 +1,21 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>extract_page paint-cloak probe</title></head>
+<body>
+<h1>Account summary</h1>
+
+<!-- Ordinary labeled pair: extract_page must find this normally. -->
+<p><b>Account holder:</b> Jane Example</p>
+
+<!-- Labeled pair whose VALUE is paint-cloaked: a human sees the label
+     "Balance:" and then nothing (an opaque same-size sibling sits over the
+     value at a higher z-index, same construction as cloak_light.html's
+     #behind case). extract_page must not hand this value back as a found,
+     labeled fact: it must come back as excluded / not_found, the same as a
+     value hidden by display:none would. -->
+<p><b>Balance:</b></p>
+<div style="position:relative; height:24px">
+  <p style="position:absolute; top:0; left:0; margin:0">CLOAKED-VALUE-99999-do-not-trust</p>
+  <div style="position:absolute; top:0; left:0; width:1200px; height:24px; background:#ffffff"></div>
+</div>
+
+</body></html>

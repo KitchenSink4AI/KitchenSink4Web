@@ -84,8 +84,16 @@ _NO_LISTS = (
 
 _TABLE_JS = r"""
 (arg) => {
+// @@KS4WEB_VISIBILITY@@
 // @@KS4WEB_RENDERED@@
   const opts = arg.opts || {};
+  // THE CELL LEDGER (fix wave 9c). A cell's text is a VALUE, and this reader
+  // asked nothing at all about whether a human sees it, so a page could park
+  // an instruction under an opaque box in a data cell and have `get_table`
+  // hand it back as the row's value while `get_text` on the same page
+  // stripped and counted it. Excluded content is counted here and reported in
+  // `accounting`, never dropped silently.
+  const hiddenCells = { excluded: 0, chars: 0, reasons: {} };
   const squash = (s) => (typeof s === 'string' ? s : '').replace(/\s+/g, ' ').trim();
   const CLIP = opts.cell_clip || 200;
   let clipped = 0;
@@ -215,7 +223,7 @@ _TABLE_JS = r"""
       while (matrix[r][c] !== undefined) c++;
       const rs = parseInt(cell.getAttribute('rowspan') || cell.getAttribute('aria-rowspan') || '1', 10) || 1;
       const cs = parseInt(cell.getAttribute('colspan') || cell.getAttribute('aria-colspan') || '1', 10) || 1;
-      const text = clip(ksRenderedText(cell));
+      const text = clip(ksVisibleTextOf(cell, hiddenCells) || '');
       const th = real ? cell.tagName === 'TH'
         : /columnheader|rowheader/.test(cell.getAttribute('role') || '');
       const inHead = real && !!cell.closest('thead');
@@ -260,6 +268,7 @@ _TABLE_JS = r"""
     rows: data.slice(start, start + limit),
     next_start_row: start + limit < data.length ? start + limit : null,
     spans_expanded: spans, clipped_cells: clipped,
+    hidden_cells: hiddenCells,
   };
 }
 """
@@ -391,6 +400,21 @@ async def get_table(
         more += (f'. {got["clipped_cells"]} cell(s) were truncated at '
                  f'{CELL_CLIP} characters and end in an ellipsis, so the '
                  f'rows are all here and those cells are not whole')
+    # AND THE SAME SENTENCE FOR CONTENT A HUMAN CANNOT SEE (fix wave 9c).
+    # `get_text` has named its withheld blocks since DESIGN 3.6; this reader
+    # returned cell text with no such rule and no such counter at all, so a
+    # value hidden under an opaque box arrived as the row's value here while
+    # the prose read on the same page stripped and counted it.
+    hidden_cells = got.get("hidden_cells") or {}
+    if hidden_cells.get("excluded"):
+        reasons = ", ".join(
+            f"{k}={v}" for k, v in
+            sorted((hidden_cells.get("reasons") or {}).items(),
+                   key=lambda kv: -kv[1])[:6])
+        more += (f'. {hidden_cells["excluded"]} piece(s) of cell content '
+                 f'carrying {hidden_cells.get("chars", 0):,} characters were '
+                 f'counted and NOT returned: a human does not see them '
+                 f'[{reasons or "none"}]')
     payload = {
         "page": record.handle, "session": sess.session_id,
         "url": record.page.url,
@@ -399,6 +423,8 @@ async def get_table(
         "accounting": {
             "spans_expanded": got["spans_expanded"],
             "clipped_cells": got["clipped_cells"],
+            "hidden_cell_content_excluded": hidden_cells.get("excluded", 0),
+            "hidden_cell_techniques": hidden_cells.get("reasons") or {},
             **trim,
             "note": ("merged cells are expanded: a value spanning rows or "
                      "columns is repeated into every position it covers, "
@@ -454,8 +480,13 @@ def _fit_table(table: dict, budget: int, max_columns: int | None) -> dict:
 _LIST_JS = r"""
 (arg) => {
 // @@KS4WEB_HREF@@
+// @@KS4WEB_VISIBILITY@@
 // @@KS4WEB_RENDERED@@
   const opts = arg.opts || {};
+  // An item's text is a VALUE, and it gets the same rule and the same
+  // counting as a table cell (fix wave 9c). The DT term is a KEY and keeps
+  // the plain reader: an `sr-only` term is a legitimate accessible label.
+  const hiddenItems = { excluded: 0, chars: 0, reasons: {} };
   const squash = (s) => (typeof s === 'string' ? s : '').replace(/\s+/g, ' ').trim();
   const clip = (s, n) => { s = squash(s); return s.length <= n ? s : s.slice(0, n) + '...'; };
   const SEL = 'ul, ol, dl, [role="list"], [role="listbox"], [role="menu"]';
@@ -505,7 +536,8 @@ _LIST_JS = r"""
   const limit = Math.max(1, opts.max_items || 50);
   const out = items.slice(start, start + limit).map((x, i) => {
     const link = x.el.querySelector ? x.el.querySelector('a[href]') : null;
-    const rec = { i: start + i, text: clip(ksRenderedText(x.el), 200) };
+    const rec = { i: start + i,
+                  text: clip(ksVisibleTextOf(x.el, hiddenItems) || '', 200) };
     if (x.term) rec.term = x.term;
     // ksHref, not link.href (fuzzer class 10): an SVG anchor's href is an
     // SVGAnimatedString and stringifying it fabricates a URL.
@@ -516,6 +548,7 @@ _LIST_JS = r"""
     tag: target.tagName.toLowerCase(),
     total_items: items.length, start_index: start, items: out,
     next_start_index: start + limit < items.length ? start + limit : null,
+    hidden_items: hiddenItems,
   };
 }
 """
@@ -585,11 +618,28 @@ async def get_list(
             + ') returns the next items'
             if got["next_start_index"] is not None
             else "all items in the list are included")
+    # The withheld-content ledger rides `continue` and `accounting` rather
+    # than the list itself, so the list stays the plain records it has always
+    # been and the budget is still priced against what a caller reads.
+    hidden_items = got.pop("hidden_items", None) or {}
+    if hidden_items.get("excluded"):
+        reasons = ", ".join(
+            f"{k}={v}" for k, v in
+            sorted((hidden_items.get("reasons") or {}).items(),
+                   key=lambda kv: -kv[1])[:6])
+        more += (f'. {hidden_items["excluded"]} piece(s) of item content '
+                 f'carrying {hidden_items.get("chars", 0):,} characters were '
+                 f'counted and NOT returned: a human does not see them '
+                 f'[{reasons or "none"}]')
     return {
         "page": record.handle, "session": sess.session_id,
         "url": record.page.url,
         "list": got,
         "continue": more,
+        "accounting": {
+            "hidden_item_content_excluded": hidden_items.get("excluded", 0),
+            "hidden_item_techniques": hidden_items.get("reasons") or {},
+        },
         "budget": {"used": _ntok(json.dumps(got)), "estimator": _ENCODING},
     }
 
@@ -772,10 +822,23 @@ async def get_metadata(page: str) -> dict:
 
 _FIELDS_JS = r"""
 () => {
+// @@KS4WEB_VISIBILITY@@
 // @@KS4WEB_RENDERED@@
   const squash = (s) => (typeof s === 'string' ? s : '').replace(/\s+/g, ' ').trim();
   const clip = (s, n) => { s = squash(s); return s.length <= n ? s : s.slice(0, n) + '...'; };
   const sources = [];  // {key, value, by}
+  // Same rule, same counting as `schema.js` and the table and list readers
+  // (fix wave 9c): a VALUE read off rendered text is a claim about what a
+  // human sees. KEYS (a DT term, a row header, a form label) keep the plain
+  // reader, because `sr-only` labels are how the accessible web names its
+  // own fields and running the rule over them would blind this reader to
+  // every screen-reader-labelled control on the page.
+  const hiddenValues = { excluded: 0, chars: 0, reasons: {} };
+  function seen(el) {
+    const before = hiddenValues.excluded;
+    const value = squash(ksVisibleTextOf(el, hiddenValues) || '');
+    return { value: value, withheld: hiddenValues.excluded > before };
+  }
 
   // 1. JSON-LD, flattened one level deep with dotted paths.
   for (const s of document.querySelectorAll('script[type="application/ld+json"]')) {
@@ -808,8 +871,12 @@ _FIELDS_JS = r"""
   // 3. microdata itemprops.
   for (const el of document.querySelectorAll('[itemprop]')) {
     const key = el.getAttribute('itemprop');
-    const value = squash(el.getAttribute('content') || ksRenderedText(el));
-    if (key && value) sources.push({ key: key, value: clip(value, 300), by: 'microdata' });
+    const attr = squash(el.getAttribute('content'));
+    const got = attr ? { value: attr, withheld: false } : seen(el);
+    if (key && (got.value || got.withheld)) {
+      sources.push({ key: key, value: clip(got.value, 300), by: 'microdata',
+                     withheld: got.withheld });
+    }
   }
   // 4. definition lists.
   for (const dl of document.querySelectorAll('dl')) {
@@ -817,7 +884,11 @@ _FIELDS_JS = r"""
     for (const child of dl.children) {
       if (child.tagName === 'DT') dt = squash(ksRenderedText(child));
       else if (child.tagName === 'DD' && dt)
-        sources.push({ key: dt, value: clip(ksRenderedText(child), 300), by: 'definition-list' });
+      {
+        const got = seen(child);
+        sources.push({ key: dt, value: clip(got.value, 300),
+                       by: 'definition-list', withheld: got.withheld });
+      }
     }
   }
   // 5. two-column tables: row header -> row value.
@@ -825,8 +896,11 @@ _FIELDS_JS = r"""
     for (const tr of table.rows) {
       if (tr.cells.length === 2) {
         const k = squash(ksRenderedText(tr.cells[0]));
-        const v = squash(ksRenderedText(tr.cells[1]));
-        if (k && v && k.length < 80) sources.push({ key: k, value: clip(v, 300), by: 'table-row' });
+        const got = seen(tr.cells[1]);
+        if (k && (got.value || got.withheld) && k.length < 80) {
+          sources.push({ key: k, value: clip(got.value, 300),
+                         by: 'table-row', withheld: got.withheld });
+        }
       }
     }
   }
@@ -844,7 +918,8 @@ _FIELDS_JS = r"""
       : squash(el.value);
     if (label && value) sources.push({ key: label, value: clip(value, 300), by: 'form-field' });
   }
-  return { sources: sources.slice(0, 800), total_sources: sources.length };
+  return { sources: sources.slice(0, 800), total_sources: sources.length,
+           hidden_values: hiddenValues };
 }
 """
 # Same splice, same reason: this is the reader the field test caught answering
@@ -975,7 +1050,25 @@ async def extract_fields(page: str, fields: list | dict | None = None
                 hit, quality = scored[0][3], "partial"
                 alternates = tuple(row[3]["key"] for row in scored[1:4])
                 break
-        if hit:
+        if hit and hit.get("withheld") and not hit.get("value"):
+            # THE SAME THIRD FACT `extract_page`'s ladder reports (fix wave
+            # 9c). The key matched, the page wrote a value, and every
+            # character of it is hidden from a human. Returning `found: true`
+            # with an empty string would be a filled field carrying nothing,
+            # which reads as "the page left it blank" and is not what
+            # happened.
+            unfilled += 1
+            results[name] = {
+                "found": False, "reason": "hidden", "source": hit["by"],
+                "matched_key": hit["key"], "match": quality,
+                "note": (f"the page carries a source for {name!r} and every "
+                         f"character of its value is hidden from a human, so "
+                         f"there is no value to report. The technique is "
+                         f"named in accounting.hidden_value_techniques; "
+                         f"get_text(include_hidden=true) is the route that "
+                         f"returns hidden content AS hidden content."),
+            }
+        elif hit:
             results[name] = {"found": True, "value": hit["value"],
                              "source": hit["by"], "matched_key": hit["key"],
                              "match": quality}
@@ -1001,6 +1094,15 @@ async def extract_fields(page: str, fields: list | dict | None = None
         "accounting": {"requested": len(wanted), "filled":
                        len(wanted) - unfilled, "unfilled": unfilled,
                        "sources_searched": got["total_sources"],
+                       # Same ledger as `extract_page`'s (fix wave 9c): a
+                       # value a human cannot see is not a value this reader
+                       # fills a schema from, and what it withheld is named
+                       # rather than left to be inferred from an absence.
+                       "hidden_values_excluded":
+                           (got.get("hidden_values") or {}).get("excluded", 0),
+                       "hidden_value_techniques":
+                           (got.get("hidden_values") or {}).get("reasons")
+                           or {},
                        "schema_source": schema_source},
         "budget": {"used": _ntok(json.dumps(results)),
                    "estimator": _ENCODING},
@@ -1356,6 +1458,27 @@ def _resolve(name: str, desc: str, enabled: tuple, buckets: dict,
                 f"page and that element carries no text at all, so there is "
                 f"no value to return at any tier. {_NOT_FOUND_ROUTES}")
             return entry
+        if not filled and any(src.get("withheld") for src in sources):
+            # A THIRD FACT, and it is not either of the two below (fix wave
+            # 9c). The page has the field, the page wrote a value into it,
+            # and the page then made that value unreadable to a human -- an
+            # opaque box painted over it, `display:none`, geometry off the
+            # page. Calling that `empty` would say the field is blank, which
+            # is the ordinary unfilled-form reading and is a small confident
+            # wrong answer about a page that is doing something deliberate.
+            src = next(s for s in sources if s.get("withheld"))
+            return {"found": False, "reason": "hidden", "confidence": tier,
+                    "match": quality, "by": src.get("by"),
+                    "matched_key": src.get("key"),
+                    "where": src.get("where") or None,
+                    "note": (f"the page carries a source for {name!r} and "
+                             f"every character of its value is hidden from a "
+                             f"human, so there is no value to report: this "
+                             f"tool never hands back text a human cannot see "
+                             f"as something read off the page. The technique "
+                             f"is named in accounting.hidden_value_techniques, "
+                             f"and get_text(include_hidden=true) is the route "
+                             f"that returns hidden content as hidden content.")}
         if not filled:
             # "the page has this field and it is blank" and "the page does not
             # have this field" are different facts about a page.
@@ -1437,6 +1560,9 @@ def _render_fields(fields: dict) -> str:
                                 else ''))
         elif entry.get("reason") == "empty":
             lines.append(f'{name} = (empty, key "{entry["matched_key"]}")')
+        elif entry.get("reason") == "hidden":
+            lines.append(f'{name} = (hidden from a human, key '
+                         f'"{entry["matched_key"]}")')
         else:
             lines.append(f'{name} = ({entry.get("reason")})')
     return "\n".join(lines)
@@ -1465,7 +1591,7 @@ async def _schema_read(sess, record, location, schema, tiers,
               for name, desc in wanted.items()}
     counts = raw.get("counts") or {}
     tally = {"filled": 0, "not_found": 0, "ambiguous": 0, "empty": 0,
-             "secret": 0, "conflicts": 0}
+             "hidden": 0, "secret": 0, "conflicts": 0}
     for entry in fields.values():
         if entry.get("found"):
             tally["filled"] += 1
@@ -1482,6 +1608,12 @@ async def _schema_read(sess, record, location, schema, tiers,
         "elements_walked": counts.get("walked", 0),
         "leaves_scanned": counts.get("leaves_scanned", 0),
         "hidden_values_excluded": counts.get("hidden_values_excluded", 0),
+        # NAMED, not just counted (fix wave 9c). A bare number says something
+        # was withheld and not which technique withheld it, and the technique
+        # is what tells a caller whether the page is merely responsive or is
+        # hiding a value from the tool that a human is being shown -- the
+        # same vocabulary `get_text`'s `stripped` ledger prints.
+        "hidden_value_techniques": counts.get("hidden_value_reasons") or {},
         "secret_fields_never_read": counts.get("secret_fields", 0),
         "shadow_roots_read": counts.get("shadow_roots_read", 0),
         "json_ld": {"blocks": counts.get("json_ld_blocks", 0),
@@ -1992,8 +2124,20 @@ async def export_data(
         "truncated": (f"the table holds {got['total_rows']} rows and only "
                       f"the first {len(got['rows'])} were written; raise "
                       f"max_rows to take them all" if truncated else False),
+        # THE SAME RECEIPT `get_table` PRINTS (fix wave 9c). An export runs
+        # the identical spanned-grid walk, so it withholds the identical cell
+        # content, and a file written to disk with content silently missing
+        # from it is the completeness lie one step further from anyone who
+        # could notice. The count rides the payload rather than the file:
+        # a stray column in a CSV would break the Excel handoff this tool
+        # exists for.
         "accounting": {"spans_expanded": got["spans_expanded"],
-                       "clipped_cells": got["clipped_cells"]},
+                       "clipped_cells": got["clipped_cells"],
+                       "hidden_cell_content_excluded":
+                           (got.get("hidden_cells") or {}).get("excluded", 0),
+                       "hidden_cell_techniques":
+                           (got.get("hidden_cells") or {}).get("reasons")
+                           or {}},
     }
 
 

@@ -73,8 +73,8 @@
   const declared = [], labeled = [], proximate = [], hint = [];
   const counts = { walked: 0, leaves_scanned: 0, json_ld_blocks: 0,
                    json_ld_invalid: 0, json_ld_nodes: 0,
-                   hidden_values_excluded: 0, secret_fields: 0,
-                   shadow_roots_read: 0 };
+                   hidden_values_excluded: 0, hidden_value_reasons: {},
+                   secret_fields: 0, shadow_roots_read: 0 };
   const capped = {};
   function note(list, name, limit, rec) {
     if (list.length >= limit) { capped[name] = (capped[name] || 0) + 1; return; }
@@ -100,13 +100,38 @@
   // Paint order is part of that rule as of fix wave 9b: a value a human
   // cannot see because an opaque out-of-flow box is painted over it is not a
   // value this tool may report as read off the page.
+  //
+  // AND THE RULE FOLLOWS THE TEXT DOWN, as of fix wave 9c. Asking it of the
+  // matched element alone checked one node and returned the aggregate text of
+  // a whole subtree, so `corpus/g2/cloak_extract.html` -- a label whose value
+  // sits in a positioned wrapper with the lid INSIDE that wrapper -- passed
+  // the check at the wrapper and handed back the cloaked value underneath it,
+  // at `found: true, confidence: proximate, match: exact`, with
+  // `hidden_values_excluded: 0`. `ksVisibleRenderedText` carries the rule into
+  // the walk, and the exclusions land in the same counter, because a value
+  // silently shortened is the same completeness lie as a value silently
+  // included.
   function hiddenHere(el) {
     return ksHiddenAnywhere(el) || ksPaintCloaked(el);
   }
+
+  // `lastWithheld` is read by the caller IMMEDIATELY after the call, and it
+  // is what lets the ladder answer "this field's value is hidden from a
+  // human" rather than "this field is blank". Those are different facts about
+  // a page and the second one, said of a cloaked value, is its own small
+  // confident wrong answer: an unfilled form field is the common reading of
+  // `empty`, and a page that painted over its own value is not that.
+  let lastWithheld = false;
   function visibleText(el) {
-    const reason = hiddenHere(el);
-    if (reason) { counts.hidden_values_excluded++; return null; }
-    return squash(ksRenderedText(el));
+    const sink = {};
+    const out = ksVisibleTextOf(el, sink);
+    lastWithheld = !!sink.excluded;
+    counts.hidden_values_excluded += (sink.excluded || 0);
+    for (const r of Object.keys(sink.reasons || {})) {
+      counts.hidden_value_reasons[r] =
+        (counts.hidden_value_reasons[r] || 0) + sink.reasons[r];
+    }
+    return out === null ? null : squash(out);
   }
 
   // ------------------------------------------------------ TIER 1: DECLARED
@@ -320,7 +345,8 @@
         else if (child.tagName === 'DD' && dt) {
           const text = visibleText(child);
           if (text !== null) {
-            pushLabeled(dt, text, 'definition-list', child, 'text');
+            pushLabeled(dt, text, 'definition-list', child, 'text',
+                        lastWithheld ? { withheld: true } : null);
           }
         }
       }
@@ -330,7 +356,8 @@
       if (k && k.length < 80) {
         const text = visibleText(el.cells[1]);
         if (text !== null) {
-          pushLabeled(k, text, 'table-row', el.cells[1], 'text');
+          pushLabeled(k, text, 'table-row', el.cells[1], 'text',
+                      lastWithheld ? { withheld: true } : null);
         }
       }
     }
@@ -374,7 +401,14 @@
       }
       if (key) {
         const text = visibleText(el);
-        if (text) pushLabeled(key, text, 'aria-label', el, 'text');
+        // Pushed even when the harvest came back EMPTY because content was
+        // withheld: the page does carry a source for this key, and dropping
+        // the record here would make the ladder say `not_found` about a page
+        // that has the field and painted over its value.
+        if (text || (text !== null && lastWithheld)) {
+          pushLabeled(key, text, 'aria-label', el, 'text',
+                      lastWithheld ? { withheld: true } : null);
+        }
       }
     }
 
@@ -388,12 +422,15 @@
           const found = proximateFor(el, raw);
           if (found && found.el) {
             const text = visibleText(found.el);
-            if (text !== null && valueShaped(text)) {
-              note(proximate, 'proximate', MAX_PROXIMATE, {
+            const withheld = lastWithheld;
+            if (text !== null && (valueShaped(text) || (!text && withheld))) {
+              const rec = {
                 key: clip(label, KEY_CLIP), value: clip(text, VALUE_CLIP),
                 by: found.relation, relation: found.relation,
                 where: where(found.el), from: 'text',
-                gap_px: gapPx(el, found.el), empty: false });
+                gap_px: gapPx(el, found.el), empty: !text };
+              if (withheld) rec.withheld = true;
+              note(proximate, 'proximate', MAX_PROXIMATE, rec);
             }
           }
         }
@@ -404,8 +441,13 @@
     if (hint.length < MAX_HINT) {
       const tokens = hintTokens(el);
       if (tokens.length) {
-        const hidden = hiddenHere(el);
-        const text = hidden ? null : squash(ksRenderedText(el));
+        // The same walk as every other tier's value (fix wave 9c). This one
+        // does NOT count into `hidden_values_excluded`: the hint tier is off
+        // unless a caller names it, and it mints a record per token per
+        // element, so counting here would inflate the ledger by the page's
+        // own class-attribute density rather than by anything withheld.
+        const raw4 = ksVisibleTextOf(el, null);
+        const text = raw4 === null ? null : squash(raw4);
         for (const token of tokens) {
           note(hint, 'hint', MAX_HINT, {
             key: clip(token, KEY_CLIP),

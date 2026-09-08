@@ -1,0 +1,113 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Ordinary lids that must not cloak</title>
+<style>
+  body { margin: 0; font: 16px sans-serif; width: 640px; }
+  .wrap { position: relative; width: 600px; height: 120px; }
+  .under { position: absolute; left: 0; top: 0; width: 600px; height: 120px;
+           margin: 0; }
+  .lid { position: absolute; left: 0; top: 0; width: 600px; height: 120px;
+         z-index: 6; }
+</style>
+</head>
+<body>
+
+<h1>Ordinary lids</h1>
+<p>MARK VISIBLE: the anchor sentence, under nothing at all.</p>
+
+<!-- THE FALSE POSITIVES FIX WAVE 9B SHIPPED. Every lid below is out of flow,
+     covers its paragraph exactly, and satisfies all three of the read-side
+     cloak rule's box conditions. None of them paints over the text a human
+     reads. Each one must come back as ordinary prose. -->
+
+<!-- 1. The publisher's continue-reading fade. Ordinary markup on a large
+        fraction of the web, and a CSS gradient IS a background-image, which
+        the acting path's alpha credits at 1.0 by construction. -->
+<article style="position:relative">
+  <p>MARK FADE: the article body under a publisher's continue-reading fade,
+     which a human reads straight through because the wash is a fifth of a
+     white.</p>
+  <div style="position:absolute; left:0; right:0; bottom:0; height:120px;
+              z-index:3;
+              background:linear-gradient(rgba(255,255,255,0.15),
+                                         rgba(255,255,255,0.35))"></div>
+</article>
+
+<!-- 2. A photo caption under an ordinary darkening scrim. -->
+<div style="position:relative; height:120px; background:#345">
+  <p class="under" style="color:#fff">MARK SCRIM: the caption a human reads
+     over the photograph through an ordinary darkening gradient.</p>
+  <div class="lid"
+       style="background:linear-gradient(to top, rgba(0,0,0,0.45),
+                                         rgba(0,0,0,0.05))"></div>
+</div>
+
+<!-- 3. clip-path, the FIRST of the seven constructions the acting path's
+        pixel arbiter exists to clear. The box keeps its rect and its
+        background colour after the browser has clipped its paint to nothing. -->
+<div class="wrap">
+  <p class="under">MARK CLIP: a paragraph under a lid whose paint is clipped
+     entirely away.</p>
+  <div class="lid" style="background:#fff; clip-path:inset(0 100% 0 0)"></div>
+</div>
+
+<!-- 4. A transparent mask, same story one property along. -->
+<div class="wrap">
+  <p class="under">MARK MASK: a paragraph under a lid masked out to nothing.</p>
+  <div class="lid" style="background:#fff;
+       -webkit-mask-image:linear-gradient(transparent,transparent);
+       mask-image:linear-gradient(transparent,transparent)"></div>
+</div>
+
+<!-- 5. A decorative full-viewport SVG: one small circle, credited alpha 1.0
+        on the tag alone. -->
+<div class="wrap">
+  <p class="under">MARK SVG: a paragraph under a decorative full-width svg
+     that draws one small circle.</p>
+  <svg class="lid" viewBox="0 0 10 10">
+    <circle cx="1" cy="1" r="0.5" fill="#eee"></circle>
+  </svg>
+</div>
+
+<!-- 6. An undrawn canvas. -->
+<div class="wrap">
+  <p class="under">MARK CANVAS: a paragraph under a canvas nothing has ever
+     drawn into.</p>
+  <canvas class="lid" width="600" height="120"></canvas>
+</div>
+
+<!-- 7. A 1x1 transparent spacer GIF, stretched. It is `complete` with a
+        naturalWidth of 1, so it clears the one content check that exists. -->
+<div class="wrap">
+  <p class="under">MARK SPACER: a paragraph under a stretched transparent
+     spacer image.</p>
+  <img class="lid" alt=""
+       src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7">
+</div>
+
+<!-- 8. mix-blend-mode: multiply, which text reads straight through. -->
+<div class="wrap">
+  <p class="under">MARK BLEND: a paragraph under a white lid set to multiply,
+     which changes nothing a human sees.</p>
+  <div class="lid" style="background:#fff; mix-blend-mode:multiply"></div>
+</div>
+
+<!-- 9. An out-of-flow iframe overlay, which is what an ad slot, a consent
+        manager, and a support-chat widget all are. Source-derived and
+        unmeasured in the round that found this class, so it gets a fixture. -->
+<div class="wrap">
+  <p class="under">MARK FRAME: a paragraph under an empty out-of-flow iframe
+     overlay.</p>
+  <iframe class="lid" title="empty overlay" src="about:blank"
+          style="border:0; background:transparent"></iframe>
+</div>
+
+<!-- CONTROL. A plain opaque box, which really does cover its paragraph and
+     must still be excluded and counted. Without this the fix above would
+     pass by simply switching the rule off. -->
+<div class="wrap">
+  <p class="under">MARK CONTROL BEHIND: a paragraph under a plain opaque
+     white box, which no human sees any part of.</p>
+  <div class="lid" style="background:#ffffff"></div>
+</div>
+
+</body></html>
