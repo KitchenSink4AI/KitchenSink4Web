@@ -13,6 +13,9 @@
     "type": "git",
     "url": "https://github.com/nometalalchemist/KitchenSink4Web"
   },
+  "homepage": "https://nometalalchemist.github.io/KitchenSink4Web",
+  "documentation": "https://github.com/nometalalchemist/KitchenSink4Web#readme",
+  "support": "https://github.com/nometalalchemist/KitchenSink4Web/issues",
   "icon": "icon.png",
   "keywords": [
     "mcp",
@@ -56,7 +59,7 @@
     "allow_acting": {
       "type": "boolean",
       "title": "Allow this server to click and type",
-      "description": "Lets Claude click buttons, type into forms, and submit pages; leave it off and Claude can only read and navigate, with nothing on the page changeable.",
+      "description": "Lets Claude click buttons, type into forms, and submit pages; leave it off and Claude can only read and navigate, with nothing on the page changeable. [COPY PENDING: manifest.allow_acting.danger | STRONG WARNING tier] FACTS TO CONVEY: this is the write switch and the single most consequential box on this screen. With it off, nothing KS4Web does can change a page. With it on, Claude can click, type, and submit on your behalf on any site you send it to, and a submitted form is not reversible. Tier-2 actions still stop and ask a human every time (paying, signing or accepting terms, deleting, posting publicly, passing an age gate) and no setting on this screen makes those proceed unattended. Leave it off unless you want Claude acting.",
       "default": false,
       "required": false
     },
@@ -71,14 +74,14 @@
       "type": "boolean",
       "title": "Data extraction",
       "description": "Pulls structured data off pages: tables, lists, links, and page details, with CSV and JSON export, and reads long documents page by page so one read never floods the conversation.",
-      "default": false,
+      "default": true,
       "required": false
     },
     "pack_capture": {
       "type": "boolean",
       "title": "Screenshots and page capture",
       "description": "Takes screenshots (passwords masked) and saves pages as PDF or archive files.",
-      "default": false,
+      "default": true,
       "required": false
     },
     "pack_network": {
@@ -91,21 +94,21 @@
     "pack_storage": {
       "type": "boolean",
       "title": "Cookies and logins",
-      "description": "Works with cookies and site storage, and saves a signed-in session to a file so it can be reused next time. It saves the session, never the password.",
+      "description": "Works with cookies and site storage, and saves a signed-in session to a file so it can be reused next time. It saves the session, never the password. [COPY PENDING: manifest.pack_storage.danger | CAUTION tier] FACTS TO CONVEY: this pack reaches saved sign-ins. It can write a signed-in session to a file on this machine and load one back, which means a file that grants access to your account exists on disk until you delete it. It stores the session, never the password, and loading one stops to ask first.",
       "default": false,
       "required": false
     },
     "pack_files": {
       "type": "boolean",
       "title": "Downloads and uploads",
-      "description": "Downloads files from pages into one dedicated folder, fetches a file by URL through the same checks, uploads files into page forms, and reads or writes the clipboard, with every write stopping to ask first.",
+      "description": "Downloads files from pages into one dedicated folder, fetches a file by URL through the same checks, uploads files into page forms, and reads or writes the clipboard, with every write stopping to ask first. [COPY PENDING: manifest.pack_files.danger | CAUTION tier] FACTS TO CONVEY: this pack reaches your filesystem and your clipboard. Downloads land in one dedicated folder and nowhere else, uploads send a file you name into a page's form, and a clipboard write stops to ask first. What leaves this machine is whatever you upload.",
       "default": false,
       "required": false
     },
     "pack_diagnostics": {
       "type": "boolean",
       "title": "Page diagnostics",
-      "description": "Reads the page's own error messages and console output, and can run a page script only after you confirm it.",
+      "description": "Reads the page's own error messages and console output, and can run a page script only after you confirm it. [COPY PENDING: manifest.pack_diagnostics.danger | STRONG WARNING tier] FACTS TO CONVEY: this pack carries evaluate_script, which runs arbitrary JavaScript inside the page with that page's full privileges, including its logged-in session. Every script is shown and confirmed before it runs, one confirmation per script, and none runs unattended. The rest of the pack only reads the page's own errors and console output.",
       "default": false,
       "required": false
     },

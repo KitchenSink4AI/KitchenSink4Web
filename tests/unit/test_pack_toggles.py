@@ -85,11 +85,22 @@ def test_unset_everything_is_still_lite():
     assert packs.resolve_startup_packs() == []
 
 
+#: THE ONLY BOXES THE SHIPPED INSTALL SCREEN STARTS TICKED (orchestrator
+#: ruling, fix wave 10). The field report's item 4 said a default install
+#: "can read but not act" and called the configuration surface daunting; the
+#: answer taken was to start the two READ packs on, and nothing else. Both
+#: are read-only capabilities, so the safety default is untouched: acting is
+#: still off, storage is still off, and everything that can change a page,
+#: reach the filesystem, or run a script is still a deliberate tick.
+#: Named here rather than asserted inline so a future default change is a
+#: visible edit to a named list rather than a loosened assertion.
+DEFAULT_ON = {"pack_extract", "pack_capture"}
+
+
 def test_manifest_source_carries_every_toggle():
     """Parity between the pack table and the .mcpb manifest source: every
     pack has its checkbox and its env mapping, plus the master toggle and
-    the acting checkbox, and every boolean defaults OFF (lite, read-only
-    shipped defaults)."""
+    the acting checkbox, and every boolean outside DEFAULT_ON starts off."""
     manifest = json.loads((ROOT / "bundle" / "manifest.json")
                           .read_text(encoding="utf-8"))
     config = manifest["user_config"]
@@ -102,15 +113,78 @@ def test_manifest_source_carries_every_toggle():
         key = f"pack_{pack}"
         assert key in config, f"manifest misses the {pack} checkbox"
         assert config[key]["type"] == "boolean"
-        assert config[key]["default"] is False
         assert config[key]["description"].strip(), (
             f"{pack} has no what-you-get sentence")
         assert env[packs.ENV_PACK_PREFIX + pack.upper()] == \
             f"${{user_config.{key}}}"
     for key, entry in config.items():
-        assert entry["default"] is False, (
-            f"{key} must default off: lite and read-only are the shipped "
-            f"defaults")
+        assert entry["default"] is (key in DEFAULT_ON), (
+            f"{key} default is {entry['default']}; the shipped install "
+            f"screen starts exactly {sorted(DEFAULT_ON)} ticked")
+
+
+def test_nothing_that_can_change_anything_starts_on():
+    """THE BOTH-DIRECTION PIN on the default change. Whatever the read
+    defaults become, the write switch and every pack that can alter a page,
+    touch the filesystem, or run a script must be a deliberate tick.
+
+    Written as its own test rather than as a line inside the one above,
+    because the list above is a calibration a future wave may reasonably
+    edit and this one is not."""
+    manifest = json.loads((ROOT / "bundle" / "manifest.json")
+                          .read_text(encoding="utf-8"))
+    config = manifest["user_config"]
+    for key in ("allow_acting", "all_packs", "pack_storage", "pack_files",
+                "pack_diagnostics", "pack_network", "pack_workflows"):
+        assert config[key]["default"] is False, (
+            f"{key} starts on. Read-only and the deliberate-tick rule are "
+            f"the shipped defaults; this box can change something.")
+
+
+def test_the_dangerous_boxes_carry_a_danger_label():
+    """Two tiers, four boxes. A checkbox whose whole job is to hand over a
+    capability that can act on the user's behalf has to say so on the screen
+    where it is ticked, not only in a document.
+
+    STRONG WARNING: `allow_acting` is the write switch, and
+    `pack_diagnostics` carries evaluate_script, which runs arbitrary page
+    script. CAUTION: `pack_storage` reaches saved logins and `pack_files`
+    reaches the filesystem and the clipboard."""
+    manifest = json.loads((ROOT / "bundle" / "manifest.json")
+                          .read_text(encoding="utf-8"))
+    config = manifest["user_config"]
+    for key in ("allow_acting", "pack_diagnostics"):
+        assert "STRONG WARNING" in config[key]["description"], key
+    for key in ("pack_storage", "pack_files"):
+        assert "CAUTION" in config[key]["description"], key
+    # And no box that is not one of those four wears a label, so the labels
+    # keep meaning something.
+    labelled = {"allow_acting", "pack_diagnostics", "pack_storage",
+                "pack_files"}
+    for key, entry in config.items():
+        if key in labelled:
+            continue
+        assert "STRONG WARNING" not in entry["description"], key
+        assert "CAUTION" not in entry["description"], key
+
+
+def test_the_manifest_names_where_to_get_help():
+    """homepage / documentation / support, mirroring the shape KitchenSink4XL
+    ships. An install screen with no route to the docs or to an issue tracker
+    leaves a stuck user with nowhere to go."""
+    manifest = json.loads((ROOT / "bundle" / "manifest.json")
+                          .read_text(encoding="utf-8"))
+    for field in ("homepage", "documentation", "support"):
+        assert manifest.get(field), f"the manifest has no {field}"
+        assert manifest[field].startswith("https://"), field
+    assert manifest["support"].endswith("/issues")
+    assert "#readme" in manifest["documentation"]
+    # The org migration will repoint these; what must never drift is that
+    # they and the repository field name the same project.
+    repo = manifest["repository"]["url"]
+    assert manifest["documentation"].startswith(repo), (
+        manifest["documentation"], repo)
+    assert manifest["support"].startswith(repo)
 
 
 def test_dev_manifest_differs_only_in_defaults():
