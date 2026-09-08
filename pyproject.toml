@@ -77,6 +77,12 @@ ocr = [
 # result MEANS. `get_accessibility` reports the version it actually ran.
 accessibility = ["axe-playwright-python==0.1.8"]
 
+[project.urls]
+Homepage = "https://kitchensink4.ai"
+Documentation = "https://github.com/KitchenSink4AI/KitchenSink4Web#readme"
+Repository = "https://github.com/KitchenSink4AI/KitchenSink4Web"
+Issues = "https://github.com/KitchenSink4AI/KitchenSink4Web/issues"
+
 [project.scripts]
 # Q11, RULED by the author 2026-09-04.
 web-mcp = "kitchensink4web.server:main"

@@ -44,6 +44,9 @@ ENFORCED = (
     "bundle/dev/manifest.json",
     "docs/llms.txt",
     "README.md",
+    "docs/QUICKSTART.md",
+    "docs/COOKBOOK.md",
+    "docs/ARCHITECTURE.md",
 )
 
 #: The packed artifacts, which are what a human actually installs. A manifest

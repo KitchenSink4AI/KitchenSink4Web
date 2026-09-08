@@ -4750,3 +4750,64 @@ code; every one of those is flagged in
   2,056 passed / 5 skipped / 1 xpassed in 944.83s; browser then unit 2,056
   passed / 5 skipped / 1 xpassed in 911.30s. Ship gate green at full scope.
   Zero orphaned browser processes. Nothing pushed.
+
+## 2026-09-09 RELEASE STAMP: v1.0.0
+
+Part of a four-repo stamp wave run by one worker from detached worktrees, own
+venv per repo, suites SEQUENTIAL across the family, nothing pushed. Base
+d94978d.
+
+- **THE VERSION WAS ALREADY RIGHT AND SO WAS THE SHIP NAME.** 1.0.0 in
+  pyproject, `__version__`, both `server.json` fields, and both bundle
+  manifests. The ship manifest's `display_name` already read
+  `"KitchenSink4Web"` with no "(release candidate)" suffix, both in
+  `bundle/manifest.json` and inside the packed `.mcpb`. The RC on the Desktop
+  (`ks4web-rc.mcpb`) does carry `"KitchenSink4Web (release candidate)"`; it
+  was read to confirm the contrast and never written. Tool-prefix stability
+  holds: the shipped name is final.
+- **`[project.urls]` is new**: Homepage `https://kitchensink4.ai`, plus
+  Documentation, Repository and Issues under the KitchenSink4AI org. These 404
+  until the transfer, which is correct by sequencing.
+- **CHANGELOG.md is new**, carrying the ratified 1.0.0 entry verbatim.
+  `docs/QUICKSTART.md`, `docs/COOKBOOK.md` and `docs/ARCHITECTURE.md` are the
+  ratified web docs, copied byte-identical, and the README's opening section
+  now closes on the three-link pointer at them.
+- **FIGURES.** `tools/measure_readme_numbers.py` re-measured everything. Raw
+  dump 33,073, lite 19 tools at 5.8k, full 15.3k, 16 rungs, delta 82, 733
+  browser tests: all identical to what is published. Two moved. The projection
+  cost on the frozen Versailles page is **4,445**, not 4,437, and the test
+  count is **2,062**, not 2,055. Both restamped in the README prose, the
+  README table and llms.txt.
+- **THE SNAPSHOT WAS THE STALE FILE.** `tools/readme_numbers_snapshot.json`
+  still recorded 2,055 tests, 4,437 projection, 6.5k lite surface and 16.0k
+  full surface, against a README that already carried the newer 5.8k and 15.3k.
+  Regenerated from the same run.
+  `test_the_measuring_snapshot_is_not_itself_stale_about_the_surface` would
+  have caught the surface half of that on the next run.
+- **Both `.mcpb` artifacts repacked** from the stamped tree by
+  `scripts/pack_bundles.py` (5,020 and 4,991 bytes). Both packed manifests
+  parse equal to their tree manifests. The script's smoke test fails on
+  `uvx kitchensink4web==1.0.0` with "not found in the package registry",
+  which is expected: the version is not on PyPI yet, and stamping before
+  publishing is the point.
+- **The ship gate's scope grew by three surfaces**: `docs/QUICKSTART.md`,
+  `docs/COOKBOOK.md`, `docs/ARCHITECTURE.md`, which is what the gate's own
+  docstring asks for when a new public surface appears.
+- **THE FIRST FULL RUN WAS RED, AND THE TREE WAS NOT THE REASON.** A fresh
+  venv installed with `[dev]` alone returned 4 failed / 2,029 passed / 28
+  skipped: the OCR completeness line, two accessibility cases, and the shadow
+  traversal case, plus 23 extra skips against the 5 this log records. All of
+  it was the missing `ocr` and `accessibility` extras. Installed
+  (`ocr.available()` True, `axe_playwright_python` importable), the collect
+  count was unchanged at 2,062 / 733 and the suite went green. Worth writing
+  down: `[dev]` alone is not enough to certify this product, and the failure
+  it produces looks like a product regression rather than a missing extra.
+- FULL SUITE, sequential, BOTH ORDERS, `-p no:randomly`: unit then browser
+  **2,056 passed / 5 skipped / 1 xpassed / ZERO FAILED** in 1036.63s; browser
+  then unit **2,056 / 5 / 1 / ZERO FAILED** in 1085.17s. Identical to the
+  previous certifying run in both orders. Ship gate, gates and copy guards
+  together: **45 passed**. Zero orphaned browser processes. Nothing pushed.
+- The recorded adversarial gate batteries (`scripts/gate_*.py`, results in
+  `gates/`) were NOT re-run. This wave changed version strings, docs, urls and
+  published figures, and no behaviour, so the recorded rounds still describe
+  the tree. A full re-run before publishing is a separate pass.

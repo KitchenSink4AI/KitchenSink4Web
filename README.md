@@ -5,10 +5,12 @@
 Everything plus the kitchen sink for the open web: a browser MCP server that reads a whole page
 for the price of a paragraph, and starts out unable to change anything at all.
 
+New here? Start with the [Quickstart](docs/QUICKSTART.md); the [Cookbook](docs/COOKBOOK.md) has the ten most common jobs, and [Architecture](docs/ARCHITECTURE.md) explains how the pieces fit.
+
 ## Two numbers that matter
 
 The same page, read two ways. A raw dump of the Treaty of Versailles article on Wikipedia costs
-33,073 tokens of your assistant's memory. This server's first read of it costs 4,437. The
+33,073 tokens of your assistant's memory. This server's first read of it costs 4,445. The
 difference is not compression, it is a different product: a map of the page with a price on every
 region, instead of the whole page whether you wanted it or not.
 
@@ -141,7 +143,7 @@ recommend for the page you are on. It never switches lanes for you.
 |---|---|
 | Lite tool surface | 5.8k |
 | Full surface (all packs) | 15.3k |
-| First read of the Treaty of Versailles article on Wikipedia | 4,437 |
+| First read of the Treaty of Versailles article on Wikipedia | 4,445 |
 | Delta read after one click | 82 |
 
 The budget ladder has 16 rungs; every read reports which rung it printed at and what a deeper
@@ -161,7 +163,7 @@ older `KS4WEB_NO_UPDATE_CHECK=1` spelling is still honored.
 
 ## Testing
 
-2,055 tests, of which 733 drive a real browser. Beyond the suite, every release passes gate
+2,062 tests, of which 733 drive a real browser. Beyond the suite, every release passes gate
 batteries that re-run the adversarial findings of four attack rounds: prompt injection through
 page content, hidden-text smuggling, credential-theft attempts, gate bypasses, workflow
 replay tampering, and resource abuse. The gates are not aspirational; each one exists because an
