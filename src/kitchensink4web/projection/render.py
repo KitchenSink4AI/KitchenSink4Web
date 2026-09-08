@@ -41,6 +41,25 @@ from .meter import (CONTAINER_ONLY, DROPPED_RUNG, LISTED_NOT_EXPANDED,
                     SUMMARIZED, BudgetMeter, ntok, ntok_line)
 
 
+#: WHAT THE SECTION HEADERS USED TO SAY, kept verbatim so the workflow
+#: topics that now carry it cannot drift from what the projection meant.
+#: Each of these was reprinted inside a `## N HEADER` line on every read;
+#: they are explanations, they do not change from page to page, and they
+#: are useful the FIRST time a caller meets them.
+HEADER_TEACHING: dict[str, str] = {
+    "page_shape": (
+        "regions, each priced with this read's own estimate of how much "
+        "CONTENT it holds; expanding one returns a projection of that "
+        "content under whatever budget you pass, so a large price means a "
+        "lot is in there rather than a large bill"),
+    "completeness": (
+        "what this read did NOT see, rendered from the budget meter's own "
+        "ledger"),
+    "next_calls": (
+        "ranked by what each is likely to answer, not by size"),
+}
+
+
 @dataclass(frozen=True)
 class Rung:
     """One step of the ladder. Every cap is non-increasing down the table."""
@@ -233,6 +252,10 @@ class Renderer:
     # disclosure, "including in the section that exists specifically to
     # disclose what the read did not cover."
     def head(self, title: str) -> str:
+        """A section label. Nothing explanatory: the three headers that
+        carried a tutorial paid for it on every read of every page forever,
+        and the tutorial is in HEADER_TEACHING and in the workflow topics
+        that quote it."""
         self.n += 1
         return f"## {self.n} {title}"
 
@@ -280,11 +303,11 @@ class Renderer:
         keep = ranked if self.rung.regions is None else ranked[:self.rung.regions]
         keep_refs = {r["ref"] for r in keep}
         self.listed_regions = [r for r in listable if r["ref"] in keep_refs]
-        lines = [self.head(
-            "PAGE SHAPE (regions, each priced with this read's own estimate "
-            "of how much CONTENT it holds; expanding one returns a "
-            "projection of that content under whatever budget you pass, so a "
-            "large price means a lot is in there rather than a large bill)")]
+        # A HEADER IS A LABEL (fat audit D4). This one was 55 tokens of
+        # tutorial reprinted on every read forever, and the tutorial is
+        # useful exactly once. It moved verbatim to
+        # get_workflows(topic='budgeting'); see HEADER_TEACHING below.
+        lines = [self.head("PAGE SHAPE")]
         for r in self.listed_regions:
             where = "in-view" if r["in_viewport"] else f'y={r["top"]}'
             net = r["net"]
@@ -569,9 +592,7 @@ class Renderer:
         on the projection (which had omitted most of the page)."""
         c = self.d["completeness"]
         led = self.meter.ledger
-        lines = [self.head(
-            "COMPLETENESS (what this read did NOT see, rendered from the "
-            "budget meter's own ledger)")]
+        lines = [self.head("COMPLETENESS")]
 
         ladder = c.get("frame_ladder")
         if ladder:
@@ -904,8 +925,7 @@ class Renderer:
         overlapping parent is demoted below its own children here rather than
         promoted above them."""
         page = self.meta.get("page", "p1")
-        lines = [self.head("NEXT CALLS (ranked by what each is likely to "
-                           "answer, not by size)")]
+        lines = [self.head("NEXT CALLS")]
         candidates = []
         for r in self.listed_regions:
             price = self.meter.price_region(r)

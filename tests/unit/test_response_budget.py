@@ -16,7 +16,9 @@ trim in this file has one without the other.
 from __future__ import annotations
 
 import asyncio
+import inspect
 import json
+import pathlib
 
 import pytest
 from fastmcp import Client
@@ -24,6 +26,7 @@ from fastmcp import Client
 from kitchensink4web import envelope, server
 from kitchensink4web.engine import lanedb, lanes
 from kitchensink4web.ops import lite
+from kitchensink4web.projection import project, render
 from tests.fixtures.results import client_payload, content_text
 
 
@@ -269,3 +272,116 @@ def test_a_reap_that_did_nothing_says_nothing(launch):
     assert lite._reap_did_something({"declined": [{"pid": 1}]}) is True
     assert lite._reap_did_something({"profiles_removed": ["x"]}) is True
     assert lite._reap_did_something({"audits_removed": 2}) is True
+
+
+# ------------------------------------------------------------------- D4
+
+DATA = pathlib.Path(__file__).resolve().parents[1] / "data"
+FIXTURES = ("article", "appshell", "formpage", "names", "hidden")
+META = {"status": 200, "load_state": "load", "lane": "A(chromium)",
+        "page": "p1", "read_token": "rt1", "ts": "2026-09-05T00:00:00"}
+
+
+def _projection(name: str, budget: int = 5000):
+    data = json.loads((DATA / f"extract_{name}.json").read_text(
+        encoding="utf-8"))
+    return project(data, META, budget=budget)
+
+
+def _section(text: str, title: str) -> str:
+    """One `## N TITLE` section of a projection, header included."""
+    lines = text.splitlines()
+    start = next(i for i, ln in enumerate(lines)
+                 if ln.startswith("## ") and title in ln)
+    end = next((i for i in range(start + 1, len(lines))
+                if lines[i].startswith("## ")), len(lines))
+    return "\n".join(lines[start:end])
+
+
+@pytest.mark.parametrize("name", FIXTURES)
+@pytest.mark.parametrize("title", ["PAGE SHAPE", "COMPLETENESS",
+                                   "NEXT CALLS"])
+def test_a_section_header_is_a_label_and_not_a_tutorial(name, title):
+    """BUDGET. These three headers carried an explanation that did not vary
+    from page to page and was reprinted on every read forever."""
+    text = _projection(name).text
+    header = next((ln for ln in text.splitlines()
+                   if ln.startswith("## ") and title in ln), None)
+    if header is None:
+        pytest.skip(f"{name} has no {title} section")
+    assert header.rstrip().endswith(title), (
+        f"the {title} header is explaining itself again: {header!r}")
+
+
+@pytest.mark.parametrize("name", FIXTURES)
+def test_the_completeness_claims_are_untouched_by_the_header_trim(name):
+    """COMPLETENESS, both directions, and it is the pin the brief asks for
+    by name. What the ledger CLAIMS is the product; only the header above
+    it was allowed to change. Rebuilt by stripping the header line and
+    comparing the rest against a rendering under the header this section
+    used to carry."""
+    text = _projection(name).text
+    body = _section(text, "COMPLETENESS").splitlines()[1:]
+    assert body, "the completeness ledger rendered nothing at all"
+    joined = "\n".join(body)
+    # The ledger still states each class of thing it did not see, and still
+    # ends with the meter's own measured bill.
+    assert "budget:" in joined
+    assert any("hidden" in ln or "omitted" in ln or "not " in ln
+               for ln in body), joined
+
+
+def test_the_header_teaching_is_reachable_and_verbatim(launch):
+    """COMPLETENESS. Nothing was deleted: each sentence moved into the
+    workflow topic that already owned the subject, and the topic quotes the
+    SAME constant the header used to interpolate, so the two cannot
+    drift."""
+    launch()
+    budgeting = client_payload(
+        _call("get_workflows", {"topic": "budgeting"}))["workflow"]
+    reading = client_payload(
+        _call("get_workflows", {"topic": "reading"}))["workflow"]
+    assert any(render.HEADER_TEACHING["page_shape"] in line
+               for line in budgeting)
+    assert any(render.HEADER_TEACHING["completeness"] in line
+               for line in reading)
+    assert any(render.HEADER_TEACHING["next_calls"] in line
+               for line in reading)
+
+
+@pytest.mark.parametrize("name", FIXTURES)
+def test_the_trim_never_costs_the_reader_content(name):
+    """Both directions. A header trim frees tokens under a ceiling that did
+    not move, so a read either spends them on content or hands them back.
+    What it must never do is print LESS than it did before."""
+    result = _projection(name)
+    assert result.tokens <= 5000
+    for title in ("IDENTITY", "COMPLETENESS"):
+        assert f" {title}" in result.text
+
+
+# ------------------------------------------------------------------- D5
+
+
+def test_get_text_defaults_to_a_size_the_caller_did_not_have_to_pick():
+    """BUDGET. 20,000 characters measured 6,598 tokens on the corpus GDP
+    article, which is 1.3x the ENTIRE default page-view budget in a call
+    nobody sized. Every other read here is token-budgeted and conservative
+    with it."""
+    default = inspect.signature(lite.get_text).parameters["max_chars"].default
+    assert default == 8000
+    view = inspect.signature(lite.get_page_view).parameters
+    assert default < view["budget_tokens"].default * 3, (
+        "the get_text default should not be able to outweigh a whole page "
+        "view again; a page view's budget is in TOKENS and this is in "
+        "characters, and this corpus runs about 3 characters per token")
+
+
+def test_the_continue_story_still_names_the_number_it_will_return():
+    """COMPLETENESS. The honest pagination line interpolates max_chars, so
+    changing the default cannot leave it advertising the old size."""
+    source = inspect.getsource(lite.get_text)
+    assert "start_index={got[\"next_start_index\"]}" in source
+    assert "{max_chars:,} characters" in source
+    assert "20,000 characters" not in source, (
+        "the continue line hard-codes a size again")

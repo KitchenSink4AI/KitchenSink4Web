@@ -51,6 +51,7 @@ from . import act as _act
 from . import common as _common
 from . import resource as _resource
 from . import wellknown as _wellknown
+from ..projection import render as _render
 from ..engine import (frames, handles as _handles, lanedb as _lanedb, lanes,
                       session as _session)
 from ..errors import (AmbiguousLocation, AuthRequired, BadParams,
@@ -1191,7 +1192,21 @@ async def get_text(
     page: str,
     location: dict | None = None,
     start_index: int = 0,
-    max_chars: int = 20000,
+    # SIZED TO THE CALL THIS SERVER TELLS YOU TO MAKE (fat audit D5). The
+    # default was 20,000, which measured 6,598 tokens on the Wikipedia GDP
+    # article: 1.3x the ENTIRE default page-view budget, in a call the
+    # caller never sized. Every other read here is token-budgeted and
+    # conservative with it (get_page_view 5,000, get_table 5,000).
+    #
+    # 8,000 is the size of the call the content digest actually recommends:
+    # `get_text(location={"ref":"h<n>"})` for one section, which is 2,000
+    # to 8,000 characters on the corpus, so the common targeted read still
+    # completes in ONE call. At the 3.03 characters-per-token this corpus
+    # measures it lands near 2,600 tokens, about half a default page view.
+    # A caller who wants a whole long article passes max_chars and says so;
+    # pagination already exists, already works, and the continue line
+    # already advertises the next call with this number in it.
+    max_chars: int = 8000,
     include_hidden: bool = False,
 ) -> dict:
     """Extract readable prose from a page or one region of it, paginated by
@@ -7014,6 +7029,12 @@ async def get_workflows(topic: str | None = None) -> dict:
             "re-renders, but find_elements(query='Submit', role='button') "
             "survives anything that does not rename the button, and it is "
             "what makes a saved workflow replay months later.",
+            # The other two section-header explanations (fat audit D4),
+            # verbatim, for the same reason as the one in `budgeting`.
+            f"COMPLETENESS in a page view is "
+            f"{_render.HEADER_TEACHING['completeness']}.",
+            f"NEXT CALLS in a page view is "
+            f"{_render.HEADER_TEACHING['next_calls']}.",
         ],
         "budgeting": [
             "budget_tokens is a ceiling the read never exceeds, so the "
@@ -7034,6 +7055,11 @@ async def get_workflows(topic: str | None = None) -> dict:
             "The cheapest page you ever read is the one you read once. A "
             "full read followed by deltas is the pattern; a full read "
             "repeated after every click is the bill.",
+            # Moved out of the PAGE SHAPE section header (fat audit D4),
+            # verbatim. It was 55 tokens reprinted on every read of every
+            # page, and it is the answer to a question a caller asks once.
+            f"PAGE SHAPE in a page view lists "
+            f"{_render.HEADER_TEACHING['page_shape']}.",
         ],
         "troubleshooting": [
             "Page looks empty or wrong: read navigate's verdict first, "
