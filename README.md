@@ -8,7 +8,7 @@ for the price of a paragraph, and starts out unable to change anything at all.
 ## Two numbers that matter
 
 The same page, read two ways. A raw dump of the Treaty of Versailles article on Wikipedia costs
-33,073 tokens of your assistant's memory. This server's first read of it costs 4,495. The
+33,073 tokens of your assistant's memory. This server's first read of it costs 4,306. The
 difference is not compression, it is a different product: a map of the page with a price on every
 region, instead of the whole page whether you wanted it or not.
 
@@ -108,7 +108,7 @@ recommend for the page you are on. It never switches lanes for you.
 |---|---|
 | Lite tool surface | 6.5k |
 | Full surface (all packs) | 16.0k |
-| First read of the Treaty of Versailles article on Wikipedia | 4,495 |
+| First read of the Treaty of Versailles article on Wikipedia | 4,306 |
 | Delta read after one click | 82 |
 
 The budget ladder has 16 rungs; every read reports which rung it printed at and what a deeper
@@ -124,7 +124,7 @@ it off entirely.
 
 ## Testing
 
-905 tests, of which 399 drive a real browser. Beyond the suite, every release passes gate
+1,897 tests, of which 711 drive a real browser. Beyond the suite, every release passes gate
 batteries that re-run the adversarial findings of four attack rounds: prompt injection through
 page content, hidden-text smuggling, credential-theft attempts, gate bypasses, workflow
 replay tampering, and resource abuse. The gates are not aspirational; each one exists because an

@@ -38,7 +38,7 @@ from fastmcp.exceptions import ValidationError as _FmcpValidationError
 from fastmcp.server.middleware import Middleware
 from pydantic import ValidationError as _PydanticValidationError
 
-from . import confirm, envelope, packs, profiles
+from . import __version__, confirm, envelope, packs, profiles
 from .errors import (BadParams, ConfirmationRequired, ReadOnlyMode,
                      Timeout, ValidationFailed)
 from .ops import lite
@@ -51,6 +51,12 @@ envelope.set_redactor(credentials.redactor)
 
 mcp = FastMCP(
     name="kitchensink4web",
+    # THE VERSION A CLIENT IS TOLD, and it has to be this package's. Left
+    # unset, FastMCP answers `initialize` with its OWN version, so the
+    # server introduced itself as 3.4.7 while pyproject, server.json and
+    # both bundle manifests said 1.0.0. Every install screen, every client
+    # log and every bug report a user files reads this field.
+    version=__version__,
     instructions=(
         "Browser automation with a cheap first read. get_page_view returns "
         "an orientation of any page under a token budget it never exceeds, "

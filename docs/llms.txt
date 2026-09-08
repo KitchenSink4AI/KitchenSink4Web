@@ -28,7 +28,7 @@ of which ship with the source.
   mid-session `enable_tools` here, by design: an absent pack is provably
   absent rather than switched off.
 - `get_page_view` is the cheap first read and the one you should reach for.
-  On the frozen Treaty of Versailles article it costs 4,495 tokens at the
+  On the frozen Treaty of Versailles article it costs 4,306 tokens at the
   default 5,000 budget. The same page dumped as visible text costs 33,073, as
   a flat role-and-name listing 64,596, as serialized DOM 691,486.
 - The budget is a hard ceiling, not a target. The read renders at the highest
@@ -169,7 +169,7 @@ human flips, which is a launch-time instruction and not an in-session route.
 
 ## 8. Test evidence
 
-905 tests, 399 of which drive a real browser. Gate batteries re-run the
+1,897 tests, 711 of which drive a real browser. Gate batteries re-run the
 findings of four adversarial attack rounds covering prompt injection through
 page content, hidden-text smuggling, credential-theft attempts, gate
 bypasses, workflow replay tampering, and resource abuse. A live field

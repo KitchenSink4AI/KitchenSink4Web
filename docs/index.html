@@ -16,10 +16,10 @@
     33,073  raw dump of the frozen Treaty of Versailles page (o200k_base,
             cheapest of three dump flavors: visible text 33,073, flat role
             listing 64,596, serialized DOM 691,486)
-    4,495   this server's first read of the same page (rung 6, budget 5,000)
+    4,306   this server's first read of the same page (rung 7, budget 5,000)
     82      delta read after one click (corpus/b/pathological.html)
     19      lite tools / ~6.5k tokens;  52 full / ~16.0k tokens
-    905     tests, 399 of them driving a real browser
+    1,897   tests, 711 of them driving a real browser
     16      rungs on the budget ladder
   The DEPT. 00 map panel quotes the real region rows from
   corpus/a/out/wikipedia_versailles.projection.txt. The DEPT. 00 dump panel
@@ -40,7 +40,7 @@
   STOREFRONT: https://nometalalchemist.github.io/ (do not edit it from here)
 -->
 <title>KitchenSink4Web: Everything plus the kitchen sink for the open web</title>
-<meta name="description" content="A browser MCP server that reads a whole page for the price of a paragraph. A raw dump of one Wikipedia article costs 33,073 tokens; this server's first read of it costs 4,495, and every region is priced before you open it. Starts read-only: the tools that click and type are absent until you switch them on.">
+<meta name="description" content="A browser MCP server that reads a whole page for the price of a paragraph. A raw dump of one Wikipedia article costs 33,073 tokens; this server's first read of it costs 4,306, and every region is priced before you open it. Starts read-only: the tools that click and type are absent until you switch them on.">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🪴</text></svg>">
 <link rel="llms" href="llms.txt" type="text/plain">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -505,7 +505,7 @@ footer a{color:var(--brass)}
     <div class="spec"><span class="n">44 vs 6</span><span class="l" data-i18n="spec.c2">pages your AI can read before its memory fills</span></div>
     <div class="spec"><span class="n">0</span><span class="l" data-i18n="spec.c3">acting tools installed until you flip the switch</span></div>
   </div>
-  <p class="spec-fine rev d4" data-i18n="spec.fine">Measured: the same encyclopedia article costs 33,073 tokens as a raw dump and 4,495 read here, at a typical 200,000-token AI working memory.</p>
+  <p class="spec-fine rev d4" data-i18n="spec.fine">Measured: the same encyclopedia article costs 33,073 tokens as a raw dump and 4,306 read here, at a typical 200,000-token AI working memory.</p>
   <div class="rev d5">
     <a class="btn primary" href="#install" data-i18n="btn.install">Install the Sink</a>
     <a class="btn" href="https://github.com/nometalalchemist/KitchenSink4Web" data-i18n="btn.source">Read the Source</a>
@@ -534,7 +534,7 @@ footer a{color:var(--brass)}
         <h3 data-i18n="demo.goodh">What this server hands your AI instead</h3>
         <div class="meter">
           <span class="cap" data-i18n="demo.meter2">Tokens spent on this page</span>
-          <span class="fig" id="mapFig">4,495</span>
+          <span class="fig" id="mapFig">4,306</span>
         </div>
         <div class="map" id="mapPanel">
           <div class="idline" id="mapId">Treaty of Versailles - Wikipedia · article · 10,737 dom nodes · 51.1 screens</div>
@@ -569,7 +569,7 @@ footer a{color:var(--brass)}
     <div class="tablewrap">
       <table class="scenario">
         <tr><th data-i18n="cmp.h1">"Hey, could you…"</th><th class="us">🪴 <span data-i18n="cmp.h2">This one</span></th><th data-i18n="cmp.h3">Other tools on this shelf (other web-browsing MCPs)</th></tr>
-        <tr><td data-i18n="cr1.q">"Read this article and tell me what actually matters."</td><td class="us" data-i18n="cr1.us">A map first, then only the sections your AI opens: 4,495 tokens for the same article, plus a note about anything left unread.</td><td data-i18n="cr1.oth">The whole page arrives at once, menus and footers included: 33,073 tokens of AI memory for one encyclopedia article.</td></tr>
+        <tr><td data-i18n="cr1.q">"Read this article and tell me what actually matters."</td><td class="us" data-i18n="cr1.us">A map first, then only the sections your AI opens: 4,306 tokens for the same article, plus a note about anything left unread.</td><td data-i18n="cr1.oth">The whole page arrives at once, menus and footers included: 33,073 tokens of AI memory for one encyclopedia article.</td></tr>
         <tr><td data-i18n="cr2.q">"Find the issue about the broken d-pad. There are 771 open ones."</td><td class="us" data-i18n="cr2.us">One search finds it, even inside modern component-built pages, and returns a result your AI can act on.</td><td data-i18n="cr2.oth">Scroll, copy, repeat. The strongest competing tool added a page search in mid-2026.</td></tr>
         <tr><td data-i18n="cr3.q">"Before you read that page: what will it cost me?"</td><td class="us" data-i18n="cr3.us">Every section of the map shows what opening it will cost, before you open it.</td><td data-i18n="cr3.oth">There is no way to ask. You find out what a page cost after you have paid it.</td></tr>
         <tr><td data-i18n="cr4.q">"Fill in this form, but only because I said you could."</td><td class="us" data-i18n="cr4.us">Those tools are not installed until you turn them on, and even then, submitting a form stops and asks you first.</td><td data-i18n="cr4.oth">The clicking and typing tools are always loaded; whether they get used is up to the AI's judgment.</td></tr>
@@ -590,7 +590,7 @@ footer a{color:var(--brass)}
         <tr><th data-i18n="bill.h1">On the meter</th><th class="num" data-i18n="bill.h2">Tools</th><th class="num" data-i18n="bill.h3">Tokens</th><th data-i18n="bill.h4">When it draws</th></tr>
         <tr><td data-i18n="bill.r1">Lite core</td><td class="num">19</td><td class="num">6.5k</td><td data-i18n="bill.w1">From the first message of every session</td></tr>
         <tr><td data-i18n="bill.r2">Every pack switched on</td><td class="num">52</td><td class="num">16.0k</td><td data-i18n="bill.w2">Only when the packs are chosen at launch</td></tr>
-        <tr><td data-i18n="bill.r3">First read of one long article</td><td class="num">·</td><td class="num">4,495</td><td data-i18n="bill.w3">Once, and it never exceeds the budget you set</td></tr>
+        <tr><td data-i18n="bill.r3">First read of one long article</td><td class="num">·</td><td class="num">4,306</td><td data-i18n="bill.w3">Once, and it never exceeds the budget you set</td></tr>
         <tr class="sum"><td data-i18n="bill.r4">The same read again, after one click</td><td class="num">·</td><td class="num">82</td><td data-i18n="bill.w4">Every repeat read, priced on what changed</td></tr>
       </table>
     </div>
@@ -638,7 +638,7 @@ footer a{color:var(--brass)}
     <div class="maturity">
       <h3 data-i18n="maturity.h">Young, and raised in a hard school</h3>
       <p data-i18n="maturity.p">This is the newest product in the family, and the page will not pretend otherwise. Before release we attack our own products deliberately: hostile test rounds that try to trick the safety features, leak data, and break the guarantees, followed by fixes, followed by fresh attacks, until a round comes back empty-handed. What this server has not had yet is a long life in strangers' browsers. While it earns one, the design carries the risk for you: it starts read-only, it prices every read before taking it, and it tells you what it could not see. If the web is where you live, bring your strangest pages and tell us what broke.</p>
-      <div class="maturity-fig"><div class="spec"><span class="n">905</span><span class="l" data-i18n="spec.tests">Tests</span></div></div>
+      <div class="maturity-fig"><div class="spec"><span class="n">1,897</span><span class="l" data-i18n="spec.tests">Tests</span></div></div>
     </div>
     <span class="ticket" data-i18n="svc.ticket">NOW SERVING · TAKE A NUMBER · SAME DESK AS THE WORD, POWERPOINT, AND EXCEL SINKS</span>
     <div class="service-grid">
@@ -769,7 +769,7 @@ var BEDS = [
   ["r36", "Reactions",                 2812],
   ["r37", "Britain",                    678]
 ];
-var BASE = 4495;
+var BASE = 4306;
 
 var wall = document.getElementById("dumpWall");
 var mapPanel = document.getElementById("mapPanel");
@@ -874,7 +874,7 @@ en: {
 "spec.c1": "cheaper page reads, measured on a real article",
 "spec.c2": "pages your AI can read before its memory fills",
 "spec.c3": "acting tools installed until you flip the switch",
-"spec.fine": "Measured: the same encyclopedia article costs 33,073 tokens as a raw dump and 4,495 read here, at a typical 200,000-token AI working memory.",
+"spec.fine": "Measured: the same encyclopedia article costs 33,073 tokens as a raw dump and 4,306 read here, at a typical 200,000-token AI working memory.",
 "cmp.gloss": "(other web-browsing MCPs)",
 "btn.install": "Install the Sink",
 "btn.source": "Read the Source",
@@ -911,7 +911,7 @@ en: {
 "cmp.h2": "This one",
 "cmp.h3": "Other tools on this shelf (other web-browsing MCPs)",
 "cr1.q": "\"Read this article and tell me what actually matters.\"",
-"cr1.us": "A map first, then only the sections your AI opens: 4,495 tokens for the same article, plus a note about anything left unread.",
+"cr1.us": "A map first, then only the sections your AI opens: 4,306 tokens for the same article, plus a note about anything left unread.",
 "cr1.oth": "The whole page arrives at once, menus and footers included: 33,073 tokens of AI memory for one encyclopedia article.",
 "cr2.q": "\"Find the issue about the broken d-pad. There are 771 open ones.\"",
 "cr2.us": "One search finds it, even inside modern component-built pages, and returns a result your AI can act on.",
@@ -1008,7 +1008,7 @@ ko: {
 "spec.c1": "더 싼 페이지 읽기, 실제 기사로 측정한 값",
 "spec.c2": "AI의 기억이 차기 전에 읽을 수 있는 페이지 수",
 "spec.c3": "스위치를 올리기 전까지 설치되는 행동 도구",
-"spec.fine": "측정: 같은 백과사전 기사가 통째로 쏟으면 33,073 토큰, 여기서 읽으면 4,495 토큰이며, AI의 작업 기억은 보통 200,000 토큰입니다.",
+"spec.fine": "측정: 같은 백과사전 기사가 통째로 쏟으면 33,073 토큰, 여기서 읽으면 4,306 토큰이며, AI의 작업 기억은 보통 200,000 토큰입니다.",
 "cmp.gloss": "(다른 웹 브라우징 MCP)",
 "btn.install": "설치하기",
 "btn.source": "소스 보기",
@@ -1045,7 +1045,7 @@ ko: {
 "cmp.h2": "이 도구",
 "cmp.h3": "이 선반의 다른 도구들 (다른 웹 브라우징 MCP)",
 "cr1.q": "\"이 기사 읽고 진짜 중요한 게 뭔지 말해 줘.\"",
-"cr1.us": "먼저 지도, 그다음에는 AI가 여는 구획만. 같은 기사에 4,495토큰, 그리고 읽지 않고 남은 것에 대한 안내까지.",
+"cr1.us": "먼저 지도, 그다음에는 AI가 여는 구획만. 같은 기사에 4,306토큰, 그리고 읽지 않고 남은 것에 대한 안내까지.",
 "cr1.oth": "메뉴와 푸터까지 포함해 페이지 전체가 한꺼번에 옵니다. 백과사전 기사 하나에 AI 기억 33,073토큰.",
 "cr2.q": "\"십자키 고장 관련 이슈 찾아 줘. 열려 있는 게 771개야.\"",
 "cr2.us": "검색 한 번이면 찾아냅니다. 요즘 컴포넌트로 짜인 페이지 안까지 들어가서, AI가 바로 다룰 수 있는 결과를 돌려줍니다.",
@@ -1142,7 +1142,7 @@ ja: {
 "spec.c1": "安いページ読み取り、実際の記事で測定",
 "spec.c2": "AIの記憶がいっぱいになるまでに読めるページ数",
 "spec.c3": "スイッチを入れるまでに入っている操作ツール",
-"spec.fine": "実測: 同じ百科事典の記事は、そのまま流し込むと 33,073 トークン、ここで読むと 4,495 トークン。AIの作業記憶はふつう 200,000 トークンです。",
+"spec.fine": "実測: 同じ百科事典の記事は、そのまま流し込むと 33,073 トークン、ここで読むと 4,306 トークン。AIの作業記憶はふつう 200,000 トークンです。",
 "cmp.gloss": "（ほかのウェブ閲覧MCP）",
 "btn.install": "導入する",
 "btn.source": "ソースを読む",
@@ -1179,7 +1179,7 @@ ja: {
 "cmp.h2": "こちら",
 "cmp.h3": "この棚のほかの道具（ほかのウェブ閲覧MCP）",
 "cr1.q": "「この記事を読んで、本当に大事なところを教えて。」",
-"cr1.us": "まず地図、そのあとは AI が開いた区画だけ。同じ記事で 4,495 トークン、それに読まれずに残ったものの注記も付きます。",
+"cr1.us": "まず地図、そのあとは AI が開いた区画だけ。同じ記事で 4,306 トークン、それに読まれずに残ったものの注記も付きます。",
 "cr1.oth": "メニューもフッターも込みで、ページ全体が一度に届きます。百科事典の記事ひとつで AI の記憶 33,073 トークン。",
 "cr2.q": "「十字キーの不具合のissueを探して。オープンなのが771件あるけど。」",
 "cr2.us": "検索ひとつで見つかります。いまどきの部品で組まれたページの中まで探し、AI がそのまま扱える結果を返します。",
@@ -1276,7 +1276,7 @@ zh: {
 "spec.c1": "更便宜的页面读取，用真实文章测得",
 "spec.c2": "AI 记忆填满之前能读的页面数",
 "spec.c3": "在你打开开关之前装上的操作工具",
-"spec.fine": "实测：同一篇百科文章，整页倾倒要 33,073 个令牌，在这里读只要 4,495 个，而 AI 的工作记忆通常是 200,000 个令牌。",
+"spec.fine": "实测：同一篇百科文章，整页倾倒要 33,073 个令牌，在这里读只要 4,306 个，而 AI 的工作记忆通常是 200,000 个令牌。",
 "cmp.gloss": "（其他网页浏览 MCP）",
 "btn.install": "装上这套水槽",
 "btn.source": "阅读源码",
@@ -1313,7 +1313,7 @@ zh: {
 "cmp.h2": "这一个",
 "cmp.h3": "这个货架上的其他工具（其他网页浏览 MCP）",
 "cr1.q": "“把这篇文章读一下，告诉我真正重要的是什么。”",
-"cr1.us": "先给地图，然后只算你的 AI 打开的那些板块：同一篇文章 4,495 个令牌，外加一份没读到的东西的说明。",
+"cr1.us": "先给地图，然后只算你的 AI 打开的那些板块：同一篇文章 4,306 个令牌，外加一份没读到的东西的说明。",
 "cr1.oth": "整页一次性送到，菜单和页脚一并奉上：一篇百科文章要花掉 33,073 个令牌的 AI 记忆。",
 "cr2.q": "“找一下十字键坏掉那个 issue。开着的有 771 个。”",
 "cr2.us": "一次搜索就找得到，连现代组件拼出来的页面内部也能进去，返回的结果你的 AI 可以直接拿来用。",
@@ -1410,7 +1410,7 @@ de: {
 "spec.c1": "günstigere Seitenlesungen, an einem echten Artikel gemessen",
 "spec.c2": "Seiten, die Ihre KI lesen kann, bevor ihr Gedächtnis voll ist",
 "spec.c3": "handelnde Werkzeuge installiert, bis Sie den Schalter umlegen",
-"spec.fine": "Gemessen: derselbe Lexikonartikel kostet 33.073 Tokens als Rohabzug und 4.495, hier gelesen, bei einem typischen KI-Arbeitsgedächtnis von 200.000 Tokens.",
+"spec.fine": "Gemessen: derselbe Lexikonartikel kostet 33.073 Tokens als Rohabzug und 4.306, hier gelesen, bei einem typischen KI-Arbeitsgedächtnis von 200.000 Tokens.",
 "cmp.gloss": "(andere Web-Browsing-MCPs)",
 "btn.install": "Die Spüle einbauen",
 "btn.source": "Den Quelltext lesen",
@@ -1447,7 +1447,7 @@ de: {
 "cmp.h2": "Dieses hier",
 "cmp.h3": "Andere Werkzeuge in diesem Regal (andere Web-Browsing-MCPs)",
 "cr1.q": "\"Lies diesen Artikel und sag mir, worauf es wirklich ankommt.\"",
-"cr1.us": "Erst eine Karte, dann nur die Abschnitte, die Ihre KI öffnet: 4.495 Tokens für denselben Artikel, dazu ein Hinweis auf alles, was ungelesen blieb.",
+"cr1.us": "Erst eine Karte, dann nur die Abschnitte, die Ihre KI öffnet: 4.306 Tokens für denselben Artikel, dazu ein Hinweis auf alles, was ungelesen blieb.",
 "cr1.oth": "Die ganze Seite kommt auf einmal, Menüs und Fußzeilen inklusive: 33.073 Tokens KI-Gedächtnis für einen Lexikonartikel.",
 "cr2.q": "\"Finde das Issue zum kaputten Steuerkreuz. Es sind 771 offene.\"",
 "cr2.us": "Eine Suche findet es, auch in modernen, aus Komponenten gebauten Seiten, und liefert ein Ergebnis zurück, mit dem Ihre KI arbeiten kann.",
@@ -1544,7 +1544,7 @@ fr: {
 "spec.c1": "lectures de page moins chères, mesurées sur un vrai article",
 "spec.c2": "pages que votre IA peut lire avant que sa mémoire soit pleine",
 "spec.c3": "outils d'action installés tant que vous n'avez pas basculé l'interrupteur",
-"spec.fine": "Mesuré : le même article d'encyclopédie coûte 33 073 jetons en déversement brut et 4 495 lu ici, pour une mémoire de travail d'IA typique de 200 000 jetons.",
+"spec.fine": "Mesuré : le même article d'encyclopédie coûte 33 073 jetons en déversement brut et 4 306 lu ici, pour une mémoire de travail d'IA typique de 200 000 jetons.",
 "cmp.gloss": "(autres MCP de navigation web)",
 "btn.install": "Installer l'évier",
 "btn.source": "Lire le code source",
@@ -1581,7 +1581,7 @@ fr: {
 "cmp.h2": "Celui-ci",
 "cmp.h3": "Les autres outils de ce rayonnage (autres MCP de navigation web)",
 "cr1.q": "\"Lis cet article et dis-moi ce qui compte vraiment.\"",
-"cr1.us": "D'abord une carte, ensuite seulement les sections que votre IA ouvre : 4 495 jetons pour le même article, plus une note sur ce qui est resté non lu.",
+"cr1.us": "D'abord une carte, ensuite seulement les sections que votre IA ouvre : 4 306 jetons pour le même article, plus une note sur ce qui est resté non lu.",
 "cr1.oth": "La page entière arrive d'un coup, menus et pieds de page compris : 33 073 jetons de mémoire d'IA pour un seul article d'encyclopédie.",
 "cr2.q": "\"Trouve le ticket sur la croix directionnelle cassée. Il y en a 771 d'ouverts.\"",
 "cr2.us": "Une seule recherche le trouve, y compris à l'intérieur des pages modernes assemblées en composants, et renvoie un résultat exploitable par votre IA.",
@@ -1678,7 +1678,7 @@ es: {
 "spec.c1": "lecturas de página más baratas, medidas en un artículo real",
 "spec.c2": "páginas que su IA puede leer antes de que su memoria se llene",
 "spec.c3": "herramientas de acción instaladas hasta que usted acciona el interruptor",
-"spec.fine": "Medido: el mismo artículo de enciclopedia cuesta 33.073 tokens volcado en bruto y 4.495 leído aquí, con una memoria de trabajo de IA típica de 200.000 tokens.",
+"spec.fine": "Medido: el mismo artículo de enciclopedia cuesta 33.073 tokens volcado en bruto y 4.306 leído aquí, con una memoria de trabajo de IA típica de 200.000 tokens.",
 "cmp.gloss": "(otros MCP de navegación web)",
 "btn.install": "Instalar el fregadero",
 "btn.source": "Leer el código",
@@ -1715,7 +1715,7 @@ es: {
 "cmp.h2": "Esta",
 "cmp.h3": "Otras herramientas de este estante (otros MCP de navegación web)",
 "cr1.q": "\"Lee este artículo y dime qué importa de verdad.\"",
-"cr1.us": "Primero un mapa y después solo las secciones que su IA abre: 4.495 tokens para el mismo artículo, más una nota sobre lo que quedó sin leer.",
+"cr1.us": "Primero un mapa y después solo las secciones que su IA abre: 4.306 tokens para el mismo artículo, más una nota sobre lo que quedó sin leer.",
 "cr1.oth": "La página entera llega de golpe, menús y pies de página incluidos: 33.073 tokens de memoria de la IA para un artículo de enciclopedia.",
 "cr2.q": "\"Busca la incidencia sobre la cruceta rota. Hay 771 abiertas.\"",
 "cr2.us": "Una sola búsqueda lo encuentra, incluso dentro de las páginas modernas construidas con componentes, y devuelve un resultado con el que su IA puede actuar.",

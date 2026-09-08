@@ -25,6 +25,7 @@ The rules, from PLAN 8 and DESIGN 5:
 from __future__ import annotations
 
 import asyncio
+import functools
 import re
 from pathlib import Path
 
@@ -421,6 +422,14 @@ def test_version_is_consistent_across_manifests():
         f"src/kitchensink4web/__init__.py says "
         f"{kitchensink4web.__version__}, pyproject says {version}")
 
+    # SEVEN fields, since 2026-09-08. The six above are files, and files
+    # were all this guard checked while the running server introduced itself
+    # to every client as 3.4.7: FastMCP answers `initialize` with its own
+    # version when the constructor is not given one.
+    assert server.mcp.version == version, (
+        f"the server reports version {server.mcp.version} over the wire and "
+        f"pyproject says {version}")
+
 
 def test_no_beta_language_in_public_copy():
     """KS4Web ships as a full 1.0 born-right (author ruling, the XL
@@ -443,42 +452,125 @@ def test_no_published_surface_overclaims_the_single_read():
                 f"{where} overclaims the single read"
 
 
-def test_published_numbers_match_the_measuring_snapshot():
-    """Every figure the README and the page publish is in the snapshot the
-    measuring script writes. A number that moved and was not re-published
-    fails here rather than being spotted by a reader."""
-    import json
+# --------------------------------------- the published figures, against LIVE
+#
+# The guard that used to stand here compared the published prose to
+# `tools/readme_numbers_snapshot.json`, a file written by the same script that
+# stamps the prose. Both sides of that comparison move together, so a figure
+# that went stale in the product went stale in the snapshot at the same
+# moment and the guard agreed with it. V-21 already found one instance of
+# exactly that (the tool counts) and fixed it by asking the live process; the
+# rest of the figures are asked live here, for the same reason.
+#
+# What can be measured without a browser is measured in this file. The page
+# reads (the dump figure, the first-read projection, the delta) need a real
+# page and live in `tests/browser/test_published_numbers_live.py`.
 
-    snap = ROOT / "tools" / "readme_numbers_snapshot.json"
-    assert snap.exists(), "tools/readme_numbers_snapshot.json is missing"
-    fill = json.loads(snap.read_text(encoding="utf-8"))["fill"]
-    files = _published_files()
-    readme = files.get("README.md", "")
-    page = files.get("docs/index.html", "")
-    for key in ("RAW_DUMP_TOKENS", "PROJECTION_TOKENS", "DELTA_TOKENS",
-                "LITE_SURFACE_TOKENS", "FULL_SURFACE_TOKENS"):
-        assert str(fill[key]) in readme, \
-            f"README does not carry the measured {key} ({fill[key]})"
-    for key in ("RAW_DUMP_TOKENS", "PROJECTION_TOKENS"):
-        assert str(fill[key]) in page, \
-            f"the page does not carry the measured {key} ({fill[key]})"
-    assert str(fill["RUNG_COUNT"]) in readme
 
-    # The test count is the one published figure that moves every time
-    # somebody writes a test, so an exact match would turn "added a test"
-    # into "broke the suite". The rule is the family's own: never overstate,
-    # and do not go stale. An undercount is the honest direction, a claim of
-    # more tests than exist is not, and a figure more than 5 percent behind
-    # the suite is one nobody has looked at.
-    published = _published_test_counts()
-    measured = int(fill["TEST_COUNT"])
-    for where, claimed in published.items():
+@functools.lru_cache(maxsize=1)
+def _live_test_count() -> dict[str, int]:
+    """pytest's own collection of both suites, run right now.
+
+    `--collect-only` imports the test modules and stops, so this cannot
+    recurse into itself, and it costs one import pass per directory."""
+    import subprocess
+    import sys
+
+    counts = {}
+    for name in ("unit", "browser"):
+        proc = subprocess.run(
+            [sys.executable, "-X", "utf8", "-m", "pytest", f"tests/{name}",
+             "--collect-only", "-q", "-p", "no:cacheprovider"],
+            cwd=str(ROOT), capture_output=True, text=True,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        match = re.search(r"(\d+) tests? collected", proc.stdout)
+        assert match, (
+            f"collecting tests/{name} produced no count "
+            f"(exit {proc.returncode}): {proc.stdout[-800:]}")
+        assert proc.returncode == 0, (
+            f"collecting tests/{name} exited {proc.returncode}: "
+            f"{proc.stdout[-800:]}")
+        counts[name] = int(match.group(1))
+    counts["total"] = counts["unit"] + counts["browser"]
+    return counts
+
+
+def test_the_published_test_count_matches_a_live_collection():
+    """The suite count as the surfaces state it, against what pytest
+    collects in this working tree at this moment.
+
+    The test count is the one published figure that moves every time
+    somebody writes a test, so an exact match would turn "added a test"
+    into "broke the suite". The rule is the family's own: never overstate,
+    and do not go stale. An undercount is the honest direction, a claim of
+    more tests than exist is not, and a figure more than 5 percent behind
+    the suite is one nobody has looked at."""
+    live = _live_test_count()
+    measured = live["total"]
+    for where, claimed in _published_test_counts().items():
         assert claimed <= measured, (
-            f"{where} claims {claimed} tests and the suite collects "
+            f"{where} claims {claimed} tests and a live collection finds "
             f"{measured}. Never publish more evidence than exists.")
         assert claimed >= measured * 0.95, (
-            f"{where} claims {claimed} tests against a suite of {measured}. "
-            f"Re-run tools/measure_readme_numbers.py and restamp.")
+            f"{where} claims {claimed} tests against a live collection of "
+            f"{measured}. Re-run tools/measure_readme_numbers.py and "
+            f"restamp.")
+
+    # The browser figure rides in the same sentence as the total on every
+    # surface, and it is the harder half of the claim: "drives a real
+    # browser" is the part a reader is entitled to check.
+    for where, claimed in _published_browser_counts().items():
+        assert claimed <= live["browser"], (
+            f"{where} claims {claimed} browser tests and a live collection "
+            f"finds {live['browser']}. Never publish more evidence than "
+            f"exists.")
+        assert claimed >= live["browser"] * 0.95, (
+            f"{where} claims {claimed} browser tests against a live "
+            f"collection of {live['browser']}. Re-run "
+            f"tools/measure_readme_numbers.py and restamp.")
+
+
+def test_the_published_surface_and_ladder_figures_match_this_build():
+    """The two surface token figures and the rung count, measured off the
+    live registry and the live ladder rather than read out of a file."""
+    from kitchensink4web import packs, projection
+
+    def _surface_tokens(**kw) -> str:
+        server.configure(**kw)
+        tools = {t.name: t for t in asyncio.run(server.mcp.list_tools())}
+        total = sum(packs.approx_tokens(t) for t in tools.values())
+        return f"{total / 1000:.1f}k"
+
+    try:
+        lite = _surface_tokens(read_only=False)
+        full = _surface_tokens(mode="full", read_only=False)
+    finally:
+        server.configure(read_only=False)
+
+    readme = _published_files().get("README.md", "")
+    assert lite in readme, (
+        f"README does not carry the measured lite surface figure ({lite})")
+    assert full in readme, (
+        f"README does not carry the measured full surface figure ({full})")
+    assert str(len(projection.RUNGS)) in readme, (
+        f"README does not carry the measured rung count "
+        f"({len(projection.RUNGS)})")
+
+
+def _published_browser_counts() -> dict[str, int]:
+    """The browser-test figure as each surface states it."""
+    files = _published_files()
+    out = {}
+    patterns = {
+        "README.md": r"tests, of which (\d[\d,]*) drive a real browser",
+        "docs/llms.txt": r"tests, (\d[\d,]*) of which drive a real browser",
+        "docs/index.html": r"tests, (\d[\d,]*) of them driving a real browser",
+    }
+    for where, pattern in patterns.items():
+        match = re.search(pattern, files.get(where, ""))
+        assert match, f"{where} does not state a browser-test count"
+        out[where] = int(match.group(1).replace(",", ""))
+    return out
 
 
 def _published_test_counts() -> dict[str, int]:
@@ -510,13 +602,19 @@ def test_the_comparison_table_and_the_demo_quote_the_same_numbers():
     """DEPT. 02's first row cites the two figures DEPT. 00 demonstrates. Two
     numbers for one measurement, on one page, is the failure that a reader
     catches before any of us does. Checked in every language, since the
-    figures ride inside translated sentences."""
-    import json
+    figures ride inside translated sentences.
 
+    The two figures are read off the page's own demo tiles rather than out
+    of a file beside them. The tiles are what the browser guard measures
+    against a real read, so the chain here runs measurement -> tile -> every
+    locale, with no link that can go stale on its own."""
     page = _published_files().get("docs/index.html", "")
-    fill = json.loads((ROOT / "tools" / "readme_numbers_snapshot.json")
-                      .read_text(encoding="utf-8"))["fill"]
-    raw, projected = fill["RAW_DUMP_TOKENS"], fill["PROJECTION_TOKENS"]
+    raw_tile = re.search(r'<span class="fig">([\d,]+)</span>', page)
+    map_tile = re.search(r'<span class="fig" id="mapFig">([\d,]+)</span>',
+                         page)
+    assert raw_tile and map_tile, \
+        "the demo tiles no longer state the two figures"
+    raw, projected = raw_tile.group(1), map_tile.group(1)
 
     # Digit groups are punctuated per locale (33,073 / 33.073 / 33 073), so
     # the check is on the digits, not on the rendered separator.
