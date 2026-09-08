@@ -351,6 +351,55 @@ def _submitter_hay(census: dict, names: tuple) -> str:
     return squash(census.get("submitter"), *names)
 
 
+#: WHAT A SEARCH BOX IS, in the only vocabulary this module has to hand.
+#: Matched against the form's action path and against the accessible names
+#: of the control that was touched.
+SEARCH_TERMS: tuple[str, ...] = (
+    "search", "find", "lookup", "look up", "query", "browse",
+    "suchen", "suche", "buscar", "busqueda", "rechercher", "recherche",
+    "cerca", "ricerca", "pesquisar", "zoeken",
+    "검색", "찾기", "検索", "搜索", "搜尋",
+)
+
+
+def _is_search_shaped(census: dict, path: str, names: tuple = ()) -> bool:
+    """Is this the site's search box rather than its checkout?
+
+    THE PORKBUN FALSE POSITIVE (live purchase field test, 2026-09-08). Their
+    domain search form is a one-field GET that posts to `/checkout/search`,
+    and `checkout` is in the strong payment vocabulary, so the path alone
+    classified a search box as a payment form and the submit failed closed.
+    On that site there was a URL-addressable search to fall back to; on a
+    site without one it is a hard stop on a search box, and the `research`
+    consent scope explicitly permits submitting query-shaped forms, so the
+    classifier was overriding the exact case the scope carves out.
+
+    EVERY CONDITION IS REQUIRED, and together they describe a form that
+    cannot move money: one field, sent by GET, no payment field anywhere in
+    it, no password or one-time code, and something in its path or in the
+    control's own name that says search. A checkout form fails several of
+    these at once -- it collects more than one field, it POSTs, and it
+    carries a payment field -- so nothing that takes a payment can wear this
+    exemption.
+
+    It exempts ONLY the weak path signal. A one-field GET form whose button
+    says "Pay now", or which prints a price, still classifies: what the
+    control SAYS is a stronger claim than what the endpoint is called, and
+    this narrows the weaker of the two."""
+    if census.get("payment") or census.get("secret"):
+        return False
+    if str(census.get("method") or "GET").upper() != "GET":
+        return False
+    count = census.get("field_count")
+    if not isinstance(count, int) or count != 1:
+        return False
+    if has_amount(census.get("submitter"), *names):
+        return False
+    if matches(squash(" ".join(str(n or "") for n in names)), SEARCH_TERMS):
+        return True
+    return bool(matches(path, SEARCH_TERMS))
+
+
 def _payment_reason(census: dict, submitter: str, path: str,
                     names: tuple = ()) -> str | None:
     """Why this submission is a payment, or None.
@@ -363,9 +412,17 @@ def _payment_reason(census: dict, submitter: str, path: str,
     looked."""
     if census.get("payment"):
         return "the form carries a payment-shaped field"
-    hit = matches(submitter, PAYMENT_TERMS) or matches(path, PAYMENT_TERMS)
+    # THE SUBMITTER ROUTE IS ABSOLUTE. What the button says is the site
+    # telling you what the button does, and no exemption below touches it.
+    hit = matches(submitter, PAYMENT_TERMS)
     if hit:
         return f"the submission is named {hit!r}"
+    # THE PATH ROUTE IS THE WEAKER CLAIM and it is the one a search box
+    # trips: `/checkout/search` contains `checkout`. See `_is_search_shaped`.
+    if not _is_search_shaped(census, path, names):
+        hit = matches(path, PAYMENT_TERMS)
+        if hit:
+            return f"the submission is named {hit!r}"
     if has_amount(census.get("submitter"), *names):
         hit = matches(submitter, PAYMENT_CONFIRM) or \
             matches(path, PAYMENT_PATHS)

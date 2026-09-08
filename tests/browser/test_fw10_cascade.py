@@ -23,6 +23,7 @@ and a slot with sessions still on it must never have its driver stopped.
 from __future__ import annotations
 
 import asyncio
+import json as _json
 
 import pytest
 
@@ -415,3 +416,84 @@ def test_a_driver_this_cannot_see_is_treated_as_alive():
         _connection = _connection()
 
     assert _session.driver_alive(_Dead()) is False
+
+
+# ============ items 9 and 12: the live purchase field test, over real pages
+
+
+def test_status_never_hands_back_a_capability_url(session_factory,
+                                                  fixture_site):
+    """ITEM 9, END TO END, on a real page carrying a real query and fragment.
+
+    The status poll the product recommends for watching a handoff returned a
+    live Stripe Checkout URL in the clear, with its `cs_live_` id and full
+    fragment. The first cut of this pin asserted only that no `?` or `#`
+    appeared, which `about:blank` satisfies for free and which therefore
+    passed against the unfixed tree; a pin that a bug passes is not a pin.
+    So the page really carries both, and both really have to go."""
+    async def go():
+        sess = await session_factory()
+        page = sess.focused
+        await lite.navigate(
+            page=page,
+            url=f"{fixture_site}/a/wikipedia_versailles.html"
+                f"?session_token=cs_live_abc123def456#fidkdWxOYHwn")
+        # BEFORE the handoff the caller gets the whole URL, which is the
+        # both-direction half: this rule is not "shorten every URL".
+        row = lite._tab_list(sess)[0]
+        assert "session_token" in row["url"], row
+        assert "url_redacted" not in row
+
+        sess.handed_off_at = 1.0
+        row = lite._tab_list(sess)[0]
+        assert "cs_live_abc123def456" not in row["url"], row
+        assert "fidkdWxOYHwn" not in row["url"], row
+        assert "?" not in row["url"] and "#" not in row["url"], row
+        assert row["url"].endswith("/a/wikipedia_versailles.html"), (
+            "the path still says WHERE the human is, which is what a "
+            "watcher polls for")
+        assert "url_redacted" in row, (
+            "a redaction that does not say so is indistinguishable from a "
+            "page that had no query")
+
+        status = await lite.manage_session(action="status")
+        blob = _json.dumps(status)
+        assert "cs_live_abc123def456" not in blob
+        assert "fidkdWxOYHwn" not in blob
+
+    run(go())
+
+
+def test_a_handoff_marks_the_session_and_says_what_changes(session_factory):
+    async def go():
+        sess = await session_factory()
+        assert getattr(sess, "handed_off_at", None) is None
+        out = await lite.manage_session(action="handoff",
+                                        session=sess.session_id)
+        assert "url_reporting" in out
+        assert "credential" in out["url_reporting"]
+        live = MANAGER.session(out["session"])
+        assert live.handed_off_at is not None
+        await MANAGER.close(live.session_id)
+
+    run(go())
+
+
+def test_pages_is_never_an_integer_anywhere(session_factory):
+    """ITEM 12. `pages` was a list from open and an int from status, and a
+    field watcher crashed on exactly that after a clean handoff."""
+    async def go():
+        opened = await lite.manage_session(action="open")
+        try:
+            assert isinstance(opened["pages"], list), opened["pages"]
+            status = await lite.manage_session(action="status")
+            for row in status["sessions"]:
+                assert "pages" not in row, (
+                    "status rows carry page_count and open_pages; a `pages` "
+                    "key here is the type ambiguity coming back")
+                assert isinstance(row["page_count"], int)
+                assert isinstance(row["open_pages"], list)
+        finally:
+            await MANAGER.close(opened["session"])
+
+    run(go())

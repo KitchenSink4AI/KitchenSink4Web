@@ -463,6 +463,15 @@ class Session:
     #: browser died" and "this browser died after a wall" changes what a
     #: caller should do next.
     walled_origins: set[str] = field(default_factory=set)
+    #: WHEN THE HUMAN TOOK THIS SESSION OVER, or None. Set by
+    #: `manage_session(action='handoff')` and never cleared: a handoff is a
+    #: one-way statement that this browser is the human's now, and a session
+    #: that quietly became the agent's again would be the trap the handoff
+    #: exists to prevent. Every surface that reports a page URL reads it,
+    #: because after a handoff the URL a human navigated to can itself be a
+    #: credential (2026-09-08 live purchase field test: a status poll handed
+    #: the agent a live Stripe Checkout capability URL).
+    handed_off_at: float | None = None
 
     # ----------------------------------------------------- the focused jar
 
@@ -1515,9 +1524,16 @@ class SessionManager:
             reason = "crash" if session.browser_alive() is False \
                 else "explicit_close"
         urls = []
+        handed_off = getattr(session, "handed_off_at", None) is not None
         for record in session.pages.values():
             try:
-                urls.append(record.page.url)
+                # A TOMBSTONE OUTLIVES THE SESSION, so it is the last place
+                # a capability URL should be written down. Same rule as the
+                # live surfaces, applied where the record is durable.
+                from ..policy import credentials as _cred
+                safe, _note = _cred.safe_page_url(record.page.url,
+                                                  handed_off=handed_off)
+                urls.append(safe)
             except Exception:
                 pass
         stone = {

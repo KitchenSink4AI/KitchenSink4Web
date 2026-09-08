@@ -169,7 +169,7 @@ human flips, which is a launch-time instruction and not an in-session route.
 
 ## 8. Test evidence
 
-1,897 tests, 711 of which drive a real browser. Gate batteries re-run the
+2,006 tests, 733 of which drive a real browser. Gate batteries re-run the
 findings of four adversarial attack rounds covering prompt injection through
 page content, hidden-text smuggling, credential-theft attempts, gate
 bypasses, workflow replay tampering, and resource abuse. A live field

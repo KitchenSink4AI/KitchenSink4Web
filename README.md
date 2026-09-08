@@ -143,7 +143,7 @@ older `KS4WEB_NO_UPDATE_CHECK=1` spelling is still honored.
 
 ## Testing
 
-1,897 tests, of which 711 drive a real browser. Beyond the suite, every release passes gate
+2,006 tests, of which 733 drive a real browser. Beyond the suite, every release passes gate
 batteries that re-run the adversarial findings of four attack rounds: prompt injection through
 page content, hidden-text smuggling, credential-theft attempts, gate bypasses, workflow
 replay tampering, and resource abuse. The gates are not aspirational; each one exists because an

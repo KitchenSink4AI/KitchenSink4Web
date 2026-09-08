@@ -5597,15 +5597,29 @@ def _tab_list(sess) -> list[dict]:
     `locate()` was refusing every read and act on it as dead, and the tab
     list is the one that reads as authoritative."""
     browser_dead = sess.browser_alive() is False
+    # THE ONE CHOKE POINT FOR EVERY URL THIS SERVER REPORTS ABOUT A PAGE
+    # (fix wave 10, the live-purchase field test). Ten call sites reach this
+    # function: manage_session open, status, handoff, and every manage_tabs
+    # branch. A URL can BE the credential, and after a handoff the human is
+    # the one holding it, so this is where the rule lives rather than at ten
+    # places that would drift.
+    handed_off = getattr(sess, "handed_off_at", None) is not None
     out = []
     for record in sess.pages.values():
         try:
             url = record.page.url
         except Exception:
             url = "(closing)"
+        url, redacted = _credentials.safe_page_url(url,
+                                                   handed_off=handed_off)
         row = {"page": record.handle, "url": url,
                "focused": record.handle == sess.focused,
                "parked": record.parked}
+        if redacted:
+            # SAID OUT LOUD, always. A caller reading a URL with no query
+            # cannot tell a redacted one from a page that had no query, and
+            # `take_screenshot` reports `masked_fields` for the same reason.
+            row["url_redacted"] = redacted
         if len(sess.contexts) > 1:
             # Stated only when it can matter. A single-jar session printing
             # "context: c1" on every row would be noise; a two-jar session
@@ -5946,9 +5960,18 @@ async def manage_session(
                 f"Cookies carried over and the focused page was reopened; "
                 f"localStorage did not carry, and refs from the old "
                 f"session are gone. Use the new handles.")
+        # THE MARKER, set before the payload is built so this very response
+        # is already redacted. One-way by design: nothing clears it.
+        sess.handed_off_at = time.time()
         return {"session": sess.session_id, "handoff": "the headed window is "
                 "yours; nothing is automated until you call manage_session "
                 "again", "reason": reason,
+                "url_reporting": (
+                    "from now on this session's page URLs are reported "
+                    "without their query strings, fragments, or any path "
+                    "segment carrying a minted id. The human is driving, "
+                    "and a URL they land on can itself be a credential. "
+                    "Where anything was taken out the row says so."),
                 **({"upgraded": upgraded} if upgraded else {}),
                 "pages": _tab_list(sess)}
     if action == "export_handle":
@@ -6466,7 +6489,16 @@ def _session_status(sess) -> dict:
                         for pid in c.journal.survivors()})
     row = {
         "session": sess.session_id, "lane": sess.spec.label,
-        "pages": len(sess.pages), "focused": sess.focused,
+        # `page_count`, NOT `pages` (live purchase field test, O9). This was
+        # the one site in the tool where `pages` was an integer; the other
+        # eight all return the list, and a watcher that iterated the status
+        # row got `TypeError: 'int' object is not iterable` right after a
+        # clean handoff, which is the worst place to take an avoidable
+        # exception. The key is renamed rather than retyped so the break is
+        # a loud KeyError at the one call site that read it, instead of a
+        # silent change of meaning; `open_pages` below is and always was the
+        # list, and `pages` now means the list everywhere or nothing.
+        "page_count": len(sess.pages), "focused": sess.focused,
         "profile_dir": sess.profile_dir,
         "owned_pids": sorted({pid for c in sess.contexts.values()
                               for pid in c.journal.pids}),

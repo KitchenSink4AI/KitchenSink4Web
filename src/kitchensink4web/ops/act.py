@@ -1804,8 +1804,35 @@ async def verify(page, node_ref: str | None, before: dict) -> dict:
         changes.append("the DOM changed")
         effect = effect or "dom-changed"
     if changes:
-        return {"effect": effect or "changed", "details": changes,
-                "none_observed": False}
+        out = {"effect": effect or "changed", "details": changes,
+               "none_observed": False}
+        # WHAT THIS CHECK CANNOT HAVE SEEN (live purchase field test, O6).
+        # The outcome is read once, `_SETTLE_MS` after the dispatch, so an
+        # effect the page completes over the network lands after this
+        # answer. The measured case: a click on "Add to cart" returned
+        # `dom-changed`, an immediate verification read still showed the old
+        # badge, and a re-read seconds later showed the new one. An agent
+        # that trusts its own verification read there concludes the add
+        # failed and clicks again, which on a cart is a double charge.
+        #
+        # Stated rather than fixed by waiting longer, because there is no
+        # number that is right: the honest answer is that this window is
+        # bounded and the page's is not, plus the call that CAN wait for a
+        # specific outcome. Attached only where a DOM mutation was actually
+        # seen, since that is the shape whose settling is in doubt; a
+        # navigation or a focus move is complete when it is observed.
+        if after.get("mutated"):
+            out["may_still_be_settling"] = (
+                f"this outcome was read {_SETTLE_MS} ms after the action. A "
+                f"page that updates over the network finishes after that, so "
+                f"a read taken right now can still show the state from "
+                f"before this action. To confirm an outcome rather than "
+                f"assume it, wait for the thing you expect with "
+                f"wait_for(condition='text', value=...) or "
+                f"condition='selector', and do not re-issue the action on "
+                f"the strength of an immediate read: a repeated click is a "
+                f"second action, not a retry.")
+        return out
     return {
         "effect": "none-observed",
         "details": [],

@@ -786,3 +786,152 @@ def secret_value(ref: Any) -> str:
         f"registered names are {secret_ref_names() or 'none'}. A human adds "
         f"one at launch by setting {ENV_SECRET_PREFIX}<NAME> in the "
         f"environment, which is a settings choice no tool call can make.")
+
+
+# --------------------------------------------------- capability URLs (fw10)
+#
+# A URL CAN BE THE CREDENTIAL. The live purchase field test of 2026-09-08
+# caught the sharpest version of it: after `manage_session(action='handoff')`
+# gave the headed window to the human for a real Stripe payment, the status
+# poll the product itself recommends for watching returned
+#
+#     https://checkout.stripe.com/c/pay/cs_live_<...>#fidkdWxOYHwn<...>
+#
+# in the clear, to the agent, during the exact window the handoff exists to
+# keep the agent out of. Possession of that string is enough to open the
+# author's real payment session, and it went into the watcher's log file on
+# disk. The vault above cannot help: it redacts values it has OBSERVED being
+# set as secrets, and nothing ever "set" this one. It is a capability that
+# the site minted and put in a URL.
+#
+# The rule this implements has two triggers and one shape. The triggers are
+# a HANDED-OFF session (the human is driving; the agent needs to know WHERE
+# they are and never the credential that got them there) and a PAYMENT
+# ORIGIN (true whether or not a handoff happened). The shape is: the query
+# and the fragment go entirely, and any path segment that looks like a
+# minted token goes too, because in the leaked URL above the `cs_live_` id
+# was in the PATH and an origin-plus-path rule would have published it.
+#
+# EVERY REDACTION SAYS SO. A caller reading a URL with no query cannot tell
+# a redacted URL from a page that had no query, and the difference matters,
+# which is the same reason `take_screenshot` reports `masked_fields`.
+
+#: Hosts whose URLs carry payment capabilities. Suffix-matched against the
+#: host, so `checkout.stripe.com` matches `stripe.com`. Deliberately short
+#: and deliberately not a general "does this look financial" guess: every
+#: entry is a checkout host that mints capability URLs.
+PAYMENT_URL_HOSTS: tuple[str, ...] = (
+    "stripe.com",
+    "checkout.stripe.com",
+    "paypal.com",
+    "checkout.paypal.com",
+    "pay.google.com",
+    "checkout.square.site",
+    "squareup.com",
+    "checkout.adyen.com",
+    "adyen.com",
+    "braintreegateway.com",
+    "checkout.razorpay.com",
+    "razorpay.com",
+    "buy.polar.sh",
+    "checkout.paddle.com",
+    "paddle.com",
+    "js.stripe.com",
+)
+
+#: Prefixes a payment processor uses for a session or intent id. Present so
+#: a token is caught by NAME as well as by shape, since a short id that the
+#: entropy test would pass is still a capability.
+CAPABILITY_PREFIXES: tuple[str, ...] = (
+    "cs_live_", "cs_test_", "pi_", "seti_", "sk_live_", "pk_live_",
+    "acct_", "sub_", "in_", "cus_", "tok_", "src_", "ba_",
+)
+
+#: How long a path segment has to be before its shape alone is enough. A
+#: real path segment is a word, a slug, or a number; 24 characters of mixed
+#: letters and digits is an identifier somebody minted.
+TOKEN_SEGMENT_MIN = 24
+
+URL_REDACTED = "<redacted>"
+
+
+def is_payment_origin(url) -> bool:
+    """Does this URL live on a host that mints payment capability URLs?"""
+    from urllib.parse import urlparse
+    try:
+        host = (urlparse(url or "").hostname or "").lower()
+    except Exception:
+        return False
+    if not host:
+        return False
+    return any(host == h or host.endswith("." + h)
+               for h in PAYMENT_URL_HOSTS)
+
+
+def _segment_is_a_token(segment: str) -> bool:
+    low = segment.lower()
+    if any(low.startswith(p) for p in CAPABILITY_PREFIXES):
+        return True
+    if len(segment) < TOKEN_SEGMENT_MIN:
+        return False
+    # Mixed letters and digits is what an identifier looks like; a long
+    # hyphenated title slug is not, and neither is a long word.
+    return (any(c.isdigit() for c in segment)
+            and any(c.isalpha() for c in segment))
+
+
+def redact_url(url, *, reason: str) -> tuple[str, str | None]:
+    """`(url_to_publish, note_or_None)`.
+
+    `reason` is what the caller knows: `'handoff'` or `'payment_origin'`.
+    Returns the URL unchanged with a `None` note when there was nothing to
+    take out, so a caller can tell "redacted" from "there was nothing
+    there" without guessing."""
+    from urllib.parse import urlparse, urlunparse
+    text = url if isinstance(url, str) else ""
+    if not text:
+        return text, None
+    try:
+        parts = urlparse(text)
+    except Exception:
+        # An unparseable string near a payment page is not something to
+        # publish on a hunch about what it is.
+        return URL_REDACTED, "this URL could not be parsed, so it was withheld"
+    removed = []
+    if parts.query:
+        removed.append("query string")
+    if parts.fragment:
+        removed.append("fragment")
+    segments = (parts.path or "").split("/")
+    hidden = 0
+    for i, segment in enumerate(segments):
+        if segment and _segment_is_a_token(segment):
+            segments[i] = URL_REDACTED
+            hidden += 1
+    if hidden:
+        removed.append(f"{hidden} path segment(s) that carry a minted id")
+    if not removed:
+        return text, None
+    safe = urlunparse((parts.scheme, parts.netloc, "/".join(segments),
+                       "", "", ""))
+    why = ("this page belongs to a session that was handed to the human, so "
+           "the parts of its URL that can carry a credential are withheld "
+           "from this report"
+           if reason == "handoff" else
+           "this is a payment origin, where a URL can itself be the "
+           "credential, so the parts that can carry one are withheld from "
+           "this report")
+    return safe, f"{why}. Removed: {', '.join(removed)}."
+
+
+def safe_page_url(url, *, handed_off: bool = False) -> tuple[str, str | None]:
+    """The one entry point every URL-reporting surface calls.
+
+    Ordinary pages come back untouched, which is the both-direction half of
+    this rule: a redactor that quietly shortened every URL would cost the
+    caller the thing it uses URLs for."""
+    if handed_off:
+        return redact_url(url, reason="handoff")
+    if is_payment_origin(url):
+        return redact_url(url, reason="payment_origin")
+    return (url if isinstance(url, str) else url), None
