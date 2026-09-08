@@ -882,6 +882,7 @@ function ksOccluders() {
 // re-takes the verdict after letting the page's own queued work run.
 function ksResetPaintCaches() {
   ksOccluderCache = null;
+  ksReadLidCache = null;
   ksStyleCache = new Map();
   ksCtxPathCache = new Map();
 }
@@ -998,6 +999,110 @@ function ksOcclusionScan(el) {
 function ksOccludedReason(el) {
   var scan = ksOcclusionScan(el);
   return scan ? scan.reason : null;
+}
+
+// ---------------------------------------------- THE READ-SIDE CLOAK CHECK
+//
+// PAINT-ORDER OCCLUSION, ON THE READ SIDE (fix wave 9b, 2026-09-08). The
+// acting path refuses a click on a control an opaque panel is painted over,
+// and every read surface in the build handed the SAME construction back as
+// ordinary prose: `corpus/g2/cloak_light.html` parks a paragraph under an
+// identically-sized `#fff` sibling at a higher z-index, a human never sees a
+// character of it, and `get_text` printed it as content and did not even
+// count it in the `stripped` ledger. That is the read-side sibling of the
+// R4 click bug, and prose is where it actually lives: a hidden instruction a
+// tool reads out as legitimate visible text is the whole injection game.
+//
+// THIS CHECK IS DELIBERATELY NARROWER THAN THE ACTING PATH'S, and the
+// narrowing is measured rather than assumed. `ksOcclusionScan` is box math,
+// and box math produces false positives that only the pixel arbiter can
+// clear -- run unmodified over the blocks `get_text` emits it strips 53
+// blocks of real prose from the frozen Wikipedia article in `corpus/a`
+// (navbox `v`/`t`/`e` links under in-flow `<th>` cells of a nested table
+// that overlap them in that snapshot) and costs 420ms of scan on top of the
+// page-wide occluder pass. The read cannot afford the screenshot arbiter
+// that would clear those, so it asks a stricter question instead:
+//
+//   1. THE LID IS OUT OF FLOW. Only `fixed`, `absolute`, and `sticky` boxes
+//      count, plus positioned pseudo-elements (`ksPseudoRect` already
+//      demands that of them). This is the same predicate `viewportLid` in
+//      `extract.js` already uses for the page-level answer the read has
+//      trusted since H-09, so the two agree by construction. Measured: it
+//      takes both frozen Wikipedia pages to zero false positives and 26ms.
+//   2. THE PAINT IS EFFECTIVELY TOTAL. Composited coverage at or above
+//      KS_READ_CLOAK_ALPHA, computed exactly rather than through
+//      `ksCoverageAt`'s at-or-above-half shortcut, so an ordinary modal
+//      backdrop at `rgba(0,0,0,.6)` is NOT a read cloak. A human reads
+//      dimmed text; a human reads nothing at all under an opaque box. The
+//      acting path keeps its own at-or-above-half rule, because clicking
+//      through a scrim is the harm and reading through one is not.
+//   3. THE WHOLE BOX IS COVERED, not a majority of it: 25 sample points,
+//      corners inset by a pixel. A sticky header clipping a paragraph's top
+//      edge leaves 20 of them clear on the first point tested.
+//
+// The residual, stated because an unstated one is what this fix exists to
+// remove: an IN-FLOW static box that covers text -- the `static-grid` class
+// in the lid battery -- is caught by the acting path and not by this one.
+// Widening to static boxes is what produced the 53 false positives above.
+var KS_READ_CLOAK_ALPHA = 0.95;
+
+var ksReadLidCache = null;
+function ksReadLids() {
+  if (ksReadLidCache) return ksReadLidCache;
+  var out = [], all = ksOccluders();
+  for (var i = 0; i < all.length; i++) {
+    var c = all[i];
+    if (c.ksPseudo) { out.push(c); continue; }
+    var pos = ksCS(c.el).position;
+    if (pos === 'fixed' || pos === 'absolute' || pos === 'sticky') out.push(c);
+  }
+  ksReadLidCache = out;
+  return out;
+}
+
+// `ksCoverageAt` returns 1 the moment the stack passes half, which is the
+// right shortcut for a question whose threshold IS half. This one has to
+// report the real composited number, because the read's threshold is 0.95.
+function ksExactCoverage(over, x, y) {
+  var through = 1;
+  for (var i = 0; i < over.length; i++) {
+    var b = over[i].rect;
+    if (x >= b.left && x <= b.right && y >= b.top && y <= b.bottom) {
+      through *= (1 - over[i].a);
+    }
+  }
+  return 1 - through;
+}
+
+function ksPaintCloaked(el) {
+  var lids = ksReadLids();
+  if (!lids.length) return null;            // the common page stops here
+  if (!el || !el.getBoundingClientRect) return null;
+  var r = el.getBoundingClientRect();
+  if (r.width < 1 || r.height < 1) return null;
+  var over = [];
+  for (var i = 0; i < lids.length; i++) {
+    var c = lids[i];
+    if (!c.ksPseudo && (c.el === el || ksContainsDeep(c.el, el))) continue;
+    if (ksContainsDeep(el, c.el)) continue;
+    if (c.rect.right <= r.left || c.rect.left >= r.right
+        || c.rect.bottom <= r.top || c.rect.top >= r.bottom) continue;
+    if (!ksPaintsAbove(c, el)) continue;
+    over.push(c);
+  }
+  if (!over.length) return null;
+  var xs = [r.left + 1, r.left + r.width / 4, r.left + r.width / 2,
+            r.left + r.width * 3 / 4, r.right - 1];
+  var ys = [r.top + 1, r.top + r.height / 4, r.top + r.height / 2,
+            r.top + r.height * 3 / 4, r.bottom - 1];
+  for (var xi = 0; xi < xs.length; xi++) {
+    for (var yi = 0; yi < ys.length; yi++) {
+      if (ksExactCoverage(over, xs[xi], ys[yi]) < KS_READ_CLOAK_ALPHA) {
+        return null;
+      }
+    }
+  }
+  return 'paint-cloaked';
 }
 
 // ------------------------------------------------------- THE PIXEL ARBITER

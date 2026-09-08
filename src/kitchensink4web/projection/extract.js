@@ -1024,6 +1024,12 @@
       let geoReason = null;
       if (direct > 8) {
         geoReason = geometryHidden(el, style).reason;
+        // AND PAINT ORDER, which is neither style nor geometry (fix wave
+        // 9b). Text under an opaque out-of-flow box is invisible for the
+        // same reason a control under one is unclickable, and this walk
+        // counted the characters as content. Asked only where there is
+        // enough text to hide, on the rule in `visibility.js`.
+        if (!geoReason) geoReason = ksPaintCloaked(el);
       }
       if (geoReason) {
         hiddenNodes++;
@@ -1095,6 +1101,21 @@
         }
       }
 
+      // THE CLOAK CHECK STOPS AT PROSE, AND THE LINE IS THE FINDING'S OWN
+      // (fix wave 9b, and it was tried the other way first). The acting
+      // path's refusal already discloses that "the read surfaces do not
+      // compute per-element occlusion", which is TRUE of controls and was
+      // the gap for TEXT -- the round put it exactly that way: the
+      // disclosure "is scoped to interactive controls; it does not cover
+      // prose/text nodes, and prose extraction is where this gap actually
+      // lives". Dropping cloaked CONTROLS out of the affordance list broke
+      // more than it fixed: the anchor ladder rebinds a ref by matching it
+      // against the affordances of a fresh read, so a control the read
+      // stopped listing became unresolvable, and `find_and_act` on
+      // `ra/overlay.html` answered R4's own page with a StaleAnchor instead
+      // of "an opaque panel is painted over it". The read reports the
+      // cloaked TEXT; the acting path stays the authority on controls,
+      // where it can run the pixel arbiter and the read cannot.
       if (isInteractive(el)) {
         const geo = geometryHidden(el, style);
         if (geo.reason) {
@@ -1693,7 +1714,37 @@
       // fails to produce is the worst version of the defect: an agent told
       // to trust the completeness block is told so by a message the
       // completeness block contradicts.
-      viewport_lid: viewportLid(),
+      // AND WHICH LISTED CONTROLS THE CLICK PATH WOULD ACTUALLY REFUSE
+      // (fix wave 9b, 2026-09-08). The lid line asserted that "a click on
+      // any of them refuses", and on `corpus/ra/modal.html` -- an ordinary
+      // modal, where the backdrop sits BELOW the panel by design -- the
+      // click on the panel's own Confirm button succeeded, exactly as the
+      // fixture intends. The read was making a confident claim about the
+      // acting path that the acting path contradicted on the same page.
+      //
+      // So the split is MEASURED with the acting path's own rule
+      // (`ksOccludedReason`, the at-or-above-half nine-point test in
+      // `visibility.js`) rather than inferred from the lid's existence, and
+      // it is measured only where a lid was found and only over the
+      // affordances the read actually listed, so an ordinary page pays
+      // nothing for it.
+      viewport_lid: (function () {
+        var lid = viewportLid();
+        if (!lid) return null;
+        var behind = 0, above = 0, aboveRefs = [];
+        for (var i = 0; i < affordances.length; i++) {
+          var el = KS.refs.get(affordances[i].ref);
+          if (!el || !el.isConnected) continue;
+          if (ksOccludedReason(el)) { behind++; continue; }
+          above++;
+          if (aboveRefs.length < 8) aboveRefs.push(affordances[i].ref);
+        }
+        lid.listed = affordances.length;
+        lid.behind = behind;
+        lid.above = above;
+        lid.above_refs = aboveRefs;
+        return lid;
+      })(),
       hidden_interactive: hiddenInteractive, hidden_nodes: hiddenNodes,
       hidden_text_chars: hiddenTextChars, hidden_reasons: hiddenReasons,
       hidden_interactive_reasons: hiddenInteractiveReasons,

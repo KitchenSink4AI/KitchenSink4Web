@@ -4013,3 +4013,111 @@ Zero orphans. No `chrome-headless-shell` and no `chrome.exe` at exit. Fourteen
 `firefox.exe` processes are running on this machine and were not touched: all
 fourteen started eight hours before this session, so they are not this wave's
 to reason about, let alone to kill.
+
+## 2026-09-08 10:17 KST — fix wave 9b (the insane-sonnet two, closed)
+
+The hostile stress round (`20260908_insane_sonnet.md`) ran ~152 calls against
+the frozen integrated build and came back THUMBS DOWN on two findings, both
+of them the same shape: **the tool describing its own behavior wrongly.**
+Everything that gates an action held — every consent class tested, the
+click-time occlusion engine, injection containment, secret redaction, monitor
+and session honesty, zero envelope escapes, zero crashes. The two blockers
+were both on the READ side, and both are closed here. Both were reproduced on
+`fcda053` first, with the round's own fixtures, before anything was touched.
+
+**S-01: the lid line made a claim about the acting path that the acting path
+contradicted on the same page.** `corpus/ra/modal.html` is a modal built the
+ordinary way, and its manifest says so: the backdrop sits BELOW the panel, so
+the panel's own button must stay actable and everything behind the backdrop
+must not. `get_page_view` printed "an opaque panel covers the viewport
+(div#backdrop, 1280x900): a human sees that panel and not the controls listed
+above, **so a click on any of them refuses**", and then `click` on
+`e2 "Confirm inside the modal"` ran, exactly as the fixture intends, while
+`e1` was correctly refused. A caller trusting the cheap read — which the tool
+recommends by name — would have concluded the confirm button was unreachable.
+
+The sentence was not the defect; its SOURCE was. "A click on any of them
+refuses" was inferred from the lid's mere existence, and a lid's existence
+says nothing about what is painted over it. The extractor now measures the
+split with the acting path's own rule (`ksOccludedReason`, the
+at-or-above-half nine-point test in `visibility.js`), over the affordances the
+read actually listed, only where a lid was found, so an ordinary page pays
+nothing. The original sentence still prints where it is true — `b/uw_lid.html`,
+H-09's own page, where nothing is above the panel — and the mixed case prints
+the measured split with the actable refs named. That line's sentence content
+is a `[COPY PENDING]` placeholder with its FACTS TO CONVEY in the code: no
+user-facing prose was authored by an agent.
+
+**S-02: text extraction did not apply the paint-order check that `click`
+already applies.** `corpus/g2/cloak_light.html` parks a paragraph under an
+opaque, identically-sized, higher-z-index sibling. A human never sees a
+character of it. `get_text` returned it as ordinary in-scope prose, on a page
+whose one visible sentence says it is "the only prose a human reads on this
+page", and left it out of the `stripped` ledger as well — which named the
+other seven cloaking techniques correctly. This is the read-side sibling of
+the R4 click bug, on the surface where an injected instruction actually
+rides: the payload cannot drive a click on its own, but it can be hidden in
+plain sight behind a decoy paint layer and described as legitimate prose.
+
+`ksPaintCloaked` lives in `visibility.js` with every other visibility rule,
+and the CLASS is swept across every surface that REPORTS CONTENT: `get_text`,
+`get_page_view`'s digest, `get_article`, and `extract_page` all ask it. The
+technique is named `paint-cloaked` and rides the ledgers that already exist,
+so nothing is silently emitted and nothing is silently dropped — `get_text`
+reports `[... paint-cloaked=1 ...]` in `stripped` and the page view names the
+same technique in its hidden ledger.
+
+**The sweep stops at control retrieval, and the suite is what drew that line.**
+The first pass also dropped cloaked CONTROLS out of the affordance list and
+filtered `find_elements` with the same rule, and the full run failed exactly
+the right test: `test_a_control_under_an_opaque_panel_is_not_a_target`, R4's
+own pin. Two downgrades underneath it. `find_elements` mints refs for the
+acting path, and the acting path owns a better verdict than any read can
+compute, since only it runs the pixel arbiter that clears box math's false
+positives — filtering there made `find_and_act` on `ra/overlay.html` answer
+"nothing visible matches" where it had answered "an opaque panel is painted
+over it". And the anchor ladder rebinds a ref by matching it against a fresh
+read's affordances, so a control the read stopped listing became unresolvable
+and the same call came back `StaleAnchor` instead. Both reverted. The line
+that survives is the round's own: `click`'s disclosure that "the read surfaces
+do not compute per-element occlusion" is true of CONTROLS, and the finding was
+that it "does not cover prose/text nodes, and prose extraction is where this
+gap actually lives". Both directions are pinned.
+
+**The read's rule is deliberately narrower than the acting path's, and the
+narrowing is measured rather than assumed.** `ksOcclusionScan` is box math,
+and box math produces false positives that only the pixel arbiter clears. Run
+unmodified over the blocks `get_text` emits, it strips 53 blocks of real prose
+from the frozen Wikipedia article in `corpus/a` — navbox `v`/`t`/`e` links
+under in-flow `<th>` cells of a nested table that overlap them in that
+snapshot — and costs 420 ms of scan on top of the page-wide occluder pass. The
+read cannot afford the screenshot arbiter that would clear those, so it asks a
+stricter question: the lid must be OUT OF FLOW (`fixed`, `absolute`, `sticky`,
+or a positioned pseudo-element — the same predicate `viewportLid` has used for
+the page-level answer since H-09), the paint must be effectively TOTAL
+(composited coverage at or above 0.95, computed exactly rather than through
+`ksCoverageAt`'s at-or-above-half shortcut), and the WHOLE box must be covered
+at 25 sample points rather than a majority at nine. Measured: zero false
+positives on both frozen Wikipedia pages, 26 ms of scan.
+
+Two consequences are worth stating rather than discovering later. An ordinary
+modal backdrop at `rgba(0,0,0,.6)` is NOT a read cloak: a human reads dimmed
+text, and the acting path still refuses the click behind it, which is the
+documented split — reading a covered control is not the harm, clicking one is.
+And an IN-FLOW static box that covers text — the `static-grid` class in the
+lid battery — is caught by the acting path and not by this one. Widening to
+static boxes is what produced the 53 false positives above. Both are pinned.
+
+Gate: full suite **1,871 passed, 4 skipped, ZERO FAILED in both orders**, run
+SEQUENTIALLY: forward `-p no:randomly` (929.8s, 1 xpassed) and
+`--randomly-seed=20260909` (930.7s, 1 xfailed). That is the 1,860 baseline
+plus exactly the eleven new pins, and the quarantined frame-gated pin reports
+xpassed one way and xfailed the other, both green. The fix-wave pin files run
+alone are 167 passed, 1 xpassed, nothing failed.
+
+The eleven new pins in `tests/browser/test_fixwave9b_fixes_live.py` are the
+round's own two repros, the class sweep, the two scope pins above, and four
+false-positive arms. Four of them fail on `fcda053` and pass here, verified
+mechanically by `git stash push -- src` and re-running: 4 failed / 7 passed
+stashed, 11 passed restored. Zero orphans: no `chrome.exe` and no
+`chrome-headless-shell` at exit.

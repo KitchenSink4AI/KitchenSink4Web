@@ -40,7 +40,15 @@
     // Geometry is measured rather than computed, and BODY is exempt because a
     // body with no laid-out box is a page state, not a hiding technique.
     if (el.tagName === 'BODY' || !el.getBoundingClientRect) return null;
-    return ksGeometryHidden(el, null).reason;
+    const g = ksGeometryHidden(el, null).reason;
+    if (g) return g;
+    // PAINT ORDER IS A HIDING TECHNIQUE TOO (fix wave 9b). A paragraph under
+    // an opaque, identically-sized, higher-z-index sibling is invisible to a
+    // human by exactly the mechanism `click` already refuses on, and this
+    // read returned it as ordinary prose and left it out of the `stripped`
+    // ledger as well. It is now a technique with a name, counted and named
+    // beside the other eight. The rule itself lives in `visibility.js`.
+    return ksPaintCloaked(el);
   }
 
   let root = null, rootWas = 'document';

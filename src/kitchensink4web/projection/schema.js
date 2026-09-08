@@ -97,8 +97,14 @@
   }
 
   // Rendered text is subject to the shared hidden rule; a declaration is not.
+  // Paint order is part of that rule as of fix wave 9b: a value a human
+  // cannot see because an opaque out-of-flow box is painted over it is not a
+  // value this tool may report as read off the page.
+  function hiddenHere(el) {
+    return ksHiddenAnywhere(el) || ksPaintCloaked(el);
+  }
   function visibleText(el) {
-    const reason = ksHiddenAnywhere(el);
+    const reason = hiddenHere(el);
     if (reason) { counts.hidden_values_excluded++; return null; }
     return squash(ksRenderedText(el));
   }
@@ -378,7 +384,7 @@
       const raw = squash(ksRenderedText(el));
       if (labelShaped(raw)) {
         const label = raw.replace(/:$/, '').trim();
-        if (label && !ksHiddenAnywhere(el)) {
+        if (label && !hiddenHere(el)) {
           const found = proximateFor(el, raw);
           if (found && found.el) {
             const text = visibleText(found.el);
@@ -398,7 +404,7 @@
     if (hint.length < MAX_HINT) {
       const tokens = hintTokens(el);
       if (tokens.length) {
-        const hidden = ksHiddenAnywhere(el);
+        const hidden = hiddenHere(el);
         const text = hidden ? null : squash(ksRenderedText(el));
         for (const token of tokens) {
           note(hint, 'hint', MAX_HINT, {

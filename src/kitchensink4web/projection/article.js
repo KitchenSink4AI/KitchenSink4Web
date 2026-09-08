@@ -56,7 +56,13 @@
     const r = ksHiddenReason(el, null);
     if (r) return r;
     if (el.tagName === 'BODY' || !el.getBoundingClientRect) return null;
-    return ksGeometryHidden(el, null).reason;
+    const g = ksGeometryHidden(el, null).reason;
+    if (g) return g;
+    // Paint-order cloaking, same rule and same source as the prose read
+    // (fix wave 9b). An article body is the surface an injected instruction
+    // most wants to ride out on, so the technique is excluded here and
+    // counted in this read's own reason ledger like every other one.
+    return ksPaintCloaked(el);
   }
 
   const BLOCK = new Set(['P', 'LI', 'BLOCKQUOTE', 'PRE', 'DD', 'DT',

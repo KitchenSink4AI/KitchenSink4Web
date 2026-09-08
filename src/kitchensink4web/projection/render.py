@@ -769,13 +769,35 @@ class Renderer:
             # listed and visible while an opaque panel covered the whole
             # viewport, and the click refusal cited a completeness entry
             # that did not exist.
-            lines.append(
-                f'an opaque panel covers the viewport '
-                f'({lid["tag"]}'
-                + (f'#{lid["id"]}' if lid.get("id") else '')
-                + f', {lid["w"]}x{lid["h"]}): a human sees that panel and '
-                f'not the controls listed above, so a click on any of them '
-                f'refuses. Its own controls are the ones a human can act on')
+            #
+            # AND THE CLAIM IS NOW THE MEASURED ONE (fix wave 9b). "a click
+            # on any of them refuses" was a prediction about the acting path
+            # derived from the lid's mere existence, and on an ordinary
+            # modal it was false: the panel's own button sits ABOVE the
+            # backdrop and clicks fine, which is what makes a modal a modal.
+            # The extractor now runs the acting path's own occlusion rule
+            # over the listed affordances, so this sentence prints only in
+            # the case it describes, and the mixed case prints the split.
+            head = (f'an opaque panel covers the viewport '
+                    f'({lid["tag"]}'
+                    + (f'#{lid["id"]}' if lid.get("id") else '')
+                    + f', {lid["w"]}x{lid["h"]}): ')
+            if lid.get("above"):
+                # PLACEHOLDER, not authored copy. FACTS TO CONVEY: the panel
+                # covers the viewport; `behind` of the listed controls are
+                # under it and a click on those refuses; `above` are painted
+                # over it and a click on those runs; the refs of the actable
+                # ones are named so a caller can act without a second read.
+                lines.append(
+                    head + '[COPY PENDING: completeness.viewport_lid.split] '
+                    f'behind_it={lid["behind"]}, actable={lid["above"]}'
+                    + (' (' + ", ".join(lid.get("above_refs") or []) + ')'
+                       if lid.get("above_refs") else ''))
+            else:
+                lines.append(
+                    head + 'a human sees that panel and '
+                    'not the controls listed above, so a click on any of them '
+                    'refuses. Its own controls are the ones a human can act on')
         if c["affordance_cap_hit"]:
             lines.append(
                 f'{c["affordances_uncollected"]} of those were counted but '

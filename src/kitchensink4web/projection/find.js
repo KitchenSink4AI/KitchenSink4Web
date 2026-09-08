@@ -190,6 +190,18 @@
     }
     return false;
   }
+  // THE PAINT-ORDER CLOAK IS DELIBERATELY NOT ASKED HERE (fix wave 9b, and
+  // it was tried the other way first). Every surface that REPORTS CONTENT --
+  // `get_text`, `get_article`, the page view's digest, `extract_page` --
+  // excludes cloaked text and counts it, because reporting it as ordinary
+  // prose is a claim about what a human sees. This surface does something
+  // else: it mints refs for the ACTING path, and the acting path owns a
+  // better verdict than any read can compute, since only it can run the
+  // pixel arbiter that clears box math's false positives. Filtering here
+  // substituted the cheaper, more conservative answer for the better one and
+  // cost the R4 refusal its whole point: `find_and_act` on `ra/overlay.html`
+  // stopped saying "an opaque panel is painted over it" and started saying
+  // "nothing visible matches", which is a worse answer about the same fact.
   function hiddenAnywhere(el) { return ksHiddenAnywhere(el) !== null; }
 
   const TAG_ROLE = {
