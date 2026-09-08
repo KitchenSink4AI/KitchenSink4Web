@@ -4658,3 +4658,32 @@ not start.
 
 Full report:
 `Draft/Working Files/Agent Results/20260908_rc2_rebuild.md`.
+
+### Addendum, same day: the master switch comes off
+
+The author installed RC v2 and found what only an install test finds. The mcpb
+form is STATIC, so ticking "Everything at once" cannot make the ten boxes below
+it visibly change, and a control that looks inert reads as broken. The ruling
+is keep-only-if-visually-verifiable and the platform cannot do it, so
+`all_packs` and its `${user_config.all_packs}` wiring leave both manifests. Ten
+boxes remain.
+
+`KS4WEB_ALL_PACKS` stays and is still honored at launch, still beaten by
+KS4WEB_MODE and --packs, still loud on garbage. The preauth precedent, one
+commit later: the setting survives for launch-file users, the unexplainable
+checkbox does not. New pin `test_the_master_toggle_is_not_on_the_install_screen`,
+both directions, both manifests, red-first observed against the unedited
+manifests.
+
+Caught while repacking: a pre-existing `bundle/__pycache__` was swept into the
+shipped `.mcpb` (4,967 -> 13,561 bytes with a stale .pyc). The archive-contents
+check flagged it on the same run. `__pycache__/` and `*.pyc` are now in both
+`.mcpbignore` files.
+
+GATES. Scoped set 150 passed / 0 failed; full forward suite **2,058 passed / 0
+failed** / 5 skipped / 1 xpassed in 14m43s.
+
+RC v3 on the Desktop, sha256
+`7ea93673ecec1c3476fabc220a705bfd351d0008a679a7ee9649d42e9316d432`, full
+verification battery re-run at 0 failures, 25 tools by set equality, acting
+absent, rc=0, zero orphans.
