@@ -210,3 +210,31 @@ def test_the_readme_pack_table_quotes_the_manifest_sentences():
         assert sentence in readme, (
             f"the README's {pack} row does not quote the manifest sentence "
             f"verbatim: {sentence!r}")
+
+
+def test_the_packed_bundles_match_their_manifests():
+    """The two `.mcpb` artifacts in the tree, against the manifests they are
+    built from. Both are tracked files, so a manifest edit that is not
+    repacked ships an install screen nobody wrote.
+
+    This is the second drift of that shape. The config-fix pass of
+    2026-09-07 repacked `bundle/dev/kitchensink4web-dev.mcpb` after finding
+    it still carrying a retired eleven-field manifest, and by 2026-09-08
+    BOTH artifacts were nine settings against their manifests' ten: the
+    senses wave added the accessibility pack to the manifests and neither
+    zip was rebuilt. Unzipping a bundle to check it is something people
+    remember to do once."""
+    import zipfile
+
+    for mcpb, source in (
+            ("bundle/kitchensink4web.mcpb", "bundle/manifest.json"),
+            ("bundle/dev/kitchensink4web-dev.mcpb", "bundle/dev/manifest.json")):
+        with zipfile.ZipFile(ROOT / mcpb) as bundle:
+            assert sorted(bundle.namelist()) == ["icon.png", "manifest.json"], \
+                f"{mcpb} holds {sorted(bundle.namelist())}"
+            packed = json.loads(bundle.read("manifest.json"))
+        tracked = json.loads((ROOT / source).read_text(encoding="utf-8"))
+        assert packed == tracked, (
+            f"{mcpb} does not match {source}. Settings in the zip: "
+            f"{sorted(packed.get('user_config', {}))}; in the manifest: "
+            f"{sorted(tracked.get('user_config', {}))}. Repack it.")

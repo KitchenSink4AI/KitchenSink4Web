@@ -4268,3 +4268,117 @@ compares the README's test count against a snapshot written by the same script
 that fills the README, so it compares the doc to itself and passes green while
 the README claims 905 against a live suite near 1,880. This wave moves the
 real number again; whoever owns the stamp step should see it.
+
+## 2026-09-08 12:53 KST — pre-ship finalization, and the gate sequence that got here
+
+THE GATE SEQUENCE, in the order it actually ran, because the ledger of who
+cleared what is the thing a ship decision rests on.
+
+The seven-branch integration landed at `2e8bf30`. The fresh-eyes verify round
+read that tree and returned **NOT CLEAN**: six HIGH, nine MEDIUM, eight LOW.
+Fix wave 9 closed them, and fix wave 9b closed the two blockers the first
+insane-sonnet round found on `ra/modal.html` and `g2/cloak_light.html`, taking
+the tree to `c0145ac`. The re-verify pass read `c0145ac` and returned **NOT
+CLEAN** again, on one HIGH nobody had asked for: R-01, the fix that stopped the
+read leaking cloaked text was now stripping a publisher's own body copy and
+calling it injection-shaped, because `ksLidAlpha` credits alpha 1.0 to any
+background-image and a CSS gradient is a background-image. Insane-sonnet-2 hit
+the same tree from the other side and found two more. Fix wave 9c closed all
+three at `0998b0d`, computing the read's own alpha rather than borrowing the
+acting path's, and making the checked node and the returned node the same node.
+
+Two independent rounds then read `0998b0d` and both returned **THUMBS UP**:
+insane-haiku over 132 adversarial calls in nine batches (zero crashes, zero
+lies, 82 honest refusals), and insane-sonnet-3, which built its own fixtures
+and filed two non-blocking findings rather than a blocker. That is the pair of
+clean reads the ship gate was waiting on. Both findings are carried in
+`20260909_deferred_ledger.md` as D-17 and D-18, with every other deferred item
+from the night's six reports beside them: fifty-seven entries, sorted by whether
+the author has to rule, whether it is a defect, whether it is a documented
+limitation, whether it was never built, whether it is copy, or whether it is a
+process rule.
+
+WHAT THIS ENTRY ADDS, on top of that sequence.
+
+**The server was introducing itself as 3.4.7.** FastMCP answers `initialize`
+with its OWN version when the constructor is not handed one, so every client
+log, every install screen and every bug report would have carried the
+framework's version while pyproject, `server.json` and both bundle manifests
+said 1.0.0. `FastMCP(version=__version__)` closes it, and
+`test_version_is_consistent_across_manifests` grew a seventh field: it checked
+six FILES and agreed with itself while the running process said something else.
+1.0.0 stands as the pre-ship version. It was already the truthful one in five
+of six places, the ship has not happened, and a version number that has never
+been published has nothing to be bumped away from.
+
+**The published-figures guard could not fail.**
+`test_published_numbers_match_the_measuring_snapshot` compared the README to
+`tools/readme_numbers_snapshot.json`, which is written by the same script that
+stamps the README. One edit moves both sides, so a figure that went stale in the
+product went stale in its own guard at the same moment, and the two agreed. It
+was green while the front page claimed 905 tests against a suite of nearly
+1,900. The re-verify round filed it as R-02 and named the shape exactly: V-21
+asked for a test against the live surface, the tool counts got one, and the test
+count got a test that cannot fail.
+
+Everything is asked live now. The suite count comes from a `--collect-only` run
+at test time, in both directories, with the browser sub-count beside it. The two
+surface token figures and the rung count come off the live registry and the live
+ladder. The page reads move to `tests/browser/test_published_numbers_live.py`,
+which serves the frozen corpus the publishing script serves, aborts every
+off-origin request, and measures the three dump flavors, the first read and the
+delta through the shipped tools; all three dump flavors are pinned because
+`llms.txt` prints all three. The comparison table's locale check reads its two
+figures off the English page's own demo tiles instead of the snapshot, so the
+chain runs measurement to tile to every locale with no link that can go stale on
+its own. One tolerance is documented where it lives: the page's URL rides inside
+the projection, so the loopback port moves the count by a token or two.
+`TOKEN_SLACK` is 10 and the stale figure this guard was written against sat 189
+off. Red-first on both halves, verified by running them before the stamp: the
+test-count guard fails on 905 against a live 1,897 and the first-read guard
+fails on 4,495 against a measured 4,306.
+
+**Then the restamp the old guard was hiding.** First read 4,495 to 4,306, rung 6
+to rung 7, on README, `llms.txt` and the page, including the six translated
+sentences that quote it, the demo tile, and the countdown script's opening
+figure. Tests 905 to 1,897, browser 399 to 711. The dump figures, the tool
+counts, the surface token figures and the rung count all re-measured unchanged.
+`tools/readme_numbers_snapshot.json` was regenerated from the same run and is
+now a record rather than a source of verdicts.
+
+**Both tracked `.mcpb` artifacts were stale.** `bundle/kitchensink4web.mcpb` and
+`bundle/dev/kitchensink4web-dev.mcpb` still carried nine settings against their
+manifests' ten: the senses wave added the accessibility pack to both manifests
+and neither packed artifact was repacked. This is the second time a packed
+artifact has drifted from its manifest, so the fix is not only the repack:
+`test_the_packed_bundles_match_their_manifests` parses each `.mcpb` and asserts
+it equals its tracked manifest and holds exactly `manifest.json` and `icon.png`.
+An artifact that disagrees with the file it is built from now fails a test
+rather than waiting for somebody to unzip it.
+
+**Gates.** Full suite forward sequential on the finalized tree,
+`-p no:randomly -q`: **1,892 passed, 4 skipped, 1 xfailed, ZERO FAILED** in
+882.6s. That is the 1,888 baseline plus exactly the four new pins (two live
+figure guards in `test_copy_guards.py`, three in the new browser file, less the
+circular one they replace), and the collection total of 1,897 is the number the
+front page now publishes. The one warning is the known
+`PytestUnraisableExceptionWarning` from `test_multicontext.py`, which is
+inherent to a pin that kills a browser on purpose. Touched-area runs before it:
+the copy guards plus the new browser file, 30 passed. After it, the bundle
+delta: `tests/unit/test_pack_toggles.py` 15 passed, red-first verified by
+stashing the two repacked artifacts, and the whole unit suite 1,183 passed /
+4 skipped in 24.1s. The published test figure stays at 1,897, which is the
+certifying run's own collection and one behind the tree's 1,898 after the
+bundle guard; an undercount is the direction the guard's own rule calls honest,
+and 1,897 is the number that was actually run.
+
+**The Desktop field-test bundle was rebuilt from this tree** and verified end to
+end: `mcpb validate` clean, install shape checked (two entries, no tools array,
+every `${user_config.X}` reference resolving to a declared setting and every
+setting reaching the server, a real 512x512 icon), one silent launch answering
+`serverInfo {"name": "kitchensink4web", "version": "1.0.0"}` with **52 tools**,
+`rc=0` on stdin close rather than on a kill, and zero orphans. Its venv moved
+out of a dead session's temp scratchpad to `C:\Users\nykal\.ks4web-dev\venv`,
+which is what the post-ship item about temp-cleanup fragility asked for. The
+details, and the two things the author still has to do by hand, are in
+`20260909_finalize.md`.
