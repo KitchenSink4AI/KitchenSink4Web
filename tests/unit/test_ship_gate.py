@@ -25,6 +25,10 @@ SCOPE. Everything in ``ENFORCED`` is clean of all six, so every hit after
 this is a regression. The scope is TOTAL as of the 2026-09-09 copy fill
 wave: ``README.md`` carried the update-check ``[COPY PENDING]`` block until
 that wave replaced it, and ``PENDING_FILL`` is gone with it.
+``docs/index.html`` joined the list later the same day, after four landing
+pages shipped figures their own READMEs contradicted; the published-figure
+guard at the bottom of this file covers the same class from the other
+direction.
 """
 
 from __future__ import annotations
@@ -45,6 +49,7 @@ ENFORCED = (
     "docs/llms.txt",
     "README.md",
     "docs/QUICKSTART.md",
+    "docs/index.html",
     "docs/COOKBOOK.md",
     "docs/ARCHITECTURE.md",
 )
@@ -129,4 +134,63 @@ def test_every_enforced_surface_is_still_a_real_file():
     """A row pointing at a renamed file would quietly turn into no gate at
     all, which is how a total scope stops being total."""
     for rel in ENFORCED:
+        assert (ROOT / rel).is_file(), rel
+
+
+#: Surfaces cut from a measured source. Every figure below is published on
+#: all three, so a wave that restamps one and forgets another turns this
+#: red. The 2026-09-09 stale landing pages lived in exactly that gap: the
+#: README said one number and docs/index.html said another, and nothing
+#: checked either against the other.
+FIGURE_SURFACES = (
+    "README.md",
+    "docs/index.html",
+    "docs/llms.txt",
+)
+
+#: (figure, what it measures, the script that produces it). Values are the
+#: measurement at the commit that adds this guard. Change one only together
+#: with a re-run of the named script.
+PUBLISHED_FIGURES = (
+    ('4,445', 'tokens for the first read of the demo page', 'tools/measure_readme_numbers.py'),
+    ('2,062', 'tests', 'pytest --collect-only'),
+    ('33,073', 'tokens in the raw dump of the same page', 'tools/measure_readme_numbers.py'),
+)
+
+#: (string, what it used to mean). Absent from every FIGURE_SURFACES file at
+#: this commit. A hit means a surface went backwards.
+SUPERSEDED_FIGURES = (
+    ('4,437', 'the previous projection cost'),
+    ('4.437', 'the same figure with a german or spanish separator'),
+    ('4 437', 'the same figure with a french separator'),
+    ('2,055', 'the previous test count'),
+    ('6.5k', 'the previous lite surface cost'),
+    ('16.0k', 'the previous full surface cost'),
+)
+
+
+@pytest.mark.parametrize("figure,what,source", PUBLISHED_FIGURES)
+def test_every_published_figure_reads_the_same_on_every_surface(figure, what, source):
+    """A figure published on three surfaces has to be the same figure on all
+    three. Checking presence rather than equality keeps the guard honest
+    about locale number formatting, which differs by design."""
+    for rel in FIGURE_SURFACES:
+        assert figure in _read(rel), (
+            f"{rel} does not carry {figure!r} ({what}, measured by {source}). "
+            f"Either the surface was missed by a restamp or the figure moved "
+            f"and this table was not updated. Re-run the script, do not "
+            f"guess the number.")
+
+
+@pytest.mark.parametrize("stale,what", SUPERSEDED_FIGURES)
+def test_no_superseded_figure_survives_on_a_published_surface(stale, what):
+    """The regression guard for the defect this file was widened over."""
+    for rel in FIGURE_SURFACES:
+        assert stale not in _read(rel), (
+            f"{rel} still carries {stale!r}, {what}. Restamp it from the "
+            f"measuring script rather than deleting this row.")
+
+
+def test_every_figure_surface_is_still_a_real_file():
+    for rel in FIGURE_SURFACES:
         assert (ROOT / rel).is_file(), rel

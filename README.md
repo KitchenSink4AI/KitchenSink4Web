@@ -2,6 +2,12 @@
 
 # 🚰 KitchenSink4Web
 
+[![Tests](https://github.com/nometalalchemist/KitchenSink4Web/actions/workflows/tests.yml/badge.svg)](https://github.com/nometalalchemist/KitchenSink4Web/actions/workflows/tests.yml)
+[![PyPI](https://img.shields.io/pypi/v/kitchensink4web)](https://pypi.org/project/kitchensink4web/)
+[![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE)
+
+[Landing page](https://nometalalchemist.github.io/KitchenSink4Web/) · [llms.txt](https://nometalalchemist.github.io/KitchenSink4Web/llms.txt) (machine-readable capability manifest for agents and LLM crawlers)
+
 Everything plus the kitchen sink for the open web: a browser MCP server that reads a whole page
 for the price of a paragraph, and starts out unable to change anything at all.
 
