@@ -4811,3 +4811,79 @@ d94978d.
   `gates/`) were NOT re-run. This wave changed version strings, docs, urls and
   published figures, and no behaviour, so the recorded rounds still describe
   the tree. A full re-run before publishing is a separate pass.
+
+## 2026-09-09 (closer wave): identity merge, landing page restamp, widened ship gate
+
+Cleared the mechanical blockers from the final pre-ship audit
+(`Agent Results/20260909_ship_audit_final.md`). Nothing pushed.
+
+### Restamped, given the family's CLA, and one figure flagged
+
+`docs/index.html` published a projection cost of 4,437 and 2,055 tests against
+a README saying 4,445 and 2,062. Restamped. **Found beyond the brief:** the
+context-bill table also published a lite surface of 6.5k and a full surface of
+16.0k; both re-measured here at 5.8k and 15.3k, which the README already
+carried. Restamped too. The head comment's `PRE-PRODUCTION. Nothing here is
+published. The product is not released.` banner was deleted, being false on a
+page that ships today.
+
+**FLAG, unresolved, for the author.** `tools/measure_readme_numbers.py` run
+three times in this repo's own `.venv` returns `PROJECTION_TOKENS 4,437`
+deterministically. The stamp wave committed 4,445 from a scratchpad venv
+carrying the `ocr` and `accessibility` extras this venv does not have.
+Everything else in that run reproduced exactly: 33,073 raw dump, 82 delta, 19
+lite tools at 5.8k, 52 full at 15.3k, 16 rungs, 733 browser tests. Only the
+projection moved, and only by eight tokens. The landing page was stamped to
+4,445 so all four published surfaces agree, which is the blocker being cleared,
+but WHICH ENVIRONMENT DEFINES A PUBLISHED NUMBER IS AN AUTHOR DECISION. If it
+is the default install (`uvx kitchensink4web`, no extras), the figure is 4,437
+and three surfaces plus the snapshot move back.
+
+`readme_numbers_snapshot.json` was edited in place for the test counts rather
+than regenerated, precisely so that regeneration would not silently decide the
+projection question.
+
+**CLA.md, CONTRIBUTING.md and .github/workflows/cla.yml** now exist here. The
+first and third are byte-identical copies of the word repo's; neither carries a
+product name, and the maintainer line is left exactly as the siblings have it.
+CONTRIBUTING.md is the same file with one line swapped, following the family's
+own precedent (word names its live tier, ppt names PowerPoint): here it names
+the bundled Chromium the browser tests drive. That one sentence is flagged as
+the only copy not lifted whole from a sibling.
+
+A badge row and landing page line were added, mirroring the siblings with this
+repo's slugs. They resolve once the repository exists; there is still no remote
+configured here.
+
+The published test count settled at **2,065** (1,332 unit plus 733 browser).
+
+### The ship gate is wider
+
+`docs/index.html` joined `ENFORCED`, which is where the stale figures had been
+sitting all along: the gate was total on four files and silent on the one a
+visitor actually clicks from the README.
+
+A published-figure guard came with it. `PUBLISHED_FIGURES` asserts every
+measured figure is present on README.md, docs/index.html and docs/llms.txt at
+once, so a restamp that misses one surface goes red. `SUPERSEDED_FIGURES`
+asserts the values those figures used to carry are absent from all three, so a
+surface cannot go backwards. Both are LOOPS inside one test each, not
+parametrized: this repo's collected test count is one of the guarded figures,
+so a parametrized table would move the number it guards every time somebody
+added a row.
+
+The `src/` trees are deliberately out of the em dash scope. The em dashes in
+the user-facing refusal strings are an author decision and this gate does not
+make it; each gate's module docstring now says so.
+
+### Suite
+
+Touched-area plus gates, per the brief, since nothing behavioural
+changed: `test_ship_gate`, `test_copy_guards`, `test_gates`,
+`test_consent_ladder`, `test_projection`, `test_pack_toggles`,
+`test_response_budget`, `test_dialogs`, `test_credential_injection`,
+`test_union_wave_fixes`: **348 passed** in 30.24s. Plus
+`tests/browser/test_published_numbers_live.py`: **3 passed**. Ship gate at its
+widened scope: **10 passed**. Zero orphaned browser processes.
+
+Zero orphaned WINWORD, EXCEL, POWERPNT or soffice processes before or after.
