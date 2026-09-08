@@ -48,7 +48,9 @@
         "KS4WEB_PACK_FILES": "${user_config.pack_files}",
         "KS4WEB_PACK_DIAGNOSTICS": "${user_config.pack_diagnostics}",
         "KS4WEB_PACK_WORKFLOWS": "${user_config.pack_workflows}",
-        "KS4WEB_PACK_ACCESSIBILITY": "${user_config.pack_accessibility}"
+        "KS4WEB_PACK_ACCESSIBILITY": "${user_config.pack_accessibility}",
+        "KS4WEB_CONSENT": "${user_config.consent_scope}",
+        "KS4WEB_PREAUTH": "${user_config.preauth}"
       }
     }
   },
@@ -121,6 +123,20 @@
       "title": "Accessibility audit",
       "description": "Checks a page against the WCAG accessibility rules using axe-core, groups what it finds by rule, and says plainly what automated testing cannot check.",
       "default": false,
+      "required": false
+    },
+    "consent_scope": {
+      "type": "string",
+      "title": "What Claude may do without asking",
+      "description": "Type research or full. Only applies when \"Allow this server to click and type\" is on; leave it as research if you are unsure. [COPY PENDING: manifest.consent_scope | CAUTION tier] FACTS TO CONVEY: this sets how often Claude stops to ask you. research, the default, pre-approves reading, navigating, clicking, typing, and search-shaped form submission, and asks before anything else. full also pre-approves ordinary form submission. Neither one touches the actions that always stop and ask a human: paying, submitting a credential, sending something that reaches other people, deleting, accepting terms, and passing an age gate. It does nothing at all while acting is off, because there is nothing to consent to. This is a typed field and a value that is not one of the two words stops the server from starting, with the two words named.",
+      "default": "research",
+      "required": false
+    },
+    "preauth": {
+      "type": "string",
+      "title": "Pre-authorized actions (advanced, leave empty)",
+      "description": "Optional. Pre-approves one class of action on one site, so Claude stops asking about it. Format: class@site, for example storage_load@github.com. [COPY PENDING: manifest.preauth | CAUTION tier] FACTS TO CONVEY: empty is the normal setting and means every gate asks. One entry pre-approves ONE action class on ONE site named here, for this install, until you change it; separate several with commas and add :8h to give one a time limit. Paying, submitting a credential, sending something that reaches other people, deleting, accepting terms, acting off an allowlist, and resetting budgets can NEVER be pre-authorized, and naming one of them here stops the server from starting rather than quietly ignoring it. Like the box above, this is a typed field: a misspelling stops the server from starting and says what the format is.",
+      "default": "",
       "required": false
     }
   },

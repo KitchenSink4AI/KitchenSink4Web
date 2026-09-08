@@ -17,6 +17,7 @@ import pytest
 
 from kitchensink4web import packs
 from kitchensink4web.errors import BadParams
+from kitchensink4web.policy import consent
 
 ROOT = Path(__file__).resolve().parents[2]
 ALL = sorted(packs.PACK_SUMMARIES)
@@ -96,6 +97,12 @@ def test_unset_everything_is_still_lite():
 #: visible edit to a named list rather than a loosened assertion.
 DEFAULT_ON = {"pack_extract", "pack_capture"}
 
+#: THE ONLY TWO FREE-TEXT FIELDS on the install screen, named here so the
+#: exception cannot spread by accident. They exist because
+#: `consent.PREAUTH_TEACHING` pointed a Desktop user at a pre-authorization
+#: field that the manifest never defined; see the toggle test below.
+TYPED_FIELDS = {"consent_scope", "preauth"}
+
 
 def test_manifest_source_carries_every_toggle():
     """Parity between the pack table and the .mcpb manifest source: every
@@ -118,9 +125,18 @@ def test_manifest_source_carries_every_toggle():
         assert env[packs.ENV_PACK_PREFIX + pack.upper()] == \
             f"${{user_config.{key}}}"
     for key, entry in config.items():
+        if key in TYPED_FIELDS:
+            continue
         assert entry["default"] is (key in DEFAULT_ON), (
             f"{key} default is {entry['default']}; the shipped install "
             f"screen starts exactly {sorted(DEFAULT_ON)} ticked")
+    # The two typed fields ship the posture the server would have taken
+    # with neither of them set, so accepting every default reproduces the
+    # old install exactly.
+    assert config["consent_scope"]["default"] == consent.DEFAULT_SCOPE
+    assert config["preauth"]["default"] == ""
+    assert env[consent.ENV_SCOPE] == "${user_config.consent_scope}"
+    assert env[consent.ENV_PREAUTH] == "${user_config.preauth}"
 
 
 def test_nothing_that_can_change_anything_starts_on():
@@ -142,7 +158,7 @@ def test_nothing_that_can_change_anything_starts_on():
 
 
 def test_the_dangerous_boxes_carry_a_danger_label():
-    """Two tiers, four boxes. A checkbox whose whole job is to hand over a
+    """Two tiers, six boxes. A checkbox whose whole job is to hand over a
     capability that can act on the user's behalf has to say so on the screen
     where it is ticked, not only in a document.
 
@@ -159,8 +175,10 @@ def test_the_dangerous_boxes_carry_a_danger_label():
         assert "CAUTION" in config[key]["description"], key
     # And no box that is not one of those four wears a label, so the labels
     # keep meaning something.
+    for key in TYPED_FIELDS:
+        assert "CAUTION" in config[key]["description"], key
     labelled = {"allow_acting", "pack_diagnostics", "pack_storage",
-                "pack_files"}
+                "pack_files"} | TYPED_FIELDS
     for key, entry in config.items():
         if key in labelled:
             continue
@@ -220,19 +238,35 @@ def test_dev_manifest_differs_only_in_defaults():
             assert config[f"pack_{pack}"]["default"] is False
 
 
-def test_every_install_screen_box_is_a_toggle():
-    """No free-text or numeric field on any install screen. A typed value is
-    a typo waiting to break an install, and the mcpb manifest schema has no
-    enum type to make one safe (user_config.type is string, number, boolean,
-    directory, or file, with additionalProperties false), so booleans are the
-    only control this surface gets."""
+def test_every_install_screen_box_is_a_toggle_except_the_two_named_ones():
+    """Toggles only, with EXACTLY two named exceptions.
+
+    The rule and the reason both still stand: a typed value is a typo
+    waiting to break an install, and the mcpb manifest schema has no enum
+    type to make one safe (user_config.type is string, number, boolean,
+    directory, or file, with additionalProperties false).
+
+    The exceptions exist because the alternative was worse.
+    `consent.PREAUTH_TEACHING` told a Desktop user to fill a
+    pre-authorization field in the server's settings, and there was no such
+    field: shipped copy describing a control nobody built. Either the
+    manifest gained the fields or the string stopped naming a control, and
+    the ruling was that it gains them.
+
+    The list is EXACTLY two, both directions, so this stays an exception
+    rather than becoming a precedent. What a typo in either one does is
+    pinned separately below."""
     for rel in ("manifest.json", "dev/manifest.json"):
         manifest = json.loads((ROOT / "bundle" / rel)
                               .read_text(encoding="utf-8"))
-        for key, entry in manifest["user_config"].items():
-            assert entry["type"] == "boolean", (
-                f"{rel}: {key} is a {entry['type']} field; install-screen "
-                f"settings are toggles only")
+        typed = {key for key, entry in manifest["user_config"].items()
+                 if entry["type"] != "boolean"}
+        assert typed == TYPED_FIELDS, (
+            f"{rel}: the typed install-screen fields are {sorted(typed)}, "
+            f"and the sanctioned set is {sorted(TYPED_FIELDS)}. A new "
+            f"free-text box needs the same ruling these two got.")
+        for key in TYPED_FIELDS:
+            assert manifest["user_config"][key]["type"] == "string"
         env = manifest["server"]["mcp_config"]["env"]
         for var, ref in env.items():
             referenced = ref.removeprefix("${user_config.").removesuffix("}")
@@ -312,3 +346,75 @@ def test_the_packed_bundles_match_their_manifests():
             f"{mcpb} does not match {source}. Settings in the zip: "
             f"{sorted(packed.get('user_config', {}))}; in the manifest: "
             f"{sorted(tracked.get('user_config', {}))}. Repack it.")
+
+
+def test_a_typed_field_refuses_loudly_and_an_empty_one_is_a_no_op(
+        monkeypatch, launch):
+    """THE PRICE OF THE TWO EXCEPTIONS, pinned rather than assumed.
+
+    A free-text install-screen field can be mistyped, and this server's
+    answer to a bad value is to refuse to START. That is the right answer
+    (a consent posture the user did not choose is worse than a server that
+    says why it will not run) but it means the message has to name the
+    valid values, because on a Desktop install screen there is nobody to
+    ask. Both directions: the common case, an empty box, must be a clean
+    no-op, because empty is what the manifest ships and what most installs
+    will keep."""
+    launch(read_only=False)
+
+    monkeypatch.setenv(consent.ENV_SCOPE, "reserch")
+    with pytest.raises(BadParams) as bad_scope:
+        consent.apply()
+    assert "research" in str(bad_scope.value)
+    assert "full" in str(bad_scope.value)
+    monkeypatch.delenv(consent.ENV_SCOPE)
+
+    monkeypatch.setenv(consent.ENV_PREAUTH, "evaluate_script")
+    with pytest.raises(BadParams) as bad_form:
+        consent.apply()
+    assert "<class>@<origin>" in str(bad_form.value)
+    monkeypatch.delenv(consent.ENV_PREAUTH)
+
+    monkeypatch.setenv(consent.ENV_PREAUTH, "payment_form@example.com")
+    with pytest.raises(BadParams) as irreducible:
+        consent.apply()
+    assert "cannot be pre-authorized" in str(irreducible.value)
+    monkeypatch.delenv(consent.ENV_PREAUTH)
+
+    # An untouched install screen sends both fields through as empty
+    # strings, and that has to land on the shipped default posture.
+    monkeypatch.setenv(consent.ENV_SCOPE, "")
+    monkeypatch.setenv(consent.ENV_PREAUTH, "")
+    assert consent.apply() == consent.DEFAULT_SCOPE
+    assert consent.preauth_entries() == []
+
+
+def test_the_preauth_teaching_names_a_field_that_exists():
+    """THE GAP THIS WAVE CLOSED, held shut.
+
+    `consent.PREAUTH_TEACHING` told a Desktop user to fill "the
+    pre-authorization field in the server's settings". Fix wave 10 found
+    that no such field existed: the manifest wired KS4WEB_ALLOW_ACTING and
+    the pack booleans and nothing else, so a human who followed shipped,
+    ratified copy went looking for a control nobody had built.
+
+    Both directions, because either half can rot. The teaching still points
+    at Desktop settings, AND the manifest still defines the box AND wires
+    it to the variable the same sentence names for shell users, so the two
+    routes it describes are the same feature."""
+    manifest = json.loads((ROOT / "bundle" / "manifest.json")
+                          .read_text(encoding="utf-8"))
+    teaching = consent.PREAUTH_TEACHING
+    assert "pre-authorization field in the server's settings" in teaching
+    assert consent.ENV_PREAUTH in teaching
+    assert "preauth" in manifest["user_config"], (
+        "PREAUTH_TEACHING points a Desktop user at a field the install "
+        "screen does not have. Either the manifest keeps the field or the "
+        "string stops naming it; it cannot be neither.")
+    env = manifest["server"]["mcp_config"]["env"]
+    assert env[consent.ENV_PREAUTH] == "${user_config.preauth}", (
+        "the box exists but reaches nothing, which is worse than no box")
+    # The format the teaching quotes is the format the field's own
+    # description quotes, so a user reading either one types the same thing.
+    assert "class@site" in manifest["user_config"]["preauth"]["description"]
+    assert "<class>@<origin>" in teaching
