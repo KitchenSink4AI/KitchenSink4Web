@@ -1374,6 +1374,63 @@ class SessionManager:
 
     # ------------------------------------------------------- tombstones
 
+    def dead_recovery(self, session=None) -> dict:
+        """The SESSION_DEAD recovery, as facts rather than as a sentence.
+
+        Lives on the manager because the manager is what knows: which other
+        handles are dead, which drivers have gone down, and which of the
+        casualties is the monitor scheduler's. The field cascade this closes
+        ran three sessions deep and the tester found the second and third
+        only by calling status on a hunch, after every new open had already
+        failed. A caller that reads these facts knows in one refusal what
+        took that tester four calls.
+
+        Every value is an observation. Nothing here is an instruction the
+        message did not already give, and a fact this process cannot
+        establish is omitted rather than guessed."""
+        facts: dict = {
+            # THE ONE THING THE FIELD REPORT SAID WAS BROKEN, stated as the
+            # fact it now is.
+            "new_session_is_not_blocked": True,
+            "status_call": "manage_session(action='status')",
+        }
+        others = []
+        for sid, other in self.sessions.items():
+            if session is not None and sid == session.session_id:
+                continue
+            if other.browser_alive() is False:
+                others.append({"session": sid,
+                               "role": getattr(other, "role", "user"),
+                               "lane": other.spec.label})
+        if others:
+            facts["other_dead_sessions"] = others
+        for sid, other in self.sessions.items():
+            if getattr(other, "role", "user") != "monitor":
+                continue
+            alive = other.browser_alive()
+            # NAMED WHETHER OR NOT IT IS DEAD. "The monitor is fine" is the
+            # answer that stops a caller hunting, and it is worth as much as
+            # the other one.
+            facts["monitor_session"] = {
+                "session": sid,
+                "browser": ("dead" if alive is False else
+                            "alive" if alive else "unknown")}
+            break
+        if self.driver_deaths:
+            facts["driver_deaths"] = list(self.driver_deaths)
+        if session is not None:
+            facts["session"] = session.session_id
+            facts["lane"] = session.spec.label
+            # THE LANE HINT, and only when a wall was actually seen on this
+            # session. A lane suggestion after an ordinary crash would be a
+            # guess dressed as a diagnosis.
+            walled = sorted(getattr(session, "walled_origins", ()) or ())
+            if walled:
+                facts["wall_preceded_death"] = True
+                facts["walled_origins"] = walled[:8]
+                facts["lanes_call"] = "manage_session(action='lanes')"
+        return facts
+
     def reap_dead(self) -> list[dict]:
         """Tombstone every session whose browser is already gone, and say so.
 
@@ -1672,7 +1729,7 @@ class SessionManager:
                 if jar is not None and jar.alive() is False:
                     survivors = sorted(
                         set(session.contexts) - {jar.label})
-                    raise SessionDead(
+                    dead = SessionDead(
                         f"the browser for session {session.session_id} "
                         f"context {jar.label} is gone: every process it owns "
                         f"has exited ({sorted(jar.journal.pids)}). Page "
@@ -1689,6 +1746,8 @@ class SessionManager:
                            f"action='close') and open a new one")
                         + " Refs, read tokens, and page handles do not carry "
                           "over.")
+                    dead.recovery = self.dead_recovery(session)
+                    raise dead
                 if record.crashed:
                     # A crashed renderer never recovers on the same page:
                     # replaying the driver's "Page crashed" against a dead

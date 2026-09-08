@@ -1841,54 +1841,17 @@ def _session_is_gone(session) -> bool:
 
 
 def session_dead_recovery(session=None) -> dict:
-    """The SESSION_DEAD recovery, as facts rather than as a sentence.
+    """`MANAGER.dead_recovery` plus the one fact the manager cannot see.
 
-    Built from what this process can see at the moment of the refusal, which
-    is the whole reason it is worth carrying: the field cascade this closes
-    ran three sessions deep, and the tester only found the second and third
-    casualties by calling status on a hunch after every new open had already
-    failed. A caller that reads these facts knows in one refusal what took
-    that tester four calls.
-
-    Every value here is an observation. Nothing in it is an instruction the
-    message did not already give, and a fact this process cannot establish
-    is omitted rather than guessed."""
-    facts: dict = {
-        # THE ONE THING THE FIELD REPORT SAID WAS BROKEN, stated as the
-        # fact it now is: opening a new session is never blocked by a dead
-        # one, because open() tombstones the dead ones on its way past.
-        "new_session_is_not_blocked": True,
-        "status_call": "manage_session(action='status')",
-    }
-    others = []
-    for sid, other in MANAGER.sessions.items():
-        if session is not None and sid == getattr(session, "session_id", None):
-            continue
-        if other.browser_alive() is False:
-            others.append({"session": sid,
-                           "role": getattr(other, "role", "user"),
-                           "lane": other.spec.label})
-    if others:
-        facts["other_dead_sessions"] = others
-    monitor_health = _monitor_ops.monitor_session_health()
-    if monitor_health:
-        # NAMED WHETHER OR NOT IT IS DEAD. "The monitor is fine" is the
-        # answer that stops a caller hunting, and it is worth as much as
-        # the other one.
-        facts["monitor_session"] = monitor_health
-    if MANAGER.driver_deaths:
-        facts["driver_deaths"] = list(MANAGER.driver_deaths)
-    if session is not None:
-        facts["session"] = session.session_id
-        facts["lane"] = session.spec.label
-        # THE LANE HINT, and only when a wall was actually seen on this
-        # session. A lane suggestion after an ordinary crash would be a
-        # guess dressed as a diagnosis.
-        walled = sorted(getattr(session, "walled_origins", ()) or ())
-        if walled:
-            facts["wall_preceded_death"] = True
-            facts["walled_origins"] = walled[:8]
-            facts["lanes_call"] = "manage_session(action='lanes')"
+    The manager owns the recovery because it owns the knowledge; what it
+    does not own is the monitor scheduler's restart history, which lives in
+    `ops/monitor` and cannot be imported from `engine/`. There is no second
+    opinion here: the monitor row the manager already wrote is REPLACED by
+    the richer one rather than sitting beside it."""
+    facts = MANAGER.dead_recovery(session)
+    health = _monitor_ops.monitor_session_health()
+    if health:
+        facts["monitor_session"] = health
     return facts
 
 
