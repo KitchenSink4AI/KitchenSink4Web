@@ -28,6 +28,7 @@ from kitchensink4web.engine.session import MANAGER
 from kitchensink4web.errors import (ConfirmationRequired, CredentialRefused,
                                     UnsupportedContent, ValidationFailed)
 from kitchensink4web.ops import capture, diag, extract, files, net, storage
+from tests.fixtures.results import client_payload
 from kitchensink4web.policy import credentials, gates, readonly
 
 pytestmark = pytest.mark.browser
@@ -219,10 +220,9 @@ def test_screenshot_media_type_matches_bytes_on_every_format(site):
         _, page = await _open(site, "meta")
         for fmt, magic in (("png", b"\x89PNG"), ("jpeg", b"\xff\xd8\xff")):
             res = await capture.take_screenshot(page=page, format=fmt)
-            # inline result is a ToolResult; the structured payload carries
-            # the media type derived from the bytes.
-            payload = res.structured_content if hasattr(
-                res, "structured_content") else res
+            # An inline result is a ToolResult carrying the image plus
+            # the metadata as text; a spilled one is the plain dict.
+            payload = client_payload(res)
             assert payload["format"] == fmt
             assert payload["media_type"] == f"image/{fmt}"
     run(go())
@@ -245,8 +245,7 @@ def test_screenshot_masks_secret_fields(site):
     async def go():
         _, page = await _open(site, "b/secrets.html")
         res = await capture.take_screenshot(page=page, format="png")
-        payload = res.structured_content if hasattr(
-            res, "structured_content") else res
+        payload = client_payload(res)
         assert payload["masked_fields"] >= 1
     run(go())
 

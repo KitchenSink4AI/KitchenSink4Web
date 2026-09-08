@@ -199,22 +199,23 @@ def test_p16_13b_bom_file_loads(userdir):
     assert pset.by_slug("bom") is not None, "a UTF-8 BOM is not corruption"
 
 
-def test_p16_14_every_file_corrupt_still_starts(userdir):
+def test_p16_14_every_file_corrupt_still_starts(userdir, launch):
+    # Through `launch` rather than a bare server.configure(): a bare call
+    # resolves the shipped default grade and leaves the process read-only
+    # for whatever the shuffle runs next. The fixture restores it.
     for i in range(6):
         _write(userdir, f"junk{i}.json", "{{{ not json")
     pset = _load(userdir)
     assert len(pset.problems) >= 6
-    from kitchensink4web import server
-    state = server.configure(cli_packs=[])
+    state = launch(cli_packs=[])
     assert state["registered"]
 
 
-def test_p16_15_corrupt_dir_does_not_move_the_tool_count(userdir):
-    from kitchensink4web import server
-    clean = server.configure(cli_packs=["capture"])
+def test_p16_15_corrupt_dir_does_not_move_the_tool_count(userdir, launch):
+    clean = launch(cli_packs=["capture"])
     for i in range(4):
         _write(userdir, f"junk{i}.json", "not json at all")
-    dirty = server.configure(cli_packs=["capture"])
+    dirty = launch(cli_packs=["capture"])
     assert sorted(dirty["registered"]) == sorted(clean["registered"])
     assert dirty["profiles"]["problems"] >= 4
 
@@ -351,8 +352,16 @@ def test_p16_28_read_only_is_unaffected_by_profiles(userdir):
         assert "click" not in state["registered"]
         assert state["profiles"]["loaded"] >= 1
     finally:
+        # `read_only=False` and NOT a bare `configure()`, for the reason the
+        # `launch` fixture spells out in tests/conftest.py: a bare call
+        # resolves the SHIPPED default grade, `browse`, so this cleanup used
+        # to clear the grade on its first line and re-arm it on its second.
+        # Every test that ran after this one in a random order inherited a
+        # read-only process, and the lane database refuses to learn under a
+        # read-only grade, so `test_lane_wiring` went red whenever the
+        # shuffle put this file first.
         readonly.apply(False)
-        server.configure(cli_packs=[])
+        server.configure(cli_packs=[], read_only=False)
 
 
 def test_p16_29_unknown_workflow_names_are_reported_not_run(userdir):

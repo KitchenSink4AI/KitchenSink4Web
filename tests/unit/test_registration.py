@@ -17,6 +17,7 @@ from fastmcp import Client
 from kitchensink4web import envelope, packs, server
 from kitchensink4web.errors import BadParams
 from kitchensink4web.policy import readonly
+from tests.fixtures.results import client_payload
 
 # DESIGN 2.1, with the review's arithmetic note applied.
 #: find_and_act joined on 2026-09-06. It goes in LITE rather than a pack
@@ -250,7 +251,7 @@ def test_get_workflows_carries_the_pack_menu_and_the_lane_menu(launch):
     launch()
     result = _call("get_workflows", {})
     assert result.is_error is False
-    flows = result.structured_content["workflows"]
+    flows = client_payload(result)["workflows"]
     assert set(flows["packs"]) >= {"extract", "capture", "network"}
     assert any("--packs" in entry["launch_flag"]
                for entry in flows["packs"].values())
@@ -264,13 +265,13 @@ def test_get_workflows_carries_the_steering_topics(launch):
     one has to be retrievable BY NAME, since that is how an agent reaches a
     topic it was pointed at."""
     launch()
-    flows = _call("get_workflows", {}).structured_content["workflows"]
+    flows = client_payload(_call("get_workflows", {}))["workflows"]
     for topic in ("reading", "budgeting", "troubleshooting"):
         assert topic in flows, f"steering topic {topic} is missing"
         assert flows[topic], f"steering topic {topic} is empty"
         one = _call("get_workflows", {"topic": topic})
         assert one.is_error is False
-        assert one.structured_content["topic"] == topic
+        assert client_payload(one)["topic"] == topic
     assert any("since=" in line for line in flows["reading"])
     assert any("budget_tokens" in line for line in flows["budgeting"])
     assert any("moz-firefox" in line for line in flows["troubleshooting"])

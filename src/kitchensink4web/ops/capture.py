@@ -183,10 +183,13 @@ def _image_result(data: bytes, *, meta: dict, path: str | None,
     from .. import envelope
     meta["inline"] = True
     payload = envelope.success(meta)
+    # The image, then the metadata as text, and NOT a third copy of the
+    # metadata as structuredContent: an inline screenshot is the most
+    # expensive response this server sends and it was paying twice for the
+    # cheap half of it. Same measurement as envelope.ship.
     return ToolResult(
         content=[Image(data=data, format=fmt).to_image_content(),
-                 _json.dumps(payload, ensure_ascii=False)],
-        structured_content=payload)
+                 _json.dumps(payload, ensure_ascii=False)])
 
 
 async def _document_extent(p) -> dict:
