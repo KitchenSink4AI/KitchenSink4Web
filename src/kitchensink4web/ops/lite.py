@@ -6794,6 +6794,54 @@ def _audit_page_data(got: dict) -> dict:
     return {"page_derived": wrapped, "page_data": note}
 
 
+#: The reserved topic name that returns every topic at once, for a caller
+#: who really does want the whole manual. Reserved: `_menu_is_complete`
+#: refuses to let a real topic take this name.
+_ALL_TOPICS = "all"
+
+#: ONE LINE PER TOPIC, so a bare call can hand back a menu instead of the
+#: manual (fat audit D2). Nine of these are this tool's OWN description,
+#: split at its commas and re-homed against the topic each phrase already
+#: described, which is a relocation rather than new copy. The six topics the
+#: description never covered carry a placeholder with their facts inline,
+#: for the same copy pass that owns the other placeholders in this file.
+#:
+#: `_menu_is_complete` holds this dict and `recipes` to the same key set, so
+#: a topic added without a gloss fails at test time rather than shipping a
+#: menu with a hole in it.
+_TOPIC_MENU: dict[str, str] = {
+    "auth": "the auth workflow: headed handoff plus saved state",
+    "cheap-read-then-act": "the cheap-read-then-act pattern",
+    "reading": "reading strategy",
+    "budgeting": "budgeting",
+    "troubleshooting": "troubleshooting a page that will not read",
+    "subagent-budget": "the subagent budget setting",
+    "lanes": "lanes",
+    "packs": ("what each capability pack contains, with the exact launch "
+              "flag that loads it"),
+    "profiles": "what a site profile is and where it lives",
+    "session-transfer": ("[COPY PENDING: workflows.menu.session-transfer] "
+                         "FACTS: how to hand a running session to another "
+                         "conversation"),
+    "dialogs": ("[COPY PENDING: workflows.menu.dialogs] FACTS: native "
+                "alert, confirm and prompt dialogs, and arming an answer "
+                "before the click that raises one"),
+    "accessibility": ("[COPY PENDING: workflows.menu.accessibility] FACTS: "
+                      "the axe-core audit, the pip extra and the pack it "
+                      "needs, and what an automated audit does not catch"),
+    "packs-are-launch-time": ("[COPY PENDING: workflows.menu.packs-are-"
+                              "launch-time] FACTS: there is no runtime "
+                              "enable call; a missing capability needs a "
+                              "restart"),
+    "read-only": ("[COPY PENDING: workflows.menu.read-only] FACTS: the "
+                  "grade this server is running under and what unlocks "
+                  "acting at the next launch"),
+    "setup": ("[COPY PENDING: workflows.menu.setup] FACTS: everything "
+              "decided before the server starts: acting, packs, optional "
+              "extras, consent, dependencies"),
+}
+
+
 async def get_workflows(topic: str | None = None) -> dict:
     """Get recipes for this server: the cheap-read-then-act pattern, the
     auth workflow (headed handoff plus saved state), reading strategy,
@@ -7103,12 +7151,26 @@ async def get_workflows(topic: str | None = None) -> dict:
     }
     if topic:
         key = topic.strip().lower()
+        if key == _ALL_TOPICS:
+            return {"topic": _ALL_TOPICS, "workflows": recipes}
         if key not in recipes:
             raise BadParams(
                 f"no workflow topic {topic!r}: the topics are "
                 f"{sorted(recipes)}.")
         return {"topic": key, "workflow": recipes[key]}
-    return {"workflows": recipes}
+    # A BARE CALL IS ORIENTATION, SO IT RETURNS THE MENU. It used to return
+    # all fourteen topics in full, 4,101 tokens of recipes for packs the
+    # caller may not have loaded, when the names alone cost 59 and the topic
+    # a caller actually wanted costs between 24 and 532 by name. Nothing was
+    # removed: every topic is still reachable, and topic='all' still returns
+    # the whole dict for anyone who genuinely wants it.
+    return {
+        "topics": {name: _TOPIC_MENU[name] for name in sorted(recipes)},
+        "how": (
+            f"each name above is a valid topic= argument and returns that "
+            f"topic in full; topic={_ALL_TOPICS!r} returns every topic at "
+            f"once."),
+    }
 
 
 _DIALOG_ACTIONS = ("status", "hold", "arm_accept", "arm_dismiss",

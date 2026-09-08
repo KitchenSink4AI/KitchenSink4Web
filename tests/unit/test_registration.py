@@ -249,7 +249,9 @@ def test_get_workflows_carries_the_pack_menu_and_the_lane_menu(launch):
     """Discoverability rule 2, adapted: there is no enable call to name, so
     lite's own recipe tool has to carry the full menu (DESIGN 7.4)."""
     launch()
-    result = _call("get_workflows", {})
+    # topic='all' since D2: a BARE call returns the menu now, and this test
+    # is about what the recipes SAY, which is what 'all' hands back whole.
+    result = _call("get_workflows", {"topic": "all"})
     assert result.is_error is False
     flows = client_payload(result)["workflows"]
     assert set(flows["packs"]) >= {"extract", "capture", "network"}
@@ -265,7 +267,8 @@ def test_get_workflows_carries_the_steering_topics(launch):
     one has to be retrievable BY NAME, since that is how an agent reaches a
     topic it was pointed at."""
     launch()
-    flows = client_payload(_call("get_workflows", {}))["workflows"]
+    flows = client_payload(
+        _call("get_workflows", {"topic": "all"}))["workflows"]
     for topic in ("reading", "budgeting", "troubleshooting"):
         assert topic in flows, f"steering topic {topic} is missing"
         assert flows[topic], f"steering topic {topic} is empty"
