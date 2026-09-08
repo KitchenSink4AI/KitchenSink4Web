@@ -540,7 +540,7 @@ def detect_installed(refresh: bool = False) -> list[dict]:
     return found
 
 
-def recommended_lane(refresh: bool = False) -> dict:
+def recommended_lane(refresh: bool = False, explain: bool = True) -> dict:
     """Which lane to open, given what is installed. STEERING ONLY.
 
     Nothing here switches a lane, and `manage_session(action='open')` reads
@@ -554,6 +554,13 @@ def recommended_lane(refresh: bool = False) -> dict:
     difference: Reddit served Chromium headless a 17-node blank page and
     served both Firefox lanes the real one, and the block is the stock
     HeadlessChrome user agent rather than anything KS4Web does.
+
+    `explain=False` returns which lanes without the two `why` sentences and
+    the steering note, which are the same words on every call and are what
+    the session status block pays for repeatedly. The reasoning did not go
+    away: `manage_session(action='status')` names where it went, and
+    `manage_session(action='lanes')` and get_workflows(topic='sessions')
+    both still carry it whole.
     """
     installed = detect_installed(refresh=refresh)
     firefox = next((b for b in installed if b["channel"] == "moz-firefox"),
@@ -569,6 +576,13 @@ def recommended_lane(refresh: bool = False) -> dict:
                 "lanes the real page in the field campaign. An installed "
                 "Firefox would be the better one"),
     }
+    if not explain:
+        return {
+            "installed": [{"name": b["name"], "lane": b["lane"],
+                           "path": b["path"]} for b in installed],
+            "default": {"lane": "A(chromium)"},
+            "research": {"lane": research["lane"]},
+        }
     return {
         "installed": [{"name": b["name"], "lane": b["lane"], "path": b["path"]}
                       for b in installed],

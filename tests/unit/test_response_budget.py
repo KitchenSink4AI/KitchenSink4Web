@@ -22,6 +22,7 @@ import pytest
 from fastmcp import Client
 
 from kitchensink4web import envelope, server
+from kitchensink4web.engine import lanedb, lanes
 from kitchensink4web.ops import lite
 from tests.fixtures.results import client_payload, content_text
 
@@ -173,3 +174,98 @@ def test_the_dump_answers_to_the_same_spellings_a_topic_does(launch,
     result = _call("get_workflows", {"topic": spelling})
     assert result.is_error is False
     assert "workflows" in client_payload(result)
+
+
+# ------------------------------------------------------------------- D3
+
+
+def _sessions_topic(launch_fixture):
+    launch_fixture()
+    return client_payload(
+        _call("get_workflows", {"topic": "sessions"}))["workflow"]
+
+
+def test_the_status_teaching_moved_verbatim_and_not_a_word_changed(launch):
+    """COMPLETENESS, and the one that matters for D3: status was 52% text
+    that said the same words on every call whatever the state was, and the
+    fat audit's instruction was to RELOCATE it, not to rewrite it. Every
+    paragraph is compared against the constant status itself still uses, so
+    a future edit that reworded one copy fails here rather than shipping
+    two accounts of the same rule."""
+    topic = _sessions_topic(launch)
+    assert topic["shared_state"] == (
+        f"{lite.SHARED_STATE_RULE} {lite.SHARED_STATE_DETAIL}")
+    assert topic["idle_bounds"] == lite.IDLE_ADVISORY_NOTE
+    assert topic["lane_database"] == lanedb.DISCLOSURE
+    assert topic["browser_recommendation"]["note"]
+    assert topic["browser_recommendation"]["default"]["why"]
+    assert topic["browser_recommendation"]["research"]["why"]
+
+
+def test_the_lane_database_disclosure_has_exactly_one_copy(launch):
+    """Both directions. A privacy promise printed from two places is a
+    privacy promise that can disagree with itself. The status block stopped
+    repeating it; the action a caller reaches for when the question IS the
+    database still carries it, and it comes from the same constant."""
+    launch()
+    assert lanedb.status(explain=True)["never_stores"] == (
+        lanedb.DISCLOSURE["never_stores"])
+    assert "never_stores" not in lanedb.status(explain=False)
+    lanes_action = client_payload(
+        _call("manage_session", {"action": "lanes"}))
+    assert lanes_action["lane_database"]["never_stores"] == (
+        lanedb.DISCLOSURE["never_stores"])
+
+
+def test_the_recommendation_keeps_its_lanes_when_it_drops_its_reasons(
+        launch):
+    """COMPLETENESS. `explain=False` is allowed to drop sentences and is
+    not allowed to drop an answer."""
+    launch()
+    full = lanes.recommended_lane()
+    brief = lanes.recommended_lane(explain=False)
+    assert brief["default"]["lane"] == full["default"]["lane"]
+    assert brief["research"]["lane"] == full["research"]["lane"]
+    assert brief["installed"] == full["installed"]
+    assert "why" not in brief["default"]
+    assert "note" not in brief
+
+
+def test_status_names_where_the_teaching_went(launch):
+    """A block that stops explaining itself and does not say where the
+    explanation is has not been trimmed, it has been deleted. The pointer
+    is asserted to be a call that actually answers."""
+    launch()
+    status = client_payload(_call("manage_session", {"action": "status"}))
+    assert status["explained_by"] == "get_workflows(topic='sessions')"
+    assert _call("get_workflows", {"topic": "sessions"}).is_error is False
+
+
+def test_status_keeps_the_state_and_the_claims(launch):
+    """Both directions for the whole of D3: what left status was text that
+    never varied, and every one of these varies or is a claim the server
+    makes about itself."""
+    launch()
+    status = client_payload(_call("manage_session", {"action": "status"}))
+    assert status["idle_advisory"]["automatic_action"] == "none"
+    assert "quiet_after_s" in status["idle_advisory"]
+    assert "read_only" in status
+    assert "optional_features" in status
+    assert status["lane_database"]["learning"]
+    assert "installed" in status["browsers"]
+
+
+def test_a_reap_that_did_nothing_says_nothing(launch):
+    """A startup fact restated forever is not a status. The census keys
+    (`journals`, `skipped_live_owner`) are deliberately not triggers: a
+    machine running a second KS4Web has them non-zero on every healthy
+    launch, which would make the condition always true."""
+    assert lite._reap_did_something({}) is False
+    assert lite._reap_did_something(
+        {"journals": 3, "skipped_live_owner": 2, "killed": [],
+         "declined": [], "profiles_removed": []}) is False
+    assert lite._reap_did_something(
+        {"journals": 1, "killed": [4321]}) is True
+    assert lite._reap_did_something({"declined": [{"pid": 1}]}) is True
+    assert lite._reap_did_something({"profiles_removed": ["x"]}) is True
+    assert lite._reap_did_something({"audits_removed": 2}) is True

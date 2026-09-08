@@ -556,10 +556,12 @@ def test_no_automatic_park_or_recycle_and_the_surface_says_so():
     status = inspect.getsource(lite.manage_session)
     assert '"idle_advisory"' in status, "the bounds are unlabelled again"
     assert '"automatic_action": "none"' in status
-    block = status[status.index('"hygiene": {"job_object": '
-                                '_session.hygiene.JOB.status,\n'
-                                '                        "startup_reap"'):]
-    assert "idle_park_s" not in block[:200], (
+    # Anchored on the block's OPENING, not on its whole literal: what the
+    # hygiene block CONTAINS is allowed to change (the startup reap became
+    # conditional in the ship-polish wave) and this test is about where the
+    # idle bounds live, not about how the reap is reported.
+    block = status[status.index('"hygiene": {'):]
+    assert "idle_park_s" not in block[:400], (
         "the idle bounds are back inside the hygiene block, beside two "
         "defenses that really do act")
 

@@ -6127,18 +6127,14 @@ async def manage_session(
             # on a browser some other conversation opened. That is the
             # design, and it stops being a trap the moment it is said out
             # loud beside the list it applies to.
-            **({"shared_state": (
-                "sessions belong to this KS4Web process, not to a "
-                "conversation. Every session above is reachable from any "
-                "conversation talking to this server, including ones "
-                "another conversation opened, and a call that names no "
-                "session uses the single open one whatever opened it. The "
-                "open_pages of each session above are what it is actually "
-                "showing. To work in isolation, open your own with "
-                "manage_session(action='open') and pass its handle "
-                "explicitly; to pick up an existing one deliberately, use "
-                "manage_session(action='export_handle') in the "
-                "conversation that holds it.")} if listed else {}),
+            # The paragraph's FIRST SENTENCE stays, because the sonnet
+            # model test burned about twelve calls on cross-conversation
+            # contamination before working this out and the fat audit
+            # carved it out of D3 by name. The rest of it, the part that
+            # says what to do about it, moved verbatim to
+            # get_workflows(topic='sessions'), which is where a caller who
+            # has just read this line goes next.
+            **({"shared_state": SHARED_STATE_RULE} if listed else {}),
             # Field log 2 item U1's cheap half. A conversation that timed out
             # leaves its browser running, and the status call is where that
             # becomes visible: every session carries how long it has been
@@ -6159,7 +6155,7 @@ async def manage_session(
             # EMPTY on every machine and learns only from what this machine
             # observed, so the honest thing to publish here is the file, the
             # host count, and what the file can and cannot contain.
-            "lane_database": _lanedb.status(),
+            "lane_database": _lanedb.status(explain=False),
             # THE SCHEDULER'S BROWSER, NAMED (fix wave 10, the field
             # cascade). A user who does not know monitors open sessions
             # will not recognise one in the list above, and the tester who
@@ -6203,7 +6199,7 @@ async def manage_session(
             # item 44, the user's own ask). Detected once per process from
             # stats and a registry read, never by launching anything, and it
             # steers rather than switches: no code path reads this back.
-            "browsers": lanes.recommended_lane(),
+            "browsers": lanes.recommended_lane(explain=False),
             **({"update": update} if update else {}),
             # The two idle bounds moved OUT of `hygiene` (endurance F3).
             # They sat beside the job object and the startup reaper, which
@@ -6211,18 +6207,26 @@ async def manage_session(
             # live defense; a session left alone for 6.7x the recycle bound
             # still held five browser processes and about 500 MB. They are
             # advisory thresholds and nothing else, and now say so.
-            "hygiene": {"job_object": _session.hygiene.JOB.status,
-                        "startup_reap": MANAGER.startup_reap},
+            # The startup reap is a STARTUP fact, and on a healthy machine
+            # it reports that it found nothing, forever, on every call.
+            # It is here when it did something and absent when it did not,
+            # which is the same discipline `reaped_on_last_open` and
+            # `driver_deaths` above already follow.
+            "hygiene": {
+                "job_object": _session.hygiene.JOB.status,
+                **({"startup_reap": MANAGER.startup_reap}
+                   if _reap_did_something(MANAGER.startup_reap) else {}),
+            },
+            # `automatic_action: none` is the claim and it stays. The
+            # paragraph explaining it said the same words on every call and
+            # is now in get_workflows(topic='sessions'), verbatim.
             "idle_advisory": {
                 "quiet_after_s": _session.IDLE_PARK_S,
                 "long_quiet_after_s": _session.IDLE_CLOSE_S,
-                "automatic_action": "none",
-                "note": ("these bounds decide when this status calls a "
-                         "session quiet and prints the close advice. "
-                         "Nothing parks a page and nothing recycles a "
-                         "session on its own: a session lives until you "
-                         "close it or the server exits, and an idle one "
-                         "holds its browser processes the whole time.")},
+                "automatic_action": "none"},
+            # ONE POINTER, not a sentence per block. Everything the blocks
+            # above stopped repeating is behind this one call, verbatim.
+            "explained_by": "get_workflows(topic='sessions')",
         }
     raise BadParams(
         f"unknown manage_session action {action!r}: the actions are 'open', "
@@ -6504,8 +6508,13 @@ def _session_status(sess) -> dict:
                               for pid in c.journal.pids}),
         # The journal is populated once, at open, so it names the processes
         # that existed at launch and never grows (endurance p9_journal).
-        # Reporting which of THOSE are still running is the honest half.
-        "owned_pids_alive": live_pids,
+        # Reporting which of THOSE are still running is the honest half --
+        # and it is only worth a line when it DIFFERS. On a healthy session
+        # it repeated `owned_pids` exactly, so a reader had to compare two
+        # identical lists to learn nothing. Absent means all of them.
+        **({"owned_pids_alive": live_pids}
+           if live_pids != sorted({pid for c in sess.contexts.values()
+                                   for pid in c.journal.pids}) else {}),
         # THE AGGREGATE IS HONEST ABOUT PARTIAL DEATH. One context's
         # browser can die while the other lives, and reporting the session
         # as alive because one of them is would be the
@@ -6794,6 +6803,52 @@ def _audit_page_data(got: dict) -> dict:
     return {"page_derived": wrapped, "page_data": note}
 
 
+#: THE SHARED-PROCESS RULE, in one place. The first sentence is what the
+#: session status block carries on every call with a session open; the whole
+#: paragraph is what get_workflows(topic='sessions') carries. Splitting it
+#: here rather than writing a short version keeps the two from drifting into
+#: two different accounts of the same rule.
+SHARED_STATE_RULE = (
+    "sessions belong to this KS4Web process, not to a conversation.")
+SHARED_STATE_DETAIL = (
+    "Every session in manage_session(action='status') is reachable from "
+    "any conversation talking to this server, including ones another "
+    "conversation opened, and a call that names no session uses the single "
+    "open one whatever opened it. The open_pages of each session are what "
+    "it is actually showing. To work in isolation, open your own with "
+    "manage_session(action='open') and pass its handle explicitly; to pick "
+    "up an existing one deliberately, use "
+    "manage_session(action='export_handle') in the conversation that holds "
+    "it.")
+
+#: The idle bounds' explanation, moved out of every status call. The CLAIM
+#: it explains (`automatic_action: none`) stayed behind.
+IDLE_ADVISORY_NOTE = (
+    "these bounds decide when manage_session(action='status') calls a "
+    "session quiet and prints the close advice. Nothing parks a page and "
+    "nothing recycles a session on its own: a session lives until you "
+    "close it or the server exits, and an idle one holds its browser "
+    "processes the whole time.")
+
+
+def _reap_did_something(report) -> bool:
+    """Whether the startup reap has anything to report.
+
+    A reap that found nothing is the healthy case and it was printing a
+    fixed six-key dict of zeros and empty lists on every status call
+    forever. Anything it ACTED on brings the whole report back, in full.
+
+    `journals` and `skipped_live_owner` are deliberately not triggers: they
+    are a census of what the reaper looked at, and on a machine running a
+    second KS4Web they are non-zero on every healthy launch, which would
+    make this condition always true and the trim pointless."""
+    if not isinstance(report, dict):
+        return bool(report)
+    return bool(report.get("killed") or report.get("declined")
+                or report.get("profiles_removed")
+                or report.get("audits_removed"))
+
+
 #: The reserved topic name that returns every topic at once, for a caller
 #: who really does want the whole manual. Reserved: `_menu_is_complete`
 #: refuses to let a real topic take this name.
@@ -6836,6 +6891,9 @@ _TOPIC_MENU: dict[str, str] = {
     "read-only": ("[COPY PENDING: workflows.menu.read-only] FACTS: the "
                   "grade this server is running under and what unlocks "
                   "acting at the next launch"),
+    "sessions": ("[COPY PENDING: workflows.menu.sessions] FACTS: the "
+                 "shared-process rule, the idle bounds, what the lane "
+                 "database holds, and why each lane is recommended"),
     "setup": ("[COPY PENDING: workflows.menu.setup] FACTS: everything "
               "decided before the server starts: acting, packs, optional "
               "extras, consent, dependencies"),
@@ -7092,6 +7150,22 @@ async def get_workflows(topic: str | None = None) -> dict:
             "that wants to influence the result can. Both facts are in "
             "every payload rather than in documentation.",
         ],
+        # THE RECEIVING TOPIC (fat audit D3). manage_session(action='status')
+        # was 52% text that said the same words on every call whatever the
+        # state was. Every paragraph below is that text, VERBATIM, moved
+        # rather than rewritten; status names this topic in `explained_by`
+        # and keeps the state, the claims, and the shared-process rule's
+        # first sentence. The lane-database disclosure is here AND still on
+        # manage_session(action='lanes'), from one shared constant, so the
+        # two cannot drift.
+        "sessions": {
+            "shared_state": f"{SHARED_STATE_RULE} {SHARED_STATE_DETAIL}",
+            "idle_bounds": IDLE_ADVISORY_NOTE,
+            "lane_database": _lanedb.DISCLOSURE,
+            "browser_recommendation": {
+                k: v for k, v in lanes.recommended_lane().items()
+                if k != "installed"},
+        },
         "packs-are-launch-time": (
             "There is no runtime enable call. The tool set is fixed when the "
             "server starts, which is what MCP 2026-07-28 requires, so a "
