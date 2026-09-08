@@ -4479,3 +4479,109 @@ Full report, including fourteen new `[COPY PENDING]` slots with their FACTS TO
 CONVEY, the six author-queued non-builds with the tester's own arguments, and
 the deferred-ledger cross-reference:
 `Draft/Working Files/Agent Results/20260908_web_fixwave10.md`.
+
+## 2026-09-08 20:59 KST — the ship-polish wave (fat audit D1-D5, and the transport)
+
+THE HEADLINE IS ONE ARGUMENT NOBODY PASSED. Every success response was leaving
+this server twice, as `structuredContent` and as a byte-identical text copy of
+the same object, because a tool that returns a dict makes FastMCP build both.
+The fat audit measured it and named it worth more than everything else in the
+audit combined, and said the one thing it could not settle from inside the
+server was which copy a real client reads.
+
+SETTLED BY MEASUREMENT, at the client boundary. A live server was driven from
+a Claude Code session and asked the same tool twice: the success came back
+compact and the refusal came back indented two spaces, which are exactly this
+server's own two accidental serializations (`pydantic_core.to_json` on success,
+`json.dumps(indent=2)` on refusals). A client that ignored `content` and
+re-serialized `structuredContent` would have used one serializer and produced
+one style. It reproduced both. The client reads `content`.
+
+So success ships text only, through `envelope.ship`, in FastMCP's own
+serialization so the bytes are what was already going out. Refusals keep both
+copies and lose the indent: `isError` forces the shape anyway, they are sixty
+tokens, and `RefusalResult`'s mapping protocol reads `structured_content` back
+in-process. `output_schema=None` at registration stops `tools/list` promising a
+structured copy nobody sends.
+
+  get_page_view versailles   9,302 -> 4,765 on the wire
+  get_page_view ecommerce    7,654 -> 3,729
+  get_text (default)        14,326 -> 3,450
+  get_workflows()            8,355 ->   372
+  manage_session(status)     3,489 -> 1,291
+  navigate                     503 ->   227
+
+A session of one navigate, one page view, one status check and one section read
+went from 27,620 tokens to 9,733.
+
+THE REST OF THE AUDIT. A bare `get_workflows()` is a MENU now, 362 tokens
+against 4,255, with every topic still fetchable by name and byte-identical,
+`topic='all'` for the dump, and nine of the fifteen glosses re-homed from the
+tool's own description rather than written. `manage_session(action='status')`
+reports STATE: 1,730 -> 1,351, with every relocated paragraph moved VERBATIM to
+`get_workflows(topic='sessions')` and named once in `explained_by`; the
+shared-process rule keeps its first sentence, `automatic_action: none` keeps
+its claim, and the lane-database disclosure now comes from ONE constant that
+status, the lanes action and the topic all quote. Three projection section
+headers stopped being sentences. `get_text` defaults to 8,000 characters
+instead of 20,000, sized to the one-section read this server's own content
+digest recommends.
+
+THE HEADER TRIM BOUGHT DETAIL, NOT A SMALLER BILL, and that is worth recording
+because it is the first time this happened. On a page already at the top rung
+it hands back about 77 tokens; on the flagship Versailles read, which was
+rung-limited, the freed room promoted the read from rung 7 to rung 6. Same
+page, same budget, more of the page. The published figure went UP as a result,
+4,306 -> 4,437, and the delta fixture's first read went DOWN, 898 -> 821. Both
+restamped, English and all six locales.
+
+THREE AUDIT ITEMS WERE NOT APPLIED and the reasons are findings. The
+per-heading prices stay: the audit said there is no call to spend them on, and
+the digest's very next line advertises `get_text(location={"ref":"h<n>"})`, so
+the heading price is the price of the call printed underneath it. The empty
+completeness lines and the `priced at page rate` line stay: collapsing them
+means writing new phrasing for CLAIMS, which is a copy-pass job. The `budget{}`
+block stays against the audit's ranking, because it is the machine-readable
+form of the budget guarantee and thirty test call sites read it.
+
+THE MANIFEST GAINED THE FIELD ITS OWN TEACHING PROMISED. `PREAUTH_TEACHING`
+told a Desktop user to fill a pre-authorization field that did not exist.
+`consent_scope` and `preauth` are wired to `KS4WEB_CONSENT` and
+`KS4WEB_PREAUTH` in both manifests; accepting every default reproduces the
+previous install exactly and an empty box is a clean no-op, both pinned. These
+are the FIRST free-text fields on the install screen and the standing rule
+against them had a real reason: a typo in either stops the server from
+starting. The rule was not loosened, it was given exactly two named exceptions
+asserted both ways, and what a typo does is pinned. FLAGGED FOR THE AUTHOR.
+
+A PRE-EXISTING BUG, found because `pytest-randomly` shuffled badly.
+`test_p16_28` cleared the read-only grade and re-armed it with a bare
+`configure()`, which re-resolves the SHIPPED default grade; the lane database
+refuses to learn under a read-only grade, so six lane tests went red on any
+seed that ordered those two files that way. Verified on a pristine `git
+archive` baseline before anything of mine was involved. Every prior wave's
+green suite on this repo was partly seed luck. An autouse fixture now fails any
+test that leaves the grade changed, and it caught two more leakers immediately.
+
+GATES. Certifying runs on the merged tree at `20b1174`, sequential, both
+orders: forward seed 1 **2,049 passed / 0 failed / 5 skipped / 1 xpassed** in
+15m07s, and reverse order seed 20260909 **2,049 passed / 0 failed / 5 skipped /
+1 xpassed** in 14m53s. The gauntlet subset over the changed surface (twenty-two
+unit and browser files) ran **627 passed / 0 failed**. 68 new pins, each
+labelled BUDGET or COMPLETENESS, red-first proven against a `git archive` of
+`main` extracted outside every worktree so no git state was mutated to obtain
+the proof: 33 of the 47 in `test_response_budget.py` fail there and the 14 that
+hold are completeness pins, and four manifest-parity tests failed against the
+unedited manifest before any test was touched. Suite collection 2,006 -> 2,055,
+restamped because the guard that measures live caught it, along with the two
+page-read figures and the German, French and Spanish comparison rows the copy
+guard caught after the English ones were fixed.
+
+A release-candidate Desktop bundle was built for the author's out-of-box test:
+`Desktop/ks4web-rc.mcpb`, public manifest defaults, wired to its OWN durable
+venv rather than the beta's, because three live servers are running out of the
+beta's and sharing one install would have made testing the candidate change the
+thing it might replace.
+
+Full report:
+`Draft/Working Files/Agent Results/20260908_web_polish.md`.
