@@ -262,4 +262,13 @@ def capability_line() -> str:
     capability flag that costs forty tokens is the first thing to go."""
     if probe()[0]:
         return "read_image_text reads text out of them here"
-    return f"nothing here reads pixels ({short_reason()})"
+    why = short_reason()
+    # THE EXTRA IS NAMED HERE TOO (fix wave 10 audit, gap 6). This line was
+    # the one place the module's own promise -- that the extra is named in
+    # every refusal -- was not kept, and it is the surface a caller meets
+    # BEFORE it ever calls the tool and gets the full refusal. The name is
+    # added only on the branch where installing it is the answer: on
+    # non-Windows and on =off it would be an instruction that cannot help.
+    if why == "extra not installed":
+        return f"nothing here reads pixels ({why}: pip install {EXTRA})"
+    return f"nothing here reads pixels ({why})"

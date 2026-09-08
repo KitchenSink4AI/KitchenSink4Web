@@ -119,8 +119,18 @@ class GuidedAbsenceMiddleware(Middleware):
             if pack not in (None, "lite") and not packs.is_pack_loaded(pack):
                 refusal = BadParams(
                     f"{name} exists in the design but its pack is not "
-                    f"loaded in this process.")
+                    f"loaded in this process. Packs are chosen at LAUNCH by "
+                    f"a human, at the install screen or in the launch "
+                    f"environment, so no call turns one on mid-session and "
+                    f"nothing about the arguments is wrong.")
                 refusal.hint_tools = (name,)
+                # AUDIT GAP 11. BAD_PARAMS's own hint opens "the arguments
+                # are malformed", which is printed above the correct pack
+                # teaching and contradicts it. `hint` is the documented
+                # raise-site override for this exact shape.
+                refusal.hint = (
+                    "this is a capability absence, not an argument fault: "
+                    "the tool is not in this process's tool set")
                 return envelope.refuse(refusal)
             # L1 (gauntlet 2026-09-06): a name that is neither an absent
             # mutating tool nor an unloaded pack member used to fall through

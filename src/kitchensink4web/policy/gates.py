@@ -216,7 +216,7 @@ class GateEngine:
     def ask(self, action_class: str, *, tool: str, session: str,
             page: str | None, target: dict | None, summary: str,
             live_only: bool = False, unattended: bool = False,
-            origin: str | None = None) -> Gate:
+            origin: str | None = None, reason: str | None = None) -> Gate:
         """Record the gate and refuse with the confirmation payload.
 
         Raises on the first pass. On a confirmation re-run (the elicitation
@@ -248,7 +248,8 @@ class GateEngine:
                 f"set is {sorted(GATED_CLASSES)}. A class is added in the "
                 f"design, not at a call site.")
         if unattended:
-            raise self._unattended_refusal(action_class, summary, live_only)
+            raise self._unattended_refusal(action_class, summary, live_only,
+                                          reason)
         self._sweep()
         token = _secrets.token_urlsafe(18)
         gate = Gate(token=token, action_class=action_class, tool=tool,
@@ -268,7 +269,16 @@ class GateEngine:
             f"completes there. The target is re-validated at execution "
             f"time, so a "
             f"page that swaps the element after this confirmation gets "
-            f"TARGET_CHANGED, not the click.")
+            f"TARGET_CHANGED, not the click."
+            # WHY THIS CLASS ASKED, carried through at last (fix wave 10
+            # audit, gap 4). `consent.decide` composes a precise sentence
+            # naming the scope in force, the setting that would clear the
+            # class, or the fact that nothing clears it, and the ladder used
+            # it on the CLEARED branch and dropped it on this one. So a
+            # caller gated under `research` was never told `KS4WEB_CONSENT`
+            # exists, and a caller gated on a pre-authorizable class was
+            # never told `KS4WEB_PREAUTH` exists.
+            + (f" {reason}" if reason else ""))
         exc.detail = {
             "resultType": "input_required",
             "requestState": token,
@@ -296,7 +306,9 @@ class GateEngine:
     #: (Tier 1) or the statement that no setting makes this proceed
     #: unattended (Tier 2).
     def _unattended_refusal(self, action_class: str, summary: str,
-                            live_only: bool) -> ConfirmationRequired:
+                            live_only: bool,
+                            reason: str | None = None
+                            ) -> ConfirmationRequired:
         route = (
             "No setting makes this proceed without a human. Paying, "
             "submitting a credential, sending something that reaches other "
@@ -314,7 +326,10 @@ class GateEngine:
             f"element it named, so a decision made later could not execute "
             f"this action anyway, and a queue that pretended otherwise "
             f"would be the stale-intent hole this system exists to close. "
-            f"{route}")
+            f"{route}"
+            # Same fix as the attended branch: the computed reason names
+            # the scope in force and the setting that would change it.
+            + (f" {reason}" if reason else ""))
 
     # -------------------------------------------------------------- redeem
 

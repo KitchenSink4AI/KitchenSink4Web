@@ -712,7 +712,7 @@ class Renderer:
                 f'{len(c["canvases"])}'
                 + (f' ({"; ".join(parts)})' if parts else '')
                 + mute_clause
-                + '; pixels need the capture pack (--packs capture); '
+                + '; pixels need the capture pack, chosen at launch (--packs capture); '
                 + _ocr.capability_line())
         elif mute:
             lines.append(

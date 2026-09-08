@@ -88,11 +88,19 @@ def approve(request: ActionRequest) -> dict:
     #    refusing here keeps the claim true even then. Navigation is the
     #    permitted-but-graded case.
     if grade is not None and request.kind in ("act", "download"):
+        # THE LADDER'S OWN REFUSAL NOW TEACHES WHAT THE OTHERS TEACH (fix
+        # wave 10 audit, gap 2). It said "restart without --read-only",
+        # which is a no-op instruction on a default install: `browse` is
+        # the shipped default grade and no flag is present to remove.
+        # `readonly.UNLOCK_TEACHING` is the one string that names the
+        # Desktop checkbox, the environment variable, and the fact that
+        # this is a human's settings choice rather than anything a tool
+        # call can reach, and every other read-only refusal already used it.
         raise ReadOnlyMode(
             f"this server is read-only (grade {grade!r}) and {request.tool} "
             f"describes a mutating action. No tool in this mode can click, "
             f"type, submit, upload, download, evaluate script, or write "
-            f"storage. Restart without --read-only to act.")
+            f"storage. " + readonly.UNLOCK_TEACHING)
 
     # 2. Credential blindness.
     if request.writes_value and request.target is not None:
@@ -234,7 +242,12 @@ def confirm(action_class: str, *, tool: str, session: str | None,
             target=target, summary=summary,
             live_only=decision.outcome == consent.ASK_LIVE_ONLY,
             unattended=consent.unattended(),
-            origin=consent.origin_of(url))
+            origin=consent.origin_of(url),
+            # THE REASON REACHES THE ASK BRANCH TOO. It was used on the
+            # cleared branch below as `cleared_because` and dropped here,
+            # which silenced every teaching sentence consent.decide writes
+            # about the scope in force and the setting that would clear it.
+            reason=decision.reason)
         record = gates.ENGINE.verify_execute(
             granted, target, resolution_outcome=resolution)
         record["cleared_by"] = "human"

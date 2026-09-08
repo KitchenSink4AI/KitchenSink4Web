@@ -201,9 +201,17 @@ HINTS: dict[str, str] = {
         "this action class needs a human confirmation; answer the attached "
         "request and the call will re-validate its target before acting"
     ),
+    # THE HINT USED TO NAME A FLAG THAT IS NOT THERE (fix wave 10 audit,
+    # gap 1). It said "restart without --read-only to act", and it rides on
+    # EVERY read-only refusal. The shipped default grade is `browse` with no
+    # flag present at all, so for a default install that is an instruction
+    # to remove something the user never set, printed underneath messages
+    # that name the real switch correctly.
     "READ_ONLY_MODE": (
         "this server is running read-only; the message names the grade in "
-        "force and what it permits. Restart without --read-only to act"
+        "force and what it permits. A human turns acting on at the install "
+        "screen or in the launch environment (KS4WEB_ALLOW_ACTING=true); no "
+        "tool call can do it"
     ),
     "LANE_UNSUPPORTED": (
         "the current engine lane cannot do this; the message names the gap "

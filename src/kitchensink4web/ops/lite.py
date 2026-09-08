@@ -59,6 +59,7 @@ from ..errors import (AmbiguousLocation, AuthRequired, BadParams,
                       NavigationFailed, NotImplementedYet, PageUnreachable,
                       ReadOnlyMode, SessionDead, StaleAnchor, TargetNotFound,
                       Timeout, ValidationFailed)
+from .. import packs as _packs
 from ..policy import audit as _audit
 from ..policy import classify as _classify
 from ..policy import budgets as _budgets
@@ -1599,7 +1600,8 @@ async def navigate(
                     f"and download(action='fetch', url=...) re-requests it "
                     f"through this session's own cookies when the browser "
                     f"would rather paint it in a viewer. Both need the "
-                    f"files pack (--packs files).")
+                    f"files pack (--packs files)."
+                    + _packs.LAUNCH_TIME_CLAUSE)
                 stopped.detail = {
                     "document_handoff": _resource.url_handoff(url)}
                 raise stopped from exc
@@ -2019,7 +2021,8 @@ def _auth_refusal(url: str, marker: str | None = None,
         f"{url} needs {what} "
         f"(evidence: {marker or 'HTTP 401'}). Load a saved state with the "
         f"storage pack (--packs storage, load_auth_state), or let a human "
-        f"log in outside the model's context. {AUTH_RECIPE}"
+        f"log in outside the model's context.{_packs.LAUNCH_TIME_CLAUSE} "
+        f"{AUTH_RECIPE}"
         + _classification_line(verdict))
 
 
@@ -6158,6 +6161,14 @@ async def manage_session(
             # Reattaching to an orphan is the expensive half and is not here.
             **({"idle_sessions": _idle_summary(stale)} if stale else {}),
             "read_only": readonly.describe(),
+            # WHAT IS MISSING, BEFORE A CALL FINDS OUT (field report item 19,
+            # recommendation 1, in the tester's own words). Each row names
+            # the engine, whether it is installed, which pack it also needs,
+            # and what installing it would take by install route, because
+            # the answer genuinely differs between a pip install and the
+            # Desktop bundle and printing one sentence to both is how a
+            # caller follows an instruction that cannot work.
+            "optional_features": _packs.optional_features(),
             # The lane database, where lane steering already lives. It ships
             # EMPTY on every machine and learns only from what this machine
             # observed, so the honest thing to publish here is the file, the
@@ -7043,6 +7054,56 @@ async def get_workflows(topic: str | None = None) -> dict:
             "server starts, which is what MCP 2026-07-28 requires, so a "
             "capability you do not have needs a restart with --packs or "
             "KS4WEB_MODE rather than a call."),
+        # THE SETUP TOPIC (field report item 19, recommendation 2). Every
+        # string here is a placeholder carrying facts; the wording is a copy
+        # job. The live installed/not-installed answer is NOT duplicated
+        # here: it lives in manage_session(action='status'), and a second
+        # copy would be a second opinion that could disagree with the first.
+        "setup": {
+            "what_this_covers": (
+                "[COPY PENDING: workflows.setup.intro] FACTS TO CONVEY: "
+                "everything that is decided before the server starts and "
+                "cannot be changed by a tool call afterwards. Four things "
+                "live here: whether the server may act, which capability "
+                "packs are loaded, which optional Python extras are "
+                "installed, and which consent scope is in force."),
+            "acting": readonly.UNLOCK_TEACHING,
+            "packs": (
+                "[COPY PENDING: workflows.setup.packs] FACTS TO CONVEY: a "
+                "pack is a group of tools chosen at launch. An unloaded "
+                "pack's tools are ABSENT from the tool list rather than "
+                "disabled, which is why no instruction on a page can talk "
+                "an assistant into using one. Three routes, and which one "
+                "applies depends on how the server was installed: the "
+                "checkboxes on the Claude Desktop install screen, the "
+                "--packs flag, or the KS4WEB_MODE and KS4WEB_PACK_<NAME> "
+                "environment variables. All three are launch-time."),
+            "optional_extras": (
+                "[COPY PENDING: workflows.setup.extras] FACTS TO CONVEY: "
+                "two features need a Python package this server does not "
+                "install by default. get_accessibility needs the "
+                "accessibility extra, which brings axe-core, and works "
+                "anywhere. read_image_text needs the ocr extra AND Windows: "
+                "the recognizer is part of Windows, so on macOS and Linux "
+                "the extra installs and there is still no engine. Each also "
+                "needs its pack loaded, which is a separate act. "
+                "manage_session(action='status') reports, per feature, "
+                "whether it is installed, whether its pack is loaded, and "
+                "what installing it would take on this install route."),
+            "consent": _consent.PREAUTH_TEACHING,
+            "dependencies": (
+                "[COPY PENDING: workflows.setup.deps] FACTS TO CONVEY: the "
+                "only thing this server installs by itself is a browser, "
+                "and only the bundled one, and only when a lane needs it. "
+                "It never fetches a script at run time: the accessibility "
+                "engine is read out of the installed package, so the server "
+                "works offline and no page it audits can be reached through "
+                "a supply-chain fetch."),
+            "how_to_check": (
+                "manage_session(action='status') is the one call that "
+                "answers all of this for the running process: read_only, "
+                "consent, optional_features, and the loaded pack list."),
+        },
         "read-only": readonly.describe(),
     }
     if topic:

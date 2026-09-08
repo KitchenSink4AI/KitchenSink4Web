@@ -322,6 +322,131 @@ def policy_locked() -> bool:
     return os.environ.get("KS4WEB_PACK_POLICY", "").strip().lower() == "locked"
 
 
+#: HOW AN EXTRA IS ACTUALLY INSTALLED, and the two answers differ by install
+#: route (field report Q1 and Q2, 2026-09-08). The tester doubted the extra
+#: names; they are right and match `pyproject.toml` exactly. What is NOT
+#: right is that a single `pip install` sentence is printed to every caller
+#: whatever route installed this server, and for one of the two routes it is
+#: the wrong instruction:
+#:
+#: - Installed with pip or uv into an environment you control, the extra is
+#:   `pip install "kitchensink4web[<extra>]"` and that is the whole answer.
+#: - Installed from the .mcpb bundle in Claude Desktop, the server is fetched
+#:   and launched by uvx against the pin in the manifest
+#:   (`kitchensink4web==<version>`), which names no extra. A pip install into
+#:   some other Python environment does not reach that one, so the extra
+#:   cannot be added from the install screen at all.
+#:
+#: Both facts are published rather than one being guessed at, because this
+#: process cannot reliably tell which route started it and a wrong install
+#: instruction is worse than two right ones.
+INSTALL_ROUTES = {
+    "pip_or_uv": '[COPY PENDING: extras.route.pip] pip install '
+                 '"kitchensink4web[{extra}]", then restart the server.',
+    "desktop_bundle": (
+        "[COPY PENDING: extras.route.bundle] FACTS TO CONVEY: the bundle's "
+        "launch line pins kitchensink4web by version and names no extra, so "
+        "this extra cannot be added from the install screen and a pip "
+        "install into a different Python environment will not reach it. "
+        "Getting it means running the server from a pip or uv install you "
+        "control instead of from the bundle."),
+}
+
+#: Every optional capability, what it needs, and what it is worth knowing
+#: about it before you try to use it. Facts only; the wording is a copy job.
+OPTIONAL_FEATURES: tuple[dict, ...] = (
+    {
+        "feature": "accessibility",
+        "extra": "accessibility",
+        "pack": "accessibility",
+        "tools": ("get_accessibility",),
+        "engine": "axe-core, through the axe-playwright-python wrapper",
+        "platforms": "any platform this server runs on",
+    },
+    {
+        "feature": "ocr",
+        "extra": "ocr",
+        "pack": "capture",
+        "tools": ("read_image_text",),
+        "engine": "Windows.Media.Ocr, the recognizer built into Windows",
+        "platforms": "Windows only",
+        "platform_note": (
+            "[COPY PENDING: extras.ocr.platform] FACTS TO CONVEY: this is "
+            "not a packaging gap that installing something fixes. The engine "
+            "is part of Windows, so on macOS and Linux the extra installs "
+            "and there is still no engine to call. Tesseract was considered "
+            "and declined: it is a separate native binary plus tens of "
+            "megabytes of language data whose absence fails at run time on a "
+            "machine where pip install succeeded. It also needs an OCR "
+            "language pack matching your profile language, which Windows "
+            "Settings installs."),
+    },
+)
+
+
+#: THE SENTENCE EVERY PACK SIGNPOST OWES ITS READER (fix wave 10 audit,
+#: gap 7). Naming a pack tells a caller which pack; it does not tell them
+#: that ticking it is a human's launch-time act. `ops/lite.py`'s auth-state
+#: precheck was the only refusal in the tree that said both, and this is
+#: that half of its sentence, hoisted so the rest can say it too.
+LAUNCH_TIME_CLAUSE = (
+    " Packs are a launch-time selection a human makes at the install screen "
+    "or in the launch environment, so no call turns one on mid-session.")
+
+
+def optional_features() -> dict:
+    """What is installed, what is not, and what each one would take.
+
+    Reported by `manage_session(action='status')` so a caller learns what is
+    missing BEFORE it calls a tool and gets a refusal, which is the field
+    report's own recommendation. The probes are the SAME ones the tools use:
+    there is no second opinion here that could disagree with the refusal a
+    caller gets one call later."""
+    rows = {}
+    for spec in OPTIONAL_FEATURES:
+        name = spec["feature"]
+        if name == "accessibility":
+            try:
+                from axe_playwright_python.base import AXE_SCRIPT  # noqa: F401
+                installed, why = True, "the engine imports in this process"
+            except Exception:
+                installed, why = False, ("the engine is not installed in "
+                                         "this environment")
+        else:
+            from . import ocr as _ocr
+            installed, why = _ocr.probe()
+        rows[name] = {
+            "installed": installed,
+            "why": why,
+            "provides": list(spec["tools"]),
+            "engine": spec["engine"],
+            "platforms": spec["platforms"],
+            # THE PACK IS HALF THE ANSWER AND IS EASY TO MISS. Installing
+            # the extra and not loading the pack leaves the tool absent, and
+            # a caller who did the pip install and still cannot see the tool
+            # has no way to work out which half is missing.
+            "also_needs_pack": spec["pack"],
+            "pack_loaded": spec["pack"] in loaded_packs(),
+            **({"platform_note": spec["platform_note"]}
+               if spec.get("platform_note") else {}),
+            **({"install": {
+                route: text.format(extra=spec["extra"])
+                for route, text in INSTALL_ROUTES.items()}}
+               if not installed else {}),
+        }
+    rows["how_this_works"] = (
+        "[COPY PENDING: extras.how] FACTS TO CONVEY: an optional feature "
+        "cannot be turned on by a tool call. It needs two things and both "
+        "are launch-time acts a human performs: the Python extra installed "
+        "into the environment this server runs from, and its pack loaded at "
+        "launch. A restart is required after either. Where an engine is "
+        "missing the "
+        "tool refuses and names the reason; nothing falls back to a "
+        "different engine, because a result labeled with an engine that did "
+        "not produce it is worse than no result.")
+    return rows
+
+
 def menu() -> dict:
     """The full pack menu, for get_workflows in lite (DESIGN 7.4). Names the
     launch flag and the env var for each pack, since there is no enable
