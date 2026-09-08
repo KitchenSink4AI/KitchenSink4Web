@@ -46,14 +46,14 @@ absent, not merely switched off:
 
 | Pack | What you get |
 |---|---|
-| extract | Pulls structured data off pages: tables, lists, links, and page details, with CSV and JSON export, and reads long documents page by page so one read never floods the conversation. |
-| capture | Takes screenshots (passwords masked) and saves pages as PDF or archive files. |
-| network | Shows the page's network requests and responses, and lets Claude block or mock them for testing. |
-| storage | Works with cookies and site storage, and saves a signed-in session to a file so it can be reused next time. It saves the session, never the password. [COPY PENDING: manifest.pack_storage.danger | CAUTION tier] FACTS TO CONVEY: this pack reaches saved sign-ins. It can write a signed-in session to a file on this machine and load one back, which means a file that grants access to your account exists on disk until you delete it. It stores the session, never the password, and loading one stops to ask first. |
-| files | Downloads files from pages into one dedicated folder, fetches a file by URL through the same checks, uploads files into page forms, and reads or writes the clipboard, with every write stopping to ask first. [COPY PENDING: manifest.pack_files.danger | CAUTION tier] FACTS TO CONVEY: this pack reaches your filesystem and your clipboard. Downloads land in one dedicated folder and nowhere else, uploads send a file you name into a page's form, and a clipboard write stops to ask first. What leaves this machine is whatever you upload. |
-| diagnostics | Reads the page's own error messages and console output, and can run a page script only after you confirm it. [COPY PENDING: manifest.pack_diagnostics.danger | STRONG WARNING tier] FACTS TO CONVEY: this pack carries evaluate_script, which runs arbitrary JavaScript inside the page with that page's full privileges, including its logged-in session. Every script is shown and confirmed before it runs, one confirmation per script, and none runs unattended. The rest of the pack only reads the page's own errors and console output. |
-| workflows | Records a multi-step flow once and replays it later, checking every step still matches the page before anything runs. |
-| accessibility | Checks a page against the WCAG accessibility rules using axe-core, groups what it finds by rule, and says plainly what automated testing cannot check. |
+| extract | Tables, lists, links, and article text, with CSV and JSON export. |
+| capture | Screenshots (passwords blurred), PDF export, and saving pages as files. |
+| network | See the requests a page makes behind the scenes. Useful for debugging websites; most people leave it off. |
+| storage | Use with care. Saves a signed-in session so Claude does not have to log in every time. It saves the session, never your password; treat the saved file like one anyway. |
+| files | Download files from pages into one folder, and upload files into page forms. Every one asks you first. |
+| diagnostics | Lets Claude run JavaScript on a page, one script at a time, each one shown to you for approval first. This is the most powerful and most dangerous setting on this page. Leave it off unless you know you need it. |
+| workflows | Record a multi-step task once and replay it later. Every replay checks that the page still matches before anything runs. |
+| accessibility | Audit a page against accessibility rules. Needs an optional extra installed; the tool tells you how if it is missing. |
 
 ## The safety model
 

@@ -3,19 +3,19 @@
   "name": "kitchensink4web",
   "display_name": "KitchenSink4Web",
   "version": "1.0.0",
-  "description": "Kitchen-sink browser MCP server: a cheap first read of any page, durable refs, and a shipped safety layer",
-  "long_description": "A Model Context Protocol server for browser automation. get_page_view reads any page as a budgeted orientation with references Claude can act on; the safety layer ships on by default: server-level read-only mode, credential blindness, confirmation gates on form submits and payments, per-session budgets, and an audit trail. Capability packs (data extraction, screenshots, network, storage, downloads, diagnostics, workflows) are chosen below at install time and are fixed for the whole session. Launching this bundle requires uv (the uvx command) on your machine; the server itself is fetched from PyPI on first launch and uses its own bundled Chromium, never your browser or profile. Tip: in Claude Desktop's Tool permissions, set the Read-only tools group to Always Allow: those tools cannot change anything, and it stops most permission prompts.",
+  "description": "Lets Claude browse the web for you: read pages and articles, pull out tables and data, take screenshots. Out of the box it can only read; clicking and typing stay off until you turn them on.",
+  "long_description": "KitchenSink4Web connects Claude to a real web browser of its own. Ask it to read an article, compare products across pages, pull a table out of a website, or watch a page for changes. It reads pages efficiently, so a long page does not swallow the conversation, and it always says what it could and could not see. Out of the box it is read-only: Claude can open pages and read them, nothing more. The checkboxes below are the whole configuration; each adds one capability, and anything that lets Claude change things on a page stays off until you check it. Uses its own private browser, never yours; requires uv on your machine. Part of the KitchenSink4 family (Word, PowerPoint, Excel, Web) from KitchenSink4AI (kitchensink4.ai).",
   "author": {
     "name": "nometalalchemist"
   },
   "license": "AGPL-3.0-only",
   "repository": {
     "type": "git",
-    "url": "https://github.com/nometalalchemist/KitchenSink4Web"
+    "url": "https://github.com/KitchenSink4AI/KitchenSink4Web"
   },
-  "homepage": "https://nometalalchemist.github.io/KitchenSink4Web",
-  "documentation": "https://github.com/nometalalchemist/KitchenSink4Web#readme",
-  "support": "https://github.com/nometalalchemist/KitchenSink4Web/issues",
+  "homepage": "https://github.com/KitchenSink4AI/KitchenSink4Web",
+  "documentation": "https://github.com/KitchenSink4AI/KitchenSink4Web#readme",
+  "support": "https://github.com/KitchenSink4AI/KitchenSink4Web/issues",
   "icon": "icon.png",
   "keywords": [
     "mcp",
@@ -52,94 +52,86 @@
         "KS4WEB_PACK_DIAGNOSTICS": "${user_config.pack_diagnostics}",
         "KS4WEB_PACK_WORKFLOWS": "${user_config.pack_workflows}",
         "KS4WEB_PACK_ACCESSIBILITY": "${user_config.pack_accessibility}",
-        "KS4WEB_CONSENT": "${user_config.consent_scope}",
-        "KS4WEB_PREAUTH": "${user_config.preauth}"
+        "KS4WEB_CONSENT": "${user_config.consent_scope}"
       }
     }
   },
   "user_config": {
     "allow_acting": {
       "type": "boolean",
-      "title": "Allow this server to click and type",
-      "description": "Lets Claude click buttons, type into forms, and submit pages; leave it off and Claude can only read and navigate, with nothing on the page changeable. [COPY PENDING: manifest.allow_acting.danger | STRONG WARNING tier] FACTS TO CONVEY: this is the write switch and the single most consequential box on this screen. With it off, nothing KS4Web does can change a page. With it on, Claude can click, type, and submit on your behalf on any site you send it to, and a submitted form is not reversible. Tier-2 actions still stop and ask a human every time (paying, signing or accepting terms, deleting, posting publicly, passing an age gate) and no setting on this screen makes those proceed unattended. Leave it off unless you want Claude acting.",
+      "title": "Warning: DANGEROUS. Let Claude click and type on pages",
+      "description": "Off: Claude can only read and navigate, and nothing on any page can be changed. On: Claude can click buttons and fill in forms. The risky submissions (payments, passwords, posts that reach people, deletions) still stop and ask you first, every time.",
       "default": false,
       "required": false
     },
-    "all_packs": {
+    "consent_scope": {
       "type": "boolean",
-      "title": "Load every capability pack",
-      "description": "Turns on all seven packs below at once instead of choosing them one by one.",
+      "title": "Submit routine forms without asking each time",
+      "description": "Off: every form submission checks with you first. On: routine submissions like site searches go through on their own, while payments, passwords, posts, and deletions always ask.",
       "default": false,
       "required": false
     },
     "pack_extract": {
       "type": "boolean",
-      "title": "Data extraction",
-      "description": "Pulls structured data off pages: tables, lists, links, and page details, with CSV and JSON export, and reads long documents page by page so one read never floods the conversation.",
+      "title": "Extract data from pages",
+      "description": "Tables, lists, links, and article text, with CSV and JSON export.",
       "default": true,
       "required": false
     },
     "pack_capture": {
       "type": "boolean",
-      "title": "Screenshots and page capture",
-      "description": "Takes screenshots (passwords masked) and saves pages as PDF or archive files.",
+      "title": "Screenshots and page saving",
+      "description": "Screenshots (passwords blurred), PDF export, and saving pages as files.",
       "default": true,
-      "required": false
-    },
-    "pack_network": {
-      "type": "boolean",
-      "title": "Network inspection",
-      "description": "Shows the page's network requests and responses, and lets Claude block or mock them for testing.",
-      "default": false,
       "required": false
     },
     "pack_storage": {
       "type": "boolean",
       "title": "Cookies and logins",
-      "description": "Works with cookies and site storage, and saves a signed-in session to a file so it can be reused next time. It saves the session, never the password. [COPY PENDING: manifest.pack_storage.danger | CAUTION tier] FACTS TO CONVEY: this pack reaches saved sign-ins. It can write a signed-in session to a file on this machine and load one back, which means a file that grants access to your account exists on disk until you delete it. It stores the session, never the password, and loading one stops to ask first.",
+      "description": "Use with care. Saves a signed-in session so Claude does not have to log in every time. It saves the session, never your password; treat the saved file like one anyway.",
       "default": false,
       "required": false
     },
     "pack_files": {
       "type": "boolean",
       "title": "Downloads and uploads",
-      "description": "Downloads files from pages into one dedicated folder, fetches a file by URL through the same checks, uploads files into page forms, and reads or writes the clipboard, with every write stopping to ask first. [COPY PENDING: manifest.pack_files.danger | CAUTION tier] FACTS TO CONVEY: this pack reaches your filesystem and your clipboard. Downloads land in one dedicated folder and nowhere else, uploads send a file you name into a page's form, and a clipboard write stops to ask first. What leaves this machine is whatever you upload.",
+      "description": "Download files from pages into one folder, and upload files into page forms. Every one asks you first.",
       "default": false,
       "required": false
     },
-    "pack_diagnostics": {
+    "pack_network": {
       "type": "boolean",
-      "title": "Page diagnostics",
-      "description": "Reads the page's own error messages and console output, and can run a page script only after you confirm it. [COPY PENDING: manifest.pack_diagnostics.danger | STRONG WARNING tier] FACTS TO CONVEY: this pack carries evaluate_script, which runs arbitrary JavaScript inside the page with that page's full privileges, including its logged-in session. Every script is shown and confirmed before it runs, one confirmation per script, and none runs unattended. The rest of the pack only reads the page's own errors and console output.",
+      "title": "Watch network traffic",
+      "description": "See the requests a page makes behind the scenes. Useful for debugging websites; most people leave it off.",
       "default": false,
       "required": false
     },
     "pack_workflows": {
       "type": "boolean",
       "title": "Recorded workflows",
-      "description": "Records a multi-step flow once and replays it later, checking every step still matches the page before anything runs.",
+      "description": "Record a multi-step task once and replay it later. Every replay checks that the page still matches before anything runs.",
       "default": false,
       "required": false
     },
     "pack_accessibility": {
       "type": "boolean",
-      "title": "Accessibility audit",
-      "description": "Checks a page against the WCAG accessibility rules using axe-core, groups what it finds by rule, and says plainly what automated testing cannot check.",
+      "title": "Accessibility checks",
+      "description": "Audit a page against accessibility rules. Needs an optional extra installed; the tool tells you how if it is missing.",
       "default": false,
       "required": false
     },
-    "consent_scope": {
-      "type": "string",
-      "title": "What Claude may do without asking",
-      "description": "Type research or full. Only applies when \"Allow this server to click and type\" is on; leave it as research if you are unsure. [COPY PENDING: manifest.consent_scope | CAUTION tier] FACTS TO CONVEY: this sets how often Claude stops to ask you. research, the default, pre-approves reading, navigating, clicking, typing, and search-shaped form submission, and asks before anything else. full also pre-approves ordinary form submission. Neither one touches the actions that always stop and ask a human: paying, submitting a credential, sending something that reaches other people, deleting, accepting terms, and passing an age gate. It does nothing at all while acting is off, because there is nothing to consent to. This is a typed field and a value that is not one of the two words stops the server from starting, with the two words named.",
-      "default": "research",
+    "pack_diagnostics": {
+      "type": "boolean",
+      "title": "Warning: DANGEROUS. Run page scripts (advanced)",
+      "description": "Lets Claude run JavaScript on a page, one script at a time, each one shown to you for approval first. This is the most powerful and most dangerous setting on this page. Leave it off unless you know you need it.",
+      "default": false,
       "required": false
     },
-    "preauth": {
-      "type": "string",
-      "title": "Pre-authorized actions (advanced, leave empty)",
-      "description": "Optional. Pre-approves one class of action on one site, so Claude stops asking about it. Format: class@site, for example storage_load@github.com. [COPY PENDING: manifest.preauth | CAUTION tier] FACTS TO CONVEY: empty is the normal setting and means every gate asks. One entry pre-approves ONE action class on ONE site named here, for this install, until you change it; separate several with commas and add :8h to give one a time limit. Paying, submitting a credential, sending something that reaches other people, deleting, accepting terms, acting off an allowlist, and resetting budgets can NEVER be pre-authorized, and naming one of them here stops the server from starting rather than quietly ignoring it. Like the box above, this is a typed field: a misspelling stops the server from starting and says what the format is.",
-      "default": "",
+    "all_packs": {
+      "type": "boolean",
+      "title": "Everything at once",
+      "description": "Turns on all the capability packs above in one click. The click-and-type and routine-forms switches stay separate.",
+      "default": false,
       "required": false
     }
   },

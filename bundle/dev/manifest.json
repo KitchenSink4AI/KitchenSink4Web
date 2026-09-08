@@ -11,7 +11,7 @@
   "license": "AGPL-3.0-only",
   "repository": {
     "type": "git",
-    "url": "https://github.com/nometalalchemist/KitchenSink4Web"
+    "url": "https://github.com/KitchenSink4AI/KitchenSink4Web"
   },
   "icon": "icon.png",
   "keywords": [
@@ -49,94 +49,86 @@
         "KS4WEB_PACK_DIAGNOSTICS": "${user_config.pack_diagnostics}",
         "KS4WEB_PACK_WORKFLOWS": "${user_config.pack_workflows}",
         "KS4WEB_PACK_ACCESSIBILITY": "${user_config.pack_accessibility}",
-        "KS4WEB_CONSENT": "${user_config.consent_scope}",
-        "KS4WEB_PREAUTH": "${user_config.preauth}"
+        "KS4WEB_CONSENT": "${user_config.consent_scope}"
       }
     }
   },
   "user_config": {
     "allow_acting": {
       "type": "boolean",
-      "title": "Allow this server to click and type",
-      "description": "Lets Claude click buttons, type into forms, and submit pages; leave it off and Claude can only read and navigate, with nothing on the page changeable.",
+      "title": "Warning: DANGEROUS. Let Claude click and type on pages",
+      "description": "Off: Claude can only read and navigate, and nothing on any page can be changed. On: Claude can click buttons and fill in forms. The risky submissions (payments, passwords, posts that reach people, deletions) still stop and ask you first, every time.",
       "default": false,
       "required": false
     },
-    "all_packs": {
+    "consent_scope": {
       "type": "boolean",
-      "title": "Load every capability pack",
-      "description": "Turns on all seven packs below at once instead of choosing them one by one.",
+      "title": "Submit routine forms without asking each time",
+      "description": "Off: every form submission checks with you first. On: routine submissions like site searches go through on their own, while payments, passwords, posts, and deletions always ask.",
       "default": false,
       "required": false
     },
     "pack_extract": {
       "type": "boolean",
-      "title": "Data extraction",
-      "description": "Pulls structured data off pages: tables, lists, links, and page details, with CSV and JSON export, and reads long documents page by page so one read never floods the conversation.",
+      "title": "Extract data from pages",
+      "description": "Tables, lists, links, and article text, with CSV and JSON export.",
       "default": false,
       "required": false
     },
     "pack_capture": {
       "type": "boolean",
-      "title": "Screenshots and page capture",
-      "description": "Takes screenshots (passwords masked) and saves pages as PDF or archive files.",
-      "default": false,
-      "required": false
-    },
-    "pack_network": {
-      "type": "boolean",
-      "title": "Network inspection",
-      "description": "Shows the page's network requests and responses, and lets Claude block or mock them for testing.",
+      "title": "Screenshots and page saving",
+      "description": "Screenshots (passwords blurred), PDF export, and saving pages as files.",
       "default": false,
       "required": false
     },
     "pack_storage": {
       "type": "boolean",
       "title": "Cookies and logins",
-      "description": "Works with cookies and site storage, and saves a signed-in session to a file so it can be reused next time. It saves the session, never the password. On in this build, because a field test that cannot save a session spends its first hour signing in.",
+      "description": "Use with care. Saves a signed-in session so Claude does not have to log in every time. It saves the session, never your password; treat the saved file like one anyway.",
       "default": true,
       "required": false
     },
     "pack_files": {
       "type": "boolean",
       "title": "Downloads and uploads",
-      "description": "Downloads files from pages into one dedicated folder, fetches a file by URL through the same checks, uploads files into page forms, and reads or writes the clipboard, with every write stopping to ask first.",
+      "description": "Download files from pages into one folder, and upload files into page forms. Every one asks you first.",
       "default": false,
       "required": false
     },
-    "pack_diagnostics": {
+    "pack_network": {
       "type": "boolean",
-      "title": "Page diagnostics",
-      "description": "Reads the page's own error messages and console output, and can run a page script only after you confirm it.",
+      "title": "Watch network traffic",
+      "description": "See the requests a page makes behind the scenes. Useful for debugging websites; most people leave it off.",
       "default": false,
       "required": false
     },
     "pack_workflows": {
       "type": "boolean",
       "title": "Recorded workflows",
-      "description": "Records a multi-step flow once and replays it later, checking every step still matches the page before anything runs.",
+      "description": "Record a multi-step task once and replay it later. Every replay checks that the page still matches before anything runs.",
       "default": false,
       "required": false
     },
     "pack_accessibility": {
       "type": "boolean",
-      "title": "Accessibility audit",
-      "description": "Checks a page against the WCAG accessibility rules using axe-core, groups what it finds by rule, and says plainly what automated testing cannot check.",
+      "title": "Accessibility checks",
+      "description": "Audit a page against accessibility rules. Needs an optional extra installed; the tool tells you how if it is missing.",
       "default": false,
       "required": false
     },
-    "consent_scope": {
-      "type": "string",
-      "title": "What Claude may do without asking",
-      "description": "Type research or full. Only applies when \"Allow this server to click and type\" is on; leave it as research if you are unsure. [COPY PENDING: manifest.consent_scope | CAUTION tier] FACTS TO CONVEY: this sets how often Claude stops to ask you. research, the default, pre-approves reading, navigating, clicking, typing, and search-shaped form submission, and asks before anything else. full also pre-approves ordinary form submission. Neither one touches the actions that always stop and ask a human: paying, submitting a credential, sending something that reaches other people, deleting, accepting terms, and passing an age gate. It does nothing at all while acting is off, because there is nothing to consent to. This is a typed field and a value that is not one of the two words stops the server from starting, with the two words named.",
-      "default": "research",
+    "pack_diagnostics": {
+      "type": "boolean",
+      "title": "Warning: DANGEROUS. Run page scripts (advanced)",
+      "description": "Lets Claude run JavaScript on a page, one script at a time, each one shown to you for approval first. This is the most powerful and most dangerous setting on this page. Leave it off unless you know you need it.",
+      "default": false,
       "required": false
     },
-    "preauth": {
-      "type": "string",
-      "title": "Pre-authorized actions (advanced, leave empty)",
-      "description": "Optional. Pre-approves one class of action on one site, so Claude stops asking about it. Format: class@site, for example storage_load@github.com. [COPY PENDING: manifest.preauth | CAUTION tier] FACTS TO CONVEY: empty is the normal setting and means every gate asks. One entry pre-approves ONE action class on ONE site named here, for this install, until you change it; separate several with commas and add :8h to give one a time limit. Paying, submitting a credential, sending something that reaches other people, deleting, accepting terms, acting off an allowlist, and resetting budgets can NEVER be pre-authorized, and naming one of them here stops the server from starting rather than quietly ignoring it. Like the box above, this is a typed field: a misspelling stops the server from starting and says what the format is.",
-      "default": "",
+    "all_packs": {
+      "type": "boolean",
+      "title": "Everything at once",
+      "description": "Turns on all the capability packs above in one click. The click-and-type and routine-forms switches stay separate.",
+      "default": false,
       "required": false
     }
   },
@@ -144,5 +136,8 @@
     "runtimes": {
       "python": ">=3.12"
     }
-  }
+  },
+  "homepage": "https://github.com/KitchenSink4AI/KitchenSink4Web",
+  "documentation": "https://github.com/KitchenSink4AI/KitchenSink4Web#readme",
+  "support": "https://github.com/KitchenSink4AI/KitchenSink4Web/issues"
 }
