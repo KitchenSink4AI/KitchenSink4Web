@@ -4382,3 +4382,100 @@ out of a dead session's temp scratchpad to `C:\Users\nykal\.ks4web-dev\venv`,
 which is what the post-ship item about temp-cleanup fragility asked for. The
 details, and the two things the author still has to do by hand, are in
 `20260909_finalize.md`.
+
+## 2026-09-08 19:12 KST — fix wave 10 (the ride-or-die feedback, plus the live purchase field test)
+
+TWO WORK ORDERS, ONE WAVE. The first was the 2026-09-08 field feedback from an
+Opus tester on claude.ai web, ~200 tool calls across 20+ sites, whose headline
+was a ship blocker. The second arrived mid-wave from an Opus agent that drove
+its own instance through a real Porkbun cart and a real Stripe checkout, and
+whose headline was worse.
+
+THE SHIP BLOCKER, ROOT-CAUSED TO ONE LINE. The tester described a three-layer
+cascade and could only guess at the middle of it: Cloudflare killed a Firefox
+browser, the monitor's Chromium browser died beside it having never visited the
+site, and then every new session open failed until a dead monitor session was
+found and closed by hand. The mechanism is `session.py:1279`, where ONE
+Playwright driver was cached for the whole process and stopped only when the
+LAST session closed. A driver is a node process and every browser it launches
+is its child, so its death is theirs whatever engine they were; and
+`_playwright()` handed the corpse back to every subsequent `open()` with no
+liveness question asked. Closing the dead monitor took the session count to
+zero, which ran that line, which started a fresh driver: that is why closing an
+unrelated dead session made new opens work, and it is the detail that confirms
+the diagnosis.
+
+Three fixes, one per layer. `SessionManager.reap_dead()` tombstones every
+session whose processes have all exited and runs inside `open()` before the
+driver is touched, so a dead session is never a reason a new one cannot start.
+Drivers are now per SLOT rather than per process, keyed by role, so the
+scheduler's browser and a conversation's browser are children of two different
+node processes and neither death can reach the other. And a dead driver is
+detected and replaced rather than handed back, with its casualties entombed as
+`driver_died` and named in the status report.
+
+A DEFECT IN THAT FIX, CAUGHT BEFORE MERGE. The first cut of `driver_alive` read
+`_connection` off the async API wrapper, where the connection actually lives on
+`_impl_obj`. It answered `None` for every real driver, so death detection would
+have been dead code in production while its unit pin passed happily against a
+hand-built stand-in. Found by running the probe against a live driver instead
+of trusting the green test. Two pins now hold the answer against a REAL driver
+in both directions.
+
+THE CAPABILITY-URL LEAK, and it is the sharpest finding in this build so far.
+After `manage_session(action='handoff')` gave the headed window to the human
+for a live payment, the status poll the product itself recommends for watching
+returned the author's live Stripe Checkout URL, `cs_live_` id and full fragment,
+in the clear, to the agent, during the exact window the handoff exists to keep
+the agent out of. It landed in the watcher's log file on disk. The redaction
+vault could not have caught it: the vault redacts values it has OBSERVED being
+set as secrets, and nothing ever set this one — it is a capability the site
+minted and put in a URL. `credentials.safe_page_url()` now takes the query, the
+fragment, and any path segment carrying a minted id, on a handed-off session or
+a payment origin, and says so wherever it took anything. The path SHAPE
+survives, because a watcher still has to see where the human is. Applied at
+`_tab_list`, the one choke point all ten URL-reporting sites reach, and at
+tombstones, which outlive the session. The handle receipt and the lane database
+were checked and were already safe: one stores a digest, the other a bare host.
+
+THE PAYMENT VOCABULARY WAS TOO WIDE IN ONE DIRECTION AND THE CLASSIFIER TOO
+NARROW IN ANOTHER. Porkbun's domain search box classified `payment_form` and
+failed closed, because `checkout` is in the strong payment table and the table
+was matched against the form's ACTION PATH; `/checkout/search` cleared the
+payment bar with no corroboration at all, overriding the exact query-shaped-form
+case the `research` scope carves out. The submitter route is now absolute and
+untouched, and only the weaker path route gains a search-shaped exemption whose
+six conditions a checkout fails several of at once. Meanwhile PubMed's
+"Checking your browser - reCAPTCHA" was not classified at all: the soft-block
+rung that catches exactly that shape was already built and correct, and neither
+string was in its vocabulary. Two needles, and the pair rule that makes it safe
+is untouched — a readable page is still never withheld.
+
+ALSO: an arXiv PDF no longer classifies `login_required` off pdf.js's own
+encrypted-file prompt, which had the product contradicting itself inside one
+payload; the update notice is converted to check-on-demand, one request per
+SEVEN DAYS (author ruling, amending this wave's own 24-hour build), a
+two-second timeout, an honest could-not-reach branch carrying the age of the
+last success, `KS4WEB_UPDATE_CHECK=off`, and a privacy disclosure on every
+answer; the public install screen starts the two READ packs on and labels the
+four boxes that can act; six refusal sites stopped naming a `--read-only` flag
+that a default install never set; and `pages` stopped meaning a list in one
+action and an integer in another, which had crashed a field watcher.
+
+GATES. Certifying runs on a quiet tree at `72d7e7d`, sequential, both orders:
+forward **2,000 passed / 0 failed / 5 skipped / 1 xpassed** in 14m33s, and
+seed 20260908 **2,000 passed / 0 failed / 5 skipped / 1 xpassed** in 14m32s.
+The gauntlet subset touching the changed surface (sixteen browser and unit
+files) ran 562 passed / 0 failed. 115 new pins, red-first proven against a
+`git archive` of `main` extracted outside every worktree, so no git state
+anywhere was mutated to obtain the proof. Three earlier full runs were started
+and discarded rather than reported: one straddled the wave's own edits under
+D-47's rule, one was invalidated by the addendum, and one found two failures
+that were real and are described in the wave report. Suite collection 1,897 ->
+2,006, browser 711 -> 733, restamped on README, `llms.txt` and the front page
+because the guard that measures live caught them.
+
+Full report, including fourteen new `[COPY PENDING]` slots with their FACTS TO
+CONVEY, the six author-queued non-builds with the tester's own arguments, and
+the deferred-ledger cross-reference:
+`Draft/Working Files/Agent Results/20260908_web_fixwave10.md`.
