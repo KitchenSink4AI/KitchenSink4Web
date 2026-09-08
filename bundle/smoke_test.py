@@ -1,10 +1,10 @@
 """Smoke test for the KitchenSink4Web .mcpb bundles.
 
 This repo ships TWO bundles, which is the difference from the siblings: the
-shipped one (`bundle/manifest.json`, nine user_config keys) and the field-test
-one (`bundle/dev/manifest.json`, eleven, adding the two lane boxes). Both are
-checked here, because a pack cycle that only ever exercises one of them is how
-the other ships broken.
+shipped one (`bundle/manifest.json`) and the field-test one
+(`bundle/dev/manifest.json`). They carry the same boxes and differ only in
+which ones start ticked. Both are checked here, because a pack cycle that
+only ever exercises one of them is how the other ships broken.
 
 Checks, per bundle, in order:
   1. The .mcpb unzips and contains exactly manifest.json + icon.png.
@@ -47,21 +47,32 @@ FAILURES = []
 
 #: Every pack box, and the environment variable each one has to reach.
 PACKS = ("extract", "capture", "network", "storage", "files", "diagnostics",
-         "workflows")
+         "workflows", "accessibility")
 
 #: The boxes that are not packs, and their variables.
 PLAIN = {
     "allow_acting": "KS4WEB_ALLOW_ACTING",
     "all_packs": "KS4WEB_ALL_PACKS",
+    "consent_scope": "KS4WEB_CONSENT",
 }
+
+#: THE BOXES THAT START TICKED. Both are read-only capabilities, so the
+#: safety default is untouched: acting is off, storage is off, and anything
+#: that can change a page, reach the filesystem, or run a script is still a
+#: deliberate tick. The field-test bundle adds storage on top.
+DEFAULT_ON = ("extract", "capture")
 
 #: Retired boxes. Browser selection is not an install-screen setting on
 #: either bundle: the manifest schema has no enum type, a text box for a
 #: lane or a channel name is a typo that breaks the install, and the engine
-#: reads these variables directly for developers who need them.
+#: reads these variables directly for developers who need them. The
+#: pre-authorization box joined them on 2026-09-08 for the same reason,
+#: after one wave on the screen: it is a launch-file setting now, and the
+#: teaching string says so.
 RETIRED = {
     "browser_lane": "KS4WEB_LANE",
     "browser_channel": "KS4WEB_CHANNEL",
+    "preauth": "KS4WEB_PREAUTH",
 }
 
 
@@ -162,9 +173,13 @@ def check_bundle(mcpb_path: Path, dev: bool) -> str | None:
         check(f"{tag}: acting is off by default",
               uc.get("allow_acting", {}).get("default") is False,
               str(uc.get("allow_acting", {}).get("default")))
-        check(f"{tag}: no pack loads by default except the field-test one",
-              all(uc[f"pack_{p}"]["default"] is (dev and p == "storage")
-                  for p in PACKS))
+        on = {"storage"} if dev else set(DEFAULT_ON)
+        check(f"{tag}: only {sorted(on)} load by default",
+              all(uc[f"pack_{p}"]["default"] is (p in on) for p in PACKS),
+              str(sorted(p for p in PACKS if uc[f"pack_{p}"]["default"])))
+        check(f"{tag}: routine form submission asks by default",
+              uc.get("consent_scope", {}).get("default") is False,
+              str(uc.get("consent_scope", {}).get("default")))
 
         for key, var in RETIRED.items():
             check(f"{tag}: no {key} box", key not in uc)

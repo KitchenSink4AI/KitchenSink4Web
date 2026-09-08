@@ -107,11 +107,28 @@ PERMITS: dict[str, str] = {
 #: HUMAN a launch-time action and hands the AGENT nothing callable,
 #: redeemable, or echoable. A teaching that named an in-session route would
 #: be a bypass wearing an instruction's clothes.
+#:
+#: FACTS TO CONVEY, corrected 2026-09-08 (the clause naming a Claude Desktop
+#: field was deleted the same day, because the field it named no longer
+#: exists):
+#:   1. Pre-authorization is a LAUNCH-TIME setting and nothing else: the
+#:      KS4WEB_PREAUTH environment variable, set in a launch file or a shell
+#:      before the server starts.
+#:   2. There is NO field for it on the Claude Desktop install screen, and
+#:      that is deliberate, not an omission. The install screen is
+#:      checkboxes only; a value a user has to spell correctly is a typo
+#:      that stops the server from starting, and free-text fields are
+#:      therefore banned from that screen.
+#:   3. A Desktop user who wants this edits the launch configuration, the
+#:      same place any other environment variable for this server is set.
+#:   4. The format, the ':8h' time limit, and the classes that can never be
+#:      pre-authorized are unchanged and still have to be stated.
+#:   5. It still hands the agent nothing callable: what it names is an act
+#:      only a human can perform, between one run of the server and the next.
 PREAUTH_TEACHING = (
     "To pre-authorize an action class for one site (a settings choice a "
-    "human makes, not something any tool call can do): in Claude Desktop, "
-    "fill the pre-authorization field in the server's settings; from a "
-    "shell, restart the server with "
+    "human makes, not something any tool call can do): restart the server "
+    "with "
     "KS4WEB_PREAUTH=<class>@<origin> (for example "
     "'evaluate_script@localhost' or 'storage_load@github.com', with an "
     "optional ':8h' time limit). Paying, submitting a credential, sending "
@@ -213,12 +230,24 @@ def parse_scope(value) -> str:
     An EMPTY value fails CLOSED to the narrowest scope, and an unrecognized
     one refuses to START. Both follow `readonly.parse_allow`'s discipline for
     the same reason: silently widening a consent scope because of a typo is
-    the exact inversion of the failure DESIGN 8.3 names."""
+    the exact inversion of the failure DESIGN 8.3 names.
+
+    The install-screen checkbox arrives here too, and by the same route
+    `readonly.parse_allow` already handles: Claude Desktop writes the literal
+    strings "true" and "false" for a user_config boolean, and the box asks
+    one question, whether routine form submissions go through without asking
+    each time. A tick is that permission, which is `full`; an untick is the
+    narrow default. The typed spelling stays for launch files and shells,
+    where a human can read an error and try again."""
     text = ("" if value is None else str(value)).strip().lower()
     if not text:
         return SCOPES[0]                      # empty NEVER widens
     if text in SCOPES:
         return text
+    if text in ("1", "true", "on", "yes"):
+        return "full"
+    if text in ("0", "false", "off", "no"):
+        return SCOPES[0]                      # an unticked box NEVER widens
     raise BadParams(
         f"unknown {ENV_SCOPE} value {value!r}: the consent scopes are "
         f"{list(SCOPES)}. 'research' pre-approves reading, navigating, "
