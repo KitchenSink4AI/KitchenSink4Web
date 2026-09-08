@@ -117,10 +117,29 @@ tightly there.
 
 ## Update check (opt-out)
 
-At startup the server compares its version against PyPI's, at most once every 14 days, and prints
-one calm line in `manage_session` output when a newer release exists. It never installs anything,
-never phones anywhere except PyPI's public version listing, and `KS4WEB_NO_UPDATE_CHECK=1` turns
-it off entirely.
+<!-- [COPY PENDING: readme.update_check] The prose below is a plain factual
+placeholder written mechanically in fix wave 10, not final copy. The section
+it replaced described the superseded design (a startup thread, a 14-day
+window, and the KS4WEB_NO_UPDATE_CHECK variable) and was factually wrong
+after the conversion, so it could not be left standing. FACTS TO CONVEY:
+nothing runs at startup and nothing runs on a thread; the check happens only
+when you call manage_session(action='status'); at most one request per 24
+hours, cached in the state directory; a two-second timeout; it never installs
+anything; the only thing it sends is a plain HTTPS GET to pypi.org for this
+package's public release index, carrying no identifier, no usage data, no
+page content and no session state; a check that could not run says so and
+says how old the last successful one was, rather than showing nothing;
+KS4WEB_UPDATE_CHECK=off switches it off and the status then says it is off;
+the older KS4WEB_NO_UPDATE_CHECK spelling is still honored. -->
+
+The server compares its version against PyPI's when you call
+`manage_session(action='status')`, and never at any other time: nothing runs at startup and nothing
+runs on a background thread. At most one request per 24 hours, with a two-second timeout. It never
+installs anything. The request is a plain HTTPS GET to pypi.org for this package's public release
+index; it sends no identifier, no usage data, no page content and no session state. A check that
+could not complete says so and says how long ago the last successful one was, rather than showing
+nothing. `KS4WEB_UPDATE_CHECK=off` switches it off, and the status report then says it is off; the
+older `KS4WEB_NO_UPDATE_CHECK=1` spelling is still honored.
 
 ## Testing
 

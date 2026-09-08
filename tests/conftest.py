@@ -22,9 +22,12 @@ from kitchensink4web import server
 
 @pytest.fixture(autouse=True)
 def _no_update_check(monkeypatch):
-    """No test touches the network. The 14-day update check is opted out
-    for the whole suite; its own tests delenv this and drive the fetch
-    through a monkeypatched urlopen."""
+    """No test touches the network. The update check is switched off for the
+    whole suite; its own tests delenv this and drive the fetch through a
+    monkeypatched urlopen. BOTH spellings are set: the current toggle and
+    the superseded opt-out, so this fixture holds whichever a future edit
+    leaves in force."""
+    monkeypatch.setenv("KS4WEB_UPDATE_CHECK", "off")
     monkeypatch.setenv("KS4WEB_NO_UPDATE_CHECK", "1")
 
 

@@ -6114,10 +6114,12 @@ async def manage_session(
         return await _transfer_report(sess, record)
 
     if action == "status":
-        # The 14-day update check: one calm line, only when a newer release
-        # is confirmed on PyPI, never an install, and a silent skip on any
-        # network trouble. Runs off the event loop; the fetch happens at
-        # most once per cache window.
+        # THE UPDATE CHECK, ON DEMAND AND NOWHERE ELSE. This is the only
+        # call site in the product: a status call is a caller asking how the
+        # server is, and no other tool pays for a network request it did not
+        # ask for. At most one request per 24 hours, two-second timeout,
+        # never an install, and a check that could not run says so instead
+        # of showing nothing. Runs off the event loop.
         import asyncio as _asyncio
 
         from .. import updatecheck as _updatecheck
