@@ -347,8 +347,14 @@ def _wrap(fn):
             return envelope.refuse(exc)
         audit.LOG.record(fn.__name__, "ok", args=kwargs)
         if isinstance(result, dict) and "ok" not in result:
-            return envelope.success(result)
-        return envelope.redact(result)
+            payload = envelope.success(result)
+        else:
+            payload = envelope.redact(result)
+        # ONE COPY ON THE WIRE. Every success used to leave here as a plain
+        # dict, which FastMCP turned into structuredContent AND a serialized
+        # text copy of the same object; see envelope.ship for the measurement
+        # that settled which of the two a real client reads.
+        return envelope.ship(payload)
 
     return inner
 
@@ -374,10 +380,19 @@ def register(fn, pack: str | None = None) -> bool:
     # navigate, scroll, and the session/tab/export tools all modify
     # something, and an optimistic hint would be a false safety claim in
     # metadata.
+    # output_schema=None stops tools/list advertising
+    # {"type":"object","additionalProperties":true} on every tool, which
+    # validates nothing and whose only effect is to tell a client to expect a
+    # structuredContent this server no longer sends. A tool that one day
+    # grows a REAL output schema is welcome to declare one and pay for its
+    # own structured copy. This does NOT on its own stop the double-send
+    # (FastMCP builds structuredContent from any returned dict regardless of
+    # the declared schema); envelope.ship does that.
     mcp.tool(
         _wrap(fn),
         name=name,
         annotations={"readOnlyHint": readonly.read_only_hint(name)},
+        output_schema=None,
     )
     packs.register(name, pack)
     return True

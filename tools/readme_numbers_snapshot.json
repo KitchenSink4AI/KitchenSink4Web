@@ -5,14 +5,14 @@
     "delta_tokens": 82,
     "fell_back_to_full_read": false,
     "file": "pathological",
-    "first_read_tokens": 898
+    "first_read_tokens": 821
    },
    "demo": {
     "budget": 5000,
     "file": "wikipedia_versailles",
     "page": "the Treaty of Versailles article on Wikipedia",
-    "projection_rung": 7,
-    "projection_tokens": 4306,
+    "projection_rung": 6,
+    "projection_tokens": 4437,
     "raw_dump_published": 33073,
     "raw_dump_published_flavor": "visible_text",
     "raw_dumps": {
@@ -37,21 +37,21 @@
    }
   },
   "tests": {
-   "browser": 711,
-   "total": 1897,
-   "unit": 1186
+   "browser": 733,
+   "total": 2055,
+   "unit": 1322
   }
  },
  "fill": {
-  "BROWSER_TEST_COUNT": 711,
+  "BROWSER_TEST_COUNT": 733,
   "DELTA_TOKENS": "82",
   "DEMO_PAGE_NAME": "the Treaty of Versailles article on Wikipedia",
   "FULL_SURFACE_TOKENS": "16.0k",
   "LITE_SURFACE_TOKENS": "6.5k",
   "LITE_TOOL_COUNT": 19,
-  "PROJECTION_TOKENS": "4,306",
+  "PROJECTION_TOKENS": "4,437",
   "RAW_DUMP_TOKENS": "33,073",
   "RUNG_COUNT": 16,
-  "TEST_COUNT": 1897
+  "TEST_COUNT": 2055
  }
 }

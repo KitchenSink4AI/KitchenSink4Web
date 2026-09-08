@@ -671,7 +671,17 @@ class RefusalResult(_FmcpToolResult):
         # rejects the frame first, and page content is sanitized to U+FFFD)
         # and one defensive substitution at the serializer.
         payload = _sanitize(payload)
-        text = _json.dumps(payload, indent=2, ensure_ascii=False)
+        # COMPACT, like every other thing this server sends. The indent was
+        # costing about 17% of a refusal for whitespace no model reads, and a
+        # refusal is the one response a caller pays for having got nothing.
+        text = _json.dumps(payload, ensure_ascii=False)
+        # A refusal keeps BOTH copies where a success keeps one (see ship()).
+        # Three reasons, and none of them apply to the success path: isError
+        # forces a CallToolResult through this shape regardless, a refusal is
+        # about sixty tokens so the duplicate is noise rather than a bill, and
+        # this class's own mapping protocol below reads structured_content
+        # back in-process, which is how ops and the test harness index a
+        # refusal like the dict it describes.
         super().__init__(
             content=text, structured_content=payload, is_error=True
         )
@@ -701,3 +711,35 @@ def success(payload: dict) -> dict:
     out: dict[str, Any] = {"ok": True}
     out.update(payload)
     return redact(out)
+
+
+def ship(payload: Any) -> Any:
+    """Put a success payload on the wire ONCE.
+
+    Returning a plain dict from a tool made FastMCP send the answer twice:
+    the dict became `structuredContent`, and because no `content` was given
+    it built one by serializing the same dict again. Both copies rode out in
+    the same CallToolResult, byte for byte identical.
+
+    Measured at the client boundary on 2026-09-08 rather than argued from the
+    code: a Claude-family client reproduces `content[0].text` verbatim, down
+    to this server's own accidental formatting differences between its
+    success path (compact) and its refusal path (indented at the time). It
+    never rendered the structured copy. So the second copy was pure freight:
+    a Versailles page view shipped 4,635 tokens of content plus an identical
+    4,667 of structure, 9,302 on the wire for a 4,344-token projection.
+
+    Text is the direction that fails safe. `content` is the field every MCP
+    client implements and the specification's own backward-compatibility
+    recommendation; `structuredContent` is optional and a client MAY ignore
+    it. A client that would have preferred structure still gets a complete,
+    parseable answer here. The reverse choice hands a client that reads
+    `content` an empty result.
+
+    Serialization is FastMCP's own, reached by handing the dict to
+    ToolResult as `content`, so the text is byte-identical to the copy this
+    server was already sending. Anything that is not a dict is already a
+    ToolResult or a content block and passes through untouched."""
+    if not isinstance(payload, dict):
+        return payload
+    return _FmcpToolResult(content=payload)

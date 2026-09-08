@@ -295,7 +295,14 @@ def test_manage_session_status_reports_the_hygiene_state(session_factory):
         browsers = status["browsers"]
         assert browsers["default"]["lane"] == "A(chromium)"
         assert browsers["research"]["lane"].endswith("firefox)")
-        assert "steering only" in browsers["note"]
+        # The steering note moved to get_workflows(topic='sessions') with
+        # the rest of the status block's fixed teaching; what status keeps
+        # is the recommendation itself and where the reasoning went.
+        assert "note" not in browsers
+        assert status["explained_by"] == "get_workflows(topic='sessions')"
+        recommendation = (await lite.get_workflows(
+            topic="sessions"))["workflow"]["browser_recommendation"]
+        assert "steering only" in recommendation["note"]
         assert isinstance(browsers["installed"], list)
 
     run(go())

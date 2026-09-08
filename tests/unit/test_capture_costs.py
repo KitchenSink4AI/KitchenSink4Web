@@ -19,6 +19,7 @@ import pytest
 
 from kitchensink4web import ocr
 from kitchensink4web.ops import capture, common
+from tests.fixtures.results import client_payload
 
 
 def _png(width: int, height: int) -> bytes:
@@ -66,10 +67,10 @@ def test_dimensions_are_read_out_of_the_bytes():
 
 
 def _meta_of(result):
-    """An inline capture returns a ToolResult; a spilled one returns the
-    dict. Both carry the same accounting."""
-    return (result if isinstance(result, dict)
-            else result.structured_content)
+    """An inline capture returns a ToolResult carrying the image and the
+    metadata as text; a spilled one returns the dict. Both carry the same
+    accounting."""
+    return client_payload(result)
 
 
 def test_the_estimate_is_computed_over_the_returned_dimensions():

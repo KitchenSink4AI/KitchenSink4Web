@@ -21,6 +21,36 @@ from kitchensink4web import server
 
 
 @pytest.fixture(autouse=True)
+def _no_grade_leak():
+    """A test may not change the process read-only grade and walk away.
+
+    The grade is launch-time and therefore process-global, and several
+    behaviours read it silently rather than refusing on it: the lane
+    database, for one, returns `read` instead of `learn` under a read-only
+    grade and records nothing. A test that leaves the grade armed does not
+    fail itself, it fails whatever the shuffle runs next, which is why this
+    is caught here instead of in a review.
+
+    `pytest-randomly` reorders every run, so a leak like this is a lottery
+    rather than a stable red. One did ship: `test_p16_28` cleared the grade
+    and then re-armed it with a bare `configure()`, and six lane tests went
+    red on any seed that put `test_profiles` before `test_lane_wiring`.
+    """
+    from kitchensink4web.policy import readonly
+    before = readonly.grade()
+    yield
+    after = readonly.grade()
+    if after != before:
+        readonly.apply(False if before is None else before)
+        pytest.fail(
+            f"this test left the process read-only grade at {after!r}, "
+            f"where it found {before!r}. The grade is process-global, so "
+            f"the cost lands on whatever runs next. Restore it explicitly: "
+            f"a bare server.configure() re-resolves the SHIPPED default "
+            f"grade rather than clearing it, so pass read_only=False.")
+
+
+@pytest.fixture(autouse=True)
 def _no_update_check(monkeypatch):
     """No test touches the network. The update check is switched off for the
     whole suite; its own tests delenv this and drive the fetch through a

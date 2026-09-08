@@ -751,8 +751,29 @@ def report(url_or_host: str | None) -> dict:
         return {"host": None, "learning": "unavailable", "lanes": []}
 
 
-def status() -> dict:
-    """The one-line summary the session status block carries."""
+#: WHAT THIS DATABASE HOLDS, in one place so the status block, the lanes
+#: action, and the workflow topic cannot drift into three answers.
+DISCLOSURE: dict[str, str] = {
+    "stores": ("hostnames, one lane key, three counts, one verdict word, "
+               "and dates at day resolution"),
+    "never_stores": ("paths, query strings, URLs, page titles, times of "
+                     "day, per-visit rows, and any intranet, IP-literal, "
+                     "or non-standard-port host"),
+    "erase": "manage_session(action='lanes', op='forget', all=True)",
+}
+
+
+def status(explain: bool = True) -> dict:
+    """The one-line summary the session status block carries.
+
+    `explain=False` drops the three fixed disclosure strings (`stores`,
+    `never_stores`, `erase`), which say the same words on every call. They
+    are NOT gone: `manage_session(action='lanes')`, the action a caller
+    reaches for when the question is about this database, carries them
+    whole, get_workflows(topic='sessions') repeats them verbatim, and the
+    status block names where they went. What stays here is the state --
+    which file, whether it exists, how many hosts, and whether this launch
+    is learning at all."""
     try:
         with _lock:
             current = mode()
@@ -760,7 +781,7 @@ def status() -> dict:
                 return {"learning": "off", "hosts": 0, "file": None}
             _load()
             target = _checked_path()
-            return {
+            state = {
                 "learning": "read-only" if (current == "read"
                                             or _STORE.frozen) else "learning",
                 "hosts": len(_STORE.hosts),
@@ -768,14 +789,10 @@ def status() -> dict:
                 "file_exists": bool(target and target.exists()),
                 "ttl_days": ttl_days(),
                 "auto_pick": autopick_enabled(),
-                "stores": ("hostnames, one lane key, three counts, one "
-                           "verdict word, and dates at day resolution"),
-                "never_stores": ("paths, query strings, URLs, page titles, "
-                                 "times of day, per-visit rows, and any "
-                                 "intranet, IP-literal, or non-standard-port "
-                                 "host"),
-                "erase": "manage_session(action='lanes', op='forget', all=True)",
             }
+            if not explain:
+                return state
+            return {**state, **DISCLOSURE}
     except Exception:
         return {"learning": "unavailable", "hosts": 0, "file": None}
 

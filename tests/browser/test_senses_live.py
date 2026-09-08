@@ -31,6 +31,7 @@ from kitchensink4web.engine.session import MANAGER
 from kitchensink4web.errors import BadParams, UnsupportedContent
 from kitchensink4web.ops import capture, common, lite
 from kitchensink4web.policy import readonly
+from tests.fixtures.results import client_payload
 
 pytestmark = pytest.mark.browser
 
@@ -66,7 +67,7 @@ async def _open(base, path):
 
 
 def _meta(result):
-    return result if isinstance(result, dict) else result.structured_content
+    return client_payload(result)
 
 
 # ------------------------------------------------------- cost and region
