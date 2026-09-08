@@ -778,22 +778,43 @@ def tombstone_line(stone: dict | None) -> str:
                f"recoverable with load_auth_state." if auth else ""))
 
 
+def _driver_transport(driver: Any) -> Any:
+    """Playwright's pipe transport, or None.
+
+    The async API object is a thin wrapper: the connection lives on
+    `_impl_obj`, and reaching for `_connection` on the wrapper itself finds
+    nothing. That is not a hypothetical: the first cut of this probe read
+    the wrapper, answered `None` for every real driver, and would have made
+    the whole death-detection path dead code in production while its unit
+    pin passed against a synthetic object. Both paths are tried here and a
+    live-driver pin now holds the answer to True."""
+    for holder in (getattr(driver, "_impl_obj", None), driver):
+        connection = getattr(holder, "_connection", None)
+        transport = getattr(connection, "_transport", None)
+        if transport is not None:
+            return transport
+    return None
+
+
 def driver_alive(driver: Any) -> bool | None:
     """Is the node process behind this Playwright instance still running?
 
     True, False, or None for cannot-tell, and the third answer is the one
     that decides the shape: the probe reads Playwright's own transport,
-    which is a private attribute and therefore allowed to move under us.
-    A driver this cannot see is treated as alive, so a Playwright release
-    that renames the attribute costs the field cascade's fix and never
-    costs a working driver."""
-    proc = getattr(driver, "_own_process", None)
-    if proc is None:
-        connection = getattr(driver, "_connection", None)
-        transport = getattr(connection, "_transport", None)
-        proc = getattr(transport, "_proc", None)
-    if proc is None:
+    which is private and therefore allowed to move under us. A driver this
+    cannot see is treated as alive, so a Playwright release that renames
+    the attribute costs the field cascade's fix and never costs a working
+    driver.
+
+    Two signals, and the transport's own stop flag is asked first because
+    it is set the moment the pipe is closed, while the process's exit code
+    takes as long as the process takes to go."""
+    transport = _driver_transport(driver)
+    if transport is None:
         return None
+    if getattr(transport, "_stopped", False):
+        return False
+    proc = getattr(transport, "_proc", None)
     code = getattr(proc, "returncode", "absent")
     if code == "absent":
         return None
@@ -939,6 +960,19 @@ class SessionManager:
         self._driver_loops[slot] = loop
         return driver
 
+    def sweep_drivers(self) -> list[dict]:
+        """Bury every driver slot whose process has exited, and say which.
+
+        Separate from `_playwright()`'s own check because that one only
+        looks at the slot it was asked for, and a user session opening
+        after the monitor's driver died would otherwise leave that death
+        unnamed until something happened to touch the monitor slot."""
+        buried = []
+        for slot, driver in list(self._drivers.items()):
+            if driver_alive(driver) is False:
+                buried.append(self._bury_driver(slot, driver))
+        return buried
+
     def _sessions_on(self, slot: str) -> list[str]:
         return sorted(sid for sid, s in self.sessions.items()
                       if getattr(s, "driver_slot", "user") == slot)
@@ -1010,9 +1044,16 @@ class SessionManager:
                 self.startup_reap = hygiene.reap_orphans()
             hygiene.JOB.ensure()
             _warm_estimator()
+            # ORDER MATTERS, and it is an attribution question rather than
+            # a correctness one. The drivers are swept FIRST so a session
+            # that died because its driver died is entombed as `driver_died`
+            # and counted in that driver's own casualty list; the general
+            # reaper afterwards takes whatever died for its own reasons and
+            # marks it `reaped_dead`. Run the other way round, every death
+            # in a driver collapse reads as an unexplained dead browser and
+            # the driver's record claims it lost nothing.
+            self.sweep_drivers()
             # A DEAD SESSION IS NEVER A REASON A NEW ONE CANNOT START.
-            # This runs before the driver is touched, because the driver
-            # is the thing most likely to have taken them down.
             self.last_reap = self.reap_dead()
             pw = await self._playwright(slot)
             lanes.ensure_installed(spec, pw)

@@ -1,5 +1,5 @@
-"""The update notice: on demand, once a day, two seconds, and honest when it
-could not run.
+"""The update notice: on demand, once a week, two seconds, and honest when
+it could not run.
 
 Every test drives the network seam through a monkeypatched urlopen; nothing
 here touches the real PyPI.
@@ -142,9 +142,9 @@ def test_a_machine_that_never_succeeded_says_so(monkeypatch):
     assert payload["last_successful_check"] == "never, on this machine"
 
 
-def test_a_failed_check_still_costs_only_one_call_a_day(monkeypatch,
-                                                        isolated):
-    """The retry horizon is the same 24 hours as the success horizon. A
+def test_a_failed_check_still_costs_only_one_call_a_week(monkeypatch,
+                                                         isolated):
+    """The retry horizon is the same seven days as the success horizon. A
     machine with no network must not attempt a fetch on every status call."""
     calls = []
 
@@ -161,8 +161,12 @@ def test_a_failed_check_still_costs_only_one_call_a_day(monkeypatch,
 # --------------------------------------------------------------- the cadence
 
 
-def test_the_window_is_twenty_four_hours():
-    assert updatecheck.CACHE_MAX_AGE_S == 24 * 3600
+def test_the_window_is_seven_days():
+    """AUTHOR RULING 2026-09-08, amending this wave's own 24-hour build. The
+    number is pinned rather than left to a comment because it is a product
+    decision about how often a small user base hears from this check, not a
+    caching tuning knob somebody may reasonably adjust."""
+    assert updatecheck.CACHE_MAX_AGE_S == 7 * 24 * 3600
 
 
 def test_the_timeout_is_two_seconds():

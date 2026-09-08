@@ -123,8 +123,8 @@ it replaced described the superseded design (a startup thread, a 14-day
 window, and the KS4WEB_NO_UPDATE_CHECK variable) and was factually wrong
 after the conversion, so it could not be left standing. FACTS TO CONVEY:
 nothing runs at startup and nothing runs on a thread; the check happens only
-when you call manage_session(action='status'); at most one request per 24
-hours, cached in the state directory; a two-second timeout; it never installs
+when you call manage_session(action='status'); at most one request per seven
+days, cached in the state directory; a two-second timeout; it never installs
 anything; the only thing it sends is a plain HTTPS GET to pypi.org for this
 package's public release index, carrying no identifier, no usage data, no
 page content and no session state; a check that could not run says so and
@@ -134,7 +134,7 @@ the older KS4WEB_NO_UPDATE_CHECK spelling is still honored. -->
 
 The server compares its version against PyPI's when you call
 `manage_session(action='status')`, and never at any other time: nothing runs at startup and nothing
-runs on a background thread. At most one request per 24 hours, with a two-second timeout. It never
+runs on a background thread. At most one request per seven days, with a two-second timeout. It never
 installs anything. The request is a plain HTTPS GET to pypi.org for this package's public release
 index; it sends no identifier, no usage data, no page content and no session state. A check that
 could not complete says so and says how long ago the last successful one was, rather than showing

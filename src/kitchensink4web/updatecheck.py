@@ -8,7 +8,7 @@ principle rather than of taste, so they are listed rather than summarised:
   thread, and no tool path other than `manage_session(action='status')`
   reaches this module. A status call is a caller asking how the server is;
   a `navigate` call is not, and never pays for this.
-- **At most one network request per 24 hours**, cached in the state dir.
+- **At most one network request per seven days**, cached in the state dir.
 - **A two-second timeout**, which is the whole budget: a status call must
   not become slow because PyPI is.
 - **Failure is REPORTED, not swallowed.** The old design called silence a
@@ -53,10 +53,16 @@ ENV_OPT_OUT = "KS4WEB_NO_UPDATE_CHECK"
 PACKAGE = "kitchensink4web"
 PYPI_URL = f"https://pypi.org/pypi/{PACKAGE}/json"
 
-#: One network call per 24 hours, whatever the outcome. A failed check
-#: writes its attempt time too, so a machine with no network tries once a
-#: day rather than on every status call.
-CACHE_MAX_AGE_S = 24 * 3600
+#: One network call per SEVEN DAYS, whatever the outcome (author ruling,
+#: 2026-09-08, amending this wave's own 24-hour build). The reasoning is
+#: about people rather than about caching: the user base at launch is small
+#: and grows over months, releases will iterate quickly, and a daily window
+#: would tell the same handful of users about a new version over and over.
+#: A week-stale answer stays honest because the payload carries when the
+#: check last succeeded, so nobody has to assume the number is fresh.
+#: A failed check writes its attempt time too, so a machine with no network
+#: tries once a week rather than on every status call.
+CACHE_MAX_AGE_S = 7 * 24 * 3600
 FETCH_TIMEOUT_S = 2.0
 
 #: PyPI's own JSON for this package is a few tens of kilobytes. The cap is
@@ -178,7 +184,8 @@ def check() -> dict:
     last one is the honest branch the superseded design did not have: a
     check that could not run says so, says why in categories rather than in
     the remote server's words, and says how long ago the last successful
-    one was."""
+    one was. That last figure carries more weight under a seven-day window
+    than it would under a daily one, which is why it is never omitted."""
     installed = _installed_version()
     if not enabled():
         return {
@@ -211,7 +218,7 @@ def check() -> dict:
         _write_cache(record)
     payload: dict = {"installed": installed, "privacy": PRIVACY_FACT,
                      "source": PYPI_URL,
-                     "cadence": "at most one request per 24 hours"}
+                     "cadence": "at most one request per seven days"}
     have = _parse(installed)
     want = _parse(latest)
     if error and want is None:

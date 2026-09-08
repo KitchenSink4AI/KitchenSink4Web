@@ -176,6 +176,68 @@ def test_a_slot_with_sessions_on_it_keeps_its_driver(session_factory):
     run(go())
 
 
+def test_a_dead_driver_is_replaced_rather_than_handed_back(session_factory):
+    """THE FIELD MECHANISM, reproduced exactly and then severed.
+
+    Killing the driver process is what actually happened: the browsers it
+    launched are its children and go with it, and the old code kept handing
+    the corpse back to every `open()` until the session count reached zero.
+    Here the next open buries it, names its casualties, and starts a fresh
+    one."""
+    async def go():
+        from kitchensink4web.engine import hygiene
+        doomed = await session_factory()
+        transport = _session._driver_transport(MANAGER._drivers["user"])
+        hygiene.kill(transport._proc.pid)
+        for _ in range(40):                     # the exit is not instant
+            if _session.driver_alive(MANAGER._drivers["user"]) is False:
+                break
+            await asyncio.sleep(0.1)
+        assert _session.driver_alive(MANAGER._drivers["user"]) is False
+
+        fresh = await session_factory()
+        assert fresh.browser_alive() is not False, (
+            "a new session launched against the dead driver")
+        assert doomed.session_id not in MANAGER.sessions
+        assert MANAGER._drivers["user"] is not None
+        assert _session.driver_alive(MANAGER._drivers["user"]) is True
+        # The death is a fact the status report carries, not a mystery.
+        report = await lite.manage_session(action="status")
+        deaths = report["driver_deaths"]
+        assert deaths and deaths[-1]["slot"] == "user"
+        assert doomed.session_id in deaths[-1]["sessions_lost"]
+        # ATTRIBUTED TO THE DRIVER, not to an unexplained dead browser.
+        stone = MANAGER.tombstone(doomed.session_id)
+        assert stone["reason"] == "driver_died", stone
+
+    run(go())
+
+
+def test_a_user_driver_death_does_not_reach_the_monitors(session_factory):
+    """THE WHOLE POINT OF THE SPLIT, on the real mechanism rather than on a
+    browser-PID kill. In the field this is the step that killed a Chromium
+    session which had never visited the site."""
+    async def go():
+        from kitchensink4web.engine import hygiene
+        await session_factory()
+        monitor_session = await MANAGER.open(headless=True, role="monitor")
+        try:
+            transport = _session._driver_transport(MANAGER._drivers["user"])
+            hygiene.kill(transport._proc.pid)
+            for _ in range(40):
+                if _session.driver_alive(MANAGER._drivers["user"]) is False:
+                    break
+                await asyncio.sleep(0.1)
+            assert _session.driver_alive(MANAGER._drivers["monitor"]) is True
+            assert monitor_session.browser_alive() is not False, (
+                "the monitor's browser died with the user slot's driver")
+        finally:
+            if monitor_session.session_id in MANAGER.sessions:
+                await MANAGER.close(monitor_session.session_id)
+
+    run(go())
+
+
 # ------------------------------------------------- LAYER 1 + 3: it is NAMED
 
 
@@ -300,6 +362,39 @@ def test_the_failure_valve_is_untouched_by_the_restart():
         _m.note_failure(record, "SESSION_DEAD", "the browser is gone")
     assert record["state"] == "paused"
     assert record["auto_paused"] is True
+
+
+def test_the_probe_reads_a_REAL_driver(session_factory):
+    """THE PIN THAT MATTERS, and it is here because the synthetic one below
+    is not enough on its own.
+
+    The first cut of `driver_alive` read `_connection` off the async API
+    wrapper. That wrapper is thin: the connection lives on `_impl_obj`, so
+    the probe answered `None` for every real driver and the whole
+    death-detection path would have been dead code in production, while the
+    synthetic pin below passed happily. A capability probe is only worth
+    what it answers about the real thing."""
+    async def go():
+        await session_factory()
+        driver = MANAGER._drivers["user"]
+        assert _session.driver_alive(driver) is True, (
+            "the liveness probe cannot see a running driver, so nothing "
+            "would ever detect a dead one")
+
+    run(go())
+
+
+def test_a_stopped_driver_reads_as_dead():
+    """The other end of the same probe, against a real driver that really
+    stopped rather than a hand-built stand-in."""
+    async def go():
+        from playwright.async_api import async_playwright
+        driver = await async_playwright().start()
+        assert _session.driver_alive(driver) is True
+        await driver.stop()
+        assert _session.driver_alive(driver) is False
+
+    asyncio.run(go())
 
 
 def test_a_driver_this_cannot_see_is_treated_as_alive():
