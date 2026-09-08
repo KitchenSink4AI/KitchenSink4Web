@@ -153,7 +153,7 @@ FIGURE_SURFACES = (
 #: with a re-run of the named script.
 PUBLISHED_FIGURES = (
     ('4,445', 'tokens for the first read of the demo page', 'tools/measure_readme_numbers.py'),
-    ('2,062', 'tests', 'pytest --collect-only'),
+    ('2,065', 'tests', 'pytest --collect-only'),
     ('33,073', 'tokens in the raw dump of the same page', 'tools/measure_readme_numbers.py'),
 )
 
@@ -164,31 +164,42 @@ SUPERSEDED_FIGURES = (
     ('4.437', 'the same figure with a german or spanish separator'),
     ('4 437', 'the same figure with a french separator'),
     ('2,055', 'the previous test count'),
+    ('2,062', 'the test count before the gate gained its figure guard'),
     ('6.5k', 'the previous lite surface cost'),
     ('16.0k', 'the previous full surface cost'),
 )
 
 
-@pytest.mark.parametrize("figure,what,source", PUBLISHED_FIGURES)
-def test_every_published_figure_reads_the_same_on_every_surface(figure, what, source):
+def test_every_published_figure_reads_the_same_on_every_surface():
     """A figure published on three surfaces has to be the same figure on all
     three. Checking presence rather than equality keeps the guard honest
-    about locale number formatting, which differs by design."""
-    for rel in FIGURE_SURFACES:
-        assert figure in _read(rel), (
-            f"{rel} does not carry {figure!r} ({what}, measured by {source}). "
-            f"Either the surface was missed by a restamp or the figure moved "
-            f"and this table was not updated. Re-run the script, do not "
-            f"guess the number.")
+    about locale number formatting, which differs by design.
+
+    Looped rather than parametrized on purpose: this repo's collected test
+    count is one of the figures below, so a parametrized table would move
+    the number it is guarding every time somebody added a row to it."""
+    missing = []
+    for figure, what, source in PUBLISHED_FIGURES:
+        for rel in FIGURE_SURFACES:
+            if figure not in _read(rel):
+                missing.append(f"{rel} does not carry {figure!r} ({what}, "
+                               f"measured by {source})")
+    assert not missing, (
+        "\n".join(missing) + "\nEither a surface was missed by a restamp or "
+        "the figure moved and this table was not updated. Re-run the script "
+        "that produces it; do not guess the number.")
 
 
-@pytest.mark.parametrize("stale,what", SUPERSEDED_FIGURES)
-def test_no_superseded_figure_survives_on_a_published_surface(stale, what):
+def test_no_superseded_figure_survives_on_a_published_surface():
     """The regression guard for the defect this file was widened over."""
-    for rel in FIGURE_SURFACES:
-        assert stale not in _read(rel), (
-            f"{rel} still carries {stale!r}, {what}. Restamp it from the "
-            f"measuring script rather than deleting this row.")
+    found = []
+    for stale, what in SUPERSEDED_FIGURES:
+        for rel in FIGURE_SURFACES:
+            if stale in _read(rel):
+                found.append(f"{rel} still carries {stale!r}, {what}")
+    assert not found, (
+        "\n".join(found) + "\nRestamp from the measuring script rather than "
+        "deleting the row.")
 
 
 def test_every_figure_surface_is_still_a_real_file():
