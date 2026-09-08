@@ -34,6 +34,14 @@ class WebMcpError(Exception):
     #: re-establish a baseline" printed underneath it.
     hint: str | None = None
 
+    #: MACHINE-READABLE RECOVERY FACTS, set at the raise site (fix wave 10).
+    #: The message already names a recovery in prose; this is the same
+    #: answer as data, for a caller that has to decide rather than read.
+    #: It carries FACTS ONLY -- what else is dead, which lane this was, what
+    #: a resubmission would need -- and never an instruction the message
+    #: does not already give. `None` everywhere it was not built.
+    recovery: dict | None = None
+
 
 # --------------------------------------------------------- inherited family
 

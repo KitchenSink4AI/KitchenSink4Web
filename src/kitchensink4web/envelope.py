@@ -640,6 +640,12 @@ def refusal(exc: BaseException) -> dict:
     detail = getattr(exc, "detail", None)
     if detail:
         error["detail"] = detail
+    # The prose recovery as data. Built only at raise sites that have the
+    # facts to build it with, so its absence means nothing was known and
+    # never that the recovery is unknown.
+    recovery = getattr(exc, "recovery", None)
+    if recovery:
+        error["recovery"] = recovery
     return redact({"ok": False, "error": error})
 
 

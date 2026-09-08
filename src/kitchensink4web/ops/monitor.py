@@ -30,6 +30,7 @@ import asyncio
 import hashlib
 import time
 import unicodedata
+from collections import deque
 from urllib.parse import urlparse
 
 from ..engine import monitors as _monitors
@@ -85,14 +86,82 @@ def _hash(text: str) -> str:
 # ------------------------------------------------------- the monitor session
 
 
+#: EVERY TIME THE SCHEDULER'S BROWSER DIED AND WAS REPLACED, newest last.
+#: Read by `monitor(action='report')` and by `manage_session(action='status')`.
+#: A restart is a thing that HAPPENED to the user's machine, so it is
+#: reported as a fact and not smoothed over; the field report's tester
+#: found a dead monitor by accident, three layers into a cascade, and
+#: that is the discovery path this list exists to replace.
+SESSION_RESTARTS: deque = deque(maxlen=16)
+
+
+def session_restarts() -> list[dict]:
+    return list(SESSION_RESTARTS)
+
+
+def monitor_session_health() -> dict | None:
+    """What the scheduler's browser is doing, or None if it holds none.
+
+    Named separately from the session list because a caller who does not
+    know monitors open sessions will not recognise one in that list."""
+    for session in MANAGER.sessions.values():
+        if getattr(session, "role", "user") == "monitor":
+            alive = session.browser_alive()
+            return {
+                "session": session.session_id,
+                "lane": session.spec.label,
+                "browser": ("dead" if alive is False else
+                            "alive" if alive else "unknown"),
+                "monitors_active": len(_active_monitors()),
+                **({"restarts": session_restarts()}
+                   if SESSION_RESTARTS else {}),
+            }
+    if SESSION_RESTARTS or _active_monitors():
+        return {"session": None,
+                "browser": "none open",
+                "monitors_active": len(_active_monitors()),
+                **({"restarts": session_restarts()}
+                   if SESSION_RESTARTS else {})}
+    return None
+
+
 async def _monitor_session():
     """The one session the scheduler owns. Headless always, and it never
     auto-upgrades to a headed window the way `manage_session(handoff)`
-    does: nothing a monitor runs may put a window on the user's screen."""
+    does: nothing a monitor runs may put a window on the user's screen.
+
+    A DEAD ONE IS REPLACED, AND THE REPLACEMENT IS REPORTED. The old code
+    handed back whatever session carried the monitor role without asking
+    whether its browser was still running, so once the scheduler's browser
+    died every tick afterwards failed against a corpse and the only symptom
+    was stale results. The restart does not weaken the failure valve:
+    `note_failure` still counts every check that did not happen and still
+    auto-pauses a monitor at KS4WEB_MONITOR_MAX_FAILURES in a row, so a
+    browser that dies as fast as it is replaced stops the monitor rather
+    than looping."""
     for session in MANAGER.sessions.values():
-        if getattr(session, "role", "user") == "monitor":
+        if getattr(session, "role", "user") != "monitor":
+            continue
+        if session.browser_alive() is not False:
             return session
-    return await MANAGER.open(headless=True, role="monitor")
+        # Dead. Clear it out of the way before opening its replacement, so
+        # the status report never shows two monitor sessions at once.
+        sid = session.session_id
+        try:
+            await MANAGER.close(sid, reason="crash")
+        except Exception:
+            MANAGER.sessions.pop(sid, None)
+        SESSION_RESTARTS.append({
+            "at": time.time(),
+            "replaced": sid,
+            "why": ("every browser process the scheduler's session owned "
+                    "had exited, so its checks could not run"),
+        })
+        break
+    session = await MANAGER.open(headless=True, role="monitor")
+    if SESSION_RESTARTS and SESSION_RESTARTS[-1].get("opened") is None:
+        SESSION_RESTARTS[-1]["opened"] = session.session_id
+    return session
 
 
 async def _close_monitor_session() -> None:
@@ -629,6 +698,12 @@ def _report() -> dict:
                    "no monitors are defined",
         **({"restart": [r["restart_note"] for r in restart]}
            if restart else {}),
+        # THE SCHEDULER'S OWN BROWSER, named here rather than left to be
+        # recognised in the session list. A monitor reporting `stale` and
+        # a dead monitor browser are the same event seen from two ends,
+        # and the field report's tester had to work that out by hand.
+        **({"session": health} if (health := monitor_session_health())
+           else {}),
         "checks_today": _monitors.STORE.checks_today.get("count", 0),
         "limits": _monitors.published_limits(),
         "how_this_works": (

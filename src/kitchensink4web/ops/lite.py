@@ -1825,6 +1825,58 @@ def _session_is_gone(session) -> bool:
     return session is None
 
 
+def session_dead_recovery(session=None) -> dict:
+    """The SESSION_DEAD recovery, as facts rather than as a sentence.
+
+    Built from what this process can see at the moment of the refusal, which
+    is the whole reason it is worth carrying: the field cascade this closes
+    ran three sessions deep, and the tester only found the second and third
+    casualties by calling status on a hunch after every new open had already
+    failed. A caller that reads these facts knows in one refusal what took
+    that tester four calls.
+
+    Every value here is an observation. Nothing in it is an instruction the
+    message did not already give, and a fact this process cannot establish
+    is omitted rather than guessed."""
+    facts: dict = {
+        # THE ONE THING THE FIELD REPORT SAID WAS BROKEN, stated as the
+        # fact it now is: opening a new session is never blocked by a dead
+        # one, because open() tombstones the dead ones on its way past.
+        "new_session_is_not_blocked": True,
+        "status_call": "manage_session(action='status')",
+    }
+    others = []
+    for sid, other in MANAGER.sessions.items():
+        if session is not None and sid == getattr(session, "session_id", None):
+            continue
+        if other.browser_alive() is False:
+            others.append({"session": sid,
+                           "role": getattr(other, "role", "user"),
+                           "lane": other.spec.label})
+    if others:
+        facts["other_dead_sessions"] = others
+    monitor_health = _monitor_ops.monitor_session_health()
+    if monitor_health:
+        # NAMED WHETHER OR NOT IT IS DEAD. "The monitor is fine" is the
+        # answer that stops a caller hunting, and it is worth as much as
+        # the other one.
+        facts["monitor_session"] = monitor_health
+    if MANAGER.driver_deaths:
+        facts["driver_deaths"] = list(MANAGER.driver_deaths)
+    if session is not None:
+        facts["session"] = session.session_id
+        facts["lane"] = session.spec.label
+        # THE LANE HINT, and only when a wall was actually seen on this
+        # session. A lane suggestion after an ordinary crash would be a
+        # guess dressed as a diagnosis.
+        walled = sorted(getattr(session, "walled_origins", ()) or ())
+        if walled:
+            facts["wall_preceded_death"] = True
+            facts["walled_origins"] = walled[:8]
+            facts["lanes_call"] = "manage_session(action='lanes')"
+    return facts
+
+
 def _raise_if_unreachable(exc: Exception, what: str,
                           record=None, target: str | None = None) -> None:
     """Re-raise a driver failure as the honest typed refusal, naming the
@@ -1857,12 +1909,15 @@ def _raise_if_unreachable(exc: Exception, what: str,
             f"took the browser away. Open a new session with "
             f"manage_session(action='open').") from exc
     if any(m in text for m in _envelope.DEAD_MARKERS):
-        raise SessionDead(
+        dead = SessionDead(
             f"{what} could not run: the browser for this session is gone "
             f"(driver detail: {_envelope.scrub_driver_text(str(exc))}). No "
             f"call on this session can work and no re-read recovers it. "
             f"Close it with manage_session(action='close') and open a new "
-            f"one.") from exc
+            f"one.")
+        dead.recovery = session_dead_recovery(
+            sess_of(record) if record is not None else None)
+        raise dead from exc
     for marker, cause in _NET_CAUSES:
         if marker in text:
             # A CONNECTION THAT OPENED AND DIED is a lane fact; a name that
@@ -2226,6 +2281,19 @@ def _blocked_refusal(sess, url: str, status: int | None, verdict: dict,
     if verdict.get("wall") in _LANE_WALLS:
         _note_lane(sess, url, "blocked", wall=verdict.get("wall"),
                    vendor=verdict.get("vendor"))
+    # THE WALL IS REMEMBERED ON THE SESSION, not only in the lane database
+    # (fix wave 10). A browser that dies shortly after meeting a wall and a
+    # browser that dies for its own reasons produce the same SESSION_DEAD,
+    # and the difference is the whole of what a caller wants to know next.
+    # The lane database answers "which lane suits this host"; this answers
+    # "did this session meet a wall before it died", which nothing else on
+    # this server could say.
+    try:
+        origin = urlparse(url).netloc
+        if origin:
+            sess.walled_origins.add(f"{origin} ({verdict.get('wall')})")
+    except Exception:
+        pass
     lane_hint = _lane_hint(sess, url, verdict.get("wall"))
     return BlockedBySite(
         f'{url} answered with a {verdict["wall"]} rather than '
@@ -3781,12 +3849,14 @@ async def wait_for(
                   + f" ended after {elapsed_ms} ms of a {timeout_ms} ms "
                     f"budget. Observed instead: {observed}.")
         if any(m in str(exc).lower() for m in _envelope.DEAD_MARKERS):
-            raise SessionDead(
+            dead = SessionDead(
                 detail + " The browser for this session is gone, which is "
                          "why the wait ended early rather than expiring: no "
                          "call on this session can work. Close it with "
                          "manage_session(action='close') and open a new "
-                         "one.") from exc
+                         "one.")
+            dead.recovery = session_dead_recovery(sess)
+            raise dead from exc
         raise _TO(
             detail + " The condition may never have held, or the page may "
                      "be blocked; verify with get_page_view.") from exc
@@ -4670,6 +4740,30 @@ async def batch(
         payload["stopped"] = {"step": stopped,
                               "code": failed.get("outcome"),
                               "message": failed.get("error")}
+        # WHAT A RESUBMISSION WOULD NEED, restated as data (fix wave 10).
+        # A caller looking at a stopped batch previously had to rebuild the
+        # tail of its own call by hand from a list of step indices, which is
+        # transcription work this call already has the material to do. The
+        # steps are echoed EXACTLY as they were passed, so a resubmission is
+        # a copy rather than a reconstruction.
+        #
+        # THE FAILED STEP IS LISTED SEPARATELY AND IS NOT FOLDED IN. It did
+        # not complete, so a caller finishing the flow usually needs it; a
+        # caller whose step failed because it was wrong needs to change it
+        # first. Deciding which of those two is true is the caller's job,
+        # and merging the lists would decide it for them.
+        payload["remaining"] = {
+            "failed_step": {"index": stopped, "step": steps[stopped]},
+            "not_attempted_steps": [
+                {"index": r["step"], "step": steps[r["step"]]}
+                for r in per_step if r["status"] == "not_attempted"],
+            "how": ("these are the steps of this call that did not complete, "
+                    "echoed as they were passed. There is no resume "
+                    "parameter: a new batch call carrying the steps you "
+                    "still want, in order, is the resume. The completed "
+                    "steps above have already happened and re-running them "
+                    "would happen again."),
+        }
     payload["page_data"]["covers"] = ["steps[].target.name", "steps[].line",
                                       "stopped.message"]
     # `outcome` is the second key so it cannot be missed, and `stopped` sits
@@ -5193,15 +5287,39 @@ async def _do_resolve(sess, record, *, intent: str, verb: str,
                 listed = _pagedata.wrap_line(
                     "; ".join(_do_match_line(c) for c in candidates[:12]),
                     url=record.page.url)
-                raise AmbiguousLocation(
+                # THE THIRD RECOVERY WAS MISSING (fix wave 10, field item
+                # 7). The refusal named the two narrowing routes and never
+                # named the one that answers "what does this page actually
+                # have", which is the call a caller who cannot tell the
+                # candidates apart needs next. Its sibling TargetNotFound
+                # two lines down has named it all along.
+                ambiguous = AmbiguousLocation(
                     f"{len(candidates)} elements on this page answer to "
                     f"{intent!r}, and no tool acts on first match. What was "
                     f"looked for: {looked}. Candidates:\n{listed}\n"
                     f"Nothing was done. Act on one of those refs directly "
                     f"(click(page={record.handle!r}, "
-                    f"location={{\"ref\": \"...\"}})), or narrow the goal "
+                    f"location={{\"ref\": \"...\"}})), narrow the goal "
                     f"with within={{'form': 'fN'}} or "
-                    f"within={{'region': 'rN'}}.")
+                    f"within={{'region': 'rN'}}, list what the page has "
+                    f"with find_elements(page={record.handle!r}, "
+                    f"query=...), or reach one kind of element with "
+                    f"find_and_act(role=...), which do does not take.")
+                ambiguous.recovery = {
+                    "matched": len(candidates),
+                    "acted": None,
+                    "refs": [c.get("ref") for c in candidates[:12]],
+                    "narrow_by_scope": ["within={'form': 'fN'}",
+                                        "within={'region': 'rN'}"],
+                    "list_the_page": f"find_elements(page={record.handle!r})",
+                    "filter_by_role": "find_and_act(role=...)",
+                    "role_filter_note": (
+                        "do has no role parameter. An intent that keeps "
+                        "matching several kinds of element at once (a "
+                        "heading and a link of the same name, for instance) "
+                        "is what find_and_act's role filter separates."),
+                }
+                raise ambiguous
             raise TargetNotFound(
                 f"the goal {intent!r} matched the {goal!r} shape and the "
                 f"page does not carry its mechanism. What was looked for: "
@@ -5688,6 +5806,19 @@ async def manage_session(
                                        "this is not")}}
                if sess.emulation else {}),
             **({"auth_state": loaded} if loaded else {}),
+            # WHAT THIS OPEN HAD TO CLEAR OUT OF THE WAY. Stated only when
+            # something was actually reaped, because a handle disappearing
+            # from the status report between two calls is a thing the
+            # caller is owed an explanation for, and because on the field
+            # path this is where the whole cascade first becomes visible.
+            **({"reaped": MANAGER.last_reap,
+                "reaped_note": (
+                    "these session handles were still listed and their "
+                    "browser processes had all exited, so opening this one "
+                    "tombstoned them. A dead session never blocks a new "
+                    "one. Any handle named here now refuses with "
+                    "SESSION_DEAD instead of hanging.")}
+               if MANAGER.last_reap else {}),
             # Stated only when it is ON. A session that announces itself to
             # every host it touches is a fact the caller should read in the
             # same result that opened it, and a session that does not needs
@@ -5963,7 +6094,9 @@ async def manage_session(
         #    two answers eventually disagree about the same browser.
         verdict = _session_status(sess)
         if verdict.get("health"):
-            raise SessionDead(verdict["health"])
+            dead = SessionDead(verdict["health"])
+            dead.recovery = session_dead_recovery(sess)
+            raise dead
         _handles.STORE.consume(record)
         return await _transfer_report(sess, record)
 
@@ -6015,6 +6148,31 @@ async def manage_session(
             # observed, so the honest thing to publish here is the file, the
             # host count, and what the file can and cannot contain.
             "lane_database": _lanedb.status(),
+            # THE SCHEDULER'S BROWSER, NAMED (fix wave 10, the field
+            # cascade). A user who does not know monitors open sessions
+            # will not recognise one in the list above, and the tester who
+            # met this found the dead monitor by accident after every new
+            # session had already failed to open. It is stated here
+            # whenever a monitor session exists, and it says `dead` out
+            # loud when it is dead.
+            **({"monitor_session": _monitor_health}
+               if (_monitor_health := _monitor_ops.monitor_session_health())
+               else {}),
+            # WHAT THE LAST open() HAD TO CLEAR, and every driver process
+            # that has gone down under this server. Both are empty on a
+            # healthy machine and both are how the cascade becomes
+            # readable instead of mysterious.
+            **({"reaped_on_last_open": MANAGER.last_reap}
+               if MANAGER.last_reap else {}),
+            **({"driver_deaths": list(MANAGER.driver_deaths),
+                "driver_deaths_note": (
+                    "a Playwright driver is a process and every browser it "
+                    "launched is its child, so a driver that exits takes "
+                    "its browsers with it. Conversation sessions and the "
+                    "monitor scheduler run on separate drivers, so one "
+                    "cannot end the other. A driver that dies is replaced "
+                    "at the next open rather than handed back.")}
+               if MANAGER.driver_deaths else {}),
             # A MISCONFIGURED toggle is REPORTED here rather than raised.
             # Opening a session refuses on it loudly, which is where a typo
             # should cost something; status is the surface an agent reaches

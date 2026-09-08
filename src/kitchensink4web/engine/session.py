@@ -445,6 +445,24 @@ class Session:
     #: refuses to hand the scheduler's session to a conversation that would
     #: then fight it for the same page.
     role: str = "user"
+    #: WHICH DRIVER PROCESS THIS SESSION'S BROWSERS BELONG TO (fix wave 10,
+    #: the field cascade). Playwright's node driver is a process, every
+    #: browser it launches is its child, and a driver that dies takes all
+    #: of them with it whatever engine they were. That is the seam the
+    #: field report's layer 2 travelled down: a Firefox session hit a
+    #: Cloudflare wall, the driver behind it stopped answering, and the
+    #: monitor's Chromium browser died beside it having never visited the
+    #: site. Sessions are now grouped onto driver slots by role, so a
+    #: user-session driver and the monitor's driver are two separate
+    #: processes and neither can kill the other. Recorded per session
+    #: because a driver's death has to be able to name its own casualties.
+    driver_slot: str = "user"
+    #: Origins that answered this session with a wall, each with the wall's
+    #: own name. Written by `_blocked_refusal`; read by the SESSION_DEAD
+    #: recovery facts, which is the one place the difference between "this
+    #: browser died" and "this browser died after a wall" changes what a
+    #: caller should do next.
+    walled_origins: set[str] = field(default_factory=set)
 
     # ----------------------------------------------------- the focused jar
 
@@ -735,6 +753,10 @@ REASON_TEXT: dict[str, str] = {
     "crash": ("its browser process exited on its own, so this was a crash "
               "rather than a close"),
     "shutdown": "the server closed it while shutting down",
+    "driver_died": ("the Playwright driver process that had launched its "
+                    "browser exited, so its browser exited with it"),
+    "reaped_dead": ("every browser process it owned had already exited, and "
+                    "a later call cleared the handle out of the way"),
 }
 
 
@@ -756,6 +778,63 @@ def tombstone_line(stone: dict | None) -> str:
                f"recoverable with load_auth_state." if auth else ""))
 
 
+def driver_alive(driver: Any) -> bool | None:
+    """Is the node process behind this Playwright instance still running?
+
+    True, False, or None for cannot-tell, and the third answer is the one
+    that decides the shape: the probe reads Playwright's own transport,
+    which is a private attribute and therefore allowed to move under us.
+    A driver this cannot see is treated as alive, so a Playwright release
+    that renames the attribute costs the field cascade's fix and never
+    costs a working driver."""
+    proc = getattr(driver, "_own_process", None)
+    if proc is None:
+        connection = getattr(driver, "_connection", None)
+        transport = getattr(connection, "_transport", None)
+        proc = getattr(transport, "_proc", None)
+    if proc is None:
+        return None
+    code = getattr(proc, "returncode", "absent")
+    if code == "absent":
+        return None
+    return code is None
+
+
+async def _stop_driver(driver: Any) -> None:
+    """Best-effort `stop()` on a driver nobody will use again."""
+    try:
+        await driver.stop()
+    except Exception:
+        pass
+
+
+def _release_session_locally(session: Session) -> None:
+    """Free a dead session's local bookkeeping without touching the browser.
+
+    Used on the two paths where the browser is already gone: a driver that
+    died and a session whose every owned process has exited. Closing pages
+    or contexts through the driver would only produce a timeout, so this
+    kills any survivor by PID, closes the journal, removes the profile
+    directory, and drops the budget ledger, which is everything `close()`
+    does that does not travel over the driver connection."""
+    desk = getattr(session, "_dialogs", None)
+    for task in list(desk.tasks) if desk is not None else ():
+        task.cancel()
+    for handle in session.contexts.values():
+        try:
+            for pid in handle.journal.survivors():
+                hygiene.kill(pid)
+            handle.journal.close()
+            hygiene._remove_tree(handle.profile_dir)
+        except Exception:
+            pass
+    try:
+        from ..policy import budgets as _budgets
+        _budgets.BOOK.drop(session.session_id)
+    except Exception:
+        pass
+
+
 def monitor_session_line(sessions: dict) -> str:
     """Name the scheduler's session in an ambiguity refusal. A session the
     caller never opened, appearing in a list of sessions to choose between,
@@ -772,8 +851,10 @@ class SessionManager:
     """Process-wide browser state. One instance, held at module level."""
 
     def __init__(self) -> None:
-        self._pw: Any = None
-        self._loop: asyncio.AbstractEventLoop | None = None
+        #: ONE PLAYWRIGHT DRIVER PROCESS PER SLOT, not one for the server.
+        #: Keyed by `Session.driver_slot`; see that field for why.
+        self._drivers: dict[str, Any] = {}
+        self._driver_loops: dict[str, Any] = {}
         self.sessions: dict[str, Session] = {}
         self._lock = asyncio.Lock()
         self._session_seq = 0
@@ -781,6 +862,36 @@ class SessionManager:
         self.startup_reap: dict | None = None
         #: Closed sessions, newest last, bounded at TOMBSTONE_MAX.
         self.tombstones: deque = deque(maxlen=TOMBSTONE_MAX)
+        #: What the last `open()` had to clear out of the way, newest last.
+        #: A dead session is never a reason a new one cannot start, and the
+        #: clearing is reported rather than done quietly.
+        self.last_reap: list[dict] = []
+        #: Driver deaths this process has observed, newest last. Read by the
+        #: status surface, which is where a caller looks when every call is
+        #: refusing and nothing has told them why.
+        self.driver_deaths: deque = deque(maxlen=TOMBSTONE_MAX)
+
+    @property
+    def _pw(self) -> Any:
+        """The user slot's driver. Kept as a name because the rest of this
+        module and its tests grew up around a single driver."""
+        return self._drivers.get("user")
+
+    @property
+    def _loop(self) -> Any:
+        return self._driver_loops.get("user")
+
+    @staticmethod
+    def driver_slot_for(role: str) -> str:
+        """Which driver process a session of this role belongs on.
+
+        Two slots, and the split is by ROLE rather than per session on
+        purpose: a driver process is real memory and a node process each,
+        so one per session would multiply the cost the contexts cap exists
+        to bound. What the split has to buy is that the scheduler's browser
+        cannot die because a conversation's browser did, and two slots buy
+        exactly that."""
+        return "monitor" if role == "monitor" else "user"
 
     # ------------------------------------------------------------ lifecycle
 
@@ -792,26 +903,73 @@ class SessionManager:
         self._page_seq += 1
         return f"p{self._page_seq}"
 
-    async def _playwright(self) -> Any:
-        """Start the driver lazily, and only once per event loop.
+    async def _playwright(self, slot: str = "user") -> Any:
+        """Start one slot's driver lazily, and only once per event loop.
 
         A Playwright instance is bound to the loop that started it, so a
         stale one is a hard error rather than something to paper over: reusing
         it across loops is exactly the kind of silent breakage this design
-        refuses elsewhere."""
+        refuses elsewhere.
+
+        A DRIVER THAT HAS DIED IS REPLACED RATHER THAN HANDED BACK, which is
+        the third layer of the field cascade this wave was opened for. The
+        old code cached the driver for the life of the process and only
+        stopped it when the LAST session closed, so once the node process
+        behind it went down, every subsequent `open()` launched against a
+        corpse and failed, and the only cure a tester could find was closing
+        the dead session by hand. The sessions on a dead driver are dead by
+        construction, so they are entombed here with the driver's death as
+        their reason rather than being left as handles that refuse."""
         loop = asyncio.get_running_loop()
-        if self._pw is not None and self._loop is loop:
-            return self._pw
-        if self._pw is not None and self.sessions:
+        existing = self._drivers.get(slot)
+        if existing is not None and driver_alive(existing) is False:
+            self._bury_driver(slot, existing)
+            existing = None
+        if existing is not None and self._driver_loops.get(slot) is loop:
+            return existing
+        if existing is not None and self._sessions_on(slot):
             raise Conflict(
-                "the browser driver belongs to a different event loop and "
-                "sessions are still open. Close them from the loop that "
-                "opened them.")
+                f"the browser driver for the {slot!r} slot belongs to a "
+                f"different event loop and sessions are still open. Close "
+                f"them from the loop that opened them.")
         from playwright.async_api import async_playwright  # lazy: DESIGN 4.1
 
-        self._pw = await async_playwright().start()
-        self._loop = loop
-        return self._pw
+        driver = await async_playwright().start()
+        self._drivers[slot] = driver
+        self._driver_loops[slot] = loop
+        return driver
+
+    def _sessions_on(self, slot: str) -> list[str]:
+        return sorted(sid for sid, s in self.sessions.items()
+                      if getattr(s, "driver_slot", "user") == slot)
+
+    def _bury_driver(self, slot: str, driver: Any) -> dict:
+        """Record a driver death and drop every session that rode on it.
+
+        The sessions are not asked whether they are alive: a driver process
+        is the parent of every browser it launched, so its death is theirs,
+        and asking would only produce a slower version of the same answer."""
+        casualties = self._sessions_on(slot)
+        for sid in casualties:
+            session = self.sessions.pop(sid, None)
+            if session is not None:
+                self.entomb(session, "driver_died")
+                _release_session_locally(session)
+        death = {
+            "slot": slot,
+            "at": time.time(),
+            "sessions_lost": casualties,
+            "why": ("the Playwright driver process behind this slot exited, "
+                    "and every browser it had launched exited with it"),
+        }
+        self.driver_deaths.append(death)
+        self._drivers.pop(slot, None)
+        self._driver_loops.pop(slot, None)
+        try:
+            asyncio.get_running_loop().create_task(_stop_driver(driver))
+        except RuntimeError:  # pragma: no cover - no loop, nothing to stop
+            pass
+        return death
 
     async def open(self, lane: str | None = None, engine: str | None = None,
                    channel: str | None = None, headless: bool | None = None,
@@ -846,12 +1004,17 @@ class SessionManager:
                 f"real memory on this machine, so the cap is deliberate. "
                 f"{ENV_MAX_CONTEXTS} raises it at the next launch. Nothing "
                 f"was opened.")
+        slot = self.driver_slot_for(role)
         async with self._lock:
             if self.startup_reap is None:
                 self.startup_reap = hygiene.reap_orphans()
             hygiene.JOB.ensure()
             _warm_estimator()
-            pw = await self._playwright()
+            # A DEAD SESSION IS NEVER A REASON A NEW ONE CANNOT START.
+            # This runs before the driver is touched, because the driver
+            # is the thing most likely to have taken them down.
+            self.last_reap = self.reap_dead()
+            pw = await self._playwright(slot)
             lanes.ensure_installed(spec, pw)
             emulation, emulation_report = lanes.emulation_kwargs(
                 spec, pw, device=device, viewport=viewport, locale=locale,
@@ -859,7 +1022,8 @@ class SessionManager:
             sid = self._next_session_id()
             session = Session(session_id=sid, spec=spec,
                               emulation=emulation_report,
-                              emulation_kwargs=dict(emulation), role=role)
+                              emulation_kwargs=dict(emulation), role=role,
+                              driver_slot=slot)
             built: list[ContextHandle] = []
             try:
                 for index in range(jars):
@@ -1009,7 +1173,11 @@ class SessionManager:
                 f"separate browser process and a separate profile "
                 f"directory, which is real memory on this machine.")
         async with self._lock:
-            pw = await self._playwright()
+            # THE SESSION'S OWN SLOT, never the default. A second cookie
+            # jar on a session belongs to the same driver as its first,
+            # or closing one would reach into the other's process.
+            pw = await self._playwright(
+                getattr(session, "driver_slot", "user"))
             label = f"c{len(session.contexts) + 1}"
             while label in session.contexts:
                 label = f"c{int(label[1:]) + 1}"
@@ -1206,6 +1374,38 @@ class SessionManager:
 
     # ------------------------------------------------------- tombstones
 
+    def reap_dead(self) -> list[dict]:
+        """Tombstone every session whose browser is already gone, and say so.
+
+        The field cascade this closes ran three layers deep and this is the
+        third: a Cloudflare wall killed one browser, the driver behind it
+        went down and took a second browser with it, and then every attempt
+        to open a fresh session failed until a tester found the dead handle
+        in the status report and closed it by hand. A handle whose every
+        owned process has exited is not a resource anything can contend
+        for, so it is cleared rather than defended.
+
+        Deliberately synchronous and lock-free: it is called from inside
+        `open()`'s lock, and everything it does is local bookkeeping plus a
+        PID kill. Nothing here travels over the driver connection, which is
+        the point, because on the path this exists for the driver is the
+        thing that died."""
+        reaped = []
+        for sid, session in list(self.sessions.items()):
+            if session.browser_alive() is not False:
+                continue
+            self.sessions.pop(sid, None)
+            stone = self.entomb(session, "reaped_dead")
+            _release_session_locally(session)
+            reaped.append({
+                "session": sid,
+                "role": getattr(session, "role", "user"),
+                "lane": session.spec.label,
+                "ended": stone["reason"],
+                "pages_at_death": stone["pages_at_close"],
+            })
+        return reaped
+
     def entomb(self, session: Session, reason: str | None = None) -> dict:
         """Record how one session ended, before it stops existing.
 
@@ -1276,12 +1476,17 @@ class SessionManager:
                     await asyncio.wait_for(handle.context.close(), timeout=30)
                 except Exception:
                     pass
-            if not self.sessions and self._pw is not None:
-                try:
-                    await self._pw.stop()
-                finally:
-                    self._pw = None
-                    self._loop = None
+            # PER SLOT, not per server. Stopping the user slot's driver
+            # because its last session closed must not reach across and
+            # take down the monitor's, which is the whole point of the
+            # split; and the monitor's own driver goes down when the
+            # scheduler retires its session, which is the same rule.
+            slot = getattr(session, "driver_slot", "user")
+            driver = self._drivers.get(slot)
+            if driver is not None and not self._sessions_on(slot):
+                self._drivers.pop(slot, None)
+                self._driver_loops.pop(slot, None)
+                await _stop_driver(driver)
             rows = []
             for handle in session.contexts.values():
                 survivors = await self._await_exit(handle.journal)
