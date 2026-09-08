@@ -219,6 +219,15 @@ CHALLENGE_TITLES: tuple[tuple[str, str, str], ...] = (
     ("security check", None, "a security-check title"),
     ("bot verification", None, "a bot-verification title"),
     ("are you a robot", None, "a bot-check title"),
+    # PubMed, live 2026-09-08, field report item 20. It served the title
+    # "Checking your browser - reCAPTCHA" and the verdict came back
+    # insufficient_evidence, because the rung that catches exactly this
+    # shape was already built and neither string was in its vocabulary.
+    # Both needles are here rather than one: the tester's page carried both,
+    # but a browser-check interstitial and a reCAPTCHA shell each appear
+    # without the other on other sites.
+    ("checking your browser", None, "a browser-check challenge title"),
+    ("recaptcha", None, "a reCAPTCHA challenge title"),
     ("blocked", None, "a block title"),
     ("forbidden", None, "a forbidden title"),
 )
@@ -239,6 +248,9 @@ CHALLENGE_TEXT: tuple[tuple[str, str, str], ...] = (
      "the Cloudflare connection-check line"),
     ("additional security check is required", None,
      "an additional-security-check notice"),
+    # The body half of the PubMed pair. A browser-check interstitial writes
+    # this line into the document as often as into the title.
+    ("checking your browser", None, "a browser-check line"),
 )
 
 #: QUERY PARAMETERS THE SITE ITSELF PUT ON THE LANDED URL. This is the

@@ -596,10 +596,23 @@ async def _wall_verdict(page, status: int | None,
     # starts raising unless a BLOCK-ONLY signal fired (`classify.wall_for`
     # only maps a category at `confirmed`).
     try:
+        # THE RESOURCE KIND, FROM THE HEADER THE SERVER SENT (field item
+        # 21). `probe_document` gives the authoritative answer but runs
+        # after this, and reordering the two would move a DOM evaluation in
+        # front of the wall check for the sake of one classifier input. The
+        # content type is already in hand here and it is what makes the
+        # arXiv case unambiguous: a response typed application/pdf is a PDF
+        # whatever its viewer chrome looks like. Where the header says
+        # nothing the classifier recognises pdf.js's own markup instead.
+        content_type = ((headers or {}).get("content-type")
+                        or (headers or {}).get("Content-Type") or "")
+        resource_kind = "pdf" if content_type.split(";")[0].strip().lower() \
+            in _resource.PDF_TYPES else None
         classification = _classify.classify(
             status, headers, title=title, body=body, source=source,
             structural=structural, redirect_chain=redirect_chain,
-            landed_url=landed, requested_url=requested)
+            landed_url=landed, requested_url=requested,
+            resource_kind=resource_kind)
         verdict["classification"] = classification
         if verdict["wall"] is None:
             mapped = _classify.wall_for(classification)

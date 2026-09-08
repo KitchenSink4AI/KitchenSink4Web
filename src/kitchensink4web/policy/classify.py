@@ -393,6 +393,23 @@ SOURCE_NEEDLES: tuple[str, ...] = tuple(sorted(set(
 
 # --------------------------------------------------------------- evidence
 
+#: MARKUP THAT ONLY A BROWSER'S OWN PDF VIEWER CARRIES. Firefox paints PDFs
+#: with pdf.js, whose chrome includes an encrypted-file password prompt, and
+#: the field report (item 21) caught an arXiv PDF classified `login_required`
+#: off that prompt while the same response correctly named the resource a PDF
+#: and offered the download route. Every needle here is viewer chrome: no
+#: site authors an element with these ids, and pdf.js has shipped them under
+#: these names for its whole life.
+_PDF_VIEWER_MARKUP: tuple[str, ...] = (
+    'id="passworddialog"',
+    'id="viewercontainer"',
+    'id="outercontainer"',
+    "resource://pdf.js",
+    "pdfjs-dist",
+    'id="pdfjs_internal',
+)
+
+
 def _sig(signal: str, tier: str, detail: str) -> dict:
     return {"signal": signal, "tier": tier, "detail": detail}
 
@@ -419,7 +436,8 @@ class _Ctx:
     partial input is claiming completeness over its own omissions."""
 
     def __init__(self, status, headers, title, body, source, structural,
-                 redirect_chain, landed_url, requested_url):
+                 redirect_chain, landed_url, requested_url,
+                 resource_kind=None):
         self.status = status
         self.headers = _walls._lower_headers(headers)
         self.title = (title or "").lower()
@@ -441,6 +459,25 @@ class _Ctx:
         chars = self.structural.get("visible_chars")
         self.visible_chars = (chars if isinstance(chars, int)
                               else len(self.body.strip()))
+        self.resource_kind = resource_kind
+        self.pdf_viewer = self._pdf_viewer()
+
+    def _pdf_viewer(self) -> bool:
+        """Is this tab a PDF viewer's own chrome rather than a web page?
+
+        The caller's answer wins when it has one: `navigate` identifies the
+        resource properly, from the content type and the embed table, and a
+        second opinion computed here could only disagree with it. Where no
+        caller said, the viewer is recognised from its own markup, because a
+        cheap classify call has nothing else to go on and getting this wrong
+        costs a false login wall on every PDF the product opens.
+
+        Firefox paints PDFs with pdf.js, whose viewer chrome carries an
+        `input type="password"` for encrypted files. That field belongs to
+        the browser, not to the site, and the site never authored it."""
+        if self.resource_kind:
+            return self.resource_kind == "pdf"
+        return any(n in self.source for n in _PDF_VIEWER_MARKUP)
 
     # -- cheap accessors, each naming the tier it answers for
 
@@ -605,6 +642,22 @@ def _detect_captcha(ctx: _Ctx) -> tuple[list, list]:
         block.append(_sig("source", "block-only",
                           "the DataDome config field rt names a solvable "
                           "challenge rather than a refusal"))
+    # THE CHALLENGE NAMED IN THE TITLE OF A DOCUMENT WITH NO PROSE. The
+    # botwall detector's soft-block rung already turns this shape into a
+    # refusal, and it names it a bot wall; a page whose title says reCAPTCHA
+    # is more specifically a captcha, and a caller deciding whether a human
+    # could clear it in a headed window wants the specific word. The pair
+    # rule is the same one soft_block uses and it is what keeps the
+    # block-only contract: a readable page is never withheld, so a page
+    # carrying prose gets nothing from this branch at all.
+    if ctx.visible_chars < _walls.NO_READABLE_PROSE_CHARS:
+        for needle in ("recaptcha", "hcaptcha", "captcha"):
+            if needle in ctx.title:
+                corr.append(_sig("title", "corroborating",
+                                 f"the title of a document carrying "
+                                 f"{ctx.visible_chars} characters of "
+                                 f"readable text names a {needle}"))
+                break
     for needle in ("press & hold", "verify you are a human",
                    "enter the characters seen in the image",
                    "i'm not a robot"):
@@ -689,7 +742,16 @@ def _detect_login(ctx: _Ctx) -> tuple[list, list]:
         bool(LOGIN_PATH.search(ctx.landed_path()))
         or ctx.visible_chars < _walls.NO_READABLE_PROSE_CHARS
         or ctx.status in _walls.REFUSING_STATUSES)
-    if document_is_the_form:
+    # A PDF VIEWER'S PASSWORD FIELD IS NOT A LOGIN (field report item 21).
+    # The two conditions that make `document_is_the_form` true are exactly
+    # the two a PDF tab meets by accident: the page's text lives in a canvas
+    # rather than the DOM, so it reads as having no prose, and pdf.js ships
+    # a password prompt for encrypted files. The result was an arXiv PDF
+    # classified `login_required` in the same response that correctly named
+    # it a PDF and handed over the download route, which is the product
+    # contradicting itself inside one payload. A viewer's chrome is not the
+    # site's markup and neither of these signals may be read off it.
+    if document_is_the_form and not ctx.pdf_viewer:
         if ctx.structural.get("has_password_field"):
             corr.append(_sig("dom", "corroborating",
                              "the document carries a password field"))
@@ -1041,7 +1103,8 @@ def classify(status: int | None, headers: dict | None = None, *,
              structural: dict | None = None,
              redirect_chain: list | None = None,
              landed_url: str | None = None,
-             requested_url: str | None = None) -> dict:
+             requested_url: str | None = None,
+             resource_kind: str | None = None) -> dict:
     """Every category this response belongs to, with its evidence.
 
     MULTI-LABEL, because the corpus proves a single label is wrong: one
@@ -1054,7 +1117,7 @@ def classify(status: int | None, headers: dict | None = None, *,
     are supplied, because a classifier that demands a full probe cannot be
     called from the cheap path."""
     ctx = _Ctx(status, headers, title, body, source, structural,
-               redirect_chain, landed_url, requested_url)
+               redirect_chain, landed_url, requested_url, resource_kind)
     found, ruled_out = [], []
     for name, detector in DETECTORS:
         try:

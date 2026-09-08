@@ -558,3 +558,94 @@ def test_the_soft_block_rung_needs_both_halves():
         200, title="", body="",
         landed_url="https://www.reddit.com/?js_challenge=1&jsc_token=x"
     ) is not None
+
+
+# ------------------------------------------------- fix wave 10, field items
+# 20 and 21. Both are calibration rather than mechanism: the rungs that catch
+# these shapes were already built, and each pin is here with its BOTH-
+# DIRECTION partner, because every one of these changes could have been made
+# by widening something until it caught the sample and everything else.
+
+
+def test_fw10_a_checking_your_browser_title_is_a_wall():
+    """PubMed, 2026-09-08. It served "Checking your browser - reCAPTCHA" on a
+    document with no prose and the verdict said insufficient_evidence."""
+    result = _classify.classify(
+        200, {}, title="Checking your browser - reCAPTCHA",
+        body="", structural={"visible_chars": 34})
+    names = {row["category"] for row in result["categories"]}
+    assert "botwall" in names, result
+    assert result["categories"][0]["confidence"] == "confirmed"
+    assert _classify.wall_for(result) is not None
+
+
+def test_fw10_a_recaptcha_title_also_reads_as_a_captcha():
+    """The specific word, for a caller deciding whether a human in a headed
+    window could clear it."""
+    result = _classify.classify(
+        200, {}, title="Checking your browser - reCAPTCHA",
+        body="", structural={"visible_chars": 34})
+    names = {row["category"] for row in result["categories"]}
+    assert "captcha" in names, result
+
+
+def test_fw10_a_readable_page_is_never_withheld_for_its_title():
+    """THE BOTH-DIRECTION PIN. The same title over real prose classifies as
+    nothing: the block-only rule is that a readable page is never withheld,
+    and a page that discusses reCAPTCHA is a page."""
+    prose = "This article explains how reCAPTCHA works. " * 40
+    result = _classify.classify(
+        200, {}, title="Checking your browser - reCAPTCHA and you",
+        body=prose, structural={"visible_chars": len(prose)})
+    names = {row["category"] for row in result["categories"]}
+    assert "botwall" not in names, result
+    assert "captcha" not in names, result
+    assert _classify.wall_for(result) is None
+
+
+def test_fw10_a_pdf_viewers_password_field_is_not_a_login():
+    """arXiv PDF on Firefox, 2026-09-08. pdf.js paints an encrypted-file
+    password prompt into its own chrome and the classifier read it as the
+    site's login form, in the same response that named the resource a PDF."""
+    viewer = ('<div id="outerContainer"><div id="viewerContainer"></div>'
+              '<div id="passwordDialog"><input type="password"></div></div>')
+    result = _classify.classify(
+        200, {}, title="2401.00001v1.pdf", body="", source=viewer,
+        structural={"visible_chars": 12, "has_password_field": True})
+    names = {row["category"] for row in result["categories"]}
+    assert "login_required" not in names, result
+
+
+def test_fw10_the_caller_s_resource_kind_settles_it():
+    """`navigate` identifies the resource properly; when it says pdf, that
+    wins over any markup this module could inspect for itself."""
+    result = _classify.classify(
+        200, {}, title="paper.pdf", body="", source="<html></html>",
+        structural={"visible_chars": 12, "has_password_field": True},
+        resource_kind="pdf")
+    names = {row["category"] for row in result["categories"]}
+    assert "login_required" not in names, result
+
+
+def test_fw10_a_real_login_page_still_classifies():
+    """THE BOTH-DIRECTION PIN. Suppressing the signal on a PDF must not
+    suppress it on the login page it was written for."""
+    result = _classify.classify(
+        200, {}, title="Sign in", body="", source='<input type="password">',
+        landed_url="https://example.com/login",
+        structural={"visible_chars": 40, "has_password_field": True})
+    names = {row["category"] for row in result["categories"]}
+    assert "login_required" in names, result
+
+
+def test_fw10_a_401_on_a_pdf_is_still_a_login_wall():
+    """THE BOTH-DIRECTION PIN, second arm. The viewer suppression touches the
+    password-field and markup corroborators only. A status that refuses is a
+    block-only signal and nothing about a PDF makes a 401 not a 401."""
+    viewer = '<div id="passwordDialog"><input type="password"></div>'
+    result = _classify.classify(
+        401, {}, title="paper.pdf", body="", source=viewer,
+        structural={"visible_chars": 12, "has_password_field": True},
+        resource_kind="pdf")
+    names = {row["category"] for row in result["categories"]}
+    assert "login_required" in names, result
