@@ -263,8 +263,9 @@ def enum_arg(value, allowed, *, default=None, tool: str = "this tool",
         # malformed argument, and the whole surface answered it that way
         # before this normalizer existed.
         raise BadParams(
-            f"unknown {tool} {name} {given!r}: the {name}s are "
-            f"{sorted(allowed)}." + (f" {extra}" if extra else ""))
+            f"{given!r} is not one of the accepted values for {name}. The "
+            f"accepted values are: {sorted(allowed)}."
+            + (f" {extra}" if extra else ""))
     return text
 
 
@@ -285,10 +286,9 @@ def count_arg(value, *, name: str, tool: str, default: int,
             f"one.") from None
     if n < minimum:
         raise RangeOutOfBounds(
-            f"{name}={n} is below the floor of {minimum} for {tool}: a "
-            f"count of {n} is not a smaller answer, it is not an answer. "
-            f"Ask for {minimum} or more, or omit {name} for the default of "
-            f"{default}.")
+            f"{name} must be at least {minimum}; {n} is below it. A count of "
+            f"{n} is not a smaller answer, it is not an answer. Omit {name} "
+            f"for the default of {default}.")
     if maximum is not None and n > maximum:
         raise RangeOutOfBounds(
             f"{name}={n} is past the ceiling of {maximum} for {tool}; the "
@@ -331,7 +331,7 @@ def resolve_out_path(path, purpose: str) -> Path:
     expanded = os.path.expandvars(os.path.expanduser(raw.strip()))
     if not expanded:
         raise FileWriteFailed(
-            f"refusing to {purpose}: the path is empty. Give a file path, "
+            f"that path cannot be written: it is empty. Give a file path, "
             f"or omit path to use the server's downloads directory.")
     # The device check runs on the name the CALLER gave, before abspath:
     # `os.path.abspath("CON")` already rewrites it to the `\\.\CON` device
@@ -342,15 +342,15 @@ def resolve_out_path(path, purpose: str) -> Path:
         # directory listing shows, which is not what any caller asking for
         # `x.txt:stream` means (fuzzer class 4).
         raise FileWriteFailed(
-            f"refusing to {purpose}: {leaf!r} names an alternate data "
-            f"stream rather than a file. The bytes would not appear in any "
-            f"directory listing. Use a file name with no colon in it.")
+            f"that path cannot be written: {leaf!r} names an alternate data "
+            f"stream. The bytes would not appear in any directory listing. "
+            f"Use a file name with no colon in it.")
     if leaf.split(".")[0].strip().lower() in _DEVICE_NAMES:
         raise FileWriteFailed(
-            f"refusing to {purpose}: {leaf!r} is a reserved device name on "
-            f"this platform. Writing to it consumes the bytes and persists "
-            f"no file, so the receipt would name a file that does not "
-            f"exist. Choose an ordinary file name.")
+            f"that path cannot be written: {leaf!r} names a device. Writing "
+            f"to it consumes the bytes and persists no file, so the receipt "
+            f"would name a file that does not exist. Choose an ordinary "
+            f"file name.")
     checked = sandbox.check_path(expanded, purpose)
     return Path(os.path.abspath(checked))
 
@@ -377,9 +377,10 @@ def write_failed(p: Path, purpose: str, exc: OSError) -> FileWriteFailed:
     elif getattr(exc, "errno", None) == errno.ENOSPC:
         cause = "the volume is full. "
     return FileWriteFailed(
-        f"could not {purpose}: {cause}Nothing was written. Target was "
-        f"{p} (filesystem detail: {detail}). Choose a writable directory, "
-        f"or omit path to use the server's downloads directory.")
+        f"that path cannot be written: the filesystem refused: "
+        f"{cause or detail}Nothing was written. Target was {p} (filesystem "
+        f"detail: {detail}). Choose a writable directory, or omit path to "
+        f"use the server's downloads directory.")
 
 
 def write_text_file(path, text: str, purpose: str) -> str:

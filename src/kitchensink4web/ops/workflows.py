@@ -63,8 +63,8 @@ _NAME_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
 
 # --------------------------------------------------- parameters (#10)
 #
-# ALL PROSE IN THIS SECTION IS PLACEHOLDER COPY. The facts each message must
-# carry are listed in the build report.
+# The parameter prose in this section is the ratified copy (2026-09-09).
+#
 #
 # THE DESIGN DECISION, and everything else follows from it: slots are
 # STRUCTURAL, stored out of band as spans, never `{{tokens}}` written into
@@ -316,8 +316,9 @@ def _load(name: str) -> dict:
     # about location objects.
     if not isinstance(doc, dict):
         raise ValidationFailed(
-            f"workflow file {path.name} parsed as {type(doc).__name__} "
-            f"rather than a workflow object; re-save the workflow.")
+            f"{path.name} is not a workflow object (it parsed as "
+            f"{type(doc).__name__}). A workflow is the JSON that "
+            f"save_workflow writes; nothing else runs.")
     _validate_slots(doc, path.name)
     return doc
 
@@ -468,15 +469,13 @@ async def save_workflow(
     `parameters` turns the recording into a reusable template: declare
     parameters=[{'name': 'title', 'example': 'the value you recorded'}] and
     the value you typed once becomes a slot the next run fills in. A
-    PARAMETER IS DATA. A parameter is never code, never a selector, never a
-    condition, never a key: a slot can fill in what gets typed, or a piece
-    of a URL, and nothing else. Slots are stored as spans out of band rather
-    than as tokens inside the recorded text, so a recorded literal that
-    happens to contain template syntax stays a literal. A parameter that
-    binds nothing refuses and lists every recorded value you could have
-    meant, and an example matching several of them refuses rather than
-    picking one. Returns which slots each parameter bound to and the
-    run_workflow call that fills them.
+    parameter is data: it fills in what gets typed or a piece of a URL, and
+    nothing else: never a selector, a wait condition, a key, or script. Slots
+    are stored out of band as spans, so a recorded literal that happens to
+    contain template syntax stays a literal. A parameter that binds nothing
+    refuses and lists every recorded value; an example matching several
+    places refuses rather than picking one. Returns which slots each
+    parameter bound to and the run_workflow call that fills them.
     """
     if not name:
         raise BadParams(
@@ -1132,14 +1131,12 @@ async def run_workflow(
     (browser actions do not roll back) and the rest not_attempted. Returns
     the per-step resolution report on a dry run and the per-step verified
     outcomes on a real run. A workflow saved with parameters takes them
-    here, as parameters={'title': 'the value for this run'}: values are
-    filled in before the dry run, so the dry run shows what will actually be
-    typed rather than what was recorded. A missing one refuses and lists
-    every parameter the workflow declares; an unexpected one refuses too
-    rather than being ignored, since a caller that believes it configured
-    something it did not is the worse outcome. A parameter with a default is
-    filled from it and the result says so. A URL parameter that would point
-    the flow at a different site refuses unless the workflow was saved with
+    here, as parameters={'title': 'the value for this run'}. Parameter values
+    fill in before the mandatory dry run, so the dry run shows what will
+    actually be typed. A missing parameter refuses and lists what the
+    workflow needs; an extra one refuses rather than being silently ignored;
+    a default that was used is said. A URL parameter that would point the
+    flow at another site refuses unless the workflow was saved with
     permission to move.
     """
     doc = _load(name)

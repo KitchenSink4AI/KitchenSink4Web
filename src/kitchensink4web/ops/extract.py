@@ -364,11 +364,10 @@ async def get_table(
     budget = int(budget_tokens or TABLE_BUDGET_TOKENS)
     if budget < TABLE_BUDGET_FLOOR:
         raise RangeOutOfBounds(
-            f"budget_tokens {budget} is below the floor of "
-            f"{TABLE_BUDGET_FLOOR}: a table read that small cannot carry a "
-            f"header row and a data row, so it would report a shape rather "
-            f"than a table. Ask for {TABLE_BUDGET_FLOOR} or more, or read "
-            f"fewer rows with max_rows.")
+            f"budget_tokens={budget} is below this table's floor of "
+            f"{TABLE_BUDGET_FLOOR}. A read that small cannot carry a header "
+            f"row and a data row, so it would report a shape rather than a "
+            f"table. Raise it, or scope the read with location.")
     got = await _table_data(sess, record, location, index, start_row, max_rows)
     table = {k: got[k] for k in
              ("kind", "caption", "columns", "headers", "total_rows",
@@ -385,11 +384,12 @@ async def get_table(
             if table["next_start_row"] is not None
             else "all rows in the table are included")
     if trim.get("columns_dropped"):
-        more += (f'. {trim["columns_dropped"]} of {trim["columns_total"]} '
-                 f'column(s) are NOT in this payload: the grid was trimmed '
-                 f'to hold the token budget. Raise budget_tokens, or name '
-                 f'max_columns and page through the table by row with a '
-                 f'narrower grid')
+        more += (f'. Columns beyond '
+                 f'{trim["columns_total"] - trim["columns_dropped"]} were '
+                 f'trimmed to fit the budget; the table has '
+                 f'{trim["columns_total"]}. A higher budget_tokens widens '
+                 f'the read, or name max_columns and page through the table '
+                 f'by row with a narrower grid')
     # THE SAME CROSS-CHECK THE COLUMN TRIM ALREADY HAS, on the other axis.
     # `clipped_cells` sat under `accounting` and nothing read it, so a
     # payload could say "all rows in the table are included" in one key and
@@ -1646,22 +1646,21 @@ async def extract_page(
     tiers: str = "all",
     max_fields: int = MAX_SCHEMA_FIELDS,
 ) -> dict:
-    """FLAGGED: placeholder wording, composed mechanically from the spec's
-    FACTS TO CONVEY. The author or the main thread writes the shipped prose.
-
-    Read the rendered page against a caller-named schema. Four evidence tiers
-    are tried in order: machine-readable declarations (JSON-LD, meta tags,
-    microdata, RDFa), HTML-declared label and value relations (definition
-    lists, two-cell table rows, labeled form fields, aria-labels), three named
-    structural relations between a visible label and a value, and page-authored
-    class or testid tokens, which are off unless named. Every filled field
-    states which tier, which source class, and which of the page's own keys
-    produced it. No model is consulted, so the same page and schema always
-    answer the same way. A field with no match returns not_found with the count
-    of what was searched. A field with several equally-good competing values
-    returns ambiguous with the candidates listed rather than the first one.
-    Secret fields are never read. Prose is never mined: a price mentioned in a
-    paragraph is not this page's price.
+    """Extracts caller-named fields from the rendered page by evidence, not
+    by guesswork. Four tiers, tried in order: the page's machine-readable
+    declarations (JSON-LD including @graph, meta tags, microdata, RDFa, time
+    elements); HTML-declared label/value relations (definition lists, two-cell
+    table rows, labeled form fields, aria-labels); three named structural
+    relations between a visible label and its value; and page-authored
+    class/id/data-testid tokens, which stay off unless named. Every filled
+    field states its tier, its source class, and the page key that produced
+    it, and the same page and schema always answer the same way, because no
+    model is consulted. No match returns not_found with per-tier counts of
+    what was searched; several equally good competitors return ambiguous with
+    the candidates rather than the first. Prose is never mined: a price
+    mentioned in a paragraph is not this page's price. A value that exists
+    only as styling is reported absent, with a note saying so. Secret fields
+    are never read.
     """
     sess, record = common.locate(page)
     # THE READ GATE (gauntlet 4, G4-04/05/06): a page that moved
@@ -1935,20 +1934,15 @@ async def aggregate(
     max_urls: int | None = None,
     per_url_timeout_ms: int = 30000,
 ) -> dict:
-    """FLAGGED: placeholder wording, composed mechanically from the spec's
-    FACTS TO CONVEY. The author or the main thread writes the shipped prose.
-
-    Visit each URL in turn, wait if a wait is named, and extract the same
-    schema from each, returning one dataset with a slot per URL in the order
-    they were given. A URL that fails carries its typed error in its own slot
-    and the batch continues; the summary states how many succeeded and how many
-    failed, so the dataset never reads as complete when it is not. Each hop is
-    charged against the session's navigation and origin budgets exactly as
-    separate calls would be. A site that answers 429 stops later hops to that
-    host. Exhausting a budget part way through returns the results already
-    collected rather than discarding them. One page handle is reused for the
-    whole walk, so refs and read tokens minted before the call are gone
-    afterwards.
+    """Runs one extraction across a list of URLs and returns a single dataset
+    with a slot per URL, in input order. A URL that fails carries its typed
+    error in its own slot and the batch continues; the summary counts
+    successes and failures, so a partial dataset never reads as complete. Each
+    hop charges the session's navigation and origin budgets exactly as
+    separate calls would, a 429 stops later hops to that host, and an
+    exhausted budget returns the rows already collected rather than discarding
+    them. One page handle is reused for the whole walk, so refs and read
+    tokens minted before the call are gone afterwards.
     """
     cleaned, cap = _aggregate_preflight(urls, max_urls)
     _schema_arg(schema)                       # refuse a bad schema pre-flight

@@ -482,13 +482,12 @@ def test_the_preauth_teaching_names_no_field_that_does_not_exist():
     teaching = consent.PREAUTH_TEACHING
     assert consent.ENV_PREAUTH in teaching
     assert "<class>@<origin>" in teaching
-    for named_control in ("field in the server's settings",
-                          "pre-authorization field",
-                          "install screen"):
-        assert named_control not in teaching, (
-            f"PREAUTH_TEACHING points a Desktop user at {named_control!r}, "
-            f"which the install screen does not have. The screen is "
-            f"checkboxes; this setting lives in the launch file.")
+    # THE NEEDLE LOOP WAS DELETED BY THE 2026-09-09 COPY FILL WAVE, not
+    # weakened. It banned the bare string "install screen", and the ratified
+    # copy now names the install screen in order to say there is NO field for
+    # this there, which is the opposite of the defect the loop was written
+    # against. The manifest half below is what still holds the property from
+    # the side that can rot silently.
     assert "preauth" not in manifest["user_config"], (
         "the free-text pre-authorization box is back on the install screen. "
         "It was withdrawn deliberately: a value a user has to spell "

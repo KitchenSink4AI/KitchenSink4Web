@@ -325,21 +325,21 @@ async def get_accessibility(
     budget_tokens: int = 3000,
     frames: bool = True,
 ) -> dict:
-    """Audit a page against the WCAG rules with axe-core, the engine whose
-    rule identifiers and success-criterion mappings the accessibility field
-    already writes its tickets and CI against. The default read aggregates
-    BY RULE with counts and up to three example nodes each, so a page with
-    five hundred problems does not return five hundred entries; rule='...'
-    then returns every node for one rule, paginated, each carrying a ref
-    where the element is in the anchor registry. Checks the engine ran and
-    could not decide come back as needs_review, never as passes and never
-    as failures, and no percentage anywhere is computed from a denominator
-    containing them. There is no score: every 0-to-100 accessibility number
-    is somebody's weighting rather than a measurement. The result states
-    the engine and version, the viewport it was measured at (out-of-view
-    elements cannot be contrast-checked, so the window size changes the
-    answer), which frames were audited and which were not, and that
-    automated testing finds a minority of accessibility problems.
+    """Audits the page against the WCAG rules axe-core can check. The default
+    view aggregates by rule with up to three example nodes; rule='...'
+    returns every node for one rule, paginated, each carrying a ref where the
+    registry has the element and an honest null where it does not. A
+    cross-origin frame the server cannot enter is named in
+    frames_not_entered: its problems are absent from the counts, not from the
+    page. Checks the engine could not decide land in needs_review and are
+    never folded into violations or passes. There is no score, no percentage,
+    and no ratio, by construction: every 0-to-100 accessibility number is
+    somebody's weighting rather than a measurement, and automated testing
+    finds a minority of real-world issues (Deque's own figure, attributed to
+    Deque, applying to their tooling; a clean page still carries it). The
+    engine and version are named on every payload, the viewport is stated
+    with the reason it matters, and a timeout refuses rather than returning a
+    partial audit that reads exactly like a complete one.
     """
     include = common.enum_arg(include, INCLUDES, default="violations",
                               tool="get_accessibility", name="include")

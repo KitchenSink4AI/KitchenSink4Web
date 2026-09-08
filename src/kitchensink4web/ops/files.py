@@ -334,8 +334,10 @@ async def upload_file(
         # handle_dialog, wearing that code here sent the caller to answer a
         # dialog that does not exist.
         raise ValidationFailed(
-            "the located element is not a file input, so nothing was "
-            "uploaded. A page using a synthetic-DataTransfer dropzone (a div "
+            f"that element is a {(unit.get('role') or tag or 'element').lower()}, "
+            "not a file input, so nothing was uploaded. Point at the "
+            "input type=file control, or use the dropzone route. A page "
+            "using a synthetic-DataTransfer dropzone (a div "
             "that listens for drop events) has a hidden <input type=file> "
             "behind it in almost every case; address that input by css "
             "('input[type=file]') instead of the dropzone, and KS4Web sets it "

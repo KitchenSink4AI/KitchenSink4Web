@@ -129,8 +129,7 @@ def test_a_failed_check_reports_the_failure_and_the_age(monkeypatch,
     assert payload["state"] == "unknown"
     assert "could not be reached" in payload["why"]
     assert "day(s) ago" in payload["last_successful_check"]
-    assert "not a claim that the installed version is current" \
-        in payload["note"]
+    assert "no version is being guessed" in payload["note"]
 
 
 def test_a_machine_that_never_succeeded_says_so(monkeypatch):

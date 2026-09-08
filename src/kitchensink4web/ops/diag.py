@@ -171,6 +171,8 @@ async def list_console(
     'info', 'log', or 'all'. Returns the deduplicated rows newest-shape
     last, the total lines seen, and how many were collapsed, so the needle
     (one uncaught error under two thousand poll ticks) is never buried.
+    Messages are stored per session, not per page; entries from other pages
+    in this session appear here with their page named.
     """
     levels = _LEVELS + ("all",)
     level = common.enum_arg(level, levels, default="error",

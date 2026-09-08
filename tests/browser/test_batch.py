@@ -250,7 +250,7 @@ def test_step_one_ambiguity_refuses_the_whole_batch(site):
                 {"find": {"query": "Add a comment"}, "action": "click"},
             ])
         text = str(exc.value)
-        assert "Nothing in this batch was executed" in text
+        assert "Nothing in the batch was executed" in text
         assert await _counts(page) == before
 
     run(go())

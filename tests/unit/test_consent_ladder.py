@@ -625,8 +625,14 @@ def test_n30_an_unattended_session_refuses_and_does_not_queue(monkeypatch):
                 target=desc(method="POST", submitter="Pay now"),
                 action_class=klass, summary="do it"))
         text = str(exc.value)
-        assert "no human is answering" in text
-        assert "nothing was queued" in text
+        assert "no human is answering" in text.lower()
+        # NOT QUEUED, in each branch's own ratified words: Tier 1 says the
+        # confirmation expires so the work is not queued; Tier 2 says the
+        # action proceeds only with a human answering at the moment of
+        # asking, which is the same fact for a class no setting reaches.
+        assert ("not queued" in text if klass == "form_submit"
+                else "at the moment of asking" in text), text
+        assert text.startswith("Refused:") and "Nothing was done." in text
         # A refusal must not carry an elicitation payload nobody can render.
         assert getattr(exc.value, "detail", None) is None
     # Tier 2 says no setting reaches it; Tier 1 names the preauth route.

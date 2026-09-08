@@ -53,7 +53,7 @@ absent, not merely switched off:
 | files | Download files from pages into one folder, and upload files into page forms. Every one asks you first. |
 | diagnostics | Lets Claude run JavaScript on a page, one script at a time, each one shown to you for approval first. This is the most powerful and most dangerous setting on this page. Leave it off unless you know you need it. |
 | workflows | Record a multi-step task once and replay it later. Every replay checks that the page still matches before anything runs. |
-| accessibility | Audit a page against accessibility rules. Needs an optional extra installed; the tool tells you how if it is missing. |
+| accessibility | Checks a page against the WCAG accessibility rules using axe-core, groups what it finds by rule, and says plainly what automated testing cannot check. Needs an optional extra installed; the tool tells you how if it is missing. |
 
 ## The safety model
 
@@ -83,6 +83,39 @@ refuse there instead of proceeding unconfirmed.
 that crashed its own renderer, the answer names what stood in the way and what to try next. A
 refusal that explains itself is cheaper than a retry loop.
 
+### Two different things ask you for permission
+
+Your MCP client's own permission prompt names a tool (something like `mcp__web__type_text`) and
+comes from the client, not from KS4Web; approving a read-only tool group there is safe and stops
+most of the asking. A KS4Web gate names an action in plain words ("submitting this form sends a
+password") and cannot be pre-approved away for payments, credentials, posts, deletions, or legal
+assent. If a prompt names a tool, it is the client; if it names what is about to happen in the
+world, it is KS4Web.
+
+### Consent scope
+
+Out of the box the consent scope is `research`: reading and navigation are free, query-shaped
+submissions (a search box) proceed, and everything else asks first. The `full` scope lets ordinary
+form submissions proceed without asking; the irreducible set asks under every scope, always. The
+install screen's "Submit routine forms without asking each time" checkbox is the whole choice.
+
+The GET rule is the one place page-authored text classifies down rather than up: a form that looks
+like a search is allowed to proceed as one, and what a mistaken call in that direction buys is an
+unprompted ordinary submission, never a payment, credential, post, or deletion; those always ask.
+In the other direction, a submit button that says nothing recognizable in any shipped language
+passes ungated under the `full` scope; if that risk matters to you, stay on `research`.
+
+### Client compatibility
+
+If a feature refuses with `CONFIRMATION_REQUIRED` on claude.ai web, it works on Desktop and Code.
+
+| Client | What works |
+| --- | --- |
+| Claude Desktop | Everything, with confirmations rendered. |
+| Claude Code | Everything, with confirmations rendered. |
+| claude.ai web | All reading, navigation, and search. Gated actions refuse honestly because no confirmation can render; pre-authorized classes work if configured at launch. |
+
+
 ## Browsers and lanes
 
 The default lane drives the server's own bundled Chromium. It never touches your browser or your
@@ -106,8 +139,8 @@ recommend for the page you are on. It never switches lanes for you.
 
 | Surface | Tokens |
 |---|---|
-| Lite tool surface | 6.5k |
-| Full surface (all packs) | 16.0k |
+| Lite tool surface | 5.8k |
+| Full surface (all packs) | 15.3k |
 | First read of the Treaty of Versailles article on Wikipedia | 4,437 |
 | Delta read after one click | 82 |
 
@@ -116,21 +149,6 @@ read would cost. Inside a subagent, start at `budget_tokens=2500`; tool results 
 tightly there.
 
 ## Update check (opt-out)
-
-<!-- [COPY PENDING: readme.update_check] The prose below is a plain factual
-placeholder written mechanically in fix wave 10, not final copy. The section
-it replaced described the superseded design (a startup thread, a 14-day
-window, and the KS4WEB_NO_UPDATE_CHECK variable) and was factually wrong
-after the conversion, so it could not be left standing. FACTS TO CONVEY:
-nothing runs at startup and nothing runs on a thread; the check happens only
-when you call manage_session(action='status'); at most one request per seven
-days, cached in the state directory; a two-second timeout; it never installs
-anything; the only thing it sends is a plain HTTPS GET to pypi.org for this
-package's public release index, carrying no identifier, no usage data, no
-page content and no session state; a check that could not run says so and
-says how old the last successful one was, rather than showing nothing;
-KS4WEB_UPDATE_CHECK=off switches it off and the status then says it is off;
-the older KS4WEB_NO_UPDATE_CHECK spelling is still honored. -->
 
 The server compares its version against PyPI's when you call
 `manage_session(action='status')`, and never at any other time: nothing runs at startup and nothing
@@ -174,6 +192,40 @@ and it tells you what it could not see. Bring it your strangest pages and file w
   device checks that block headless Chromium; a wall that blocks everything is a wall.
 - `sendBeacon` and ping requests bypass network routing rules; that is a Playwright limit,
   documented rather than hidden.
+
+**Automated accessibility checking finds a minority of real-world issues.** Deque, who build the
+axe-core engine this tool runs, publish 57% as their own figure for their own tooling. A clean
+report here means the automated checks passed, not that the page is accessible. There is no score,
+because every 0-to-100 accessibility number is somebody's weighting rather than a measurement.
+
+**Nothing taps you on the shoulder.** No MCP client in use today delivers a server-initiated
+message into a conversation, so monitors run only while KS4Web runs, and the report is how you ask
+what happened; after a restart, the report names the window that went unchecked. A monitor watches
+one URL for one deterministic change and does not understand what changed: `content_hash` is noisy
+on pages with clocks or counters, only the main document is watched, and a change that appeared and
+reverted between two checks is invisible. A monitor cannot get past a login or a bot wall, and one
+that keeps failing pauses itself rather than hammering the site. Five minutes minimum between
+checks; everything stays on this machine.
+
+**A session handle transfer moves a live session between conversations on the same machine**,
+inside the same running KS4Web. Nothing is copied: it is the same browser, so a page the other
+conversation navigated has lost your refs, and the report says which. It does not survive a server
+restart, and it does not cross between Claude Desktop's chat and Code panels, which run separate
+servers. The session dies with KS4Web on purpose; that is what keeps orphaned browsers off your
+machine. A token works once, expires in an hour, and is not a lock: any conversation on this server
+can already see the session. The budget travels with the session.
+
+**Two identities cost two browser processes and two profile directories**, which is real memory.
+The action budget is shared across them on purpose, so opening a second identity does not double
+what a session may do to the world, and two contexts visiting the same site cost one origin against
+the origin budget. Auth state saves and loads per identity. Closing one identity leaves the others
+working; closing the last one tells you to close the session instead. Every context shares the
+session's lane and emulation; two lanes means two sessions.
+
+**The lane database is a list of which websites this computer has visited with which browser**:
+hostnames and dates, no pages, no addresses, nothing typed. It exists so a site that refused one
+browser can be read with one that works. It is stored on this machine, it never leaves unless you
+export it, learning can be turned off with one switch, and one call erases it entirely.
 
 ## Requirements
 

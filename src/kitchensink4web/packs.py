@@ -341,15 +341,14 @@ def policy_locked() -> bool:
 #: process cannot reliably tell which route started it and a wrong install
 #: instruction is worse than two right ones.
 INSTALL_ROUTES = {
-    "pip_or_uv": '[COPY PENDING: extras.route.pip] pip install '
-                 '"kitchensink4web[{extra}]", then restart the server.',
+    "pip_or_uv": 'pip install "kitchensink4web[{extra}]", then restart the '
+                 'server.',
     "desktop_bundle": (
-        "[COPY PENDING: extras.route.bundle] FACTS TO CONVEY: the bundle's "
-        "launch line pins kitchensink4web by version and names no extra, so "
-        "this extra cannot be added from the install screen and a pip "
-        "install into a different Python environment will not reach it. "
-        "Getting it means running the server from a pip or uv install you "
-        "control instead of from the bundle."),
+        "the bundle's launch line pins kitchensink4web by version and names "
+        "no extra, so this extra cannot be added from the install screen, "
+        "and a pip install into a different Python environment will not "
+        "reach it. Getting it means running the server from a pip or uv "
+        "install you control instead of from the bundle."),
 }
 
 #: Every optional capability, what it needs, and what it is worth knowing
@@ -371,9 +370,9 @@ OPTIONAL_FEATURES: tuple[dict, ...] = (
         "engine": "Windows.Media.Ocr, the recognizer built into Windows",
         "platforms": "Windows only",
         "platform_note": (
-            "[COPY PENDING: extras.ocr.platform] FACTS TO CONVEY: this is "
-            "not a packaging gap that installing something fixes. The engine "
-            "is part of Windows, so on macOS and Linux the extra installs "
+            "this is not a packaging gap that installing something fixes. "
+            "The engine is part of Windows, so on macOS and Linux the extra "
+            "installs "
             "and there is still no engine to call. Tesseract was considered "
             "and declined: it is a separate native binary plus tens of "
             "megabytes of language data whose absence fails at run time on a "
@@ -435,8 +434,8 @@ def optional_features() -> dict:
                if not installed else {}),
         }
     rows["how_this_works"] = (
-        "[COPY PENDING: extras.how] FACTS TO CONVEY: an optional feature "
-        "cannot be turned on by a tool call. It needs two things and both "
+        "an optional feature cannot be turned on by a tool call. It needs "
+        "two things and both "
         "are launch-time acts a human performs: the Python extra installed "
         "into the environment this server runs from, and its pack loaded at "
         "launch. A restart is required after either. Where an engine is "

@@ -131,7 +131,7 @@ def test_a_wide_table_holds_a_stated_budget(corpus_site):
         acc = got["accounting"]
         assert acc["columns_dropped"] > 0
         assert acc["columns_total"] == 400
-        assert "column(s) are NOT in this payload" in got["continue"]
+        assert "were trimmed to fit the budget" in got["continue"]
     run(go())
 
 
@@ -155,7 +155,7 @@ def test_the_canvas_ledger_is_not_inverted(corpus_site):
         assert "canvas-rendered regions: none" not in got["projection"]
         assert "canvas-rendered regions with no text projection: 1" \
             in got["projection"]
-        assert "pixels drawn on them" in got["projection"]
+        assert "1 painted" in got["projection"]
     run(go())
 
 
@@ -193,7 +193,7 @@ def test_wait_for_visible_reports_the_elapsed_time_it_really_spent(
                                 timeout_ms=2000)
         elapsed = _time.monotonic() - started
         assert 1.5 <= elapsed <= 6.0, elapsed
-        assert "ms elapsed" in str(caught.value)
+        assert "s for that location to become visible" in str(caught.value)
     run(go())
 
 
@@ -316,7 +316,7 @@ def test_at_end_is_not_asserted_over_a_growing_document(corpus_site):
         got = await lite.scroll(page=page, action="end")
         assert got["at_end"] is False, got
         assert "growing" in got
-        assert "no end to be at" in got["growing"]
+        assert "the document grew while scrolling" in got["growing"]
     run(go())
 
 
@@ -404,7 +404,7 @@ def test_a_dead_origin_is_not_read_as_an_empty_page(corpus_site):
         # answering ok with an empty page.
         with pytest.raises(PageUnreachable) as caught:
             await lite.get_text(page=page)
-        assert "network-error interstitial" in str(caught.value)
+        assert "the browser's own error page" in str(caught.value)
         with pytest.raises(PageUnreachable):
             await lite.get_page_view(page=page)
 
@@ -419,7 +419,7 @@ def test_a_dead_origin_is_not_read_as_an_empty_page(corpus_site):
         try:
             reread = await lite.get_text(page=page)
         except PageUnreachable as exc:
-            assert "network-error interstitial" in str(exc)
+            assert "the browser's own error page" in str(exc)
         else:
             assert "ORIGIN-ALIVE" in reread["text"], reread["text"][:200]
 

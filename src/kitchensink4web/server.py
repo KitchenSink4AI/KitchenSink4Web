@@ -272,15 +272,14 @@ async def _bounded(fn, args, kwargs):
                                       timeout=ceiling / 1000)
     except asyncio.TimeoutError as exc:
         raise Timeout(
-            f"{fn.__name__} did not return within {ceiling} ms and was "
-            f"abandoned, so the server is free even though the browser is "
-            f"not. Nothing here says the operation did not happen: it was "
-            f"still running when the bound expired. A browser that is "
-            f"suspended, thrashing, or waiting on an origin that never "
-            f"finishes answering looks exactly like this. Check the session "
-            f"with manage_session(action='status'), and close and reopen it "
-            f"if the browser is gone. KS4WEB_TOOL_CEILING_MS sets this "
-            f"bound.") from exc
+            f"{fn.__name__} exceeded its {ceiling / 1000:g}s bound and was "
+            f"stopped. The browser is still usable, and the operation may "
+            f"have partially completed; verify state before retrying. A "
+            f"browser that is suspended, thrashing, or waiting on an origin "
+            f"that never finishes answering looks exactly like this. Check "
+            f"the session with manage_session(action='status'), and close "
+            f"and reopen it if the browser is gone. KS4WEB_TOOL_CEILING_MS "
+            f"sets this bound.") from exc
 
 
 def _wrap(fn):

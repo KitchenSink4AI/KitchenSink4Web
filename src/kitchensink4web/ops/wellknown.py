@@ -231,8 +231,8 @@ async def _fetch_one(sess, origin: str, path: str) -> dict:
     if len(body) > MAX_BYTES:
         return {"file": path, "found": True, "parsed": False,
                 "status": status, "bytes": len(body),
-                "why": f"the file is larger than the {MAX_BYTES}-byte cap "
-                       f"this consumer parses"}
+                "why": f"the file is larger than the "
+                       f"{MAX_BYTES // 1024} KB cap this consumer parses"}
     try:
         data = json.loads(body.decode("utf-8", "replace"))
     except (ValueError, UnicodeDecodeError):
@@ -242,8 +242,9 @@ async def _fetch_one(sess, origin: str, path: str) -> dict:
     if not isinstance(data, (dict, list)):
         return {"file": path, "found": True, "parsed": False,
                 "status": status,
-                "why": f"the file parsed to a {type(data).__name__} rather "
-                       f"than an object or a list"}
+                "why": f"the file parsed to the wrong shape (a "
+                       f"{type(data).__name__} rather than an object or "
+                       f"list)"}
     endpoints, total = _harvest(data, origin)
     entry = {
         "file": path, "found": True, "parsed": True, "status": status,

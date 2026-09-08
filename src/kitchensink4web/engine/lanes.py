@@ -722,11 +722,13 @@ def agent_identity() -> dict | None:
         "headers": {AGENT_HEADER: f"KitchenSink4Web/{version}"},
         "on": True,
         "version": version,
-        "applies_to": "every request this session makes, on every host",
-        "user_agent": "unchanged; the browser reports its own",
-        "verification": ("this is a self-declaration and not a signed "
-                         "credential: a site can read it and cannot verify "
-                         "it"),
+        "applies_to": ("an extra request header on every request while "
+                       "enabled"),
+        "user_agent": "unchanged; never modified by this server",
+        "verification": (f"sites that check the header see "
+                         f"KitchenSink4Web/{version}; it is a "
+                         f"self-declaration and not a signed credential, so "
+                         f"a site can read it and cannot verify it"),
         "off_switch": f"{ENV_AGENT_ID}=false",
     }
 

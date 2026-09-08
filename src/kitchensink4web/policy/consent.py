@@ -85,57 +85,40 @@ ENV_SENSITIVE_ORIGINS = "KS4WEB_SENSITIVE_ORIGINS"
 #: client renders the schema'd prompt badly.
 ENV_REMEMBER = "KS4WEB_REMEMBER"
 
-#: COPY PLACEHOLDER (build report FACTS TO CONVEY 10). One line per scope, in
-#: `readonly.describe()["permits"]`'s honesty grammar: STATE THE LIMIT
-#: ALONGSIDE THE PERMISSION. A surface that lists what is allowed without
-#: listing what still asks teaches the wrong lesson to the one person reading
-#: it, and this is the line a human reads when they wonder why a prompt did or
-#: did not arrive.
+#: One line per scope, in `readonly.describe()["permits"]`'s honesty grammar:
+#: STATE THE LIMIT ALONGSIDE THE PERMISSION. A surface that lists what is
+#: allowed without listing what still asks teaches the wrong lesson to the one
+#: person reading it, and this is the line a human reads when they wonder why
+#: a prompt did or did not arrive.
 PERMITS: dict[str, str] = {
-    "research": ("reading, navigating, clicking, typing into ordinary "
-                 "fields, and submitting query-shaped forms. Everything "
-                 "that submits a real form still asks."),
-    "full": ("all of that plus ordinary form submission, sandboxed uploads "
-             "and downloads, storage clears, and unrecognized dialog "
-             "accepts. Money, credentials, sends that reach other people, "
-             "deletions, legal terms, off-allowlist actions, and budget "
-             "resets still ask."),
+    "research": ("reads, navigation, and query-shaped submissions proceed; "
+                 "every other submission, and every payment, credential, "
+                 "post, or deletion, still asks."),
+    "full": ("ordinary form submissions proceed without asking; payments, "
+             "credentials, posts that reach people, deletions, legal assent, "
+             "and anything off the allowlist still ask, every time."),
 }
 
-#: COPY PLACEHOLDER (build report FACTS TO CONVEY 11), the analog of
-#: `readonly.UNLOCK_TEACHING` and held to the same property: it teaches a
-#: HUMAN a launch-time action and hands the AGENT nothing callable,
+#: The analog of `readonly.UNLOCK_TEACHING`, held to the same property: it
+#: teaches a HUMAN a launch-time action and hands the AGENT nothing callable,
 #: redeemable, or echoable. A teaching that named an in-session route would
 #: be a bypass wearing an instruction's clothes.
 #:
-#: FACTS TO CONVEY, corrected 2026-09-08 (the clause naming a Claude Desktop
-#: field was deleted the same day, because the field it named no longer
-#: exists):
-#:   1. Pre-authorization is a LAUNCH-TIME setting and nothing else: the
-#:      KS4WEB_PREAUTH environment variable, set in a launch file or a shell
-#:      before the server starts.
-#:   2. There is NO field for it on the Claude Desktop install screen, and
-#:      that is deliberate, not an omission. The install screen is
-#:      checkboxes only; a value a user has to spell correctly is a typo
-#:      that stops the server from starting, and free-text fields are
-#:      therefore banned from that screen.
-#:   3. A Desktop user who wants this edits the launch configuration, the
-#:      same place any other environment variable for this server is set.
-#:   4. The format, the ':8h' time limit, and the classes that can never be
-#:      pre-authorized are unchanged and still have to be stated.
-#:   5. It still hands the agent nothing callable: what it names is an act
-#:      only a human can perform, between one run of the server and the next.
+#: The second sentence carries the mechanics the first one leaves out: the
+#: format, the ':8h' time limit, and what happens if an irreducible class is
+#: named. A teaching without the format teaches nothing actionable.
 PREAUTH_TEACHING = (
-    "To pre-authorize an action class for one site (a settings choice a "
-    "human makes, not something any tool call can do): restart the server "
-    "with "
-    "KS4WEB_PREAUTH=<class>@<origin> (for example "
-    "'evaluate_script@localhost' or 'storage_load@github.com', with an "
-    "optional ':8h' time limit). Paying, submitting a credential, sending "
-    "something that reaches other people, deleting, accepting terms, "
-    "acting off an allowlist, and resetting the budgets can never be "
-    "pre-authorized, and naming one of them here stops the server from "
-    "starting rather than silently doing nothing."
+    "Pre-authorization is a launch setting, not a tool: a human names the "
+    "allowed classes in the server's launch configuration (KS4WEB_PREAUTH), "
+    "and there is deliberately no way to grant it from inside a session, and "
+    "no field for it on the Desktop install screen. The irreducible set "
+    "(payments, credentials, posts, deletions, legal assent) can never be "
+    "pre-authorized by any setting. The format is "
+    "KS4WEB_PREAUTH=<class>@<origin>, with an optional ':8h' time limit, for "
+    "example 'evaluate_script@localhost' or 'storage_load@github.com'; "
+    "restart the server for it to take effect, and naming an irreducible "
+    "class there stops the server from starting rather than silently doing "
+    "nothing."
 )
 
 # ------------------------------------------------------------- the tiering

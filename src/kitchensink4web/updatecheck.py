@@ -73,12 +73,12 @@ MAX_BYTES = 256 * 1024
 #: What the check sends. Named as a constant so the disclosure below and the
 #: code that does it cannot drift apart.
 PRIVACY_FACT = (
-    "[COPY PENDING: updatecheck.privacy] FACTS: this is the only network "
-    "call KS4Web makes that the caller did not ask for. It is a plain HTTPS "
-    "GET to pypi.org for the public release index of this package. It sends "
-    "no identifier, no usage data, no page content and no session state; it "
-    "sends nothing but the request. The answer is a version number. Set "
-    f"{ENV_TOGGLE}=off to stop it.")
+    "This check is one plain HTTPS GET to pypi.org for the package's public "
+    "JSON. It sends nothing but the request itself (no document, no path, "
+    "no identifier, no telemetry), and the request carries only a "
+    "User-Agent naming the package and its version. This product sends "
+    f"nothing else off the machine, ever. Set {ENV_TOGGLE}=off to turn the "
+    f"check off.")
 
 
 def _cache_path():
@@ -229,10 +229,10 @@ def check() -> dict:
             if isinstance(last_success, (int, float))
             else "never, on this machine")
         payload["note"] = (
-            "[COPY PENDING: updatecheck.unknown] FACTS: the check did not "
-            "complete, so this says nothing about whether an update exists. "
-            "It is not a claim that the installed version is current. "
-            "Nothing was installed and nothing else about this server is "
+            "The newest published version is not known right now, and no "
+            "version is being guessed. The failure reason is in why, and "
+            "the last time an answer did arrive is in "
+            "last_successful_check. Nothing else about this server is "
             "affected.")
         return payload
     if have is None or want is None:
@@ -245,17 +245,16 @@ def check() -> dict:
     if want <= have:
         payload["state"] = "current"
         payload["note"] = (
-            "[COPY PENDING: updatecheck.current] FACTS: the installed "
-            "version is the newest on PyPI, or newer than it.")
+            "This build is not behind the index. PyPI answered at the time "
+            "shown in last_successful_check.")
         return payload
     payload["state"] = "update_available"
     payload["note"] = (
-        f"[COPY PENDING: updatecheck.available] FACTS: KS4Web {installed} is "
-        f"running and {latest} is published on PyPI. Nothing updates itself "
-        f"and nothing was installed. The upgrade command is "
-        f"`pip install -U {PACKAGE}`, or a uvx launch picks it up on its "
-        f"next start. A bundled install upgrades by installing the new "
-        f"bundle, not with pip.")
+        f"A newer version is published; the numbers are beside this note. "
+        f"Nothing was downloaded and nothing was installed. Updating means "
+        f"installing the new bundle, or upgrading the package with "
+        f"`pip install -U {PACKAGE}`. The server never downloads, installs, "
+        f"or runs anything itself.")
     return payload
 
 

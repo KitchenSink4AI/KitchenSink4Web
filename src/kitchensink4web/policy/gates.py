@@ -107,9 +107,10 @@ GATED_CLASSES: dict[str, str] = {
     # entries up is the standing reminder why: a borrowed sentence asked a
     # human to allow "clearing cookies or site storage" for an operation
     # that clears nothing, and someone reading carefully declines the wrong
-    # thing. The sentences below are COPY PLACEHOLDERS pending the author's
-    # own words (build report FACTS TO CONVEY 1-7); each states the FACT
-    # the final wording must convey and nothing beyond it.
+    # thing. The entries here are the short action-class names the grammar
+    # frames read ("allow X?", "the human declined X"); the plain-words
+    # consequence a person reads at the prompt lives in `PROMPT_SENTENCES`
+    # below.
     # ------------------------------------------------------------------
     # Credential blindness refuses the tool WRITING a password. Nothing
     # refused it PRESSING the button that sends one a human typed, so an
@@ -133,6 +134,64 @@ GATED_CLASSES: dict[str, str] = {
     "credential_injection": "attaching a stored credential to requests sent "
                             "to one origin",
 }
+
+#: THE PROMPT SENTENCE: one or two sentences a person reads at a
+#: confirmation prompt, naming the action class and the consequence and
+#: never the tool. `GATED_CLASSES` supplies the noun phrase the grammar
+#: frames need; this supplies the words that let somebody decide. A class
+#: with no entry here prompts exactly as it did before.
+#:
+#: `credential_injection` is the one template: it names the credential and
+#: the single origin, and the value is not in it and never has been.
+PROMPT_SENTENCES: dict[str, str] = {
+    "credential_submit":
+        "This form carries a password or a one-time code, and pressing this "
+        "button sends it. KS4Web cannot type that value itself; it is asking "
+        "to press the button that submits it.",
+    "broadcast_submit":
+        "This submission reaches other people, and your name goes on words "
+        "you did not write.",
+    "destructive_submit":
+        "This submission deletes, cancels, revokes, or deactivates "
+        "something.",
+    "legal_assent":
+        "This submission agrees to terms, a contract, a waiver, or a consent "
+        "in your name.",
+    "age_gate_detected":
+        "This page declares itself adult-only. KS4Web is relaying the page's "
+        "own claim, not judging the content.",
+    "sensitive_origin":
+        "This site is on your own always-ask list.",
+    "credential_injection":
+        "The stored credential {name} will be attached to requests to "
+        "{origin}, and only to that origin. Its value is not shown here and "
+        "has never been in this conversation.",
+}
+
+
+def prompt_sentence(action_class: str, target: dict | None = None,
+                    origin: str | None = None) -> str:
+    """The plain-words sentence for a class, with its slots filled.
+
+    Returns the empty string for a class that has none, so every call site
+    can concatenate unconditionally. A template whose slots cannot be filled
+    from the target degrades to no sentence rather than to a sentence with a
+    hole in it."""
+    text = PROMPT_SENTENCES.get(action_class)
+    if not text:
+        return ""
+    if "{" not in text:
+        return text
+    target = target or {}
+    # The credential gate fingerprints (header name, origin, ref) onto the
+    # existing FINGERPRINT_FIELDS names, so the ref rides in `action` and the
+    # origin in `href`.
+    name = target.get("action")
+    where = origin or target.get("href")
+    if not name or not where:
+        return ""
+    return text.format(name=name, origin=where)
+
 
 #: A pending gate lives this long. A confirmation arriving later than this
 #: refers to a page state nobody can vouch for, so it expires rather than
@@ -257,9 +316,11 @@ class GateEngine:
                     target=fingerprint(target or {}), summary=summary,
                     origin=origin)
         self._pending[token] = gate
+        sentence = prompt_sentence(action_class, gate.target, origin)
+        said = f"{sentence} " if sentence else ""
         exc = ConfirmationRequired(
             f"{GATED_CLASSES[action_class]} needs a human confirmation "
-            f"before it runs. {summary} Nothing has been done. If your "
+            f"before it runs. {said}{summary} Nothing has been done. If your "
             f"client supports interactive requests the confirmation prompt "
             f"is attached; where it supports neither MRTR nor elicitation "
             f"this action FAILS CLOSED and cannot be performed from this "
@@ -287,7 +348,8 @@ class GateEngine:
                 "method": "elicitation/create",
                 "params": {
                     "message": (f"KS4Web asks: allow "
-                                f"{GATED_CLASSES[action_class]}? {summary}"),
+                                f"{GATED_CLASSES[action_class]}? "
+                                f"{said}{summary}"),
                     "requestedSchema": {
                         "type": "object",
                         "properties": {"allow": {"type": "boolean"}},
@@ -298,35 +360,26 @@ class GateEngine:
         }
         raise exc
 
-    #: COPY PLACEHOLDER (build report FACTS TO CONVEY 8-9): the
-    #: unattended-session refusal. The facts it must carry: nothing was
-    #: done; no human answered and this process has evidence that none can;
-    #: the work is NOT queued, because a decision made later cannot execute
-    #: the target this one named; and either the pre-authorization route
-    #: (Tier 1) or the statement that no setting makes this proceed
-    #: unattended (Tier 2).
+    #: The unattended-session refusal, in two branches. Tier 1 names the
+    #: pre-authorization route; Tier 2 states that no setting makes the
+    #: action proceed unattended. Both open on what happened to the work.
     def _unattended_refusal(self, action_class: str, summary: str,
                             live_only: bool,
                             reason: str | None = None
                             ) -> ConfirmationRequired:
-        route = (
-            "No setting makes this proceed without a human. Paying, "
-            "submitting a credential, sending something that reaches other "
-            "people, deleting, accepting terms, acting off an allowlist, "
-            "and resetting the budgets are irreducible by design."
+        body = (
+            "Nothing was done. No human is answering this session, and this "
+            "action is in the set no setting can pre-authorize: it proceeds "
+            "only with a human answering at the moment of asking."
             if live_only else
-            "A human can pre-authorize this class for a named origin at the "
-            "settings surface with KS4WEB_PREAUTH, which is a launch-time "
-            "choice no tool call can make.")
+            f"Nothing was done. No human is answering this session (the "
+            f"client advertises no confirmation channel), and the "
+            f"confirmation this action needs expires in {int(GATE_TTL_S)} "
+            f"seconds, so the work is not queued. A human can pre-authorize "
+            f"this class of action at launch with KS4WEB_PREAUTH; see "
+            f"get_workflows for the consent topic.")
         return ConfirmationRequired(
-            f"{GATED_CLASSES[action_class]} needs a human confirmation and "
-            f"no human is answering in this session. {summary} Nothing has "
-            f"been done and nothing was queued: a confirmation gate expires "
-            f"in {int(GATE_TTL_S)}s together with the fingerprint of the "
-            f"element it named, so a decision made later could not execute "
-            f"this action anyway, and a queue that pretended otherwise "
-            f"would be the stale-intent hole this system exists to close. "
-            f"{route}"
+            f"Refused: {GATED_CLASSES[action_class]}. {summary} {body}"
             # Same fix as the attended branch: the computed reason names
             # the scope in force and the setting that would change it.
             + (f" {reason}" if reason else ""))

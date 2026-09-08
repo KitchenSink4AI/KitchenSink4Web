@@ -486,16 +486,6 @@ def test_every_category_has_an_access_path_key():
         assert _classify.ACCESS_PATHS[name]
 
 
-def test_the_user_facing_copy_is_still_a_placeholder():
-    """Product copy is written by the main thread, never by the agent that
-    builds the machinery. This guard states which strings are waiting, and it
-    is the guard to DELETE when the copy lands rather than one to weaken."""
-    pending = [v for v in list(_classify.ACCESS_PATHS.values())
-               + list(_classify.NOTES.values())
-               if not v.startswith("[COPY PENDING:")]
-    assert not pending, f"copy landed without this guard being updated: {pending}"
-
-
 def test_the_wall_vocabulary_is_unchanged():
     """New categories never introduce new `wall` values: `navigate` raises on
     that key and several call sites branch on it."""

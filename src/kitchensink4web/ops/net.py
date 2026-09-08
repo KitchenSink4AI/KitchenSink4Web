@@ -574,10 +574,10 @@ async def set_routing(
                  if not isinstance(x, str) or not x.strip()]
         if empty:
             raise BadParams(
-                f"pattern(s) at index {empty} are empty, so they would "
-                f"match no request at all and nothing was installed. A "
-                f"pattern is a Playwright glob, for example '**/*.png' or "
-                f"'**/tracker/**'.")
+                f"an empty pattern matches no request at all; name what to "
+                f"match. Pattern(s) at index {empty} are empty and nothing "
+                f"was installed. A pattern is a Playwright glob, for example "
+                f"'**/*.png' or '**/tracker/**'.")
         for pattern in patterns:
             async def _abort(route):
                 await route.abort()
@@ -610,10 +610,10 @@ async def set_routing(
             code = -1
         if not 100 <= code <= 599:
             raise BadParams(
-                f"status={status!r} is not an HTTP status code, so this mock "
-                f"was not installed. HTTP statuses run 100 to 599; the ones "
-                f"a mock usually wants are 200, 204, 301, 401, 403, 404, "
-                f"429, and 500.")
+                f"{status!r} is not a valid HTTP status for a mock, so "
+                f"nothing was installed. HTTP statuses run 100 to 599; the "
+                f"ones a mock usually wants are 200, 204, 301, 401, 403, "
+                f"404, 429, and 500.")
         status = code
         pattern = patterns[0]
 
@@ -665,7 +665,8 @@ async def set_routing(
         }
         if preset not in presets:
             raise BadParams(
-                f"throttle takes preset= one of {sorted(presets)}.")
+                f"unknown preset {preset!r}. The presets are: "
+                f"{sorted(presets)}.")
         conditions = presets[preset]
         for record in sess.pages.values():
             # THE PAGE'S OWN JAR, which is the right one under multiple

@@ -451,20 +451,15 @@ async def monitor(
     label: str | None = None,
     since: str | None = None,
 ) -> dict:
-    """Watch one page for one deterministic change on an interval, and
-    report what was actually seen. A monitor checks `content_hash` (the
-    page's visible text changed), `text_appears`, `text_gone`, or
-    `selector_count` (the number of elements matching a CSS selector
-    moved). Monitors run while this server runs and nothing is pushed
-    anywhere: no MCP client delivers a server-initiated message into a
-    conversation, so `action='report'` is how you ask, and `check_now`
-    forces one check immediately. A monitor that could not check reports
-    `stale` with the failure and the last successful check, never
-    `unchanged`. Checks run in a dedicated headless session, never in
-    yours, so nothing a monitor does touches your pages or your refs. The
-    interval has a floor, the number of monitors and the daily number of
-    checks are capped, a site that answers 429 is honoured rather than
-    retried, and a monitor that keeps failing pauses itself.
+    """Watches one URL for one deterministic change while this server runs.
+    Four conditions: content_hash, text_appears, text_gone, selector_count;
+    the same page state always answers the same way. Nothing is pushed
+    anywhere: report is how you ask what happened, and check_now forces a
+    check. A monitor that could not check reports stale with the failure,
+    never unchanged. Checks run in a dedicated headless session, never the
+    caller's. There is a floor on the interval and caps on monitors and daily
+    checks; a 429 is honored rather than retried; a monitor that keeps
+    failing pauses itself.
     """
     action = _common_enum(action)
     _monitors.STORE.load()

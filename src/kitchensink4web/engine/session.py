@@ -555,12 +555,10 @@ class Session:
             if len(self.contexts) <= 1:
                 return self.jar_handle
             raise BadParams(
-                f"session {self.session_id} has {len(self.contexts)} "
-                f"separate cookie jars ({sorted(self.contexts)}) and this "
-                f"call acts on one of them, so name the one you mean with "
-                f"context=... rather than letting the server pick. This is "
-                f"the same rule that applies when several sessions are "
-                f"open.")
+                f"several identities are open in this session: "
+                f"{sorted(self.contexts)}. Name the one you mean with "
+                f"context=... (the same rule as when several sessions are "
+                f"open).")
         if label not in self.contexts:
             raise TargetNotFound(
                 f"no context {label!r} in session {self.session_id}. The "
@@ -705,22 +703,18 @@ class Session:
 #: line and the local ms-playwright install path inside a BAD_PARAMS.
 _LAUNCH_CAUSES: tuple[tuple[str, str], ...] = (
     ("executable doesn't exist",
-     "the browser binary for this lane is not installed"),
+     "the browser binary is not installed on this machine"),
     ("looks like playwright was just installed or updated",
-     "the browser binary for this lane is not installed"),
+     "the browser binary is not installed on this machine"),
     ("please run the following command to download new browsers",
-     "the browser binary for this lane is not installed"),
+     "the browser binary is not installed on this machine"),
     ("browsertype.launch: target page, context or browser has been closed",
-     "the browser started and exited before it was ready"),
-    ("timeout", "the browser did not become ready inside the launch timeout"),
-    ("access is denied",
-     "the operating system refused to start the browser binary"),
-    ("permission denied",
-     "the operating system refused to start the browser binary"),
-    ("invalid parameters",
-     "the browser refused one of the context options this launch asked for"),
-    ("no such file or directory",
-     "something the launch needs is missing from the install"),
+     "the browser started and immediately exited"),
+    ("timeout", "the browser started but never became ready"),
+    ("access is denied", "the operating system refused to start it"),
+    ("permission denied", "the operating system refused to start it"),
+    ("invalid parameters", "the browser rejected a context option"),
+    ("no such file or directory", "the browser install is incomplete"),
 )
 
 
@@ -740,7 +734,7 @@ def _launch_refusal(spec, exc: Exception, emulation_report) -> Exception:
                f"{spec.engine}`. " if cause and "not installed" in cause
                else "")
     body = (
-        f"could not launch {spec.label}: "
+        f"the {spec.label} browser could not start: "
         f"{cause or 'the browser did not start'} "
         f"({type(exc).__name__}: {detail}). {install}"
         f"manage_session(action='capabilities') lists the lanes this build "
@@ -754,18 +748,18 @@ def _launch_refusal(spec, exc: Exception, emulation_report) -> Exception:
     return SessionDead(body)
 
 
-#: What each end reason MEANS, in one clause. PLACEHOLDER WORDING: these
-#: are the facts a refusal has to carry, not the final English.
+#: What each end reason MEANS, in one clause. The register is fixed: short,
+#: past tense, naming the actor. A reader of a stale-handle refusal wants to
+#: know who ended the session, and one clause is enough to say it.
 REASON_TEXT: dict[str, str] = {
-    "explicit_close": "a manage_session(action='close') call closed it",
-    "idle_recycle": "an idle recycle closed it after a quiet period",
-    "crash": ("its browser process exited on its own, so this was a crash "
-              "rather than a close"),
-    "shutdown": "the server closed it while shutting down",
-    "driver_died": ("the Playwright driver process that had launched its "
-                    "browser exited, so its browser exited with it"),
-    "reaped_dead": ("every browser process it owned had already exited, and "
-                    "a later call cleared the handle out of the way"),
+    "explicit_close": "closed by a manage_session(action='close') call",
+    "idle_recycle": (f"recycled after {int(IDLE_CLOSE_S // 60)} minutes "
+                     f"idle"),
+    "crash": "the browser process exited on its own",
+    "shutdown": "the server shut down",
+    "driver_died": "the Playwright driver exited and took the browser with it",
+    "reaped_dead": ("every browser process had already exited, and a later "
+                    "call cleared the handle"),
 }
 
 
@@ -781,10 +775,11 @@ def tombstone_line(stone: dict | None) -> str:
     when = time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(stone["closed"]))
     what = REASON_TEXT.get(stone["reason"], stone["reason"])
     auth = stone.get("auth_state_saved_to")
-    return (f" That session ended at {when}: {what}. It held "
+    return (f" It ended at {when}: {what}. It held "
             f"{stone['pages_at_close']} page(s) at the time."
-            + (f" Its auth state had been saved to {auth}, so the login is "
-               f"recoverable with load_auth_state." if auth else ""))
+            + (f" Its login state was saved to {auth}; open a fresh session "
+               f"and load it with auth_state." if auth else
+               " No login state was saved."))
 
 
 def _driver_transport(driver: Any) -> Any:
@@ -1637,9 +1632,8 @@ class SessionManager:
         handle = session.jar(label)
         if len(session.contexts) <= 1:
             raise ValidationFailed(
-                f"context {handle.label} is the only cookie jar in session "
-                f"{session.session_id}, and a session with none is a state "
-                f"nothing else here expects. To close the session, call "
+                f"{handle.label} is the session's last identity, and closing "
+                f"it would close nothing by half. Close the session instead: "
                 f"manage_session(action='close', "
                 f"session={session.session_id!r}). Nothing was closed.")
         async with self._lock:
@@ -1787,12 +1781,13 @@ class SessionManager:
                     survivors = sorted(
                         set(session.contexts) - {jar.label})
                     dead = SessionDead(
-                        f"the browser for session {session.session_id} "
-                        f"context {jar.label} is gone: every process it owns "
-                        f"has exited ({sorted(jar.journal.pids)}). Page "
-                        f"{page_handle} and every other handle in that "
-                        f"context are dead with it, and opening a fresh tab "
-                        f"there fails the same way. "
+                        f"the browser behind this handle is gone: every "
+                        f"process owned by session {session.session_id} "
+                        f"context {jar.label} has exited "
+                        f"({sorted(jar.journal.pids)}). Page {page_handle} "
+                        f"and every other handle in that context are dead "
+                        f"with it, and opening a fresh tab there fails the "
+                        f"same way. "
                         + (f"Contexts {survivors} are unaffected; close this "
                            f"one with manage_session(action='close', "
                            f"session={session.session_id!r}, "
@@ -1838,14 +1833,12 @@ class SessionManager:
                     record.parked = False
                     record.parked_from = None
                     raise StaleAnchor(
-                        f"page {page_handle} was idle long enough to be "
-                        f"parked to about:blank, so the document it held is "
-                        f"gone and every ref and read token minted on it "
-                        f"with it. It was on {was}. Navigate there again "
-                        f"with navigate(page={page_handle!r}, url={was!r}) "
-                        f"and re-read. Parking is what stops a dormant page "
-                        f"burning CPU and memory for hours, and nothing in "
-                        f"this build does it on its own.")
+                        f"this page was parked and its anchors are stale; it "
+                        f"was on {was}. Re-read the page to mint fresh refs: "
+                        f"navigate(page={page_handle!r}, url={was!r}). "
+                        f"Parking is what stops a dormant page burning CPU "
+                        f"and memory for hours, and nothing in this build "
+                        f"does it on its own.")
                 if not allow_pending_dialog:
                     held = _dialogs.desk(session).pending_for(page_handle)
                     if held is not None:

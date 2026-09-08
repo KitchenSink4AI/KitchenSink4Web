@@ -21,12 +21,10 @@ and none of them things a stranger should ever read:
 - An absolute ``C:\\Users\\`` path, which is a build that only runs on the
   machine that built it.
 
-SCOPE. Everything in ``ENFORCED`` is clean of all six as of the commit that
-adds this file, so the gate is green the day it lands and every hit after
-that is a regression. ``README.md`` is deliberately still out: it carries the
-update-check ``[COPY PENDING]`` block that the copy fill wave will replace.
-When that wave lands, move ``PENDING_FILL`` into ``ENFORCED``, delete it, and
-the gate is total. That is the whole activation step.
+SCOPE. Everything in ``ENFORCED`` is clean of all six, so every hit after
+this is a regression. The scope is TOTAL as of the 2026-09-09 copy fill
+wave: ``README.md`` carried the update-check ``[COPY PENDING]`` block until
+that wave replaced it, and ``PENDING_FILL`` is gone with it.
 """
 
 from __future__ import annotations
@@ -45,11 +43,6 @@ ENFORCED = (
     "bundle/manifest.json",
     "bundle/dev/manifest.json",
     "docs/llms.txt",
-)
-
-#: Waiting on the copy fill wave. Move these into ENFORCED when it lands;
-#: nothing else about this file needs to change.
-PENDING_FILL = (
     "README.md",
 )
 
@@ -129,9 +122,8 @@ def test_every_install_screen_field_is_a_checkbox():
             f"belongs in a launch file, not on this screen.")
 
 
-def test_the_pending_scope_is_still_a_real_file():
-    """The activation step only works if the deferred entry still names
-    something. A PENDING_FILL row pointing at a renamed file would quietly
-    turn into no gate at all."""
-    for rel in PENDING_FILL:
+def test_every_enforced_surface_is_still_a_real_file():
+    """A row pointing at a renamed file would quietly turn into no gate at
+    all, which is how a total scope stops being total."""
+    for rel in ENFORCED:
         assert (ROOT / rel).is_file(), rel

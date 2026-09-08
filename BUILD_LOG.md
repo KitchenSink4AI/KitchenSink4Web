@@ -4687,3 +4687,66 @@ RC v3 on the Desktop, sha256
 `7ea93673ecec1c3476fabc220a705bfd351d0008a679a7ee9649d42e9316d432`, full
 verification battery re-run at 0 failures, 25 tools by set equality, acting
 absent, rc=0, zero orphans.
+
+## 2026-09-09 - Copy fill wave: every ratified string lands and the ship gate goes total
+
+Source: `Agent Results/20260908_1610_STRINGS_DRAFTS.md`, read in full first,
+all tranches. Applied verbatim except where a drafted line contradicted the
+code; every one of those is flagged in
+`Agent Results/20260909_fill_wave.md` rather than resolved quietly.
+
+- **Surface 5, the seventeen classification strings.** `policy/classify.py`
+  was returning `[COPY PENDING: classify.access_path.<name>]` in live
+  payloads, which is the sentence a blocked caller acts on. All fourteen
+  access paths and all four notes now carry the ratified copy, from a closed
+  table keyed by category exactly as before. Two notes carry measured
+  numbers, so they are format templates filled at their one call site each.
+- **Surface 2, the seven gate prompts.** `GATED_CLASSES` keeps its gerund
+  noun phrases, because two grammar frames and eight tests read them. The
+  plain-words consequence a human reads lives in a new `PROMPT_SENTENCES`
+  table rendered into both the `ConfirmationRequired` text and the
+  elicitation prompt. `credential_injection` is the one template: it names
+  the credential and the single origin, and the value is not in it.
+- **Surface 1, seven tool descriptions and four amendments.** The
+  `manage_session` union is rewritten as ONE string rather than four waves'
+  clauses stacked; the ledger's "ten actions" flag is reconciled against the
+  live dispatch table, which holds ELEVEN, and the unknown-action refusal
+  (which listed ten) now lists all of them.
+- **Surfaces 3, 4, 6, 7 and the twenty-three union groups.** Consent-ladder
+  unattended refusals, batch and `do` refusals, the `import_handle` set and
+  `_END_REASONS`, multi-context, the lane hints, `PERMITS`,
+  `PREAUTH_TEACHING`, `shared_state`, `lanedb.status`, `agent_identification`,
+  the autopick announcement, the `wellknown` why-sentences, and the
+  close-after-auth-save sentence. U16 was NOT applied: its drafted line says
+  "Nothing was navigated," and this server deliberately does not refuse a
+  navigation to a PDF or a blob.
+- **Docs.** README gains the harness-prompts-versus-product-gates section, the
+  consent-scope section, the ratified accessibility sentence, a client
+  compatibility matrix, and the six honest-limit paragraphs. `docs/llms.txt`
+  gains the settings surface and the no-confirmation-channel statement.
+- **The published figures were stale after the fill.** Shorter descriptions
+  cost fewer tokens, so the live guard caught the README and llms.txt numbers
+  drifting: lite 6.5k -> 5.8k, full 16.0k -> 15.3k, read-only 3.7k -> 3.4k.
+  Re-measured off the live registry, not edited by hand.
+- **THE SHIP GATE IS TOTAL.** `PENDING_FILL` is deleted and `README.md` moved
+  into `ENFORCED`, which was the whole activation step the gate's own
+  docstring described. Both `.mcpb` archives were repacked in place with the
+  ratified accessibility sentence, since the packed manifest is in scope and
+  the `mcpb` CLI is not on this machine.
+- **Guard deletions: one, plus two more that the copy invalidated.**
+  `test_the_user_facing_copy_is_still_a_placeholder` is gone, as its own
+  docstring instructed. The preauth teaching's phrase-locked guard is gone
+  (its surviving assertion is duplicated elsewhere), and the three-needle
+  loop in `test_the_preauth_teaching_names_no_field_that_does_not_exist` is
+  gone because the ratified copy names the install screen in order to say
+  there is no field for this there. Everything else was a behaviour test
+  carrying an incidental needle; those were re-pointed, not deleted, and the
+  distinction is itemized in the wave report.
+- **Three refusals were changed rather than their tests.** The batch
+  cross-page ref refusal, the batch ref-after-navigate refusal, and `do`'s
+  unknown-verb refusal had each dropped the value they were rejecting. The
+  tests were right; the fact went back in.
+- FULL SUITE, sequential, BOTH ORDERS on the merged tree: unit then browser
+  2,056 passed / 5 skipped / 1 xpassed in 944.83s; browser then unit 2,056
+  passed / 5 skipped / 1 xpassed in 911.30s. Ship gate green at full scope.
+  Zero orphaned browser processes. Nothing pushed.

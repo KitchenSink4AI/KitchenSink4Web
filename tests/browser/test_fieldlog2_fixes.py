@@ -308,7 +308,7 @@ def test_close_reports_an_earlier_save_instead_of_contradicting_it(
     finally:
         packs.apply_startup_packs(list(saved_packs))
     note = result["auth_state"]
-    assert "saved earlier this session" in note
+    assert "login state was saved earlier" in note
     assert "none were saved" not in note
     assert out in note
 

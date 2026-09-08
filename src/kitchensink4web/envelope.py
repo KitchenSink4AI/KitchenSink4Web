@@ -257,42 +257,25 @@ HINTS: dict[str, str] = {
         "the arguments are malformed. A location object takes exactly one "
         "selector key, and a ref belongs to the page handle that minted it"
     ),
-    # FLAGGED (union wave): placeholder wording, mechanically composed from
-    # existing sentences in this file. The four new codes need the author's
-    # eyes on their hints before ship.
     "SESSION_DEAD": (
-        "the browser this session owns is gone, so no call on it can work "
-        "and no re-read recovers it. Close the session with "
-        "manage_session(action='close') and open a new one; refs, read "
-        "tokens, and page handles from the old session do not carry over"
+        "the browser behind this session is gone. Close the session and "
+        "open a new one; handles from the dead session do not carry over"
     ),
     "NAVIGATION_FAILED": (
-        "the navigation reached the network and produced no document, for a "
-        "reason the site owns rather than the arguments. The message names "
-        "what the browser reported. Rewriting the URL does not help; a "
-        "different URL, or a human in a headed window, might"
+        "the site did not complete this navigation. The failure belongs to "
+        "the site or the network, so rewriting the URL is unlikely to help"
     ),
     "FILE_WRITE_FAILED": (
-        "the file could not be written and nothing was saved. The message "
-        "names the resolved path and what the filesystem reported. Choose a "
-        "writable directory and a plain file name, or omit path to use the "
-        "server's own downloads directory"
+        "nothing was saved. The resolved path and the filesystem's reason "
+        "are in the message"
     ),
     "DRIVER_FAILURE": (
-        "the browser driver failed for a reason this build does not have a "
-        "specific code for, and the message carries what the driver said. "
-        "The arguments are not the thing to fix. Check the session with "
-        "manage_session(action='status') before retrying"
+        "the browser driver itself failed. The arguments are not the thing "
+        "to fix; check the session's status first"
     ),
-    # FLAGGED (fix wave 2026-09-08): placeholder wording, mechanically
-    # composed from existing sentences in this file. Needs the author's eyes
-    # before ship, like the union wave's four above it.
     "INTERNAL_ERROR": (
-        "KS4Web itself failed, not the browser and not the arguments, so "
-        "there is nothing in the call to fix and rewriting it does not "
-        "help. The message carries what the interpreter reported. Retrying "
-        "the same call reaches the same code; a different tool, or the same "
-        "read with a narrower root, may not"
+        "something inside the server failed. The arguments are not the "
+        "cause. Check manage_session(action='status'), then retry once"
     ),
     "NOT_IMPLEMENTED": (
         "this tool is registered but its engine is not built yet (Phase 0 "
@@ -466,10 +449,10 @@ def pack_hint(exc: BaseException) -> str | None:
 DRIVER_DETAIL_CHARS = 200
 
 #: The hint a crashed-renderer refusal carries INSTEAD of CONFLICT's generic
-#: one. FLAGGED: placeholder, lifted from the crash message's own clauses.
+#: one.
 CRASHED_HINT = (
-    "this page handle is dead and re-reading it will not recover it; open a "
-    "new tab with manage_tabs(action='open', url=...) and continue there"
+    "this page handle crashed and is dead. Re-reading will not recover it; "
+    "open a new tab with manage_tabs(action='open', url=...)"
 )
 
 #: Where a driver dump stops being the error and starts being the driver's
@@ -577,35 +560,38 @@ def refusal(exc: BaseException) -> dict:
         # `envelope`'s own first stated rule is that no exception string
         # reaches a caller; before this branch `message = str(exc)` made
         # that rule false for every backstop code in CODE_MAP.
-        # FLAGGED: placeholder wording, mechanically composed.
         detail = scrub_driver_text(message)
         if code == "SESSION_DEAD":
             message = (
-                f"the browser for this session is gone (driver detail: "
-                f"{detail}). No call on this session can work and no "
-                f"re-read recovers it. Close it with "
-                f"manage_session(action='close') and open a new one.")
+                f"something inside the server failed while acting on this "
+                f"session, and the browser behind it is gone (driver "
+                f"detail: {detail}). The arguments are not the cause. Check "
+                f"manage_session(action='status'), then retry once.")
         elif code == "NAVIGATION_FAILED":
             cause = _driver_cause(message)
             message = (
-                f"the navigation produced no document: "
+                f"something inside the server failed while navigating: "
                 f"{cause or 'the browser refused the load'} (driver "
-                f"detail: {detail}). The site owns this outcome, not the "
-                f"arguments, so rewriting the URL does not help.")
+                f"detail: {detail}). The arguments are not the cause. Check "
+                f"manage_session(action='status'), then retry once.")
         elif code == "FILE_WRITE_FAILED":
             message = (
-                f"the file could not be written and nothing was saved "
-                f"(filesystem detail: {detail}).")
+                f"something inside the server failed while writing the file "
+                f"and nothing was saved (filesystem detail: {detail}). The "
+                f"arguments are not the cause. Check "
+                f"manage_session(action='status'), then retry once.")
         elif code == "DRIVER_FAILURE":
             message = (
-                f"the browser driver failed and this build has no more "
-                f"specific code for it (driver detail: {detail}). The "
-                f"arguments are not the thing to fix.")
+                f"something inside the server failed while driving the "
+                f"browser (driver detail: {detail}). The arguments are not "
+                f"the cause. Check manage_session(action='status'), then "
+                f"retry once.")
         elif code == "INTERNAL_ERROR":
             message = (
-                f"KS4Web failed inside its own code and the call did not "
-                f"complete (internal detail: {detail}). The arguments were "
-                f"not the problem and there is nothing in them to fix.")
+                f"something inside the server failed while running this "
+                f"call (internal detail: {detail}). The arguments are not "
+                f"the cause. Check manage_session(action='status'), then "
+                f"retry once.")
         elif code == "BAD_PARAMS" and not (
                 isinstance(exc, LookupError) and len(message) < 40):
             # THE TERMINAL FALLBACK, and the only backstop code that blames

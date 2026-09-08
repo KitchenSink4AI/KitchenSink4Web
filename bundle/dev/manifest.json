@@ -112,7 +112,7 @@
     "pack_accessibility": {
       "type": "boolean",
       "title": "Accessibility checks",
-      "description": "Audit a page against accessibility rules. Needs an optional extra installed; the tool tells you how if it is missing.",
+      "description": "Checks a page against the WCAG accessibility rules using axe-core, groups what it finds by rule, and says plainly what automated testing cannot check. Needs an optional extra installed; the tool tells you how if it is missing.",
       "default": false,
       "required": false
     },

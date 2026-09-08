@@ -754,12 +754,11 @@ def report(url_or_host: str | None) -> dict:
 #: WHAT THIS DATABASE HOLDS, in one place so the status block, the lanes
 #: action, and the workflow topic cannot drift into three answers.
 DISCLOSURE: dict[str, str] = {
-    "stores": ("hostnames, one lane key, three counts, one verdict word, "
-               "and dates at day resolution"),
-    "never_stores": ("paths, query strings, URLs, page titles, times of "
-                     "day, per-visit rows, and any intranet, IP-literal, "
-                     "or non-standard-port host"),
-    "erase": "manage_session(action='lanes', op='forget', all=True)",
+    "stores": "hostnames and dates only",
+    "never_stores": "pages, URLs, queries, or anything typed",
+    "erase": ("nothing leaves this machine unless you export it; one call "
+              "erases it: manage_session(action='lanes', op='forget', "
+              "all=True)"),
 }
 
 

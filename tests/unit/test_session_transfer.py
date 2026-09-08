@@ -176,7 +176,7 @@ def test_h4_a_token_works_once(store):
     first = _call(action="import_handle", token=token)
     assert first["imported"] == "s1"
     message = _refuses("NOT_FOUND", action="import_handle", token=token)
-    assert "already used" in message or "used at" in message, message
+    assert "redeemed at" in message, message
 
 
 # ------------------------------------------------------------------- H-5
@@ -219,7 +219,7 @@ def test_h6_a_foreign_process_refusal_is_specific(store):
 @pytest.mark.parametrize("reason,marker", [
     ("explicit_close", "closed"),
     ("idle_recycle", "recycle"),
-    ("crash", "crash"),
+    ("crash", "exited on its own"),
 ])
 def test_h7_tombstone_causes_are_distinguished(store, reason, marker):
     sess = _session_in(_session.MANAGER, "s1")
@@ -288,7 +288,7 @@ def test_d3p_a_stale_handle_lookup_names_the_cause(store):
     _session.MANAGER.sessions.pop("s1")
     with pytest.raises(errors.TargetNotFound) as caught:
         _session.MANAGER.session("s1")
-    assert "crash" in str(caught.value).lower(), str(caught.value)
+    assert "exited on its own" in str(caught.value).lower(), str(caught.value)
 
 
 def test_the_tombstone_ring_is_bounded(store):

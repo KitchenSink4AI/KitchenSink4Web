@@ -111,34 +111,109 @@ CONFIDENCE_RANK: dict[str, int] = {
 }
 
 
-# ------------------------------------------------------------- pending copy
+# --------------------------------------------------------------- the copy
 #
-# EVERY SENTENCE A USER READS OUT OF THIS MODULE IS A PLACEHOLDER, and that
-# is deliberate rather than unfinished. Product copy is written by the main
-# thread or the author, never by the agent that builds the machinery
-# (standing rule, 2026-09-04). The access path is the sentence that matters
-# most in the whole feature, since it is the one a blocked caller acts on,
-# and it is also a sentence a page must never be able to influence, so it
-# comes from a CLOSED TABLE keyed by category and is never assembled from
-# anything the page wrote.
+# EVERY SENTENCE A USER READS OUT OF THIS MODULE LIVES HERE. The access path
+# is the sentence that matters most in the whole feature, since it is the one
+# a blocked caller acts on, and it is also a sentence a page must never be
+# able to influence, so it comes from a CLOSED TABLE keyed by category and is
+# never assembled from anything the page wrote.
 #
 # `tests/unit/test_classify.py` asserts that every category has a key here
 # and that no key is missing, so a category added without its copy fails
-# loudly rather than shipping an empty string. The facts each key has to
-# convey are recorded with the build report.
+# loudly rather than shipping an empty string.
 
-def _pending(key: str) -> str:
-    return f"[COPY PENDING: classify.{key}]"
+ACCESS_PATHS: dict[str, str] = {
+    "botwall":
+        "A bot-mitigation wall. KS4Web does not retry against one and does "
+        "not defeat one; the lane hint and the handoff recipe in this "
+        "refusal are the routes that exist.",
+    "captcha":
+        "A CAPTCHA needs solving, not a different fingerprint, so a lane "
+        "switch does not clear it. KS4Web does not solve one; the route is a "
+        "human through a headed handoff.",
+    "rate_limited":
+        "The server asked for a pause and KS4Web honors it: the Retry-After "
+        "window is recorded and enforced. Route: come back after the window.",
+    "login_required":
+        "The page needs a signed-in session. Routes: a saved auth state "
+        "loaded through the storage pack, or a human signing in through a "
+        "headed handoff, with the login saved for later runs.",
+    "maintenance":
+        "A maintenance window, with nothing behind it to read. Route: come "
+        "back later; the page often names a status page to watch.",
+    "http_500":
+        "The server failed; nothing on the caller's side changes that, and "
+        "this is neither a wall nor a block. Route: retry later.",
+    "http_404":
+        "The page is missing. The body was still returned, and it often "
+        "names the right URL or offers a search.",
+    "soft_404":
+        "The page is gone, but the server answered 200; a status check alone "
+        "would have called this a success. The body was returned and often "
+        "points to the right place.",
+    "paywall_academic":
+        "The article is behind an institutional or personal subscription. "
+        "What this page does carry (the abstract, title, DOI, and citation "
+        "metadata) was returned. Routes that exist: the DOI through an "
+        "institutional proxy; an open-access copy (the publisher's OA link, "
+        "a preprint server, or the author's own page); or, with "
+        "institutional credentials, a headed handoff to sign in, which can "
+        "be saved for later runs.",
+    "paywall_news":
+        "A subscription barrier. What was returned is usually the headline "
+        "and the lede. Routes: a subscription the reader already has, signed "
+        "in through a headed handoff; the publisher's own free-article "
+        "allowance; or the same story from a wire service.",
+    "paywall_saas":
+        "The product gated this data behind a paid plan, usually by "
+        "redacting values in place rather than hiding the page, so the page "
+        "reads complete while individual numbers are missing. This is the "
+        "least certain category in the taxonomy. The route is an account on "
+        "the plan that includes it, signed in through a handoff.",
+    "geo_blocked":
+        "The site appears to serve different content by region: a "
+        "low-confidence guess from limited signals. The page may be "
+        "available from another region; note that enforcement usually "
+        "happens at the media or API layer, so a landing page that loads "
+        "normally is not evidence of access.",
+    "age_gated":
+        "An age gate is blocking the page. KS4Web relays the page's own "
+        "declaration and does not answer the gate, for the same reason it "
+        "never answers a consent banner: the assertion belongs to a person. "
+        "Route: a human through a headed handoff.",
+    "gdpr_consent":
+        "A consent banner is blocking the page. KS4Web does not answer it: a "
+        "consent choice is a legal act by a person, the same posture as "
+        "never solving a CAPTCHA. The control is named here; hand it to the "
+        "caller, or to a human through a headed handoff.",
+}
 
-
-ACCESS_PATHS: dict[str, str] = {name: _pending(f"access_path.{name}")
-                                for name in CATEGORIES}
-
+#: Two of these carry measured numbers, so they are format templates rather
+#: than finished sentences; `classify` fills them at the one call site each.
+#: The other two are static.
 NOTES: dict[str, str] = {
-    "none": _pending("note.no_category"),
-    "insufficient_evidence": _pending("note.insufficient_evidence"),
-    "geo_blocked_limitation": _pending("note.geo_blocked_limitation"),
-    "paywall_saas_weak": _pending("note.paywall_saas_weak"),
+    "none":
+        "Checked against all {checked} categories; none matched. The check "
+        "ran and found nothing, which is not the same as the page being "
+        "fine.",
+    "insufficient_evidence":
+        "This document carries almost no rendered content ({visible_chars} "
+        "visible characters, after {redirects} redirects), so it cannot be "
+        "classified from its HTML: a label here would be a confident "
+        "falsehood about a document nobody can read. Route: read it again "
+        "after the page has settled.",
+    "geo_blocked_limitation":
+        "Region blocking is largely undetectable from a landing page: "
+        "region-locked broadcasters serve complete, ordinary HTTP 200 "
+        "documents with no notice of any kind, because enforcement happens "
+        "when the media is requested.",
+    "paywall_saas_weak":
+        "This category's one reliable pattern is redaction in place: "
+        "complete prose with individual values swapped for gated elements. "
+        "Its subscribe-and-upgrade vocabulary is not separable from a news "
+        "paywall's or a login wall's, which is why this label is the weakest "
+        "in the taxonomy.",
 }
 
 
@@ -1158,12 +1233,13 @@ def classify(status: int | None, headers: dict | None = None, *,
             # and reporting "this reads as an ordinary page" there would be a
             # confident falsehood about a document nobody can read.
             result["confidence"] = "insufficient_evidence"
-            result["note"] = NOTES["insufficient_evidence"]
+            result["note"] = NOTES["insufficient_evidence"].format(
+                visible_chars=ctx.visible_chars, redirects=len(ctx.chain))
             result["measured"] = {"visible_chars": ctx.visible_chars,
                                   "redirects": len(ctx.chain)}
         else:
             result["confidence"] = "none"
-            result["note"] = NOTES["none"]
+            result["note"] = NOTES["none"].format(checked=len(DETECTORS))
         if ruled_out:
             result["ruled_out"] = ruled_out
         return result

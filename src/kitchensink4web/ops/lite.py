@@ -1342,7 +1342,10 @@ async def get_text(
     # whenever the paging finished, including on a page whose visible prose
     # the extractor had declined in full.
     if got["next_start_index"] is not None:
-        more = (f'get_text(page="{record.handle}", '
+        # U10's register: state what remains AND the exact next call.
+        left = max(0, got["total_chars"] - got["next_start_index"])
+        more = (f'{left:,} character(s) of this scope were not returned; '
+                f'get_text(page="{record.handle}", '
                 f'start_index={got["next_start_index"]}) returns the next '
                 f'{max_chars:,} characters')
     elif partial:
@@ -2204,15 +2207,12 @@ def _autopick(url: str | None) -> dict | None:
             return {
                 "open": _parse_lane(argument),
                 "why": (
-                    f'The lane was chosen rather than defaulted: this '
-                    f'machine recorded {row["host"]} refusing '
-                    f'{default_key} and serving {row["lane_key"]} '
-                    f'(last read {row["last_ok"]}, {row["ok"]} observation(s)). '
-                    f'Open a different one with '
-                    f'manage_session(action="open", lane=...) before '
-                    f'navigating, or set KS4WEB_LANE_AUTOPICK=0 to always '
-                    f'take the default. A session already open is never '
-                    f'switched.'),
+                    f'No session was open, so one was opened on '
+                    f'{row["lane_key"]}: this machine has read {row["host"]} '
+                    f'there before ({row["ok"]} times, last '
+                    f'{row["last_ok"]}). Pass lane= to override, or '
+                    f'KS4WEB_LANE_AUTOPICK=0 to always take the default; a '
+                    f'session already open is never switched.'),
             }
         return None
     except Exception:
@@ -2239,14 +2239,13 @@ def _lane_hint(sess, url: str, wall: str | None) -> str:
             row = fresh[0]
             argument = lanes.lane_argument(row["lane_key"])
             return (
-                f'This machine read {row["host"]} on {row["lane_key"]} '
-                f'({row["ok"]} observation(s), last on {row["last_ok"]}), so '
-                f'manage_session(action="open", lane="{argument}") is the '
-                f'lane with a measured chance here. ')
+                f'This machine has read {row["host"]} on {row["lane_key"]}: '
+                f'{row["ok"]} observation(s), last {row["last_ok"]}. Open a '
+                f'session on it: manage_session(action="open", '
+                f'lane="{argument}"). ')
         if _lanedb.all_lanes_failed(url):
-            return (
-                'Every lane this machine has tried on this host was refused '
-                'too, so switching lanes is not the move here. ')
+            return ('Every lane tried here has been refused; switching '
+                    'lanes is not the move. ')
     except Exception:
         pass
     if sess.spec.engine == "chromium":
@@ -2363,14 +2362,12 @@ def _refuse_unrecorded_popup(sess, record) -> None:
     if record.last_nav_url == record.page.url:
         return          # a later navigation on this page IS recorded
     raise Conflict(
-        f"the browser opened {record.handle} itself and this session has "
-        f"opened more windows than the server keeps first-response records "
-        f"for ({sess.pending_nav_evicted} record(s) dropped), so nothing "
-        f"survives that says what this page answered with. A bot wall and "
-        f"an ordinary page look the same from the document alone, so no "
-        f"read is taken rather than handing you an interstitial as content. "
-        f"navigate(page={record.handle!r}, url=...) to the URL you want, "
-        f"which records the response, or close the page.")
+        f"this popup cannot be ruled on: its first response was not "
+        f"recorded (the record was evicted under load, "
+        f"{sess.pending_nav_evicted} dropped in this session). A bot wall "
+        f"and an ordinary page look the same from the document alone. "
+        f"Navigate to its URL directly so the server can read it fresh: "
+        f"navigate(page={record.handle!r}, url=...), or close the page.")
 
 
 async def _recorded_wall_refusal(sess, record) -> None:
@@ -2466,9 +2463,9 @@ async def raise_if_self_navigating(record, exc, tool: str):
     if destroyed < _SELFNAV_PROBES:
         return
     raise Conflict(
-        f"{tool} cannot read {record.handle}: this page replaces its own "
-        f"document while the read is running, so no read can complete "
-        f"against it. {destroyed} probes spaced "
+        f"the page is navigating itself right now, so {tool} cannot read "
+        f"{record.handle}: it replaces its own document faster than a read "
+        f"can complete. {destroyed} probes spaced "
         f"{int(_SELFNAV_SAMPLE_S * 1000)} ms apart each found the execution "
         f"context already destroyed, with no tool navigating: a meta "
         f"refresh onto the same URL and a scripted location.replace both "
@@ -2500,12 +2497,10 @@ def _refuse_error_document(record, url: str | None = None) -> None:
     if not _is_error_document(lowered):
         return
     raise PageUnreachable(
-        f"there is no site document on {record.handle} to read: the browser "
-        f"is showing its own network-error interstitial ({url}). The last "
-        f"navigation did not reach a server, so anything read here would be "
-        f"the browser's error page and not the site's. Navigate again once "
-        f"the host is reachable; rewriting the URL does not help if the "
-        f"failure was the network.")
+        f"this tab is showing the browser's own error page, not the site "
+        f"({url}); there is nothing here to read. The last navigation did "
+        f"not reach a server. Navigate again once the host is reachable; "
+        f"rewriting the URL does not help if the failure was the network.")
 
 
 def _incomplete_note(record) -> str | None:
@@ -2534,11 +2529,11 @@ def _incomplete_note(record) -> str | None:
         return None
     if here == failure.get("url"):
         return (
-            f'the last navigation to this URL did not complete '
-            f'({failure["why"]}), so this document may be PARTIAL: what '
-            f'arrived before the transfer stopped is what is here, and the '
-            f'counts below are counts of that, not of the page the site '
-            f'would have served. Navigate again to try for a whole document')
+            f'this read is incomplete: whatever the site had not sent when '
+            f'the transfer stopped was left out ({failure["why"]}). The '
+            f'counts below are counts of what arrived, not of the page the '
+            f'site would have served. Continue with '
+            f'navigate(page={record.handle!r}, url={failure["url"]!r})')
     # THE NAVIGATION NEVER LANDED. The tab is on `about:blank`, or on the
     # browser's own error interstitial, or wherever it was before. An empty
     # read here is not "the page is empty" (chaos C-09), and the mark is
@@ -2881,15 +2876,15 @@ def _write_mismatch(asked: str, got, cleared: bool) -> str | None:
     if cleared:
         if got == asked:
             return None
-        return (f"the field holds {got!r} after this write, not the "
-                f"{len(asked)} character(s) this call was asked to set. "
-                f"Another call wrote to the same field, or the page rewrote "
-                f"it. Nothing here is evidence that this value survived; "
-                f"re-read the page before acting on it")
+        return (f"the field reads back {got!r} where {asked!r} was typed. "
+                f"The page may have reformatted or rejected part of the "
+                f"input, or another call wrote to the same field; verify "
+                f"before relying on it")
     if asked and asked not in got:
-        return (f'the field holds {got!r} after this write and the typed '
-                f'text is not in it. Another call wrote to the same field, '
-                f'or the page rewrote it')
+        return (f'the field reads back {got!r} and the typed text is not '
+                f'in it. The page may have reformatted or rejected part of '
+                f'the input, or another call wrote to the same field; verify '
+                f'before relying on it')
     return None
 
 
@@ -2987,9 +2982,11 @@ async def fill_form(
     category. Every ref resolves before anything executes, and each target
     is re-checked immediately before its own turn, because typing into one
     field routinely re-renders its siblings. A failure stops the batch:
-    completed items stay completed, the rest report not_attempted. Each
-    entry is one target plus its value: fields=[{"ref": "e12", "value":
-    "hello"}], any selector in place of "ref", true/false for a checkbox.
+    completed items stay completed, the rest report not_attempted. Each field
+    item is {ref: "eN", value: "the text to type"}; the key is `value`.
+    (`text` belongs to location objects, where it is a selector, not a value;
+    that collision is why the key here is `value`.) Any selector works in
+    place of "ref", and a checkbox takes true or false.
     """
     sess, record = MANAGER.locate(page)
     _audit.annotate(session=sess.session_id, page=record.handle,
@@ -3601,11 +3598,12 @@ async def scroll(
         "virtualized": metrics["virtual"],
         "at_end": at_end,
         **({"growing": (
-            f'the document grew by {growth:,}px in the '
-            f'{_SCROLL_SETTLE_S:g}s after this scroll landed, so there is no '
-            f'end to be at: the page loads more as you reach the bottom. '
-            f'Scroll again for the next chunk, and stop on your own '
-            f'condition rather than on at_end')} if growth else {}),
+            f'the document grew while scrolling ({growth:,}px in the '
+            f'{_SCROLL_SETTLE_S:g}s after this scroll landed). at_end '
+            f'reflects the height at the moment it was measured, not a final '
+            f'height: the page loads more as you reach the bottom. Scroll '
+            f'again for the next chunk, and stop on your own condition '
+            f'rather than on at_end')} if growth else {}),
     }
 
 
@@ -3894,12 +3892,12 @@ async def _resolve_for_wait(sess, record, location: dict, cond: str,
         return None
     elapsed_ms = int((time.monotonic() - started) * 1000)
     raise Timeout(
-        f"waiting for an element to become visible did not resolve within "
-        f"{timeout_ms} ms ({elapsed_ms} ms elapsed): nothing ever matched "
-        f"that location, so there was never an element to watch. The target "
-        f"may be inside a cross-origin iframe or a closed shadow root, which "
-        f"no wait reaches, or the page may never render it. Resolution "
-        f"detail: {str(last)[:200] if last else 'no match'}")
+        f"waited {elapsed_ms / 1000:.1f}s for that location to become "
+        f"visible; it never did. Last observed state: nothing ever matched "
+        f"it, so there was never an element to watch. The target may be "
+        f"inside a cross-origin iframe or a closed shadow root, which no "
+        f"wait reaches, or the page may never render it. Resolution detail: "
+        f"{str(last)[:200] if last else 'no match'}")
 
 
 async def _wait_precheck(p, cond: str, value: str | None,
@@ -4211,10 +4209,9 @@ async def _search_one(sess, record, *, query: str, role: str | None,
 
 # ------------------------------------------------------- the batch (#2)
 #
-# ALL PROSE BELOW IS PLACEHOLDER COPY. Every refusal and every docstring
-# sentence carries the FACTS the message must convey and none of the voice;
-# the final English is written by the main thread from the FACTS TO CONVEY
-# list in the build report, never by this module's author.
+# The refusals and the docstring below are the ratified copy (2026-09-09
+# fill wave). Product copy is written by the main thread or the author,
+# never by this module's author.
 
 #: The step vocabulary. CLOSED for the reason `workflows.REPLAYABLE` is
 #: closed: an open step vocabulary is an arbitrary-execution tool wearing a
@@ -4306,20 +4303,23 @@ def _batch_normalize(steps, *, timeout_ms: int, max_total_ms: int,
     for i, raw in enumerate(steps):
         if not isinstance(raw, dict):
             raise BadParams(_batch_step_error(
-                i, f"a step is an object, not a {type(raw).__name__}. The "
-                   f"step kinds are {list(_BATCH_STEP_KINDS)}."))
+                i, f"a step is one of five kinds "
+                   f"({', '.join(_BATCH_STEP_KINDS)}), and an acting step "
+                   f"carries one of four verbs. This step is a "
+                   f"{type(raw).__name__}."))
         present = [k for k in _BATCH_STEP_KINDS if k in raw]
         if "fields" in raw:
             raise BadParams(_batch_step_error(
-                i, "there is no fill_form step. fill_form is already the "
-                   "batch for a form, and nesting a batch inside a batch "
-                   "doubles every reporting and gate question for no new "
-                   "capability. Call fill_form directly, or give this batch "
-                   "one `find` or `location` step per field."))
+                i, "this step carries a `fields` key, which belongs to "
+                   "fill_form. Nesting a form fill inside a batch buys "
+                   "nothing: fill_form already re-checks every field at its "
+                   "own turn. Use fill_form for the form and batch for the "
+                   "sequence around it."))
         if len(present) != 1:
             raise BadParams(_batch_step_error(
-                i, f"a step carries exactly one of {list(_BATCH_STEP_KINDS)} "
-                   f"as its discriminating key; this one carries "
+                i, f"a step is one of five kinds "
+                   f"({', '.join(_BATCH_STEP_KINDS)}), and an acting step "
+                   f"carries one of four verbs. This step is "
                    f"{present or 'none of them'} "
                    f"(keys seen: {sorted(raw)})."))
         kind = present[0]
@@ -4390,12 +4390,10 @@ def _batch_normalize(steps, *, timeout_ms: int, max_total_ms: int,
             ref = (step["spec"] or {}).get("ref")
             if ref:
                 raise ValidationFailed(
-                    f"step {step['index']} acts on ref {ref!r} and step "
-                    f"{first_nav} navigates; refs minted before a navigation "
-                    f"do not survive it, so this batch cannot work as "
-                    f"written. Nothing was executed. Give the later step a "
-                    f"`find` instead, so it resolves its target after the "
-                    f"navigation.")
+                    f"step {step['index']} uses ref {ref!r}, minted before "
+                    f"step {first_nav} navigated, and refs do not survive a "
+                    f"navigation. Nothing was executed. Find the element "
+                    f"again after the page changes.")
     return out
 
 
@@ -4424,12 +4422,15 @@ def _batch_normalize_action(step: dict, raw: dict) -> None:
     allowed = _FIND_STEP_KEYS if kind == "find" else _LOCATION_STEP_KEYS
     extra = sorted(set(raw) - allowed - {kind})
     if extra:
-        route = ("; a location step reaches the split tools directly and "
-                 "takes every argument they do, so pass a ref or selector "
-                 "as {\"location\": ...} instead" if kind == "find" else "")
+        if kind == "find":
+            named = extra[0] if len(extra) == 1 else extra
+            raise BadParams(_batch_step_error(
+                i, f"{named!r} is a location form and belongs in a "
+                   f"`location` step; a `find` step searches by query. A "
+                   f"find step takes {sorted(allowed)}."))
         raise BadParams(_batch_step_error(
             i, f"a {kind} step does not take {extra}. It takes "
-               f"{sorted(allowed)}{route}."))
+               f"{sorted(allowed)}."))
     if kind == "find":
         if not isinstance(spec, dict):
             raise BadParams(_batch_step_error(
@@ -4479,9 +4480,8 @@ async def _assert_now(page: str, spec: dict, index: int) -> dict:
             f"assert on {cond!r}"
             + (f" ({spec.get('value')!r})" if spec.get("value") is not None
                else "")
-            + " does not hold right now. An assert checks once and does not "
-              "wait, so this is a state mismatch rather than a timeout; use "
-              "a wait step if the condition is expected to arrive later.")
+            + " does not hold. An assert checks once where a wait waits; if "
+              "the state needed time to arrive, use a wait step.")
     return {"asserted": cond, "value": spec.get("value"), "held": True,
             "url": record.page.url}
 
@@ -4574,7 +4574,7 @@ async def _batch_preflight(sess, record, steps: list[dict],
                     kind=step["spec"].get("kind", "auto"),
                     within=step["spec"].get("within"), action=step["action"],
                     probe=probe,
-                    suffix=(" Nothing in this batch was executed."
+                    suffix=(" Nothing in the batch was executed."
                             if first else ""))
             except (AmbiguousLocation, TargetNotFound) as exc:
                 # STEP 0 KEEPS ITS OWN CODE, because its target is the one
@@ -4587,7 +4587,7 @@ async def _batch_preflight(sess, record, steps: list[dict],
                 raise ValidationFailed(
                     f"preflight='strict' resolves every target before the "
                     f"batch starts and step {i}'s does not resolve on the "
-                    f"page as it is now. Nothing in this batch was executed. "
+                    f"page as it is now. Nothing in the batch was executed. "
                     f"A later step's target often does not exist until an "
                     f"earlier step creates it, which is what "
                     f"preflight='advisory' (the default) reports instead of "
@@ -4608,7 +4608,7 @@ async def _batch_preflight(sess, record, steps: list[dict],
             except AmbiguousLocation as exc:
                 if first or mode == "strict":
                     raise AmbiguousLocation(
-                        str(exc) + " Nothing in this batch was executed.") \
+                        str(exc) + " Nothing in the batch was executed.") \
                         from exc
                 line.update(verdict="ambiguous-now", detail=str(exc)[:160])
             except (TargetNotFound, StaleAnchor) as exc:
@@ -4616,7 +4616,7 @@ async def _batch_preflight(sess, record, steps: list[dict],
                     raise ValidationFailed(
                         f"step {i}'s target does not resolve on the page as "
                         f"it is now and preflight={mode!r} refuses on any "
-                        f"step. Nothing in this batch was executed. "
+                        f"step. Nothing in the batch was executed. "
                         f"{str(exc)[:200]}") from exc
                 line.update(verdict="not-found-now", detail=str(exc)[:160])
         if line["verdict"] in ("ambiguous-now", "not-found-now") \
@@ -4624,7 +4624,7 @@ async def _batch_preflight(sess, record, steps: list[dict],
             raise ValidationFailed(
                 f"preflight='strict' refuses when any step's target is not "
                 f"uniquely resolvable right now, and step {i} is "
-                f"{line['verdict']}. Nothing in this batch was executed. "
+                f"{line['verdict']}. Nothing in the batch was executed. "
                 f"{line.get('detail') or ''}")
         report.append(line)
     return {
@@ -4642,26 +4642,18 @@ async def batch(
     timeout_ms: int = 15000,
     max_total_ms: int = 180000,
 ) -> dict:
-    """Run several actions on one page in a single call, each one resolving
-    its own target at its own turn. This is the general form of what
-    find_and_act did for one action and fill_form did for one form: a
-    four-step comment flow that cost sixteen calls costs one. A step is
-    {"find": {"query": "Add a comment"}, "action": "click"} to search and
-    act, {"location":
-    {"ref": "e12"}, "action": "type", "text": "hi"} to act on a ref you
-    already hold, {"wait": {...}} or {"assert": {...}} for a checkpoint, or
-    {"navigate": {"url": ...}}. The selector lives inside find or location
-    and the typed value sits at the step's top level as text, so the two can
-    never collide. Unlike fill_form, a batch cannot resolve every target
-    before it starts, because the button a batch exists to click often does
-    not exist until an earlier step creates it: what CAN be checked upfront
-    is checked, and only the first step's ambiguity or absence refuses the
-    whole batch. A failure stops the batch and returns a report rather than
-    raising: completed steps stay completed (browser actions do not roll
-    back), the failing step carries its own refusal, and the rest report
-    not_attempted. Each step charges its own budget through the real tool it
-    calls, so a batch of six clicks spends six actions: batching saves calls
-    and tokens, never budget.
+    """Runs several actions on one page in one call. Five step kinds: find
+    (search and act), location (act on a ref you hold), wait, assert,
+    navigate. Each step resolves its own target at its own turn. Unlike
+    fill_form, nothing can be pre-resolved, because the control a later step
+    clicks often does not exist until an earlier step creates it; only the
+    first step's ambiguity or absence refuses the whole batch. The selector
+    lives inside find or location and the typed value sits at the step's top
+    level, so they cannot collide. A failure stops the batch and returns a
+    report: completed steps stay completed, the failing step carries its
+    refusal, the rest read not_attempted. Each step charges its own budget, so
+    six clicks spend six actions: the fusion saves calls and tokens, never
+    budget.
     """
     normalized = _batch_normalize(steps, timeout_ms=timeout_ms,
                                   max_total_ms=max_total_ms,
@@ -4679,10 +4671,10 @@ async def batch(
         entry = sess.element_map.entries.get(ref) if ref else None
         if ref and (entry is None or entry.handle != record.handle):
             raise TargetNotFound(
-                f"step {step['index']} acts on ref {ref!r}, which is not on "
-                f"{record.handle}: it was minted on another page, or the "
-                f"page it was minted on has since navigated. Nothing was "
-                f"executed. Read this page and use the refs it returns.")
+                f"the ref {ref!r} in step {step['index']} was minted on "
+                f"{entry.handle if entry else 'another page'}, not on "
+                f"{record.handle}. Nothing was executed. Read this page and "
+                f"use the refs it returns.")
 
     started = time.monotonic()
     preflight_report = await _batch_preflight(sess, record, normalized, mode)
@@ -4857,9 +4849,11 @@ async def _batch_run(page: str, steps: list[dict], started: float,
 
 
 def _batch_timeout_note(max_total_ms: int, index: int) -> str:
-    return (f"the whole-batch bound of {max_total_ms} ms expired at step "
-            f"{index}, which is max_total_ms rather than this step's own "
-            f"timeout_ms; raising the step's timeout would not help.")
+    return (f"the batch passed max_total_ms at step {index}, against a "
+            f"ceiling of {max_total_ms} ms. That is the whole-batch bound "
+            f"rather than this step's own timeout_ms, so raising the step's "
+            f"timeout would not help. Completed steps stand; the report "
+            f"shows where the time went.")
 
 
 async def _batch_step_call(page: str, step: dict, left_ms: int):
@@ -4878,7 +4872,7 @@ def _batch_code(exc: Exception) -> str:
 
 # --------------------------------------------------------- do (#6)
 #
-# ALL PROSE BELOW IS PLACEHOLDER COPY, as in the batch above.
+# The refusals below are the ratified copy (2026-09-09 fill wave).
 #
 # THE BOUNDARY, because without it this tool is a wrapper with a
 # hallucination surface. A calling model can turn a goal into a label, so
@@ -4969,11 +4963,8 @@ def _do_classify(intent: str, text: str | None) -> dict:
     raw = (intent or "").strip()
     if not raw:
         raise BadParams(
-            "do needs a goal to resolve, for example intent='submit the "
-            "login form' or intent='go to the next page'. It works out which "
-            "element performs that goal and acts on it. When you already "
-            "know the label of the control you want, find_and_act is the "
-            "tool: it searches for what you name and acts on it.")
+            "the intent is empty. For a control you can already name, "
+            "find_and_act is the direct route.")
     low = f" {raw.lower()} "
     words = [w for w in _do_words(raw) if w not in _DO_FILLER]
     # THE VERB IS THE INTENT'S OWN FIRST WORD, not any verb-shaped token
@@ -5003,36 +4994,30 @@ def _do_classify(intent: str, text: str | None) -> dict:
         if any(w in _DO_VERBS and not (keys and w == keys.lower())
                for w in rest):
             raise BadParams(
-                f"do performs ONE goal per call and {intent!r} carries more "
-                f"than one. Issue them in sequence, one call each, so every "
-                f"one of them resolves against the page as it is by then. "
-                f"Nothing was done.")
+                f"one goal per call: {intent!r} is two. Issue them in "
+                f"sequence; each returns its own verified outcome. Nothing "
+                f"was done.")
     families = [family] if family else []
     if not families:
         raise BadParams(
-            f"do reads the goal's verb from the START of the intent and "
-            f"{words[0]!r} is not one it knows, so nothing was done and it "
-            f"did not default to clicking. The verb families are: click "
-            f"(submit, send, save, confirm, click, tap, choose, select, "
-            f"accept, dismiss, close, log in, next page), type (type, fill, "
-            f"write, enter), press (press or hit, plus a key name from "
-            f"{list(_DO_KEYS)}), and scroll_to (scroll, show, reveal). "
-            f"Nothing was done.")
+            f"the intent's first word, {words[0]!r}, is not one of the four "
+            f"verb families: click (for example 'submit the login form'), "
+            f"type (for example "
+            f"'type into the search box'), press (for example 'press Enter', "
+            f"with a key name from {list(_DO_KEYS)}), and scroll_to (for "
+            f"example 'scroll to the footer'). Nothing was done.")
     verb = families[0]
     if verb == "type" and text is None:
         raise BadParams(
-            "do(intent=<a typing goal>) needs the value in `text`. Nothing "
-            "is ever read out of the intent itself, including a quoted "
-            "string: a value the tool invented from prose is a value you "
-            "never approved. Pass real newline characters for a multi-line "
-            "value; a single-line field refuses one rather than pressing "
-            "Enter behind your back.")
+            "a typing goal takes its value from `text` and never out of the "
+            "intent, including a quoted string inside it. Nothing was typed. "
+            "Pass real newline characters for a multi-line value; a "
+            "single-line field refuses one rather than pressing Enter behind "
+            "your back.")
     if verb == "press" and not keys:
         raise BadParams(
-            f"a press-shaped goal names the key it presses, and do takes no "
-            f"`keys` argument, so the key has to come from the intent. The "
-            f"keys it recognizes are {list(_DO_KEYS)}; for a chord or any "
-            f"other key, call press_keys(keys='Control+A') directly.")
+            f"no recognized key in this goal. The key set is closed: "
+            f"{list(_DO_KEYS)}. press_keys takes them directly.")
     return {"verb": verb, "keys": keys, "goal": _do_goal(low, verb)}
 
 
@@ -5288,17 +5273,17 @@ async def _do_resolve(sess, record, *, intent: str, verb: str,
                 # candidates apart needs next. Its sibling TargetNotFound
                 # two lines down has named it all along.
                 ambiguous = AmbiguousLocation(
-                    f"{len(candidates)} elements on this page answer to "
-                    f"{intent!r}, and no tool acts on first match. What was "
-                    f"looked for: {looked}. Candidates:\n{listed}\n"
-                    f"Nothing was done. Act on one of those refs directly "
+                    f"{len(candidates)} elements answer this goal. What was "
+                    f"looked for: {looked}. Candidates, each with an actable "
+                    f"ref:\n{listed}\n"
+                    f"Nothing was done. Act on a ref directly "
                     f"(click(page={record.handle!r}, "
-                    f"location={{\"ref\": \"...\"}})), narrow the goal "
+                    f"location={{\"ref\": \"...\"}})), or narrow the goal "
                     f"with within={{'form': 'fN'}} or "
-                    f"within={{'region': 'rN'}}, list what the page has "
-                    f"with find_elements(page={record.handle!r}, "
-                    f"query=...), or reach one kind of element with "
-                    f"find_and_act(role=...), which do does not take.")
+                    f"within={{'region': 'rN'}}. find_elements(page="
+                    f"{record.handle!r}, query=...) lists what the page has, "
+                    f"and find_and_act(role=...) reaches one kind of "
+                    f"element, which do does not take.")
                 ambiguous.recovery = {
                     "matched": len(candidates),
                     "acted": None,
@@ -5315,17 +5300,17 @@ async def _do_resolve(sess, record, *, intent: str, verb: str,
                 }
                 raise ambiguous
             raise TargetNotFound(
-                f"the goal {intent!r} matched the {goal!r} shape and the "
-                f"page does not carry its mechanism. What was looked for: "
-                f"{looked}. {scanned} interactive element(s) were examined"
+                f"the goal matched {goal!r}, but none of the {scanned} "
+                f"elements examined carries the mechanism looked for "
+                f"({looked}). They were examined"
                 + (f" inside {scope_kind} {scope_ref}" if scope_ref else
                    " on the whole page")
                 + (f"; the page reports {data.get('affordance_total')} in "
                    f"total, so some were not returned by this read"
                    if (data.get("affordance_total") or 0) > scanned else "")
                 + ". Nothing was done. find_elements(page="
-                f"{record.handle!r}, query=...) lists what the page actually "
-                f"has.")
+                f"{record.handle!r}, query=...) shows what the page does "
+                f"have.")
     # STAGE 3. The existing describe selector, reused rather than rewritten.
     if within:
         # A SCOPE THAT COULD NOT BE HONORED IS A REFUSAL, never a silent
@@ -5406,30 +5391,17 @@ async def do(
     within: dict | None = None,
     timeout_ms: int = 15000,
 ) -> dict:
-    """Act on a GOAL rather than on a label: do(intent='submit the login
-    form') works out which element performs that goal and acts on it, in one
-    call, resolving at execution time so nothing acts on a ref that has been
-    sitting in a transcript. The difference from find_and_act is the
-    difference between naming a control and naming an outcome, and it
-    matters most where HTML and a reader disagree. Submitting a form is not
-    a search for the word Submit: the control may be an input of type image,
-    which is a submit button with a picture on it, or a button with no type
-    attribute at all, which the HTML spec makes a submit button inside a
-    form, and a label sitting next to the button forwards its activation to
-    the button rather than doing anything itself. This asks the document
-    which element the browser would activate instead of guessing from the
-    words on the page. The verb comes from the intent (submit, click,
-    choose, type, press a named key, scroll to); a typing goal takes its
-    value in `text` and never from the intent itself. One goal per call: an
-    intent carrying two of them refuses rather than deciding what order you
-    meant. When more than one element answers the goal, this refuses and
-    lists every candidate with a ref you can act on, because two submit
-    buttons on a page is not a thing to pick between. It returns the same
-    verified outcome the direct tool returns, plus a resolution block that
-    names which stage settled the goal, the mechanism it asked for, and the
-    element it settled on, so you can read back why this element and not
-    another. Every gate the direct tools fire, this fires, because it hands
-    off to them.
+    """Acts on a goal rather than a label; the difference from find_and_act
+    is the difference between naming a control and naming an outcome.
+    Submitting a form is not a search for the word Submit: the control may be
+    an input type=image, or a button with no type attribute, or a label that
+    forwards its activation to the real button. The verb comes from the
+    intent; a typing goal takes its value from `text` and never from the
+    intent, including a quoted string. One goal per call; several elements
+    answering it is a refusal listing every candidate. It returns the same
+    verified outcome the direct tool returns, plus a resolution block naming
+    which stage settled the goal and the element it settled on. Every gate
+    the direct tools fire, this fires.
     """
     plan = _do_classify(intent, text)
     sess, record = MANAGER.locate(page)
@@ -5641,21 +5613,20 @@ def _tab_list(sess) -> list[dict]:
             # hiding which jar a page belongs to would be a lie.
             row["context"] = getattr(record, "context", "c1")
         if browser_dead:
-            row["dead"] = ("the browser this session owns has exited; every "
-                           "page in it is gone")
+            row["dead"] = ("the browser process exited; every page in it is "
+                           "gone")
         elif record.crashed:
             row["dead"] = record.crashed
         out.append(row)
     return out
 
 
-#: INTEGRATION FLAG (2026-09-08, the seven-branch merge). Four waves each
-#: added a clause to this ONE description and the union blew the hard
-#: 2,048-character client-truncation ceiling. The transfer clause was
-#: relocated, not rewritten: every fact it carried is already published
-#: verbatim in get_workflows(task="session-transfer"), so the description
-#: now points at the topic. The description is a MERGED PLACEHOLDER and
-#: needs the author's pass as one string, not four.
+#: WRITTEN AS ONE STRING, not as four waves' clauses stacked (2026-09-08).
+#: Four waves each added a clause to this ONE description and the union blew
+#: the hard 2,048-character client-truncation ceiling, so the per-action
+#: detail was moved to `get_workflows` and the description now names the
+#: eleven actions the dispatch table below actually holds. Anything added
+#: here has to be paid for by something leaving.
 async def manage_session(
     action: str = "status",
     session: str | None = None,
@@ -5675,33 +5646,22 @@ async def manage_session(
     op: str | None = None,
     path: str | None = None,
 ) -> dict:
-    """Open, close, or inspect a browser session, report the current lane's
-    capabilities, read the budget counters, or hand the headed window to the
-    human for a login, an MFA prompt, or a bot wall (a handoff on a headless
-    session upgrades it to a headed window automatically). `auth_state` on
-    open loads a saved login file in the same call (gated, storage pack); on
-    close, 'save' or a path writes the session's login state before closing,
-    and nothing is ever auto-saved. On open, `device` (a Playwright preset
-    such as 'iPhone 15'), `viewport` ('390x844'), `locale` ('ko-KR'), and
-    `timezone` ('Asia/Seoul') set what the pages in this session believe
-    about their environment; a context takes those at construction, so they
-    are set here rather than changed later, and omitting them leaves every
-    default alone. The capabilities action states what this lane supports,
-    degrades, and cannot do, and status reports any emulation in force. The
-    status action also names the browsers installed on this machine and
-    which lane suits which job, as steering: nothing switches a lane on its
-    own. 'export_handle' and 'import_handle' move a live session between
-    conversations; get_workflows(task='session-transfer') states the limits
-    and what is lost. `contexts=2` on open gives one session two independent
-    cookie jars, so two logins to the same site can run side by side; each
-    jar is its own browser process on its own profile, the action budget is
-    shared across them, and any call that acts on one jar takes
-    `context='c1'` and refuses rather than guessing when there is more than
-    one. Closing with `context=...` closes that jar alone. The lanes action
-    reads the learned site database (which browser has actually read a given
-    host on this machine): `op='show'` with `site=`, `op='export'` or
-    'export_all' to a `path=`, `op='import'` (a dry run) and 'import_apply',
-    and `op='forget'` with `site=` or `site='all'`. Tool availability    reflects the packs this server was started with.
+    """One session is one browser. `open` starts one on a chosen lane (the
+    first navigate of a conversation can open one for you, and says so when
+    it does); `close` ends the browser; with auth state saved, the login
+    survives; the session never does. `status` reads liveness first, so a
+    dead browser says so, then lists every session this server holds with its
+    pages, budgets, and what is shared: sessions belong to the server
+    process, not to a conversation. `capabilities`, `budget`, and
+    `reset_budgets` report and manage limits. `handoff` hands the window to
+    the human for a login, an MFA prompt, or a bot wall. `export_handle` and
+    `import_handle` move a live session between conversations on this
+    machine: see `get_workflows(task='session-transfer')`. `lanes` is the
+    local lane database (status, export, import, erase). `profiles` reloads
+    site profiles from disk. On open, `auth_state` loads a saved login,
+    `contexts=2` gives one session two independent cookie jars, and `device`,
+    `viewport`, `locale`, and `timezone` set what pages in this session
+    believe about their environment.
     """
     action = _common.enum_arg(
         action, ("open", "close", "status", "capabilities", "budget",
@@ -6048,62 +6008,59 @@ async def manage_session(
         #    different answers because they have different recoveries.
         if not _handles.valid_shape(token):
             raise BadParams(
-                f"that is not a KS4Web session handle token. A token is "
-                f"minted by manage_session(action='export_handle') and is "
-                f"the prefix {_handles.TOKEN_PREFIX!r} followed by "
-                f"{_handles.TOKEN_BODY_LEN} url-safe characters. Nothing "
-                f"was changed.")
+                f"that is not a transfer token. A token looks like "
+                f"{_handles.TOKEN_PREFIX}... ({_handles.TOKEN_BODY_LEN} "
+                f"url-safe characters after the prefix), comes from "
+                f"export_handle in the conversation that holds the session, "
+                f"and works once. Nothing changed.")
         _handles.STORE.prune()
         record = _handles.STORE.find(token)
         if record is None:
             raise TargetNotFound(
-                "no handle token like that was minted by this KS4Web, or it "
-                "was minted long enough ago that its record has been "
-                "discarded. Export again from the conversation that holds "
-                "the session with manage_session(action='export_handle'). "
-                "Nothing was changed.")
+                "no record of this token. Tokens die with the server run "
+                "that minted them, so a token from an earlier server no "
+                "longer names anything. Nothing changed. Export again from "
+                "the conversation that holds the session with "
+                "manage_session(action='export_handle').")
         # 2. CONSUMED, then EXPIRED. Both are lookup misses with a specific
         #    cause, which is why consumed and expired records are kept for
         #    a grace window instead of being deleted at once.
         if record.get("consumed_at"):
             raise TargetNotFound(
-                f"that token was already used at "
-                f"{record.get('consumed', 'an earlier time')}. A handle "
-                f"token works once. Export again from either conversation "
-                f"to get a fresh one. Nothing was changed.")
+                f"this token was redeemed at "
+                f"{record.get('consumed', 'an earlier time')}. A token works "
+                f"exactly once; ask the exporting conversation for a fresh "
+                f"one. Nothing changed.")
         if _handles.time.time() > _handles.expiry_of(record):
             raise TargetNotFound(
-                f"that token expired at {record['expires']}. Export again "
-                f"with manage_session(action='export_handle') from the "
-                f"conversation that holds the session. Nothing was changed.")
+                f"this token expired at {record['expires']}. Ask the "
+                f"exporting conversation for a fresh one. Nothing changed.")
         # 3. PROCESS IDENTITY. The one refusal that has to be specific:
         #    "unknown token" here would hide the real answer, which is that
         #    the browser died with the server that owned it.
         if record.get("minted_by_pid") != _handles.os.getpid():
             raise Conflict(
-                f"that token was minted by KS4Web process "
-                f"{record.get('minted_by_pid')} and this is process "
-                f"{_handles.os.getpid()}. A session handle transfer works "
-                f"only inside one running server. The browser that session "
-                f"held was closed when that process ended, because KS4Web "
-                f"ties the browser's life to its own rather than leaving "
-                f"orphaned browser processes behind. Open a fresh session "
-                f"with manage_session(action='open').")
+                f"this token was minted by server process "
+                f"{record.get('minted_by_pid')}, and this is "
+                f"{_handles.os.getpid()}. A transfer works only inside one "
+                f"running KS4Web: the browser closes when its server exits, "
+                f"which is deliberate hygiene rather than a fault. Open a "
+                f"fresh session here instead, with "
+                f"manage_session(action='open').")
         sid = record["session"]
         # 4. LIVENESS, and the tombstone is what makes the answer specific.
         if sid not in MANAGER.sessions:
             stone = MANAGER.tombstone(sid)
             if stone:
                 raise Conflict(
-                    f"session {sid} is no longer open."
+                    f"the session this token names is gone."
                     + _session.tombstone_line(stone)
                     + " Open a fresh session with "
                       "manage_session(action='open').")
             raise Conflict(
-                f"session {sid} is not open in this process and KS4Web has "
-                f"no record of how it ended, which is itself the answer "
-                f"worth having: it did not end by any route that leaves a "
-                f"record. Open a fresh session with "
+                f"the session this token names ({sid}) is gone, and there is "
+                f"no record of how it ended, and that is informative: this "
+                f"server did not close it. Open a fresh session with "
                 f"manage_session(action='open').")
         sess = MANAGER.sessions[sid]
         # 5. HEALTH, QUOTED. The status surface owns the liveness verdict
@@ -6246,7 +6203,8 @@ async def manage_session(
     raise BadParams(
         f"unknown manage_session action {action!r}: the actions are 'open', "
         f"'close', 'status', 'capabilities', 'budget', 'reset_budgets', "
-        f"'handoff', 'export_handle', 'import_handle', and 'lanes'.")
+        f"'handoff', 'export_handle', 'import_handle', 'lanes', and "
+        f"'profiles'.")
 
 
 def _live_refs(sess, handle: str) -> int:
@@ -6575,9 +6533,10 @@ def _session_status(sess) -> dict:
         dead = [c["context"] for c in verdict["contexts"]
                 if c["health"] == "dead"]
         row["health"] = (
-            f"context(s) {dead} of this session have lost their browser "
-            f"while the rest are still working. Pages in a dead context "
-            f"are gone with it; close it with manage_session("
+            f"{len(sess.contexts) - len(dead)} of {len(sess.contexts)} "
+            f"contexts responding. Context(s) {dead} have lost their "
+            f"browser while the rest are still working, and pages in a dead "
+            f"context are gone with it; close it with manage_session("
             f"action='close', session={sess.session_id!r}, context=...) "
             f"and open another if you still need it.")
     if dead_pages:
@@ -6669,12 +6628,13 @@ def _close_auth_line(state: dict):
     earlier = state.get("saved_earlier")
     cookies = state.get("cookies", 0)
     if earlier:
-        return (f"this context held {cookies} cookie(s), and its auth state "
-                f"was saved earlier this session to {earlier}. Anything "
-                f"that changed after that save is not in the file; closing "
-                f"with auth_state='save' writes a fresh one. Reuse it with "
-                f"manage_session(action='open', auth_state=...) or "
-                f"load_auth_state.")
+        return (f"this session's login state was saved earlier to {earlier}. "
+                f"The browser is now closed; the login survives in that file "
+                f"and loads next time with manage_session(action='open', "
+                f"auth_state=...). This context held {cookies} cookie(s) at "
+                f"close, and anything that changed after that save is not in "
+                f"the file; closing with auth_state='save' writes a fresh "
+                f"one.")
     if cookies:
         # The OFFER, after the fact and never silent in either direction.
         return (f"this context held {cookies} cookie(s), which is the shape "
@@ -6824,17 +6784,14 @@ def _audit_page_data(got: dict) -> dict:
 #: here rather than writing a short version keeps the two from drifting into
 #: two different accounts of the same rule.
 SHARED_STATE_RULE = (
-    "sessions belong to this KS4Web process, not to a conversation.")
+    "sessions belong to this server process, not to a conversation.")
 SHARED_STATE_DETAIL = (
-    "Every session in manage_session(action='status') is reachable from "
-    "any conversation talking to this server, including ones another "
-    "conversation opened, and a call that names no session uses the single "
-    "open one whatever opened it. The open_pages of each session are what "
-    "it is actually showing. To work in isolation, open your own with "
-    "manage_session(action='open') and pass its handle explicitly; to pick "
-    "up an existing one deliberately, use "
-    "manage_session(action='export_handle') in the conversation that holds "
-    "it.")
+    "Every session listed here is reachable from any conversation talking "
+    "to this server, including ones another conversation opened, and a call "
+    "that names no session uses the single open one, whoever opened it. To "
+    "keep work separate, open your own session and pass its handle; to take "
+    "over another conversation's session deliberately, use a transfer "
+    "handle.")
 
 #: The idle bounds' explanation, moved out of every status call. The CLAIM
 #: it explains (`automatic_action: none`) stayed behind.
@@ -6890,28 +6847,20 @@ _TOPIC_MENU: dict[str, str] = {
     "packs": ("what each capability pack contains, with the exact launch "
               "flag that loads it"),
     "profiles": "what a site profile is and where it lives",
-    "session-transfer": ("[COPY PENDING: workflows.menu.session-transfer] "
-                         "FACTS: how to hand a running session to another "
-                         "conversation"),
-    "dialogs": ("[COPY PENDING: workflows.menu.dialogs] FACTS: native "
-                "alert, confirm and prompt dialogs, and arming an answer "
-                "before the click that raises one"),
-    "accessibility": ("[COPY PENDING: workflows.menu.accessibility] FACTS: "
-                      "the axe-core audit, the pip extra and the pack it "
+    "session-transfer": ("how to hand a running session to another "
+                         "conversation, and what a transfer cannot do"),
+    "dialogs": ("native alert, confirm and prompt dialogs, and arming an "
+                "answer before the click that raises one"),
+    "accessibility": ("the axe-core audit, the pip extra and the pack it "
                       "needs, and what an automated audit does not catch"),
-    "packs-are-launch-time": ("[COPY PENDING: workflows.menu.packs-are-"
-                              "launch-time] FACTS: there is no runtime "
-                              "enable call; a missing capability needs a "
-                              "restart"),
-    "read-only": ("[COPY PENDING: workflows.menu.read-only] FACTS: the "
-                  "grade this server is running under and what unlocks "
-                  "acting at the next launch"),
-    "sessions": ("[COPY PENDING: workflows.menu.sessions] FACTS: the "
-                 "shared-process rule, the idle bounds, what the lane "
-                 "database holds, and why each lane is recommended"),
-    "setup": ("[COPY PENDING: workflows.menu.setup] FACTS: everything "
-              "decided before the server starts: acting, packs, optional "
-              "extras, consent, dependencies"),
+    "packs-are-launch-time": ("why there is no runtime enable call, and "
+                              "what a missing capability needs instead"),
+    "read-only": ("the grade this server is running under, and what "
+                  "unlocks acting at the next launch"),
+    "sessions": ("the shared-process rule, the idle bounds, what the lane "
+                 "database holds, and which lane suits which job"),
+    "setup": ("everything decided before the server starts: acting, packs, "
+              "optional extras, consent, dependencies"),
 }
 
 
@@ -7204,7 +7153,6 @@ async def get_workflows(topic: str | None = None) -> dict:
         # copy would be a second opinion that could disagree with the first.
         "setup": {
             "what_this_covers": (
-                "[COPY PENDING: workflows.setup.intro] FACTS TO CONVEY: "
                 "everything that is decided before the server starts and "
                 "cannot be changed by a tool call afterwards. Four things "
                 "live here: whether the server may act, which capability "
@@ -7212,8 +7160,7 @@ async def get_workflows(topic: str | None = None) -> dict:
                 "installed, and which consent scope is in force."),
             "acting": readonly.UNLOCK_TEACHING,
             "packs": (
-                "[COPY PENDING: workflows.setup.packs] FACTS TO CONVEY: a "
-                "pack is a group of tools chosen at launch. An unloaded "
+                "a pack is a group of tools chosen at launch. An unloaded "
                 "pack's tools are ABSENT from the tool list rather than "
                 "disabled, which is why no instruction on a page can talk "
                 "an assistant into using one. Three routes, and which one "
@@ -7222,7 +7169,6 @@ async def get_workflows(topic: str | None = None) -> dict:
                 "--packs flag, or the KS4WEB_MODE and KS4WEB_PACK_<NAME> "
                 "environment variables. All three are launch-time."),
             "optional_extras": (
-                "[COPY PENDING: workflows.setup.extras] FACTS TO CONVEY: "
                 "two features need a Python package this server does not "
                 "install by default. get_accessibility needs the "
                 "accessibility extra, which brings axe-core, and works "
@@ -7235,8 +7181,8 @@ async def get_workflows(topic: str | None = None) -> dict:
                 "what installing it would take on this install route."),
             "consent": _consent.PREAUTH_TEACHING,
             "dependencies": (
-                "[COPY PENDING: workflows.setup.deps] FACTS TO CONVEY: the "
-                "only thing this server installs by itself is a browser, "
+                "the only thing this server installs by itself is a "
+                "browser, "
                 "and only the bundled one, and only when a lane needs it. "
                 "It never fetches a script at run time: the accessibility "
                 "engine is read out of the installed package, so the server "

@@ -624,18 +624,18 @@ async def read_image_text(
     pad_px: int = 0,
     language: str | None = None,
 ) -> dict:
-    """Read the text that is painted into pixels rather than written into
-    the DOM: a canvas, an error rendered as an image, a screenshot embedded
-    in a page. Every string comes back labeled as a READING of pixels, with
-    its bounding box and word count, never as the page's own text, and it
-    never enters get_text or get_article. Runs entirely on this machine
-    through the OCR engine built into Windows: no network, no API key, no
-    separate install beyond the optional extra. Where no engine is
-    available the call refuses and names why rather than returning an empty
-    result that reads like a blank image. Password, one-time-code, and
-    payment fields are masked before the pixels are read, so a secret on
-    screen cannot be recognized into the transcript. If the DOM has the
-    text, get_text is cheaper and exact; this is for when it does not.
+    """Reads text out of pixels where the DOM has none: a canvas, an error
+    rendered as an image, an embedded screenshot. The engine is the one
+    already inside Windows, reached through the PyWinRT projection: no native
+    install, no language download, no subprocess, no network, no key. It
+    returns words and bounding boxes under a provenance block that calls
+    every string a reading of pixels; there is no confidence score, because
+    the engine does not produce one and none was invented. Where nothing can
+    read pixels the call refuses, naming which of four reasons applies and
+    the route that exists instead; it never returns an empty line list, which
+    would be the different and wrong claim that the pixels hold no text.
+    Secret fields are masked before the optical read. What it reads rides the
+    untrusted-content envelope and never enters get_text.
     """
     if target not in ("region", "element", "viewport"):
         raise BadParams(

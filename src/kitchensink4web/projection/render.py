@@ -716,12 +716,12 @@ class Renderer:
                        if x.get("painted") not in (True, False)]
             parts = []
             if painted:
-                parts.append(f'{len(painted)} with pixels drawn on them')
+                parts.append(f'{len(painted)} painted')
             if blank:
                 parts.append(f'{len(blank)} blank')
             if unknown:
-                parts.append(f'{len(unknown)} this build could not sample '
-                             f'(a tainted or non-2D canvas)')
+                parts.append(f'{len(unknown)} unsampled (a tainted or '
+                             f'non-2D canvas)')
             # THE THIRD STATE. The line used to be binary — canvases exist,
             # or none do — which left a reader with a count of unread pixels
             # and no way to tell whether anything on this machine could read
@@ -731,7 +731,7 @@ class Renderer:
             lines.append(
                 f'canvas-rendered regions with no text projection: '
                 f'{len(c["canvases"])}'
-                + (f' ({"; ".join(parts)})' if parts else '')
+                + (f' ({", ".join(parts)})' if parts else '')
                 + mute_clause
                 + '; pixels need the capture pack, chosen at launch (--packs capture); '
                 + _ocr.capability_line())
@@ -804,13 +804,11 @@ class Renderer:
                     + (f'#{lid["id"]}' if lid.get("id") else '')
                     + f', {lid["w"]}x{lid["h"]}): ')
             if lid.get("above"):
-                # PLACEHOLDER, not authored copy. FACTS TO CONVEY: the panel
-                # covers the viewport; `behind` of the listed controls are
-                # under it and a click on those refuses; `above` are painted
-                # over it and a click on those runs; the refs of the actable
-                # ones are named so a caller can act without a second read.
                 lines.append(
-                    head + '[COPY PENDING: completeness.viewport_lid.split] '
+                    head + "the content beneath it was read; the overlay's "
+                    'own controls are labeled separately. A click on a '
+                    'control behind it refuses, and a click on one painted '
+                    'over it runs: '
                     f'behind_it={lid["behind"]}, actable={lid["above"]}'
                     + (' (' + ", ".join(lid.get("above_refs") or []) + ')'
                        if lid.get("above_refs") else ''))

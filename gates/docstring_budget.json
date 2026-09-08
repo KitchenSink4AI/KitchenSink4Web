@@ -1,6 +1,6 @@
 {
   "ruling": "2026-09-05: token budgets are SOFT; these figures are published honestly rather than enforced as caps. Estimator: chars/4 (approximate; page-read numbers use tiktoken o200k_base and the two are never mixed).",
-  "lite_total_tokens": 3686,
+  "lite_total_tokens": 3381,
   "reference_targets": {
     "lite": 1500,
     "description": [
@@ -11,15 +11,15 @@
   },
   "tools": {
     "aggregate": {
-      "description_tokens": 220,
+      "description_tokens": 153,
       "schema_tokens": 153,
-      "total_tokens": 373,
+      "total_tokens": 306,
       "over_reference_caps": true
     },
     "batch": {
-      "description_tokens": 326,
+      "description_tokens": 196,
       "schema_tokens": 94,
-      "total_tokens": 420,
+      "total_tokens": 290,
       "over_reference_caps": true
     },
     "click": {
@@ -29,9 +29,9 @@
       "over_reference_caps": false
     },
     "do": {
-      "description_tokens": 406,
+      "description_tokens": 185,
       "schema_tokens": 98,
-      "total_tokens": 504,
+      "total_tokens": 283,
       "over_reference_caps": true
     },
     "download": {
@@ -77,15 +77,15 @@
       "over_reference_caps": true
     },
     "extract_page": {
-      "description_tokens": 263,
+      "description_tokens": 253,
       "schema_tokens": 109,
-      "total_tokens": 372,
+      "total_tokens": 362,
       "over_reference_caps": true
     },
     "fill_form": {
-      "description_tokens": 137,
+      "description_tokens": 170,
       "schema_tokens": 93,
-      "total_tokens": 230,
+      "total_tokens": 263,
       "over_reference_caps": true
     },
     "find_and_act": {
@@ -101,9 +101,9 @@
       "over_reference_caps": true
     },
     "get_accessibility": {
-      "description_tokens": 259,
+      "description_tokens": 258,
       "schema_tokens": 142,
-      "total_tokens": 401,
+      "total_tokens": 400,
       "over_reference_caps": true
     },
     "get_article": {
@@ -179,9 +179,9 @@
       "over_reference_caps": true
     },
     "list_console": {
-      "description_tokens": 138,
+      "description_tokens": 168,
       "schema_tokens": 60,
-      "total_tokens": 198,
+      "total_tokens": 228,
       "over_reference_caps": true
     },
     "list_requests": {
@@ -215,9 +215,9 @@
       "over_reference_caps": true
     },
     "manage_session": {
-      "description_tokens": 490,
+      "description_tokens": 269,
       "schema_tokens": 339,
-      "total_tokens": 829,
+      "total_tokens": 608,
       "over_reference_caps": true
     },
     "manage_storage": {
@@ -233,9 +233,9 @@
       "over_reference_caps": true
     },
     "monitor": {
-      "description_tokens": 230,
+      "description_tokens": 146,
       "schema_tokens": 181,
-      "total_tokens": 411,
+      "total_tokens": 327,
       "over_reference_caps": true
     },
     "navigate": {
@@ -251,9 +251,9 @@
       "over_reference_caps": false
     },
     "read_image_text": {
-      "description_tokens": 206,
+      "description_tokens": 208,
       "schema_tokens": 127,
-      "total_tokens": 333,
+      "total_tokens": 335,
       "over_reference_caps": true
     },
     "read_pages": {
@@ -263,9 +263,9 @@
       "over_reference_caps": true
     },
     "run_workflow": {
-      "description_tokens": 338,
+      "description_tokens": 301,
       "schema_tokens": 106,
-      "total_tokens": 444,
+      "total_tokens": 407,
       "over_reference_caps": true
     },
     "save_auth_state": {
@@ -281,9 +281,9 @@
       "over_reference_caps": true
     },
     "save_workflow": {
-      "description_tokens": 320,
+      "description_tokens": 294,
       "schema_tokens": 103,
-      "total_tokens": 423,
+      "total_tokens": 397,
       "over_reference_caps": true
     },
     "scroll": {

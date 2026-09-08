@@ -608,7 +608,7 @@ def test_every_tool_call_is_bounded():
         exc = asyncio.run(drive())
     finally:
         server.TOOL_CEILING_MS = old
-    assert "did not return within 200 ms" in str(exc)
+    assert "exceeded its 0.2s bound" in str(exc)
     assert "manage_session" in str(exc)
 
 

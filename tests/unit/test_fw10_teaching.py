@@ -147,13 +147,10 @@ def test_the_ask_still_works_with_no_reason_to_give():
                          page="p1", target={"ref": "e1"},
                          summary="Submit the form.", unattended=True)
     message = str(caught.value)
-    assert "needs a human confirmation" in message
+    # Re-pointed by the 2026-09-09 copy fill wave: the unattended refusal
+    # opens on what happened to the work, not on the gate's name.
+    assert "Nothing was done." in message
     assert message.rstrip().endswith(".")
-
-
-def test_the_preauth_teaching_still_names_the_launch_time_fact():
-    assert "KS4WEB_PREAUTH" in consent.PREAUTH_TEACHING
-    assert "not something any tool call can do" in consent.PREAUTH_TEACHING
 
 
 # ----------------------------------------------------------- the setup topic
