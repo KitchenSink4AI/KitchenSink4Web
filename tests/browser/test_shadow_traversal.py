@@ -388,8 +388,16 @@ def test_a_shadow_free_page_pays_nothing_for_the_traversal(corpus_site):
         # itself still costs nothing, which is what this test exists for.
         # A future addition that moves it again should update the number
         # and say why, exactly as this comment does.
-        assert result["budget"]["used"] == 4311
-        assert result["budget"]["rung"] == 7
+        # 4,311 at rung 7 until the ship-polish wave of 2026-09-08, and
+        # THIS IS THE FIRST TIME THE RUNG MOVED THE OTHER WAY. Three
+        # section headers stopped carrying an explanation of themselves
+        # (fat audit D4); the explanations moved verbatim into the
+        # budgeting and reading workflow topics, which freed enough room
+        # under the same ceiling for the ladder to step back UP. Same page,
+        # same budget, one rung better, and the extra 131 tokens are page
+        # content rather than the projection describing itself.
+        assert result["budget"]["used"] == 4442
+        assert result["budget"]["rung"] == 6
         text = result["projection"]
         assert "shadow roots: 0 open (traversed=no), 0 closed" in text
         assert "shadow content is reported in source order" not in text
@@ -412,7 +420,11 @@ def test_the_dense_page_lands_on_the_same_rung_it_did_in_the_spike(
         _, page = await _open(corpus_site, "b/shadow_dense.html")
         result = await lite.get_page_view(page=page, budget_tokens=5000)
         assert result["budget"]["rung"] == 1
-        assert 1700 <= result["budget"]["used"] <= 1900, result["budget"]
+        # The band is a sanity check around the rung, not a pin on the
+        # exact figure; the header trim moved this read a few tokens
+        # under its old floor without changing the rung it lands on,
+        # which is what this test is actually about.
+        assert 1600 <= result["budget"]["used"] <= 1900, result["budget"]
         assert result["budget"]["used"] < 5000
 
         # The floor: the page still renders at a budget far below the default,
