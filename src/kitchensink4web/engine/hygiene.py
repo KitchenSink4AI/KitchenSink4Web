@@ -531,12 +531,25 @@ class OwnedProcesses:
             pass
 
     def survivors(self) -> list[int]:
-        """Recorded PIDs still alive, checked against creation time so a
-        recycled PID never counts as a survivor."""
+        """Recorded PIDs still running, past two fences that ask different
+        questions.
+
+        The creation time answers IDENTITY: this PID still names the process
+        we recorded, rather than a stranger Windows recycled the number onto.
+        It does not answer LIVENESS, and reading it as though it did is how
+        this method used to report a browser alive after every process it
+        owned was dead. `creation_time` opens a handle, and `alive` above
+        explains why that keeps succeeding on a process that has already
+        exited: somebody still holds a handle to it, the node driver being
+        the somebody in the case that produced the wrong answer. So the wait
+        object gets the second question, and a PID is a survivor only when it
+        is both the process we recorded and one that is still running."""
         out = []
         for pid, born in self.pids.items():
             now = creation_time(pid)
-            if now is not None and (born is None or now == born):
+            if now is None or (born is not None and now != born):
+                continue     # gone, or a recycled PID wearing its number
+            if alive(pid):
                 out.append(pid)
         return sorted(out)
 
