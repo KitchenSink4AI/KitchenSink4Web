@@ -164,6 +164,14 @@ class LaneSpec:
 
     @property
     def label(self) -> str:
+        # LANE C GETS ITS OWN WORDS. The generic form would print
+        # `C(extension, headed)`, and both halves of that mislead: the thing
+        # driving the page is an extension but the thing the label names is
+        # the BROWSER, and "headed" is a launch flag on a window nothing here
+        # launched. This string appears in every status block, every audit
+        # record, and every refusal, so it is worth being true.
+        if self.engine == "extension":
+            return "C(your browser, via the extension)"
         what = self.channel or self.engine
         return f"{self.lane}({what}{'' if self.headless else ', headed'})"
 

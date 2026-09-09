@@ -377,7 +377,14 @@ async def _resolve(sess, record, location: dict | None, *, tool: str) -> dict:
             f"({data.get('error')}). Refs are invalidated by a navigation and "
             f"by a page close; re-read the page.")
     sess.element_map.absorb(data, record.handle, token, ts=ts)
-    for kind in ("affordances", "fields", "forms"):
+    # AFFORDANCES FIRST, and `forms[].fields` is deliberately not searched:
+    # a text input is an affordance in its own right and carries the whole
+    # descriptor the classifier reads (secret, payment, the form census, the
+    # activation delegate), while the copy nested inside a form carries a
+    # short summary and an unabsorbed ref. Searching the summary would find
+    # the element and hand the gate a thinner descriptor than the one every
+    # other lane classifies.
+    for kind in ("affordances", "forms"):
         for unit in data.get(kind) or []:
             if unit.get("ref") == ref:
                 return {"unit": unit, "ref": ref,
