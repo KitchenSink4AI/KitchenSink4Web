@@ -36,6 +36,169 @@
   const BUNDLE_KEY = "__ks4webScripts";
   const STATE_KEY = "__ks4webState";
 
+  /* ------------------------------------------------------------------ state
+   *
+   * THE DIGEST. One string that answers "could a fresh walk of this document
+   * produce a different answer from the last one?", computed in well under a
+   * millisecond, where the walk itself costs fifty.
+   *
+   * It exists for two callers and they want the same guarantee from opposite
+   * directions:
+   *
+   *   - a READ wants to skip the walk when nothing that the walk reads has
+   *     changed, and must never serve a stale answer;
+   *   - an ACT wants to know that the element it is about to touch is the
+   *     element the policy gate judged, and must never act on a page that
+   *     moved underneath the decision.
+   *
+   * So the digest is built to be WRONG IN THE SAFE DIRECTION. Everything it
+   * cannot observe makes it return null, and null never equals anything,
+   * including another null. A caller holding null falls back to exactly the
+   * behaviour this file had before the digest existed: walk the page again.
+   *
+   * What it observes, and why each one is here:
+   *
+   *   revision      MutationObserver over childList, subtree, attributes and
+   *                 characterData. Covers structure, attributes and text,
+   *                 which is most of what `extract.js` reads.
+   *   controls      form-control state. A page that assigns `el.value` sets a
+   *                 PROPERTY, not an attribute, and the observer never sees
+   *                 it; the extractor does read it. Hashed rather than listed
+   *                 so the digest stays a short string on a large form.
+   *   scroll, size  the viewport. In-view geometry and media queries both
+   *                 move with it and neither mutates the DOM.
+   *   focus, hover  the two pseudo-class states a live browser changes on its
+   *                 own. The user's mouse is over this page.
+   *   readyState    a document still loading is a document about to differ.
+   *
+   * What it CANNOT observe, stated rather than hoped: a running CSS animation
+   * or transition changes computed style continuously with no mutation, no
+   * property write and no event. There is no cheap signal for the styles it
+   * is painting, so the digest REFUSES: any running or pending animation
+   * returns null and the caller pays the full walk. A page with a spinner on
+   * it therefore behaves exactly as this lane behaved in phase 2.
+   */
+  const DOC_ID = String(Date.now()) + ":" + Math.random().toString(36).slice(2);
+  let revision = 0;
+  let observer = null;
+
+  function startObserver() {
+    if (observer) {
+      return;
+    }
+    observer = new MutationObserver(function (records) {
+      revision += records.length;
+    });
+    observer.observe(document.documentElement || document, {
+      childList: true, subtree: true, attributes: true, characterData: true,
+    });
+  }
+
+  /*
+   * The revision RIGHT NOW, including mutations the observer has recorded and
+   * not yet delivered. MutationObserver callbacks are microtasks, so a
+   * synchronous caller would otherwise read a number that predates the change
+   * it is asking about. `takeRecords` drains the queue, which is also what
+   * stops the callback from counting them a second time.
+   */
+  function revisionNow() {
+    if (!observer) {
+      return revision;
+    }
+    const pending = observer.takeRecords();
+    if (pending.length) {
+      revision += pending.length;
+    }
+    return revision;
+  }
+
+  /* Our own writes bump it. `setValue` goes through the prototype setter,
+   * which is a property write and not a mutation, so an act that filled a
+   * field would otherwise leave the digest saying the page had not moved. */
+  function bumpRevision() {
+    revisionNow();
+    revision += 1;
+  }
+
+  function hash32(text) {
+    // FNV-1a, and the length is carried alongside it. Two accumulators over a
+    // form's values rather than one, because the cost of a collision here is
+    // a stale read.
+    let a = 0x811c9dc5;
+    let b = 5381;
+    for (let i = 0; i < text.length; i++) {
+      const c = text.charCodeAt(i);
+      a = ((a ^ c) >>> 0) * 0x01000193 >>> 0;
+      b = (((b << 5) + b) + c) >>> 0;
+    }
+    return a.toString(36) + "." + b.toString(36) + "." + text.length.toString(36);
+  }
+
+  function controlState() {
+    const parts = [];
+    const nodes = document.querySelectorAll("input,textarea,select,[contenteditable]");
+    for (let i = 0; i < nodes.length; i++) {
+      const el = nodes[i];
+      const type = (el.type || "").toLowerCase();
+      // A password value is NOT read here, exactly as it is not read anywhere
+      // else on this surface. Its LENGTH is not read either: a digest that
+      // changed when the user typed one more character would be a channel
+      // reporting on a field this build promises not to look at.
+      const value = (type === "password") ? "" : String(el.value === undefined ? "" : el.value);
+      parts.push(i + "" + value + "" + (el.checked ? 1 : 0)
+        + "" + (el.selectedIndex === undefined ? "" : el.selectedIndex)
+        + "" + (el.disabled ? 1 : 0));
+    }
+    return nodes.length + ":" + hash32(parts.join(""));
+  }
+
+  function animating() {
+    if (typeof document.getAnimations !== "function") {
+      // No way to ask. Refuse rather than assume nothing is moving.
+      return true;
+    }
+    try {
+      const running = document.getAnimations();
+      for (let i = 0; i < running.length; i++) {
+        const state = running[i].playState;
+        if (state === "running" || state === "pending") {
+          return true;
+        }
+      }
+      return false;
+    } catch (err) {
+      return true;
+    }
+  }
+
+  function digestNow() {
+    try {
+      if (animating()) {
+        return null;
+      }
+      const active = document.activeElement;
+      let hovered = "";
+      try {
+        hovered = String(document.querySelectorAll(":hover").length);
+      } catch (err) {
+        return null;
+      }
+      return [
+        DOC_ID,
+        revisionNow(),
+        document.readyState,
+        location.href,
+        Math.round(window.scrollX) + "x" + Math.round(window.scrollY),
+        window.innerWidth + "x" + window.innerHeight,
+        hovered,
+        active ? (active.tagName + "#" + (active.id || "")) : "",
+        controlState(),
+      ].join("|");
+    } catch (err) {
+      return null;
+    }
+  }
+
   /*
    * Password values are never read. The reads run the projection, which
    * computes `value_state: 'never-read'` for a secret field; this census is
@@ -124,11 +287,43 @@
         },
       };
     }
+    startObserver();
+    /*
+     * THE UNCHANGED ANSWER, and the whole point of computing it here rather
+     * than asking in a separate round trip: the check and the walk are one
+     * synchronous block, so there is no window between "nothing changed" and
+     * the walk that would have proved it. The caller sends the digest its
+     * cached answer was taken at; a match returns thirty bytes instead of
+     * three hundred kilobytes, and a miss costs exactly what a plain read
+     * cost before this existed.
+     */
+    const before = digestNow();
+    const expected = params && params.ifChangedFrom;
+    if (expected && before && expected === before) {
+      return {
+        result: {
+          unchanged: true,
+          digest: before,
+          readMs: 0,
+          url: location.href,
+          webdriver: navigator.webdriver === true,
+        },
+      };
+    }
     const t0 = performance.now();
     const result = fn((params && params.arg) || {});
+    /*
+     * TAKEN TWICE, AND THE PAIR IS THE POINT. A page that mutated WHILE the
+     * walk ran produced data that describes neither the before state nor the
+     * after one, and stamping it with the after digest would cache a read
+     * that never existed. When the two disagree the answer still travels; it
+     * simply travels uncacheable, and the caller walks again next time.
+     */
+    const after = digestNow();
     return {
       result: {
         data: result,
+        digest: (before && after && before === after) ? after : null,
         readMs: Math.round((performance.now() - t0) * 1000) / 1000,
         url: location.href,
         webdriver: navigator.webdriver === true,
@@ -187,6 +382,35 @@
     if (!el.isConnected) {
       return { error: { code: "STALE_REF", message: "[COPY PENDING] detached element text: " + String(ref) } };
     }
+    startObserver();
+    /*
+     * THE STALENESS GUARD, and it CLOSES a window rather than opening one.
+     *
+     * The Python side judges an element it read a moment ago, and then sends
+     * this message. Between the read and the arrival of the message the page
+     * has had two round trips to change, and nothing used to look. So the
+     * caller now sends the digest the judged read was taken at, and the check
+     * happens HERE, in the same synchronous turn as the dispatch below: there
+     * is no await between the comparison and the action, so no page script
+     * can run in between.
+     *
+     * A mismatch does nothing at all and says so. The Python side answers a
+     * STATE_CHANGED by re-reading the page and putting the new descriptor
+     * back through the same gate comparison it has always run, so the guard
+     * can only add a refusal, never remove one.
+     */
+    const expected = params && params.expectDigest;
+    if (expected) {
+      const now = digestNow();
+      if (!now || now !== expected) {
+        return {
+          error: {
+            code: "STATE_CHANGED",
+            message: "[COPY PENDING] page-moved-under-the-decision text: " + String(ref),
+          },
+        };
+      }
+    }
     const action = params.action;
     const before = { url: location.href, title: document.title };
     try {
@@ -236,8 +460,18 @@
         };
       }
     } catch (err) {
+      // The action may have half-happened, so the digest must move whatever
+      // the outcome was. A failed act that left the page unchanged costs one
+      // extra walk on the next command; a failed act that changed something
+      // and did not bump would be a stale read served as a fresh one.
+      bumpRevision();
       return { error: { code: "EXECUTION_FAILED", message: String((err && err.message) || err) } };
     }
+    // WE JUST CHANGED THE PAGE, and `setValue` changed it in the one way the
+    // observer cannot see: a value is a property, not an attribute. Bumping
+    // here is what keeps a fill from being followed by a cached read of the
+    // empty field.
+    bumpRevision();
     return {
       result: {
         action: action,
@@ -334,6 +568,17 @@
       }
       if (msg.method === "page.ready") {
         return Promise.resolve({ result: readiness() });
+      }
+      if (msg.method === "page.stamp") {
+        // The digest on its own. Nothing in the tool path asks for it -- the
+        // read and the act both carry it inline, which is what makes them
+        // atomic -- and it exists so the tests and the measurement harness
+        // can watch the thing the tool path relies on.
+        startObserver();
+        return Promise.resolve({
+          result: { digest: digestNow(), docId: DOC_ID, revision: revisionNow(),
+                    url: location.href },
+        });
       }
       if (msg.method === "page.mask") {
         return Promise.resolve(mask(msg.params || {}));

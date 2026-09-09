@@ -25,12 +25,26 @@ was, and nothing in this file kills anything.
 from __future__ import annotations
 
 import asyncio
+import copy
+import json
 import time
 from typing import Any
 
 from .. import projection as _projection
 from ..errors import BadParams, Conflict, LaneUnsupported
 from .bridge import Bridge, BridgeError, NoBrowserConnected
+
+
+class PageMoved(Conflict):
+    """The page changed between the read that was judged and the act.
+
+    Not an error the caller ever sees. It is raised by `act()` when the
+    browser refused a guarded action because the document had moved, and
+    `ops/extops._act` answers it by re-reading the page and putting the new
+    descriptor through the same `TargetChanged` comparison the lane has always
+    run. A guard that produced a user-visible failure where phase 2 succeeded
+    would be a regression wearing an optimisation's name.
+    """
 
 #: Source -> the name the extension bundle knows it by. Built once, from the
 #: same module the Playwright lane evaluates, so a projection source that
@@ -104,6 +118,25 @@ class ExtensionPage:
         #: not get to stop checking it.
         self.webdriver: bool | None = None
         self.last_ms: float | None = None
+        #: The digest the LAST evaluate was taken at, or None when the
+        #: document was in a state the browser would not stand behind (a
+        #: running animation, a mutation during the walk). The acting path
+        #: passes it back down as the staleness guard; None means it takes
+        #: the two-walk route phase 2 always took.
+        self.last_digest: str | None = None
+        #: THE UNCHANGED-PAGE CACHE. One extraction per (script, arguments),
+        #: within one digest generation: the moment a walk comes back stamped
+        #: differently from the stored generation, every entry is stale and
+        #: all of them go, which is what keeps this bounded on a page being
+        #: read with several different arguments.
+        self._cache: dict[tuple, Any] = {}
+        self._cache_digest: str | None = None
+        #: Counters, for the measurement harness and the tests. Nothing in
+        #: the payload reads them: a cached read and a walked read are the
+        #: same answer, and a caller who could tell them apart would start
+        #: branching on which one it got.
+        self.cache_hits = 0
+        self.cache_misses = 0
 
     # ---------------------------------------------------------------- identity
 
@@ -181,14 +214,57 @@ class ExtensionPage:
                 "that could carry code is a shape this build will not ship. "
                 f"The scripts it runs are {sorted(_script_texts().values())}. "
                 "Open the session on lane 'A' or 'B' for anything else.")
+        key = (name, _argkey(arg))
+        params = {"script": name, "arg": arg or {}}
+        held = self._cache.get(key)
+        if held is not None and self._cache_digest:
+            # THE CHECK AND THE WALK ARE ONE MESSAGE, deliberately. Asking
+            # "has anything changed?" and then asking for the walk would be
+            # two round trips with a page running between them, and the
+            # answer to the first would be about a document the second one no
+            # longer describes. The browser compares and decides in one
+            # synchronous turn; a miss costs exactly what a plain read cost.
+            params["ifChangedFrom"] = self._cache_digest
         result = self._absorb(await self._call(
-            "page.evaluate",
-            self._params({"script": name, "arg": arg or {}}),
-            timeout=timeout))
+            "page.evaluate", self._params(params), timeout=timeout))
+        digest = result.get("digest")
+        self.last_digest = digest
+        if result.get("unchanged"):
+            self.cache_hits += 1
+            return copy.deepcopy(held)
+        self.cache_misses += 1
         data = result.get("data")
         if isinstance(data, dict):
             data = _lane_completeness(data)
+        self._remember(key, digest, data)
         return data
+
+    def _remember(self, key: tuple, digest: str | None, data: Any) -> None:
+        """Hold one walk against the digest the browser took it at.
+
+        Nothing is held without a digest, and a digest the browser would not
+        vouch for arrives as None: a document with a running animation, or one
+        that mutated while the walk was running, is one where the answer and
+        the state it describes have already come apart.
+        """
+        if digest != self._cache_digest:
+            # A DIFFERENT DOCUMENT STATE, so every entry taken at the old one
+            # describes a page that no longer exists. They go together rather
+            # than aging out one at a time, which is what makes "the cache is
+            # never stale" a property of the structure instead of a claim
+            # about eviction order.
+            self._cache.clear()
+            self._cache_digest = digest
+        if not digest or not isinstance(data, dict) or data.get("error"):
+            self._cache.pop(key, None)
+            self._cache_digest = None if not digest else self._cache_digest
+            return
+        self._cache[key] = copy.deepcopy(data)
+
+    async def stamp(self, timeout: float = 15.0) -> dict:
+        """The digest on its own. For the tests and the harness."""
+        return self._absorb(await self._call("page.stamp", self._params(),
+                                             timeout=timeout))
 
     # ------------------------------------------------------------ the commands
 
@@ -202,8 +278,20 @@ class ExtensionPage:
         return self._absorb(await self._call("page.ready", self._params(),
                                              timeout=timeout))
 
+    def forget(self) -> None:
+        """Drop the page-state cache. A new document is a new everything.
+
+        The digest carries a per-document id, so a stale entry could not
+        match across a navigation in any case; this makes that structural
+        rather than incidental, and it stops a session holding three hundred
+        kilobytes of a page it has left."""
+        self._cache.clear()
+        self._cache_digest = None
+        self.last_digest = None
+
     async def goto(self, url: str, wait_until: str = "complete",
                    timeout_ms: int = 30000) -> dict:
+        self.forget()
         result = self._absorb(await self._call(
             "page.navigate",
             self._params({"url": url, "waitUntil": wait_until,
@@ -212,17 +300,34 @@ class ExtensionPage:
         return result
 
     async def history(self, action: str, timeout_ms: int = 30000) -> dict:
+        self.forget()
         return self._absorb(await self._call(
             "page.navigate",
             self._params({"action": action, "timeoutMs": timeout_ms}),
             timeout=(timeout_ms / 1000.0) + 10.0))
 
     async def act(self, action: str, ref: str, value: Any = None,
-                  timeout: float = 30.0) -> dict:
+                  timeout: float = 30.0,
+                  expect_digest: str | None = None) -> dict:
+        """One act, optionally fenced by the state the decision was made on.
+
+        `expect_digest` is the digest the judged read was taken at. The
+        browser compares it in the same synchronous turn as the dispatch, so
+        nothing can run between the comparison and the action; a mismatch
+        does nothing and raises `PageMoved` here, which the ops layer answers
+        with the full re-read and the `TargetChanged` comparison.
+        """
+        params = {"action": action, "ref": ref, "value": value}
+        if expect_digest:
+            params["expectDigest"] = expect_digest
+        # A write we are about to make is a change the page-state cache
+        # cannot see coming, and the browser bumps its own revision for it;
+        # dropping the local copy here means a read racing this act on
+        # another task cannot be served from a generation this act ended.
+        self._cache.clear()
+        self._cache_digest = None
         return self._absorb(await self._call(
-            "page.act", self._params({"action": action, "ref": ref,
-                                      "value": value}),
-            timeout=timeout))
+            "page.act", self._params(params), timeout=timeout))
 
     async def mask(self, selector: str, timeout: float = 15.0) -> dict:
         """Paint over the secret and payment fields, and say how many.
@@ -277,9 +382,27 @@ def _no_browser(exc: Exception) -> Exception:
         f" ({exc})")
 
 
+def _argkey(arg: Any) -> str:
+    """A stable key for an evaluate's argument.
+
+    `json.dumps` with sorted keys rather than `repr`, because two dicts that
+    differ only in insertion order describe the same call and must not get two
+    cache entries. `default=str` keeps an unexpected type from raising in a
+    caching path, where an exception would be the optimisation breaking the
+    read it was meant to speed up."""
+    try:
+        return json.dumps(arg or {}, sort_keys=True, default=str)
+    except Exception:                                    # pragma: no cover
+        return repr(arg)
+
+
 def _extension_refusal(exc: BridgeError, method: str) -> Exception:
     text = str(exc)
     code = text.split(":", 1)[0].strip()
+    if code == "STATE_CHANGED":
+        return PageMoved(
+            f"[lane C(extension)] the page moved between the read the policy "
+            f"judged and the act; nothing was done. {text}")
     if code == "ORIGIN_NOT_CONSENTED":
         return Conflict(
             f"[lane C(extension)] the browser refused {method}: {text}")
