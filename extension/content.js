@@ -121,14 +121,20 @@
   }
 
   function hash32(text) {
-    // FNV-1a, and the length is carried alongside it. Two accumulators over a
-    // form's values rather than one, because the cost of a collision here is
-    // a stale read.
+    // FNV-1a and djb2, side by side, with the length carried alongside them.
+    // TWO accumulators rather than one because the cost of a collision here
+    // is a stale read, which is the one failure this whole mechanism exists
+    // to prevent.
+    //
+    // `Math.imul` and not `*`: a 32-bit accumulator times the FNV prime
+    // overflows 2^53, so the ordinary multiply loses low bits before the
+    // shift can truncate them and the result stops being FNV-1a at all. The
+    // damage is silent and it lands exactly on the property being relied on.
     let a = 0x811c9dc5;
     let b = 5381;
     for (let i = 0; i < text.length; i++) {
       const c = text.charCodeAt(i);
-      a = ((a ^ c) >>> 0) * 0x01000193 >>> 0;
+      a = Math.imul(a ^ c, 0x01000193) >>> 0;
       b = (((b << 5) + b) + c) >>> 0;
     }
     return a.toString(36) + "." + b.toString(36) + "." + text.length.toString(36);

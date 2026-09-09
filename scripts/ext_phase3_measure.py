@@ -199,6 +199,23 @@ async def measure(bridge, pages, rounds: int) -> dict:
     findings["get_page_view_heavy"]["cache_hits"] = page.cache_hits
     findings["get_page_view_heavy"]["cache_misses"] = page.cache_misses
 
+    # A READ THAT MUST WALK, and it is the number the row above hides.
+    #
+    # The heavy fixture does not move, so a benchmark loop over it is mostly
+    # cache hits and its median is a best case. This forces the walk on every
+    # round by dropping the local cache first, which is the honest comparison
+    # against phase 2: it is the same work phase 2 did every time.
+    bridge.take()
+    walked = []
+    for _ in range(rounds):
+        fresh()
+        page.forget()
+        start = time.perf_counter()
+        await extops.get_page_view(sess, record, budget_tokens=5000)
+        walked.append((time.perf_counter() - start) * 1000.0)
+    findings["get_page_view_heavy_forced_walk"] = summarize(walked)
+    findings["get_page_view_heavy_forced_walk"]["wire_calls"] = bridge.take()
+
     # A REPEATED READ OF A PAGE NOBODY TOUCHED. The same tool, called twice in
     # a row on a document that did not move; the second call is the one the
     # unchanged path exists for.
@@ -305,6 +322,12 @@ async def measure(bridge, pages, rounds: int) -> dict:
     def ping():
         return asyncio.to_thread(bridge.request, "bg.ping", None, 30.0)
     stats, _ = await timed(ping, rounds, reset=lambda: time.sleep(PACE_S))
+    findings["bg_ping_paced"] = stats
+    # AND UNPACED, because phase 2 measured the ping in a tight loop and a
+    # 160 ms gap between samples measures a cold socket rather than the pipe.
+    # A ping is one command, so a short unpaced burst stays inside the token
+    # bucket; the burst is 20 and the bucket is 40.
+    stats, _ = await timed(ping, min(rounds, 12), warmup=3)
     findings["bg_ping"] = stats
 
     stats, _ = await timed(lambda: page.stamp(), rounds,
