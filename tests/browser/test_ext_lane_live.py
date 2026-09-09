@@ -29,8 +29,9 @@ if str(ROOT) not in sys.path:
 from kitchensink4web import anchors, projection                    # noqa: E402
 from kitchensink4web.engine import lanes                           # noqa: E402
 from kitchensink4web.engine import session as _session             # noqa: E402
-from kitchensink4web.errors import (ConfirmationRequired,          # noqa: E402
-                                    CredentialRefused)
+from kitchensink4web.errors import (BadParams,                    # noqa: E402
+                                    ConfirmationRequired,
+                                    CredentialRefused, LaneUnsupported)
 from kitchensink4web.extension import lane as _extlane             # noqa: E402
 from kitchensink4web.extension import register                     # noqa: E402
 from kitchensink4web.extension.bridge import (Bridge,
@@ -506,6 +507,77 @@ def test_the_screenshot_is_the_viewport_and_masks_the_secret_fields(lane):
     # The checkout page carries a password and a card field, so the mask had
     # something to do; a zero here would mean the selector missed.
     assert shot["masked_fields"] >= 2
+
+
+# ------------------------------------------- one refusal per tool, all six
+
+
+def _refusal_text(call, expected):
+    """Run something that must refuse, and hand back what the caller sees."""
+    with pytest.raises(expected) as caught:
+        run(call())
+    text = str(caught.value)
+    # A refusal is a product surface. Whatever the type system says, a
+    # message carrying a traceback or a module path reads as a crash to the
+    # thing on the other side of the tool boundary.
+    for tell in ("Traceback", "BridgeError(", ".py\", line", "  File "):
+        assert tell not in text, (tell, text)
+    assert "lane" in text.lower(), text
+    return text
+
+
+def test_get_page_view_refuses_a_view_it_does_not_have(lane):
+    sess, record, _pages = lane
+    assert "nonsense" in _refusal_text(
+        lambda: extops.get_page_view(sess, record, view="nonsense"),
+        BadParams)
+
+
+def test_navigate_refuses_a_driver_only_action_by_name(lane):
+    """`stop` and `wait_for_load` are driver operations. Accepting either and
+    doing nothing would be the silent degrade this lane is built to avoid."""
+    sess, record, _pages = lane
+    assert "stop" in _refusal_text(
+        lambda: extops.navigate(sess, record, action="stop"), BadParams)
+
+
+def test_click_refuses_a_mouse_button_it_cannot_press(lane):
+    sess, record, _pages = lane
+    run(extops.get_page_view(sess, record, budget_tokens=4000))
+    text = _refusal_text(
+        lambda: extops.click(sess, record,
+                             location={"ref": ref_named(sess, "Help")},
+                             button="right"),
+        LaneUnsupported)
+    assert "button" in text
+    assert "'A'" in text or "'B'" in text
+
+
+def test_type_text_refuses_a_per_keystroke_delay(lane):
+    sess, record, _pages = lane
+    run(extops.get_page_view(sess, record, budget_tokens=4000))
+    assert "delay_ms" in _refusal_text(
+        lambda: extops.type_text(sess, record,
+                                 location={"ref": ref_named(sess,
+                                                            "Full name")},
+                                 text="x", delay_ms=50),
+        LaneUnsupported)
+
+
+def test_fill_form_refuses_an_empty_batch_with_the_shape_it_wanted(lane):
+    sess, record, _pages = lane
+    assert "fields=" in _refusal_text(
+        lambda: extops.fill_form(sess, record, fields=[]), BadParams)
+
+
+def test_take_screenshot_refuses_a_full_page_capture_rather_than_cropping(
+        lane):
+    """A scroll-and-stitch is not a picture of the page, so the request for
+    one refuses instead of returning a viewport crop under its name."""
+    sess, record, _pages = lane
+    assert "full" in _refusal_text(
+        lambda: extops.take_screenshot(sess, record, target="full"),
+        LaneUnsupported)
 
 
 def test_the_mask_comes_off_after_the_capture(lane):

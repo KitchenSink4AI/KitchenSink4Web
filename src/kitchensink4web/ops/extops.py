@@ -124,18 +124,19 @@ async def get_page_view(sess, record, *, view: str = "auto",
     completeness block."""
     if view not in _PROJECTION_VIEWS:
         raise BadParams(
-            f"unknown view {view!r}. This build serves "
-            f"{sorted(_PROJECTION_VIEWS)}.")
+            f"lane C serves the views {sorted(_PROJECTION_VIEWS)}; got "
+            f"{view!r}.")
     if detail not in DETAIL_SCALE:
         raise BadParams(
-            f"unknown detail {detail!r}; the levels are "
-            f"{sorted(DETAIL_SCALE)}.")
+            f"lane C reads at the detail levels {sorted(DETAIL_SCALE)}; got "
+            f"{detail!r}.")
     mode = (mode or "auto").strip().lower().replace("-", "_")
     if mode in ("all_affordances", "all", "prose_links"):
         mode = "links"
     if mode not in ("auto", "links"):
         raise BadParams(
-            f"unknown mode {mode!r}: 'auto' (the default) or 'links'.")
+            f"lane C reads in mode 'auto' (the default) or 'links'; got "
+            f"{mode!r}.")
     page = _page(record)
     _audit.annotate(session=sess.session_id, page=record.handle,
                     url=page.url, lane=sess.spec.label)
@@ -156,7 +157,7 @@ async def get_page_view(sess, record, *, view: str = "auto",
     baseline = sess.reads.get(record.handle, since) if since else None
     if baseline is not None and baseline.scope != root:
         raise BadParams(
-            f"since={since!r} was a "
+            f"lane C cannot difference these two reads: since={since!r} was a "
             f"{'whole-page' if baseline.scope is None else 'scoped'} read and "
             f"this call is "
             f"{'whole-page' if root is None else 'scoped'}. A delta across "
@@ -277,7 +278,8 @@ async def navigate(sess, record, *, action: str = "goto",
             f"before it returns, so there is nothing left to wait for. Got "
             f"{action!r}.")
     if action == "goto" and not url:
-        raise BadParams("navigate(action='goto') needs a url.")
+        raise BadParams(
+            "lane C navigate(action='goto') needs a url.")
     before = page.url
     dest = url if action == "goto" else (
         page.url if action == "reload" else None)
@@ -691,7 +693,8 @@ async def fill_form(sess, record, *, fields: list | None = None,
     entries = list(fields or [])
     if not entries:
         raise BadParams(
-            "fill_form needs fields=[{'ref': 'e12', 'value': '...'}, ...].")
+            "lane C fill_form needs "
+            "fields=[{'ref': 'e12', 'value': '...'}, ...].")
     # THE WHOLE BATCH IS CLASSIFIED BEFORE ANYTHING IS WRITTEN. Judging field
     # by field would write the ordinary fields of a payment form and only
     # then refuse at the card number, which is the defect the gauntlet found
