@@ -344,16 +344,49 @@ def _wait_word(wait_until: str) -> str:
 # ----------------------------------------------------------------- acting
 
 
-async def _resolve(sess, record, location: dict | None, *, tool: str) -> dict:
-    """A ref, re-read from the page RIGHT NOW.
+class _Walk:
+    """ONE extraction of the page, and every ref it can answer.
 
-    Every act on this lane resolves this way, and it is a fresh extraction on
-    purpose: the descriptor the gate fingerprints and the descriptor the
-    classifier reads have to describe the element as it is at this instant,
-    not as it was when the caller read the page. The extraction is pinned to
-    the ref so an element past the extractor's 300-affordance cap is still
-    in the candidate list.
+    The walk was always the expensive thing on this lane -- fifty of a
+    sixty-eight millisecond read is the in-page pass -- and phase 2 spent one
+    per ref per stage: a three-field `fill_form` walked the page nine times.
+    It did not have to. `extract.js` returns the WHOLE page, capped at three
+    hundred affordances plus whichever ref was pinned, so the walk that
+    resolves one ref has already resolved the others; what was missing was a
+    place to keep the answer.
+
+    This is that place, and it is deliberately small and short-lived. It
+    holds no policy, makes no decision, and lives for one tool call.
     """
+
+    __slots__ = ("units", "digest")
+
+    def __init__(self, data: dict, digest: str | None) -> None:
+        self.digest = digest
+        self.units: dict[str, dict] = {}
+        # AFFORDANCES FIRST, and `forms[].fields` is deliberately not
+        # searched: a text input is an affordance in its own right and
+        # carries the whole descriptor the classifier reads (secret,
+        # payment, the form census, the activation delegate), while the copy
+        # nested inside a form carries a short summary and an unabsorbed ref.
+        # Searching the summary would find the element and hand the gate a
+        # thinner descriptor than the one every other lane classifies. The
+        # first writer wins here for exactly that reason, so the iteration
+        # order below is load-bearing rather than incidental.
+        for kind in ("affordances", "forms"):
+            for unit in data.get(kind) or []:
+                ref = unit.get("ref")
+                if ref and ref not in self.units:
+                    self.units[ref] = {"unit": unit, "ref": ref,
+                                       "node_ref": unit.get("node_ref"),
+                                       "kind": kind}
+
+    def get(self, ref: str) -> dict | None:
+        return self.units.get(ref)
+
+
+def _ref_of(sess, record, location: dict | None, *, tool: str) -> tuple:
+    """The caller's ref and the in-page id behind it, or a refusal."""
     ref = (location or {}).get("ref")
     if not ref:
         raise BadParams(
@@ -367,29 +400,35 @@ async def _resolve(sess, record, location: dict | None, *, tool: str) -> dict:
         raise TargetNotFound(
             f"{ref!r} is not a ref this session minted. Read {record.handle} "
             f"and use the refs it returns.")
+    return ref, node_ref
+
+
+async def _walk(sess, record, *, pin: str | None, ref: str) -> _Walk:
+    """Read the page RIGHT NOW, and keep the whole answer.
+
+    A fresh extraction on purpose: the descriptor the gate fingerprints and
+    the descriptor the classifier reads have to describe the element as it is
+    at this instant, not as it was when the caller read the page. The
+    extraction is pinned to the ref so an element past the extractor's
+    300-affordance cap is still in the candidate list.
+    """
     page = _page(record)
     token = sess.reads.mint_token(record.handle)
     ts = time.strftime("%Y-%m-%dT%H:%M:%S")
-    data = await _projection.extract(page, pin=node_ref)
+    data = await _projection.extract(page, pin=pin)
     if data.get("error"):
         raise TargetNotFound(
             f"{ref!r} is not on {record.handle} any more "
             f"({data.get('error')}). Refs are invalidated by a navigation and "
             f"by a page close; re-read the page.")
     sess.element_map.absorb(data, record.handle, token, ts=ts)
-    # AFFORDANCES FIRST, and `forms[].fields` is deliberately not searched:
-    # a text input is an affordance in its own right and carries the whole
-    # descriptor the classifier reads (secret, payment, the form census, the
-    # activation delegate), while the copy nested inside a form carries a
-    # short summary and an unabsorbed ref. Searching the summary would find
-    # the element and hand the gate a thinner descriptor than the one every
-    # other lane classifies.
-    for kind in ("affordances", "forms"):
-        for unit in data.get(kind) or []:
-            if unit.get("ref") == ref:
-                return {"unit": unit, "ref": ref,
-                        "node_ref": unit.get("node_ref"),
-                        "kind": kind}
+    return _Walk(data, page.last_digest)
+
+
+def _pick(walk: _Walk, ref: str, record) -> dict:
+    found = walk.get(ref)
+    if found is not None:
+        return found
     raise TargetNotFound(
         f"{ref!r} was minted on {record.handle} and the element it names is "
         f"not in a fresh read of the page. It may have been removed, or the "
@@ -397,19 +436,56 @@ async def _resolve(sess, record, location: dict | None, *, tool: str) -> dict:
         f"same words; either way nothing was done.")
 
 
+async def _resolve(sess, record, location: dict | None, *, tool: str) -> dict:
+    """One ref, re-read from the page right now. The walk is discarded."""
+    ref, node_ref = _ref_of(sess, record, location, tool=tool)
+    walk = await _walk(sess, record, pin=node_ref, ref=ref)
+    return _pick(walk, ref, record)
+
+
 async def _act(sess, record, *, tool: str, location: dict | None,
                action: str, value=None, submitting: bool = False,
-               writes_value: bool = False) -> dict:
+               writes_value: bool = False, walk: _Walk | None = None) -> dict:
     """ONE DOOR for every Lane C act, and the reason there is only one.
 
     `act.action_class_for` says a fifth write path cannot be added that
     quietly skips the classifier. This is the fifth path, and it is a single
     function so that the claim is checkable by reading rather than by
     grepping: `click`, `type_text` and `fill_form` all arrive here, and the
-    class, the approval, and the TOCTOU re-read all happen once.
+    class, the approval, and the TOCTOU check all happen once.
+
+    **What phase 3 changed, and what it deliberately did not.**
+
+    Phase 2 walked the page twice: once to build the descriptor the gate
+    judges, and once after the gate so the comparison was against the page as
+    it is at the moment of acting. Both walks were right and the second one
+    was the point of the check. It also cost sixty-five milliseconds of every
+    single act, and it left a window nobody was watching: between the second
+    walk arriving in Python and the act message arriving in the browser, the
+    page had a round trip to change, and nothing looked.
+
+    So the second walk is now conditional and the check moved INTO the
+    browser. The judged read carries the digest the browser took it at; the
+    act carries that digest back down; the content script compares it in the
+    same synchronous turn as the dispatch, with no await in between. Two
+    things follow, and they are the pins this function has to keep:
+
+    - the fast path is STRICTLY STRONGER than phase 2's, because the state is
+      checked at the instant of the act rather than a round trip before it;
+    - the slow path is IDENTICAL to phase 2's. A browser that will not vouch
+      for the state -- a running animation, a page that mutated during the
+      walk, an old content script that sends no digest at all -- returns no
+      digest, and this function walks twice and compares fingerprints exactly
+      as it always did.
+
+    A guard that can only add a refusal cannot weaken the gate. The gate
+    itself, `gates.fingerprint`, and `verify_execute` are untouched.
     """
     page = _page(record)
-    resolved = await _resolve(sess, record, location, tool=tool)
+    ref, node_ref = _ref_of(sess, record, location, tool=tool)
+    if walk is None or walk.get(ref) is None:
+        walk = await _walk(sess, record, pin=node_ref, ref=ref)
+    resolved = _pick(walk, ref, record)
     desc = _actlib.target_descriptor(resolved["unit"])
     action_class = _actlib.action_class_for(desc, submitting=submitting)
     summary = _summary(tool, desc, record.handle)
@@ -426,22 +502,33 @@ async def _act(sess, record, *, tool: str, location: dict | None,
         url=page.url, target=desc, action_class=action_class,
         args={"action": action, "ref": resolved["ref"]},
         writes_value=writes_value, summary=summary))
-    # THE RE-READ AFTER THE GATE. `approve` already ran `verify_execute`
-    # against the descriptor above; this second resolve is what makes the
-    # comparison meaningful on the confirmation re-run, because the gate
-    # captured its fingerprint on the FIRST pass and the element may have
-    # moved since. A mismatch is TARGET_CHANGED and comes from the same
-    # function every other lane uses.
-    fresh = await _resolve(sess, record, location, tool=tool)
-    fresh_desc = _actlib.target_descriptor(fresh["unit"])
-    if _act_fingerprint(desc) != _act_fingerprint(fresh_desc):
-        from ..errors import TargetChanged
-        raise TargetChanged(
-            f"the target changed between the policy check and the "
-            f"execution on {record.handle}; nothing was done. Re-read the "
-            f"page, and act on the ref the new read returns.")
     before = page.url
-    outcome = await page.act(action, fresh["node_ref"], value=value)
+    fresh_desc = desc
+    outcome = None
+    if walk.digest:
+        try:
+            outcome = await page.act(action, resolved["node_ref"],
+                                     value=value, expect_digest=walk.digest)
+        except _extlane.PageMoved:
+            outcome = None
+    if outcome is None:
+        # THE RE-READ AFTER THE GATE, phase 2's path, unchanged. `approve`
+        # already ran `verify_execute` against the descriptor above; this
+        # second resolve is what makes the comparison meaningful on the
+        # confirmation re-run, because the gate captured its fingerprint on
+        # the FIRST pass and the element may have moved since. A mismatch is
+        # TARGET_CHANGED and comes from the same function every other lane
+        # uses.
+        fresh = _pick(await _walk(sess, record, pin=node_ref, ref=ref),
+                      ref, record)
+        fresh_desc = _actlib.target_descriptor(fresh["unit"])
+        if _act_fingerprint(desc) != _act_fingerprint(fresh_desc):
+            from ..errors import TargetChanged
+            raise TargetChanged(
+                f"the target changed between the policy check and the "
+                f"execution on {record.handle}; nothing was done. Re-read the "
+                f"page, and act on the ref the new read returns.")
+        outcome = await page.act(action, fresh["node_ref"], value=value)
     record.touch(page.url)
     effect = "navigated" if page.url != before else "same-page"
     invalidated = None
@@ -609,7 +696,15 @@ async def fill_form(sess, record, *, fields: list | None = None,
     # by field would write the ordinary fields of a payment form and only
     # then refuse at the card number, which is the defect the gauntlet found
     # from the other side: the numbers that had already landed were the harm.
-    consequential = []
+    #
+    # ONE WALK FOR THE WHOLE CENSUS. Phase 2 re-read the page once per field
+    # here and twice more per field inside `_act`, so a three-field form
+    # walked the page nine times for one call. `extract.js` returns the whole
+    # page, so the walk that resolves the first field has already resolved
+    # the rest; a field it did not reach (past the affordance cap, and not
+    # the pinned one) falls back to its own pinned walk rather than being
+    # classified from a thinner descriptor.
+    #
     for entry in entries:
         if not entry.get("ref"):
             raise BadParams(
@@ -619,9 +714,23 @@ async def fill_form(sess, record, *, fields: list | None = None,
                 f"pass that is not built for this lane yet, so they refuse "
                 f"here rather than resolving differently from the way they "
                 f"resolve everywhere else. Nothing was written.")
-        resolved = await _resolve(sess, record,
-                                  {"ref": entry["ref"]}, tool="fill_form")
-        desc = _actlib.target_descriptor(resolved["unit"])
+    first_ref, first_node = _ref_of(sess, record, {"ref": entries[0]["ref"]},
+                                    tool="fill_form")
+    census = await _walk(sess, record, pin=first_node, ref=first_ref)
+    consequential = []
+    for entry in entries:
+        ref, node_ref = _ref_of(sess, record, {"ref": entry["ref"]},
+                                tool="fill_form")
+        found = census.get(ref)
+        if found is None:
+            found = _pick(await _walk(sess, record, pin=node_ref, ref=ref),
+                          ref, record)
+            # A separate walk means a different instant, so the census walk
+            # can no longer vouch for the page as a whole and its digest is
+            # dropped. The acts below then take the two-walk route, which is
+            # what phase 2 did for every field of every form.
+            census.digest = None
+        desc = _actlib.target_descriptor(found["unit"])
         if _actlib.action_class_for(desc) is not None:
             consequential.append(entry["ref"])
     # THE CONSEQUENTIAL FIELDS GO FIRST, so the gate that fires describes the
@@ -633,9 +742,15 @@ async def fill_form(sess, record, *, fields: list | None = None,
                + [e for e in entries if e["ref"] not in consequential])
     written = []
     for entry in ordered:
+        # The census walk is handed to the FIRST act only. Every act after it
+        # follows a write, and a write moves the page, so the browser-side
+        # guard would reject the census digest anyway; passing it on would be
+        # asking a question whose answer is already known.
         result = await _act(sess, record, location={"ref": entry["ref"]},
                             tool="fill_form", action="fill",
-                            value=entry.get("value"), writes_value=True)
+                            value=entry.get("value"), writes_value=True,
+                            walk=census)
+        census = None
         written.append({"ref": result["ref"], "status": "written",
                         "role": result["role"], "name": result["name"]})
     payload = {
