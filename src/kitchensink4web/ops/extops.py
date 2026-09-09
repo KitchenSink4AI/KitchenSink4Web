@@ -482,14 +482,91 @@ def _summary(tool: str, desc: dict, handle: str) -> str:
             f"{handle}, in the browser you are signed in to.")
 
 
+#: What a Lane C tool is asked for and cannot do. A parameter that arrives
+#: here and is IGNORED is the silent degrade this whole subsystem argues
+#: against: a caller who asked for a right-click and got a left one has a
+#: wrong answer with no way to find out. Each entry is the sentence the
+#: refusal carries.
+UNSUPPORTED_ARGS: dict[str, str] = {
+    "button": ("a mouse button other than left. The extension dispatches "
+               "element.click(), which is a left activation and takes no "
+               "button argument; a right or middle click is real input the "
+               "driver lanes can send and this one cannot"),
+    "click_count": ("a double or triple click. element.click() fires once, "
+                    "and firing it twice is not the event a browser sends "
+                    "for a double click"),
+    "modifiers": ("modifier keys held during the click. There is no "
+                  "keyboard state to hold on this lane"),
+    "clear_first": ("clearing the field before typing. The write replaces "
+                    "the value outright, so a clear step here would be a "
+                    "no-op wearing the name of an operation"),
+    "delay_ms": ("a per-keystroke delay. The write sets the value through "
+                 "the native property descriptor and fires input and "
+                 "change; there are no keystrokes to space out"),
+    "rect": "a raw pixel region to capture",
+    "pad_px": "padding around a capture target",
+    "path": "writing the capture to a file",
+    "max_bytes": "a byte cap on the capture",
+    "max_pixels": "a pixel cap on the capture",
+}
+
+#: The DEFAULT each of these carries at the tool boundary. A value equal to
+#: its own default is not a request, and refusing on one would make the
+#: ordinary call impossible; a value different from it is what the caller
+#: actually asked for.
+#:
+#: Per argument rather than one shared list of falsy things, and that is a
+#: bug this table already caught: `True == 1` in Python, so a shared tuple
+#: containing `1` swallowed `clear_first=True` and the refusal never fired.
+DEFAULT_ARGS: dict[str, object] = {
+    "button": "left", "click_count": 1, "modifiers": None,
+    "clear_first": False, "delay_ms": 0,
+    "rect": None, "pad_px": 0, "path": None,
+    "max_bytes": None, "max_pixels": None,
+}
+
+
+def _asked_for(name: str, value: object) -> bool:
+    """Whether the caller SET this, rather than letting its default ride."""
+    default = DEFAULT_ARGS.get(name)
+    if type(value) is not type(default) and not (
+            value is None or default is None):
+        return True
+    if isinstance(value, bool) or isinstance(default, bool):
+        return bool(value) is not bool(default)
+    if value in (None, [], ()):
+        return default not in (None, [], ())
+    return value != default
+
+
+def _refuse_unsupported(tool: str, asked: dict) -> None:
+    """Refuse LOUDLY for anything this lane cannot honour."""
+    named = [k for k, v in asked.items()
+             if k in UNSUPPORTED_ARGS and _asked_for(k, v)]
+    if not named:
+        return
+    reasons = "; ".join(UNSUPPORTED_ARGS[k] for k in named)
+    raise LaneUnsupported(
+        f"[lane C(your browser, via the extension)] {tool} was asked for "
+        f"{named}, and this lane cannot do that: {reasons}. Nothing was "
+        f"done. Drop the argument, or open the session on lane 'A' or 'B', "
+        f"where the driver sends real input.")
+
+
 async def click(sess, record, *, location: dict | None = None,
-                **_ignored) -> dict:
+                button: str = "left", click_count: int = 1,
+                modifiers: list | None = None, **_ignored) -> dict:
+    _refuse_unsupported("click", {"button": button,
+                                  "click_count": click_count,
+                                  "modifiers": modifiers})
     return await _act(sess, record, tool="click", location=location,
                       action="click")
 
 
 async def type_text(sess, record, *, location: dict | None = None,
-                    text: str = "", submit: bool = False, **_ignored) -> dict:
+                    text: str = "", submit: bool = False,
+                    clear_first: bool = False, delay_ms: int = 0,
+                    **_ignored) -> dict:
     """Write into a field, and optionally send the form.
 
     `submit=True` is TWO acts and two trips through the choke point, because
@@ -498,6 +575,8 @@ async def type_text(sess, record, *, location: dict | None = None,
     payment) and the send is judged as a submission (which is where the
     consent ladder's four classes live). Collapsing them into one approval
     would let the class of the cheaper one authorize the dearer one."""
+    _refuse_unsupported("type_text", {"clear_first": clear_first,
+                                      "delay_ms": delay_ms})
     written = await _act(sess, record, tool="type_text", location=location,
                          action="type", value=text, writes_value=True)
     if not submit:
@@ -530,24 +609,31 @@ async def fill_form(sess, record, *, fields: list | None = None,
     # by field would write the ordinary fields of a payment form and only
     # then refuse at the card number, which is the defect the gauntlet found
     # from the other side: the numbers that had already landed were the harm.
+    consequential = []
     for entry in entries:
+        if not entry.get("ref"):
+            raise BadParams(
+                f"lane C fills by ref: every field needs a 'ref' a previous "
+                f"read returned, alongside its value. Got {sorted(entry)}. "
+                f"The other selector spellings resolve through a live search "
+                f"pass that is not built for this lane yet, so they refuse "
+                f"here rather than resolving differently from the way they "
+                f"resolve everywhere else. Nothing was written.")
         resolved = await _resolve(sess, record,
-                                  {"ref": entry.get("ref")}, tool="fill_form")
+                                  {"ref": entry["ref"]}, tool="fill_form")
         desc = _actlib.target_descriptor(resolved["unit"])
         if _actlib.action_class_for(desc) is not None:
-            # Route THIS field through the door first, so the gate that fires
-            # is the one that describes the consequential field rather than
-            # whichever field happened to be first in the list.
-            await _act(sess, record, tool="fill_form",
-                       location={"ref": entry.get("ref")}, action="fill",
-                       value=entry.get("value"), writes_value=True)
-            entry["_done"] = True
+            consequential.append(entry["ref"])
+    # THE CONSEQUENTIAL FIELDS GO FIRST, so the gate that fires describes the
+    # field that made the batch consequential rather than whichever field
+    # happened to be first in the caller's list. The order is computed here
+    # rather than by marking the caller's own dicts: a tool that edits its
+    # arguments is a tool whose caller cannot re-use them.
+    ordered = ([e for e in entries if e["ref"] in consequential]
+               + [e for e in entries if e["ref"] not in consequential])
     written = []
-    for entry in entries:
-        if entry.pop("_done", False):
-            written.append({"ref": entry.get("ref"), "status": "written"})
-            continue
-        result = await _act(sess, record, location={"ref": entry.get("ref")},
+    for entry in ordered:
+        result = await _act(sess, record, location={"ref": entry["ref"]},
                             tool="fill_form", action="fill",
                             value=entry.get("value"), writes_value=True)
         written.append({"ref": result["ref"], "status": "written",
@@ -591,6 +677,7 @@ async def take_screenshot(sess, record, *, target: str = "viewport",
     if str(image_format).lower() not in ("png", "jpeg", "jpg"):
         raise BadParams(
             f"lane C captures 'png' or 'jpeg'; got {image_format!r}.")
+    _refuse_unsupported("take_screenshot", _ignored)
     if target and target != "viewport":
         raise LaneUnsupported(
             f"[lane {sess.spec.label}] "

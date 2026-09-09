@@ -2674,7 +2674,9 @@ async def click(
         # debugger API, so the click is `element.click()` and the payload
         # says `is_trusted: false` rather than letting the sentence above
         # stand for a lane it is not true of.
-        return await _extops.click(sess, record, location=location)
+        return await _extops.click(
+            sess, record, location=location, button=button,
+            click_count=click_count, modifiers=modifiers)
     _audit.annotate(session=sess.session_id, page=record.handle,
                     url=record.page.url, lane=sess.spec.label)
     # THE ORIGIN CHECK ON A DOCUMENT NO DOOR RULED ON (gauntlet 4,
@@ -2764,7 +2766,8 @@ async def type_text(
         # submission and still meets the ladder's four classes.
         return await _extops.type_text(
             sess, record, location=location, text=text,
-            submit=bool(submit or press_enter))
+            submit=bool(submit or press_enter),
+            clear_first=clear_first, delay_ms=delay_ms)
     _audit.annotate(session=sess.session_id, page=record.handle,
                     url=record.page.url, lane=sess.spec.label)
     # THE ORIGIN CHECK ON A DOCUMENT NO DOOR RULED ON (gauntlet 4,

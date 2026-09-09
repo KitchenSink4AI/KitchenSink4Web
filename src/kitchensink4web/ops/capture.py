@@ -330,7 +330,9 @@ async def take_screenshot(
         # than silently returning a viewport crop under their own name.
         return await _extops.take_screenshot(
             sess, record, target=target, image_format=format,
-            quality=quality)
+            quality=quality, location=location, rect=rect,
+            pad_px=pad_px, path=path, max_bytes=max_bytes,
+            max_pixels=max_pixels)
     # THE ORIGIN POLICY ON THE CAPTURE SURFACES (union wave, IG-02). Fix
     # wave 8 put the origin twin of the wall gate at the read doors and the
     # act doors and stopped there, and the wave-8 ruling that exempted this

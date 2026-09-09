@@ -435,6 +435,67 @@ def test_the_five_shipped_scripts_are_accepted(lane):
         assert _extlane.script_name(source) == name
 
 
+def test_an_argument_this_lane_cannot_honour_refuses_rather_than_being_dropped(
+        lane):
+    """THE SILENT-DEGRADE PIN, and it is the class the whole lane subsystem
+    exists to prevent.
+
+    A caller who asked for a right-click and got a left one has a wrong
+    answer with no way to find out. `element.click()` is a left activation
+    and takes no button argument, so the ask refuses and names the lanes
+    that can send real input."""
+    from kitchensink4web.errors import LaneUnsupported
+    sess, record, bridge = lane
+    ref = ref_for(sess, "Help")
+    for kwargs in ({"button": "right"}, {"click_count": 2},
+                   {"modifiers": ["Shift"]}):
+        with pytest.raises(LaneUnsupported) as caught:
+            run(extops.click(sess, record, location={"ref": ref}, **kwargs))
+        assert "lane 'A' or 'B'" in str(caught.value)
+    assert bridge.acted == []
+
+
+def test_the_ordinary_call_is_not_refused_by_the_pin_above(lane):
+    """THE CONTROL ARM. Every one of those parameters has a default that
+    rides along on every call, and refusing on a default would make the
+    ordinary click impossible while passing the test above."""
+    sess, record, bridge = lane
+    result = run(extops.click(sess, record,
+                              location={"ref": ref_for(sess, "Help")},
+                              button="left", click_count=1, modifiers=[]))
+    assert result["action"] == "click"
+    assert bridge.acted
+
+
+def test_typing_arguments_this_lane_cannot_honour_refuse_too(lane):
+    """`clear_first` would be a no-op wearing the name of an operation, and
+    `delay_ms` spaces out keystrokes this lane does not send."""
+    from kitchensink4web.errors import LaneUnsupported
+    sess, record, bridge = lane
+    ref = ref_for(sess, "Full name")
+    for kwargs in ({"clear_first": True}, {"delay_ms": 50}):
+        with pytest.raises(LaneUnsupported):
+            run(extops.type_text(sess, record, location={"ref": ref},
+                                 text="x", **kwargs))
+    assert bridge.acted == []
+    # And the control arm, in the same test so a refusal that fired on the
+    # defaults cannot pass silently.
+    assert run(extops.type_text(sess, record, location={"ref": ref},
+                                text="x"))["action"] == "type"
+
+
+def test_fill_form_refuses_a_field_with_no_ref(lane):
+    """The other selector spellings resolve through a search pass this lane
+    has not got, so they refuse rather than resolving differently from the
+    way they resolve everywhere else."""
+    sess, record, bridge = lane
+    with pytest.raises(Exception) as caught:
+        run(extops.fill_form(sess, record,
+                             fields=[{"css": "#who", "value": "buyer"}]))
+    assert "ref" in str(caught.value)
+    assert bridge.acted == []
+
+
 def test_the_detail_scale_is_the_same_on_both_lanes():
     """`detail='full'` has to mean the same multiplier here as it does in
     `lite.get_page_view`, or one lane charges a different budget for the same
