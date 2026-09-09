@@ -84,9 +84,77 @@ HELP = """<!doctype html>
 <body><h1>Help</h1><p>Nothing here needs a gate.</p></body>
 """
 
+#: WHERE THE SEARCH FORM ACTUALLY GOES, and its absence was half of open
+#: item 15. `SEARCH` submits GET to `/results`, the server had no such page,
+#: and a 404 with an empty body makes Firefox render its own error document:
+#: `about:neterror`, on the `about:` scheme the extension refuses, with no
+#: content script in it. So a test that submitted the search left the shared
+#: tab in a state where the NEXT test's first command answered either
+#: `REFUSED_SCHEME: about:` or `Receiving end does not exist`, depending on
+#: whether it caught the navigation in flight. Serving the page removes the
+#: source; the reset fixture below removes the class.
+RESULTS = """<!doctype html>
+<title>KS4Web lane C results</title>
+<body><h1>Results</h1><p>Nothing matched, and that is fine.</p></body>
+"""
+
 
 def run(coro):
     return asyncio.run(coro)
+
+
+def active_url(bridge):
+    """Where the shared tab is, asked in a way that costs nothing.
+
+    `bg.tabs` is answered by the background script directly and never reaches
+    `pageCommand`, so it passes no scheme gate, no consent gate and no rate
+    limit. That matters more than it looks: the first version of the reset
+    below asked with `page.read`, which does pass the rate limit, and forty
+    extra rated commands across a module that already runs flat out pushed
+    the token bucket under water. The reset then caused a different failure
+    than the one it removed, in tests that were not the ones being reset.
+    """
+    for tab in bridge.request("bg.tabs", timeout=30.0).get("tabs") or []:
+        if tab.get("active"):
+            return tab.get("url") or ""
+    return ""
+
+
+def settle(bridge, url, timeout=30.0):
+    """Put the shared tab back on a known page before the next test runs.
+
+    ONE BROWSER SERVES TWENTY TESTS AND SEVERAL OF THEM MOVE IT: a link is
+    clicked, a form submits, a navigate runs. `page.navigate` waits for
+    `webNavigation.onCompleted`, so the tab has committed by the time it
+    returns, but nothing made that call between tests, and a test whose own
+    navigation was still in flight at teardown handed the next one a tab on
+    `about:blank` or on a document with no content script in it.
+
+    The failure that follows is a harness condition wearing a product
+    failure's clothes. `REFUSED_SCHEME: about:` and `EXECUTION_FAILED:
+    Receiving end does not exist` are both correct answers to the question
+    the browser was actually asked, which is why nothing in the extension
+    ever looked wrong while a different test failed on every shuffle.
+
+    Asking first and navigating only when the answer is wrong is what keeps
+    this affordable. Most tests leave the tab where they found it, so most
+    resets spend one free `bg.tabs` and stop there.
+    """
+    deadline = time.monotonic() + timeout
+    last = "no attempt completed"
+    while time.monotonic() < deadline:
+        try:
+            if active_url(bridge) == url:
+                return
+            bridge.request("page.navigate",
+                           {"url": url, "waitUntil": "complete"}, timeout=30.0)
+            if active_url(bridge) == url:
+                return
+            last = "the navigate did not leave the tab on the fixture page"
+        except BridgeError as exc:  # noqa: PERF203
+            last = str(exc)
+        time.sleep(0.25)
+    raise AssertionError(f"the shared tab never came back to {url}: {last}")
 
 
 class _Ctx:
@@ -136,7 +204,8 @@ def live(tmp_path_factory):
     workdir = tmp_path_factory.mktemp("ks4web-lanec")
     endpoint = workdir / "endpoint.json"
     bridge = Bridge(endpoint_path=endpoint)
-    pages = PageServer({"/": CHECKOUT, "/search": SEARCH, "/help": HELP})
+    pages = PageServer({"/": CHECKOUT, "/search": SEARCH, "/help": HELP,
+                        "/results": RESULTS})
     browser = None
     rdp = None
     try:
@@ -190,8 +259,29 @@ def live(tmp_path_factory):
         register.unregister_windows()
 
 
+@pytest.fixture(autouse=True)
+def fresh_tab(live):
+    """THE STATE EVERY TEST IN THIS MODULE ASSUMED AND NONE OF THEM SET.
+
+    Autouse, because the tests that go straight to `live` and never take
+    `lane` are the ones that were failing: they speak to the bridge directly,
+    they assume the active tab is a fixture page with a content script in it,
+    and until now the only thing establishing that was whichever test the
+    shuffle happened to run before them.
+
+    Consent is restored first because one test in this module sets the
+    browser-side origin list to somewhere else, and a test that failed
+    partway through would leave it there, at which point even the navigate
+    below is refused.
+    """
+    bridge, pages = live
+    bridge.request("consent.set", {"origins": ["*"]}, timeout=30.0)
+    settle(bridge, pages.url("/"))
+    yield
+
+
 @pytest.fixture
-def lane(live):
+def lane(live, fresh_tab):
     bridge, pages = live
     before = readonly.grade()
     readonly.apply(False)
@@ -199,11 +289,12 @@ def lane(live):
     sess = _Sess(bridge)
     page = _extlane.ExtensionPage(bridge, url=pages.url("/"))
     record = _session.PageHandle(handle="p1", page=page, context="c1")
-    # EVERY TEST STARTS ON THE CHECKOUT PAGE. One browser serves the whole
-    # module, so a test that clicked a link would otherwise decide what the
-    # next one is looking at, and a suite whose verdicts depend on its own
-    # order is a suite that cannot be trusted about the one thing it exists
-    # to check.
+    # `fresh_tab` already put the browser on the checkout page and proved a
+    # content script answers there. This navigate is the SESSION's copy of
+    # that fact rather than a second attempt at it: it runs through
+    # `extops.navigate`, so the handle, the element map and the read store
+    # start each test agreeing with the tab about which document they are
+    # looking at.
     run(extops.navigate(sess, record, url=pages.url("/")))
     try:
         yield sess, record, pages
