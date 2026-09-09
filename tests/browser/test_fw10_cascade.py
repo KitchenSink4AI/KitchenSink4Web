@@ -67,18 +67,23 @@ async def _kill_browsers(sess, timeout: float = 20.0) -> None:
     THE WAIT IS PART OF THE KILL. `taskkill /F` returns when the request is
     filed, not when the process is gone, and on a loaded CI runner the gap
     was long enough that the very next line read the browser as alive and
-    failed a row about a death that did arrive a moment later. Waiting for
-    the processes to actually leave the table pins the same property without
-    the race, and the wait is AWAITED and not slept: the driver delivers
-    its disconnect on this loop, so a blocking sleep here would hold up the
-    very event the rows below go on to read."""
-    pids = [pid for jar in sess.contexts.values()
-            for pid in list(jar.journal.pids)]
-    for pid in pids:
-        hygiene.kill(pid)
+    failed a row about a death that did arrive a moment later.
+
+    The wait is on `browser_alive`, which is the VERDICT the rows below
+    read, and not on `hygiene.alive`. The two disagree for a moment on
+    purpose: `alive` asks the wait object, while the verdict runs through
+    `survivors`, which asks for a creation time, and that query keeps
+    succeeding on an exited process for as long as the driver still holds a
+    handle to it. Waiting on the cheaper predicate is waiting on the wrong
+    one. It is AWAITED and not slept, because the driver delivers its
+    disconnect on this loop and a blocking sleep here would hold up the very
+    event these rows go on to read."""
+    for jar in sess.contexts.values():
+        for pid in list(jar.journal.pids):
+            hygiene.kill(pid)
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
-        if not any(hygiene.alive(pid) for pid in pids):
+        if sess.browser_alive() is False:
             return
         await asyncio.sleep(0.1)
 

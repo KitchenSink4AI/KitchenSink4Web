@@ -173,7 +173,10 @@ def test_a_wait_inside_the_ceiling_discloses_nothing(book):
 def test_the_remaining_window_is_readable_without_scraping_a_refusal(book):
     assert book.remaining_backoff_s("api.example.org") == 0.0
     book.note_retry_after("api.example.org", "300", status=429)
-    assert 290 <= book.remaining_backoff_s("API.EXAMPLE.ORG") <= 300
+    # The epsilon is float noise and not slack in the property: a coarse
+    # clock can read no elapsed time between the note and the question, and
+    # the subtraction came back 300.00000000000006 on a Windows runner.
+    assert 290 <= book.remaining_backoff_s("API.EXAMPLE.ORG") <= 300 + 1e-6
 
 
 def test_a_503_window_is_not_reported_as_a_429(book):

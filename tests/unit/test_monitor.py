@@ -513,8 +513,13 @@ def test_the_remaining_backoff_is_read_from_the_book_not_the_sentence(
         _monitor_ops._budgets.BOOK, "check_domain",
         lambda domain: (_ for _ in ()).throw(
             errors.BlockedBySite("the window is still open")))
+    # The epsilon is float noise, not slack in the property. A clock that
+    # advances in coarse steps can read no elapsed time at all between the
+    # note and the question, and the arithmetic that subtracts it came back
+    # 300.00000000000006 on a Windows runner: six parts in a hundred
+    # trillion over a 300 second window.
     assert 290 <= _monitor_ops._remaining_backoff(
-        "https://example.org/thing") <= 300
+        "https://example.org/thing") <= 300 + 1e-6
 
 
 # ---------------------------------------------------------- the predicates

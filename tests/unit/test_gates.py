@@ -4,6 +4,8 @@ interlock. Plus the structural property that no gate touches policy."""
 
 from __future__ import annotations
 
+import time
+
 import pytest
 
 from kitchensink4web.errors import (ConfirmationRequired, TargetChanged,
@@ -107,6 +109,13 @@ def test_an_unredeemed_gate_never_executes(engine):
 def test_expired_gates_refuse_and_are_swept(engine, monkeypatch):
     token = _ask(engine).detail["requestState"]
     monkeypatch.setattr(gates, "GATE_TTL_S", 0.0)
+    # PAST ONE CLOCK TICK. Expiry is `monotonic() - created > GATE_TTL_S`,
+    # and Windows' monotonic advances in steps of about 15.6 ms: ask inside
+    # the same step and the age reads exactly 0.0, which is not greater than
+    # 0.0, so a gate that is conceptually long dead answers as fresh. The
+    # row went red on 3.12 and green on 3.13 in the same CI run on nothing
+    # but where the tick fell. A real wait makes the gate really older.
+    time.sleep(0.05)
     with pytest.raises(ValidationFailed) as exc:
         engine.redeem(token, {"allow": True})
     assert "expired" in str(exc.value) or "no pending" in str(exc.value)
