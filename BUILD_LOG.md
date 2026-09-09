@@ -4936,3 +4936,50 @@ installed, fewer tokens in the first read) and reading it backwards is exactly
 what happened once already.
 
 Nothing pushed for web. No figure moved, no locale string touched.
+
+## 2026-09-09 23:17 (bundle wave: the v1.0.0 release had no .mcpb asset)
+
+The product page tells Claude Desktop users to install a bundle, and the
+v1.0.0 GitHub release shipped with an empty assets list. The bundle itself was
+never the problem: `bundle/kitchensink4web.mcpb` was built and committed
+earlier today at 1.0.0, and this pass proves it is the right file to attach
+rather than replacing it.
+
+Repacked both bundles from main with `scripts/pack_bundles.py`, which
+regenerates the icons, packs the shipped and field-test directories together so
+the pair cannot drift, and smoke-tests both. The rebuilt archives came out
+byte-for-byte identical to the committed ones on content, differing only in zip
+member timestamps, so the working tree was restored rather than committing
+churn. Icons regenerated identical too.
+
+`bundle/smoke_test.py`, both bundles: all checks passed. Ten settings on the
+install screen, every one a boolean, every one wired to its own environment
+variable; acting off by default on both; routine form submission asks by
+default on both; the four retired boxes (browser lane, channel, preauth,
+all_packs) absent, with nothing wiring their variables. Default packs are
+extract and capture on the shipped bundle, storage on the field-test one, as
+intended. `mcpb validate` clean on both.
+
+The step that was expected to fail before PyPI now passes. `uvx
+kitchensink4web==1.0.0` launched and answered the initialize handshake with
+`serverInfo=kitchensink4web 1.0.0`, no `--refresh-package` needed, so the exact
+command Claude Desktop will run works against the live package.
+
+Ship gate `tests/unit/test_ship_gate.py`: 10 passed, which covers the version
+and copy assertions read out of the packed .mcpb manifests.
+
+### The default surface is 25 tools, and none of them can act
+
+Verified end to end rather than assumed. Built the environment a default
+install writes, every checkbox at its declared default, launched the manifest's
+own uvx command with it, and asked for `tools/list`: **25 tools**, exactly the
+read-only set. aggregate, export_data, export_pdf, extract_fields,
+extract_page, find_elements, get_article, get_audit, get_links, get_list,
+get_metadata, get_page_view, get_table, get_text, get_workflows,
+manage_session, manage_tabs, monitor, navigate, read_image_text, read_pages,
+save_page, scroll, take_screenshot, wait_for. No click, no typing, no form
+fill, no script execution. The safety promise on the install screen is the
+surface a user actually gets.
+
+Nothing pushed. The committed `bundle/kitchensink4web.mcpb` is what goes to the
+v1.0.0 release as its first public asset.
