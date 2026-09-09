@@ -243,22 +243,76 @@ function frameKey(tabId, frameId) {
   return tabId + ":" + frameId;
 }
 
-async function ensureBundle(tabId, frameId) {
+/*
+ * ONE INJECTION PER DOCUMENT, EVEN WHEN TWO CALLERS ASK AT ONCE. The priming
+ * listener below and a read arriving on its heels are exactly that race, and
+ * two overlapping `executeScript` calls would parse 300 KB twice: the bundle
+ * guards itself, so the second parse is wasted rather than wrong, but wasted
+ * is the whole thing this is trying not to be. The second caller awaits the
+ * first one's promise instead.
+ */
+const injecting = new Map();
+
+function ensureBundle(tabId, frameId) {
   const key = frameKey(tabId, frameId);
   if (injected.has(key)) {
-    return false;
+    return Promise.resolve(false);
   }
-  await browser.tabs.executeScript(tabId, {
-    file: "/projection.bundle.js",
-    frameId: frameId,
-    runAt: "document_end",
-  });
-  injected.add(key);
-  return true;
+  let inflight = injecting.get(key);
+  if (!inflight) {
+    inflight = browser.tabs.executeScript(tabId, {
+      file: "/projection.bundle.js",
+      frameId: frameId,
+      runAt: "document_end",
+    }).then(() => {
+      injected.add(key);
+      return true;
+    }).catch((err) => {
+      injecting.delete(key);
+      throw err;
+    }).then((made) => {
+      injecting.delete(key);
+      return made;
+    });
+    injecting.set(key, inflight);
+  }
+  return inflight;
 }
 
 browser.webNavigation.onCommitted.addListener((details) => {
   injected.delete(frameKey(details.tabId, details.frameId));
+});
+
+/*
+ * PRIMING, and what it is NOT.
+ *
+ * This puts the extension's OWN CODE into a document that has finished
+ * loading. It does not walk the page, does not read a value, does not
+ * extract, and sends nothing anywhere: the projection bundle is a table of
+ * functions nobody has called. What it buys is that the first read of a
+ * freshly navigated page does not pay the parse, which measured at about
+ * 20 ms on this machine.
+ *
+ * It is fenced by the same gate every page command is fenced by. Nothing is
+ * primed until a session has configured its consent (`consented === null` is
+ * the state where this extension touches nothing at all), and nothing is
+ * primed for an origin that consent does not cover. So the set of documents
+ * this can reach is a subset of the set the caller could already read, and it
+ * shrinks to empty the moment the native port drops.
+ *
+ * Deliberately fire-and-forget: the read that benefits is seconds away, and
+ * an await here would only move the cost from one command to another.
+ */
+browser.webNavigation.onCompleted.addListener((details) => {
+  if (details.frameId !== 0 || consented === null) {
+    return;
+  }
+  if (schemeRefusal(details.url) || consentRefusal(details.url)) {
+    return;
+  }
+  ensureBundle(details.tabId, 0).catch(() => {
+    /* a document that went away needs no bundle; the read will inject one */
+  });
 });
 
 // The SPA half. A history push does not commit a navigation and does not
@@ -377,19 +431,36 @@ async function pageCommand(method, params) {
     note(method, tab.url, "refused:rate");
     throw { code: "RATE_LIMITED", message: throttled };
   }
-  // THE LISTENER FIRST, THE BUNDLE SECOND. A frame with no content script
-  // yet cannot answer, and injecting 300 KB of projection into a document
-  // that is about to be replaced is the expensive way to find that out.
-  const ready = await toFrameWaiting(tab.id, frameId, { method: "page.ready" });
-  let injectedNow = false;
+  /*
+   * ONE ROUND TRIP, NOT TWO. Phase 2 sent `page.ready` first and the real
+   * command second, so that a frame whose content script had not been
+   * injected yet was found by a cheap probe rather than by the expensive
+   * command. Measured, that probe cost 3.9 ms of every single command on this
+   * lane -- a fixed toll on reads, acts, masks and screenshots alike -- to
+   * find a condition that `toFrameWaiting` already detects and already
+   * recovers from, because a frame with no listener answers "Receiving end
+   * does not exist" to ANY message including the real one.
+   *
+   * So the probe is gone and the command itself is the probe. The recovery is
+   * unchanged: inject content.js, wait, retry, six times, then let the error
+   * travel. What changed is that the ordinary case, where the listener is
+   * already there, stops paying for the unusual one.
+   */
   if (method === "page.evaluate" || method === "page.act") {
-    injectedNow = await ensureBundle(tab.id, frameId);
+    try {
+      await ensureBundle(tab.id, frameId);
+    } catch (err) {
+      // The document may still be committing. The ladder below waits for the
+      // listener, and the BUNDLE_MISSING retry after it puts the bundle in.
+      injected.delete(frameKey(tab.id, frameId));
+    }
   }
-  let sent = await toFrame(tab.id, frameId, { method: method, params: params });
-  if (sent && sent.error && sent.error.code === "BUNDLE_MISSING" && !injectedNow) {
-    // The frame kept its listener across a navigation the injection tracker
-    // did not see. Re-inject once and retry; a second BUNDLE_MISSING is a
-    // real failure and travels as one.
+  let sent = await toFrameWaiting(tab.id, frameId, { method: method, params: params });
+  if (sent && sent.error && sent.error.code === "BUNDLE_MISSING") {
+    // Either the frame kept its listener across a navigation the injection
+    // tracker did not see, or the ladder above re-injected content.js into a
+    // fresh document after the bundle went in. Re-inject once and retry; a
+    // second BUNDLE_MISSING is a real failure and travels as one.
     injected.delete(frameKey(tab.id, frameId));
     await ensureBundle(tab.id, frameId);
     sent = await toFrame(tab.id, frameId, { method: method, params: params });
@@ -466,7 +537,11 @@ async function navigate(params) {
     await browser.tabs.update(tab.id, { url: url });
   }
   const how = await settled;
-  injected.delete(frameKey(tab.id, 0));
+  // The injection tracker is cleared by `onCommitted`, which fires before the
+  // load completes. Clearing it again HERE would race the priming listener
+  // that fires on the same `onCompleted` event: the prime would put the
+  // bundle in, this line would forget it went in, and the first read would
+  // parse 300 KB a second time for nothing.
   const after = await browser.tabs.get(tab.id);
   note("page.navigate", after.url, how === "timeout" ? "timeout" : "ok");
   return {
@@ -563,8 +638,8 @@ async function dispatch(method, params) {
     return await screenshot(params);
   }
   if (method === "page.read" || method === "page.evaluate" || method === "page.act"
-      || method === "page.ready" || method === "page.mask" || method === "page.unmask"
-      || method === "diag.payload") {
+      || method === "page.ready" || method === "page.stamp" || method === "page.mask"
+      || method === "page.unmask" || method === "diag.payload") {
     return await pageCommand(method, params);
   }
   throw { code: "UNKNOWN_METHOD", message: "[COPY PENDING] unknown method text: " + String(method) };
