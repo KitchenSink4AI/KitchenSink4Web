@@ -115,6 +115,27 @@ def mv3(tmp_path_factory):
 
         if connected:
             bridge.request("consent.set", {"origins": ["*"]}, timeout=30.0)
+            # ONE READ BEFORE THE NAVIGATION, RECORDED RATHER THAN RETRIED.
+            # The browser opened this tab before the extension existed, and a
+            # manifest content script does not go back and inject itself into
+            # a document that already loaded. `toFrameWaiting` is supposed to
+            # recover from exactly that by injecting `content.js` and
+            # retrying, and on MV3 it does not always manage it. The rate is
+            # in the phase 5 report; keeping the attempt here is what stops
+            # the navigation below from hiding the condition entirely.
+            try:
+                first = bridge.request("page.read", timeout=30.0).get("text", "")
+                state["read_before_navigate"] = SENTINEL in first
+            except BridgeError as exc:
+                state["read_before_navigate"] = f"{exc}"
+            # A REAL NAVIGATION, because a committed document is the only
+            # thing that puts a manifest content script where it belongs. The
+            # module's own tests are about the MV3 round trip, not about
+            # whether a tab older than the extension can be rescued, and
+            # conflating the two cost three tests one run in four.
+            bridge.request("page.navigate",
+                           {"url": pages.url("/"), "waitUntil": "complete"},
+                           timeout=60.0)
             deadline = time.monotonic() + 40.0
             while time.monotonic() < deadline:
                 try:
@@ -220,6 +241,11 @@ def test_navigator_webdriver_under_load_extension(mv3):
     # Written into the test output so the number is in the record whichever
     # way it went.
     print(f"\nMEASURED navigator.webdriver under --load-extension: {value}")
+    # The other MV3 measurement, printed rather than asserted for the same
+    # reason: what a tab older than the extension answers is a finding about
+    # Chromium's content-script lifecycle, not a pass or a fail.
+    print("MEASURED read of a tab older than the extension: "
+          f"{mv3.get('read_before_navigate')!r}")
     assert value != "true", (
         "navigator.webdriver is TRUE under --load-extension on this "
         "Chromium, which is the bot-detection signal the whole extension "
