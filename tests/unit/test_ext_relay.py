@@ -260,6 +260,86 @@ def test_the_relay_exits_when_there_is_no_bridge_to_dial(tmp_path, monkeypatch):
             process.kill()
 
 
+# -- the pipe that has to outlive a pause ------------------------------------
+
+
+def test_a_quiet_bridge_does_not_make_the_relay_hang_up(wired):
+    """THE SESSION-KILLING ONE, and it was invisible until a test paused.
+
+    `create_connection` returns a socket in timeout mode, `makefile`
+    inherits it, and the pump spends its whole life in `readline()` waiting
+    for a command. Five idle seconds raised `socket.timeout`, the pump read
+    that as a dead bridge, and the relay exited. Firefox then fired
+    `onDisconnect`, the background script cleared its consent set, and the
+    next command on a session the human had already approved came back
+    "consent not configured" with nothing anywhere saying why.
+
+    Six seconds is longer than the handshake timeout and shorter than a
+    person thinking about what to ask for next.
+    """
+    bridge, extension = wired
+    extension.handler = echo_handler
+    time.sleep(6.0)
+    assert extension.process.poll() is None, "the relay exited while idle"
+    assert bridge.connected
+    assert bridge.request("bg.ping", timeout=20.0)["echoed"] == "bg.ping"
+
+
+def test_the_pump_socket_is_left_blocking_rather_than_timed_out(tmp_path):
+    """The mechanism above, checked where it lives rather than by its effect.
+
+    A test that only measures the six seconds passes on any build whose
+    timeout happens to be seven.
+    """
+    from kitchensink4web.extension import relay as relay_mod
+
+    bridge = Bridge(endpoint_path=tmp_path / "endpoint.json")
+    conn = None
+    try:
+        conn, _conn_file = relay_mod._connect_bridge(tmp_path / "endpoint.json")
+        assert conn.gettimeout() is None
+    finally:
+        if conn is not None:
+            conn.close()
+        bridge.close()
+
+
+def test_the_handshake_still_gives_up_rather_than_waiting_forever(tmp_path):
+    """The other direction. The five seconds were removed from the pump and
+    NOT from the handshake, so a listener that accepts and never answers is
+    still abandoned rather than waited on."""
+    from kitchensink4web.extension import relay as relay_mod
+
+    listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    listener.bind(("127.0.0.1", 0))
+    listener.listen(1)
+    port = listener.getsockname()[1]
+    held: list = []
+
+    def accept_and_say_nothing():
+        try:
+            held.append(listener.accept()[0])
+        except OSError:
+            pass
+
+    thread = threading.Thread(target=accept_and_say_nothing, daemon=True)
+    thread.start()
+
+    endpoint = tmp_path / "endpoint.json"
+    endpoint.write_text(json.dumps(
+        {"host": "127.0.0.1", "port": port, "token": "t"}), encoding="utf-8")
+    started = time.monotonic()
+    try:
+        with pytest.raises(OSError):
+            relay_mod._connect_bridge(endpoint, timeout=60.0)
+        assert time.monotonic() - started < 30.0
+    finally:
+        for sock in held:
+            sock.close()
+        listener.close()
+
+
 def test_the_endpoint_file_is_removed_when_the_bridge_closes(tmp_path):
     endpoint = tmp_path / "endpoint.json"
     bridge = Bridge(endpoint_path=endpoint)

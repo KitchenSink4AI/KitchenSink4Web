@@ -116,6 +116,23 @@ def _connect_bridge(endpoint_path: Path, timeout: float = CONNECT_TIMEOUT):
         if not ack.get("ok"):
             conn.close()
             raise ConnectionRefusedError(f"bridge refused the relay: {ack.get('reason')}")
+        # THE FIVE SECONDS ABOVE ARE FOR THE HANDSHAKE AND NOTHING ELSE.
+        # `create_connection` leaves the socket in timeout mode, `makefile`
+        # inherits it, and the pump below spends its whole life blocked in
+        # `readline()` waiting for a command that may not come for minutes.
+        # Left as it was, five idle seconds raised `socket.timeout`, the pump
+        # read it as a dead bridge and hung up, the relay exited, Firefox
+        # fired `onDisconnect`, and the background script cleared its consent
+        # set because a dropped pipe is supposed to mean a new server.
+        #
+        # The user-visible shape of that is worth stating, because it is not
+        # a test problem. Read a page, think for ten seconds, run the next
+        # command, and Lane C answers "consent not configured" for a session
+        # the human already approved. Nothing reports a disconnection, since
+        # the relay reconnects immediately; only the approvals are gone.
+        # Measured before the fix: consent survived 4.5 idle seconds and was
+        # gone at 6.
+        conn.settimeout(None)
         return conn, conn_file
     raise TimeoutError(f"no bridge within {timeout}s ({last_error})")
 
