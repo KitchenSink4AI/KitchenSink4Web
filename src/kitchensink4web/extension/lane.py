@@ -57,6 +57,21 @@ def _script_texts() -> dict[str, str]:
     }
 
 
+def origin_of(url: str | None) -> str | None:
+    """The scheme-and-host origin of a URL, or None when it has none.
+
+    Deliberately NOT the hostname: the browser-side gate compares
+    `new URL(url).origin`, so a mismatch in what the two sides call an origin
+    would show up as a page nobody can read rather than as an error."""
+    if not url:
+        return None
+    from urllib.parse import urlsplit
+    parts = urlsplit(url)
+    if not parts.scheme or not parts.netloc:
+        return None
+    return f"{parts.scheme}://{parts.netloc}"
+
+
 def script_name(source: str) -> str | None:
     """The bundle name for a projection source, or None when it is not one."""
     found = _script_names().get(id(source))
@@ -209,6 +224,21 @@ class ExtensionPage:
                                       "value": value}),
             timeout=timeout))
 
+    async def mask(self, selector: str, timeout: float = 15.0) -> dict:
+        """Paint over the secret and payment fields, and say how many.
+
+        The selector is `capture.MASK_CSS`, the same string the Playwright
+        lane hands its own masking, sent as DATA. The count is what lets the
+        caller fail closed: a page with secret fields whose mask did not go
+        on must not be captured."""
+        return await self._call("page.mask",
+                                self._params({"selector": selector}),
+                                timeout=timeout)
+
+    async def unmask(self, timeout: float = 15.0) -> dict:
+        return await self._call("page.unmask", self._params(),
+                                timeout=timeout)
+
     async def screenshot(self, image_format: str = "png",
                          quality: int | None = None,
                          timeout: float = 60.0) -> dict:
@@ -277,6 +307,13 @@ class ExtensionContext:
         self.bridge = bridge
         self.pages: list[ExtensionPage] = []
         self.opened = time.time()
+        #: THE ORIGINS THE LADDER HAS APPROVED, this session, in order.
+        #: Seeded at open with the tab the human was already on, because the
+        #: `real_profile_browse` answer they just gave was about the browser
+        #: as it stands. Everything after that is added only once
+        #: `policy.engine.approve` has passed for a navigation there, so the
+        #: set is a record of decisions rather than a list somebody typed.
+        self.consented: list[str] = []
 
     async def probe(self, timeout: float = 15.0) -> dict:
         try:
@@ -299,9 +336,26 @@ class ExtensionContext:
         a page. Defence in depth, and stated as that rather than as the
         gate: the gate is `policy/engine.approve`.
         """
+        self.consented = sorted(set(origins))
         return await asyncio.to_thread(
             self.bridge.request, "consent.set",
-            {"origins": sorted(set(origins))}, timeout)
+            {"origins": self.consented}, timeout)
+
+    async def allow_origin(self, url: str | None,
+                           timeout: float = 15.0) -> bool:
+        """Widen the browser-side set by ONE origin the ladder just passed.
+
+        Called from the navigate body after `approve()` returns and never
+        before it, which is what makes this list a record of decisions
+        instead of a second policy nobody audits. Returns whether anything
+        changed, so an ordinary navigation inside one site costs no round
+        trip at all.
+        """
+        origin = origin_of(url)
+        if origin is None or origin in self.consented:
+            return False
+        await self.set_consent(self.consented + [origin], timeout=timeout)
+        return True
 
     async def audit(self, limit: int = 100, timeout: float = 15.0) -> dict:
         return await asyncio.to_thread(

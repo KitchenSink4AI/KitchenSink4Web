@@ -498,7 +498,8 @@ async function dispatch(method, params) {
     return await screenshot(params);
   }
   if (method === "page.read" || method === "page.evaluate" || method === "page.act"
-      || method === "page.ready" || method === "diag.payload") {
+      || method === "page.ready" || method === "page.mask" || method === "page.unmask"
+      || method === "diag.payload") {
     return await pageCommand(method, params);
   }
   throw { code: "UNKNOWN_METHOD", message: "[COPY PENDING] unknown method text: " + String(method) };

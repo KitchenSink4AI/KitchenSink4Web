@@ -56,6 +56,7 @@ from ..errors import (BadParams, CredentialRefused, LaneUnsupported, Timeout,
 from ..policy import engine as _policy
 from . import act as _act
 from . import common
+from . import extops as _extops
 from . import lite as _lite
 
 ENV_SHOT_MAX = "KS4WEB_SHOT_MAX_BYTES"
@@ -321,6 +322,15 @@ async def take_screenshot(
             "quality applies to jpeg only; png is lossless. Either drop "
             "quality or ask for format='jpeg'.")
     sess, record = common.locate(page)
+    if _extops.is_extension(sess):
+        # PATH 5's capture. The mask below is a Playwright screenshot option
+        # and `captureVisibleTab` has no such option, so the Lane C body
+        # applies the SAME selector as CSS around the capture and fails
+        # closed the same way. The other three targets refuse there rather
+        # than silently returning a viewport crop under their own name.
+        return await _extops.take_screenshot(
+            sess, record, target=target, image_format=format,
+            quality=quality)
     # THE ORIGIN POLICY ON THE CAPTURE SURFACES (union wave, IG-02). Fix
     # wave 8 put the origin twin of the wall gate at the read doors and the
     # act doors and stopped there, and the wave-8 ruling that exempted this

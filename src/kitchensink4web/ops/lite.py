@@ -49,6 +49,8 @@ from .. import envelope as _envelope
 from .. import pagedata as _pagedata
 from . import act as _act
 from . import common as _common
+from . import extops as _extops
+from ..extension import lane as _extlane
 from . import resource as _resource
 from . import wellknown as _wellknown
 from ..projection import render as _render
@@ -120,6 +122,26 @@ def _parse_lane(lane: str | None) -> dict:
     which = parts[1] if len(parts) > 1 else None
     if name == "B":
         return {"lane": "B", "channel": which or "chrome", "headless": headless}
+    if name in ("C", "REAL"):
+        # LANE C TAKES NO SUFFIX AND NO '+headed'. There is nothing to
+        # choose: the browser is the one already open on the desk, in
+        # whatever state the human left it. A `C:firefox` that resolved to
+        # 'C' would be the silent shrug this parser exists to refuse, and a
+        # `C+headed` that resolved to 'C' would be agreeing with a caller
+        # about a launch flag nothing here launches.
+        if which:
+            raise BadParams(
+                f"lane 'C' takes no engine or channel, and {lane!r} names "
+                f"{which!r}. Lane C drives the browser you already have "
+                f"open, so there is nothing to pick: it is whichever browser "
+                f"the KS4Web extension is installed in. Pass lane='C' or "
+                f"lane='real'.")
+        if not headless:
+            raise BadParams(
+                f"lane 'C' has no headless mode to opt out of, and {lane!r} "
+                f"asks for '+headed'. The window is the one on your screen. "
+                f"Pass lane='C'.")
+        return {"lane": "C"}
     return {"lane": name, "engine": which or "chromium", "headless": headless}
 
 
@@ -693,6 +715,19 @@ async def get_page_view(
             f"unknown mode {mode!r}: 'auto' (the default) or 'links' "
             f"(include in-prose links in the affordance list, at cost).")
     sess, record = MANAGER.locate(page)
+    if _extops.is_extension(sess):
+        # THE LANE C FORK, and it is at the tool boundary on purpose. What
+        # follows this line is the Playwright read: a frame ladder built from
+        # driver frame objects, a document probe that compiles a snippet in
+        # the page, and a self-navigation check that reads a driver
+        # exception's text. None of the three exists on the extension lane,
+        # and a version of this function that branched around all of them
+        # would leave a reader unable to say which read they were looking at.
+        # What the two paths SHARE is the part that decides the answer: the
+        # same extract.js, the same element map, the same projection.
+        return await _extops.get_page_view(
+            sess, record, view=view, detail=detail, location=location,
+            budget_tokens=budget_tokens, since=since, mode=mode)
     _audit.annotate(session=sess.session_id, page=record.handle,
                     url=record.page.url, lane=sess.spec.label)
     budget = max(200, int(budget_tokens * _DETAIL_SCALE[detail]))
@@ -1520,6 +1555,13 @@ async def navigate(
                 auto_session += " " + picked["why"]
         page = MANAGER.session(None).focused
     sess, record = MANAGER.locate(page)
+    if _extops.is_extension(sess):
+        result = await _extops.navigate(
+            sess, record, action=action, url=url, wait_until=wait_until,
+            timeout_ms=timeout_ms)
+        if auto_session:
+            result["auto_session"] = auto_session
+        return result
     _audit.annotate(session=sess.session_id, page=record.handle,
                     url=record.page.url, lane=sess.spec.label)
     before = record.page.url
@@ -2625,6 +2667,14 @@ async def click(
     explicit none-observed with a warning rather than a bare ok.
     """
     sess, record = MANAGER.locate(page)
+    if _extops.is_extension(sess):
+        # THE FIFTH WRITE PATH, and it lands on the same classifier. The
+        # docstring above describes trusted input, which this lane cannot
+        # produce: Firefox gives an extension no equivalent of Chrome's
+        # debugger API, so the click is `element.click()` and the payload
+        # says `is_trusted: false` rather than letting the sentence above
+        # stand for a lane it is not true of.
+        return await _extops.click(sess, record, location=location)
     _audit.annotate(session=sess.session_id, page=record.handle,
                     url=record.page.url, lane=sess.spec.label)
     # THE ORIGIN CHECK ON A DOCUMENT NO DOOR RULED ON (gauntlet 4,
@@ -2706,6 +2756,15 @@ async def type_text(
     rather than reported as success.
     """
     sess, record = MANAGER.locate(page)
+    if _extops.is_extension(sess):
+        # PATH 2 OF 5. `submit` and `press_enter` are one word here: the
+        # extension submits the form rather than pressing a key, so there is
+        # no keystroke to send without waiting for and no difference between
+        # the two to preserve. The submission is still classified as a
+        # submission and still meets the ladder's four classes.
+        return await _extops.type_text(
+            sess, record, location=location, text=text,
+            submit=bool(submit or press_enter))
     _audit.annotate(session=sess.session_id, page=record.handle,
                     url=record.page.url, lane=sess.spec.label)
     # THE ORIGIN CHECK ON A DOCUMENT NO DOOR RULED ON (gauntlet 4,
@@ -2989,6 +3048,13 @@ async def fill_form(
     place of "ref", and a checkbox takes true or false.
     """
     sess, record = MANAGER.locate(page)
+    if _extops.is_extension(sess):
+        # PATH 4 OF 5, and the one gauntlet 2 caught writing a card number
+        # ungated. The Lane C body classifies the WHOLE batch before it
+        # writes anything, for the reason that finding turned on: gating the
+        # submit that follows an ungated fill gates the wrong event.
+        return await _extops.fill_form(sess, record, fields=fields,
+                                       submit=submit)
     _audit.annotate(session=sess.session_id, page=record.handle,
                     url=record.page.url, lane=sess.spec.label)
     # THE ORIGIN CHECK ON A DOCUMENT NO DOOR RULED ON (gauntlet 4,
@@ -5728,11 +5794,41 @@ async def manage_session(
                 summary=f"Open a session and load saved authentication "
                         f"state from {_one_state}? This restores "
                         f"{len(_one_state)} real login(s).")
+        lane_kwargs = _parse_lane(lane)
+        if (lane_kwargs.get("lane") or "").upper() == "C":
+            # LANE C'S DOOR, asked BEFORE the connection, for the same reason
+            # `storage_load` is asked before the launch: a fail-closed answer
+            # must not strand a half-built session. It goes through
+            # `_policy.confirm` rather than the gate engine directly, so it
+            # meets the consent ladder like every other class (the eleven
+            # sites that bypassed the ladder are the defect that made
+            # `confirm` the one door).
+            #
+            # The switch is checked FIRST. Asking a human to allow a lane the
+            # server cannot open would be a prompt whose only possible
+            # outcomes are a refusal now or a refusal one line later.
+            if not lanes.extension_enabled():
+                raise LaneUnsupported(lanes.extension_off_refusal())
+            _policy.confirm(
+                "real_profile_browse", tool="manage_session", session=None,
+                page=None, target=None,
+                summary="Connect this server to the browser you are signed "
+                        "in to?")
         sess = await MANAGER.open(device=device, viewport=viewport,
                                   locale=locale, timezone=timezone,
                                   contexts=contexts if isinstance(contexts,
                                                                   int) else 1,
-                                  **_parse_lane(lane))
+                                  **lane_kwargs)
+        if _extops.is_extension(sess):
+            # THE BROWSER-SIDE COPY OF THE ANSWER. The ladder just decided;
+            # the extension records it so a command that somehow reached the
+            # pipe for an origin nobody approved never touches a page. It is
+            # defence in depth and is not the gate: the gate is
+            # `policy.engine.approve`, and it runs on every call regardless
+            # of what the browser thinks.
+            ctx = sess.contexts["c1"].context
+            seed = _extlane.origin_of(sess.page(sess.focused).page.url)
+            await ctx.set_consent([seed] if seed else [])
         loaded = None
         if checked_states:
             loaded = {}

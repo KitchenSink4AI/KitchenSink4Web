@@ -244,6 +244,55 @@
     };
   }
 
+  // ------------------------------------------------------------- the masking
+
+  const MASK_STYLE_ID = "__ks4web_mask";
+
+  /*
+   * Paint over the secret and payment fields before a capture, and count
+   * them so the Python side can fail closed.
+   *
+   * The SELECTOR COMES FROM PYTHON and is `capture.MASK_CSS`, the same
+   * string the Playwright lane hands its own masking. It is a selector, not
+   * code, so nothing here compiles anything; what it buys is that the fields
+   * a screenshot hides cannot drift between the two lanes.
+   *
+   * The mask is a black box drawn by CSS rather than a value the script
+   * reads and blanks. Reading the value to blank it would be the one thing
+   * this whole surface promises not to do.
+   */
+  function mask(params) {
+    const selector = params && params.selector;
+    if (typeof selector !== "string" || !selector) {
+      return { error: { code: "BAD_MESSAGE", message: "[COPY PENDING] mask selector text" } };
+    }
+    let count = 0;
+    try {
+      count = document.querySelectorAll(selector).length;
+    } catch (err) {
+      return { error: { code: "BAD_MESSAGE", message: String((err && err.message) || err) } };
+    }
+    unmask();
+    if (count) {
+      const style = document.createElement("style");
+      style.id = MASK_STYLE_ID;
+      style.textContent = selector
+        + "{color:transparent !important;background:#000 !important;"
+        + "text-shadow:none !important;caret-color:transparent !important;"
+        + "-webkit-text-security:disc !important;}";
+      (document.head || document.documentElement).appendChild(style);
+    }
+    return { result: { masked: count, selector: selector } };
+  }
+
+  function unmask() {
+    const existing = document.getElementById(MASK_STYLE_ID);
+    if (existing && existing.parentNode) {
+      existing.parentNode.removeChild(existing);
+    }
+    return { result: { masked: 0 } };
+  }
+
   /*
    * Whether this document is ready to be read, and why not when it is not.
    * The SPA answer, in the one place both the read path and the navigation
@@ -275,6 +324,12 @@
       }
       if (msg.method === "page.ready") {
         return Promise.resolve({ result: readiness() });
+      }
+      if (msg.method === "page.mask") {
+        return Promise.resolve(mask(msg.params || {}));
+      }
+      if (msg.method === "page.unmask") {
+        return Promise.resolve(unmask());
       }
       if (msg.method === "diag.payload") {
         return Promise.resolve({ result: diagPayload(msg.params) });

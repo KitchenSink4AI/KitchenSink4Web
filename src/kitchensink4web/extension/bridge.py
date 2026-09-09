@@ -46,6 +46,41 @@ def default_state_dir() -> Path:
     return Path(os.path.expanduser("~")) / ".kitchensink4web"
 
 
+def _pid_alive(pid: int) -> bool:
+    """Whether a process is running. Unknown counts as ALIVE.
+
+    The caller is deciding whether to take something away from that process,
+    so an unanswerable question has to fall on the side of leaving it
+    alone."""
+    if pid <= 0:
+        return False
+    if os.name == "nt":
+        import ctypes
+        PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+        STILL_ACTIVE = 259
+        kernel32 = ctypes.windll.kernel32
+        handle = kernel32.OpenProcess(
+            PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+        if not handle:
+            return False
+        try:
+            code = ctypes.c_ulong()
+            if not kernel32.GetExitCodeProcess(handle, ctypes.byref(code)):
+                return True
+            return code.value == STILL_ACTIVE
+        finally:
+            kernel32.CloseHandle(handle)
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    except OSError:
+        return True
+    return True
+
+
 class BridgeError(Exception):
     """The bridge could not do what was asked."""
 
@@ -82,14 +117,27 @@ class Bridge:
         self._replies: dict[int, dict] = {}
         self._events: list[dict] = []
         self._stopped = threading.Event()
+        #: Whether THIS bridge wrote the endpoint file. `close` unlinks it
+        #: only when so: a bridge that refused to clobber another server's
+        #: endpoint must not delete that server's endpoint on its way out,
+        #: which would turn a polite refusal into the outage it prevented.
+        self._owns_endpoint = False
 
         self._accept_thread = threading.Thread(target=self._accept_loop, daemon=True)
         self._accept_thread.start()
-        self._write_endpoint()
+        try:
+            self._write_endpoint()
+        except BaseException:
+            # A refusal here must not leave a bound listener and a live
+            # thread behind: the caller is going to see an exception and will
+            # not be holding anything it could close.
+            self.close()
+            raise
 
     # -- lifecycle -------------------------------------------------------
 
     def _write_endpoint(self) -> None:
+        self._refuse_to_clobber()
         self.endpoint_path.parent.mkdir(parents=True, exist_ok=True)
         payload = {
             "version": PROTOCOL_VERSION,
@@ -101,6 +149,38 @@ class Bridge:
         tmp = self.endpoint_path.with_suffix(".tmp")
         tmp.write_text(json.dumps(payload), encoding="utf-8")
         os.replace(tmp, self.endpoint_path)
+        self._owns_endpoint = True
+
+    def _refuse_to_clobber(self) -> None:
+        """A SECOND SERVER DOES NOT STEAL THE FIRST ONE'S BROWSER.
+
+        The endpoint file is a single well-known path, so a second KS4Web
+        process writing it would point every future relay at itself and the
+        first server's Lane C would go quiet with no error anywhere. The pid
+        in the file is what makes that detectable: a live owner is a refusal
+        naming it, and a dead one is a stale file this process may replace.
+
+        This is the Phase 1 open question answered. The check is not a lock
+        and does not pretend to be: two servers starting in the same
+        millisecond can both pass it. What it removes is the ordinary case,
+        which is a human with a second client open.
+        """
+        try:
+            existing = json.loads(
+                self.endpoint_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return
+        pid = existing.get("pid")
+        if not isinstance(pid, int) or pid == os.getpid():
+            return
+        if not _pid_alive(pid):
+            return
+        raise BridgeError(
+            f"another KS4Web server (pid {pid}) already owns the browser "
+            f"extension endpoint at {self.endpoint_path}. One browser answers "
+            f"one server: taking the endpoint would point the extension here "
+            f"and leave that server's Lane C silently dead. Close the other "
+            f"server, or point this one somewhere else with KS4WEB_STATE_DIR.")
 
     def close(self) -> None:
         self._stopped.set()
@@ -113,10 +193,11 @@ class Bridge:
                     sock.close()
                 except OSError:
                     pass
-        try:
-            self.endpoint_path.unlink()
-        except OSError:
-            pass
+        if self._owns_endpoint:
+            try:
+                self.endpoint_path.unlink()
+            except OSError:
+                pass
         for event in list(self._waiters.values()):
             event.set()
 
