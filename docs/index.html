@@ -305,6 +305,9 @@ th.us{background:var(--brass)!important;color:var(--paper)}
   font-size:10px;letter-spacing:.3em;padding:4px 12px;text-transform:uppercase}
 .step h3{font-size:16px;font-weight:800;margin:6px 0 8px}
 .step p{font-size:13px;color:var(--ink-soft);line-height:1.6;margin-bottom:14px}
+.step .go{display:inline-block;font-size:11px;letter-spacing:.18em;text-transform:uppercase;
+  color:var(--brass);font-weight:600;text-decoration:none;border-bottom:2px solid var(--brass);
+  padding-bottom:2px}
 /* The permissions callout. This is the most useful practical line on the page,
    so it is a card with a hard frame and a brass field rather than a note hanging
    off the bottom of the section. The stem still puts out its one leaf. */
@@ -605,6 +608,7 @@ footer a{color:var(--brass)}
         <span class="badge" data-i18n="inst.b1">Easiest</span>
         <h3 data-i18n="inst.s1">Claude Desktop</h3>
         <p data-i18n="inst.p1">Claude Desktop: install the <code>.mcpb</code> bundle and pick what you want on the install screen. The checkboxes are the whole configuration: one to allow clicking and typing (off means read-only browsing, the shipped default), and one per capability pack. Launching the bundle requires <code>uv</code> (the <code>uvx</code> command) on your machine; the server itself is fetched from PyPI on first launch and drives its own bundled Chromium, never your browser or your profile.</p>
+        <a class="go" href="https://github.com/KitchenSink4AI/KitchenSink4Web/releases/latest" data-i18n="inst.g1">Download the .mcpb bundle →</a>
       </div>
       <div class="step">
         <span class="badge" data-i18n="inst.b2">One command</span>
@@ -950,6 +954,7 @@ en: {
 "inst.b1": "Easiest",
 "inst.s1": "Claude Desktop",
 "inst.p1": "Claude Desktop: install the <code>.mcpb</code> bundle and pick what you want on the install screen. The checkboxes are the whole configuration: one to allow clicking and typing (off means read-only browsing, the shipped default), and one per capability pack. Launching the bundle requires <code>uv</code> (the <code>uvx</code> command) on your machine; the server itself is fetched from PyPI on first launch and drives its own bundled Chromium, never your browser or your profile.",
+"inst.g1": "Download the .mcpb bundle →",
 "inst.b2": "One command",
 "inst.s2": "Any other MCP client",
 "inst.p2": "Packs and read-only mode are chosen at launch (<code>--packs</code>, <code>KS4WEB_MODE</code>, <code>KS4WEB_ALLOW_ACTING</code>) and are identical for every connection to the process.",
@@ -1085,6 +1090,7 @@ ko: {
 "inst.b1": "가장 쉬운 길",
 "inst.s1": "Claude Desktop",
 "inst.p1": "Claude Desktop: <code>.mcpb</code> 번들을 설치하고 설치 화면에서 원하는 것을 고르면 됩니다. 체크박스가 설정의 전부입니다. 클릭과 입력을 허용하는 것 하나(끄면 배포 기본값인 읽기 전용 열람), 그리고 기능 팩마다 하나씩입니다. 번들을 실행하려면 컴퓨터에 <code>uv</code>(<code>uvx</code> 명령)가 있어야 하며, 서버 자체는 첫 실행 때 PyPI에서 받아오고 자체 번들 Chromium을 구동합니다. 사용자의 브라우저나 프로필은 건드리지 않습니다.",
+"inst.g1": ".mcpb 번들 내려받기 →",
 "inst.b2": "명령 한 줄",
 "inst.s2": "그 밖의 모든 MCP 클라이언트",
 "inst.p2": "팩과 읽기 전용 모드는 실행 시점에 정해지며(<code>--packs</code>, <code>KS4WEB_MODE</code>, <code>KS4WEB_ALLOW_ACTING</code>), 그 프로세스에 연결하는 모든 연결에 동일하게 적용됩니다.",
@@ -1220,6 +1226,7 @@ ja: {
 "inst.b1": "いちばん簡単",
 "inst.s1": "Claude Desktop",
 "inst.p1": "Claude Desktop: <code>.mcpb</code>バンドルを入れ、インストール画面で好きなものを選ぶだけです。チェックボックスが設定のすべてで、クリックと入力を許可するものがひとつ(オフなら出荷時既定の読み取り専用ブラウジング)、そして機能パックごとにひとつです。バンドルの起動には<code>uv</code>(<code>uvx</code>コマンド)が必要で、サーバー本体は初回起動時にPyPIから取得され、同梱のChromiumを動かします。あなたのブラウザやプロファイルには触れません。",
+"inst.g1": ".mcpb バンドルをダウンロード →",
 "inst.b2": "コマンド1行",
 "inst.s2": "そのほかのMCPクライアント",
 "inst.p2": "パックと読み取り専用モードは起動時に決まり(<code>--packs</code>、<code>KS4WEB_MODE</code>、<code>KS4WEB_ALLOW_ACTING</code>)、そのプロセスへのすべての接続で同じです。",
@@ -1355,6 +1362,7 @@ zh: {
 "inst.b1": "最省事",
 "inst.s1": "Claude Desktop",
 "inst.p1": "Claude Desktop：安装 <code>.mcpb</code> 捆绑包，在安装界面上挑你要的东西。那些复选框就是全部配置：一个用来允许点击和输入（不勾就是出厂默认的只读浏览），其余每个能力包一个。启动这个捆绑包需要你的机器上有 <code>uv</code>（也就是 <code>uvx</code> 命令）；服务器本身在首次启动时从 PyPI 取回，并驱动它自带的 Chromium，绝不碰你的浏览器或你的配置文件。",
+"inst.g1": "下载 .mcpb 安装包 →",
 "inst.b2": "一条命令",
 "inst.s2": "任何其他 MCP 客户端",
 "inst.p2": "能力包与只读模式在启动时确定（<code>--packs</code>、<code>KS4WEB_MODE</code>、<code>KS4WEB_ALLOW_ACTING</code>），并且对连接到该进程的每一个连接都相同。",
@@ -1490,6 +1498,7 @@ de: {
 "inst.b1": "Am einfachsten",
 "inst.s1": "Claude Desktop",
 "inst.p1": "Claude Desktop: Installieren Sie das <code>.mcpb</code>-Bündel und wählen Sie im Installationsbildschirm aus, was Sie möchten. Die Kästchen sind die gesamte Konfiguration: eines, um Klicken und Tippen zu erlauben (aus bedeutet reines Lesen beim Browsen, die ausgelieferte Voreinstellung), und eines pro Fähigkeitspaket. Der Start des Bündels verlangt <code>uv</code> (den Befehl <code>uvx</code>) auf Ihrem Rechner; der Server selbst wird beim ersten Start von PyPI geholt und steuert sein eigenes mitgeliefertes Chromium, nie Ihren Browser und nie Ihr Profil.",
+"inst.g1": ".mcpb-Bündel herunterladen →",
 "inst.b2": "Ein Befehl",
 "inst.s2": "Jeder andere MCP-Client",
 "inst.p2": "Pakete und Lesemodus werden beim Start gewählt (<code>--packs</code>, <code>KS4WEB_MODE</code>, <code>KS4WEB_ALLOW_ACTING</code>) und sind für jede Verbindung zu diesem Prozess identisch.",
@@ -1625,6 +1634,7 @@ fr: {
 "inst.b1": "Le plus simple",
 "inst.s1": "Claude Desktop",
 "inst.p1": "Claude Desktop : installez le paquet <code>.mcpb</code> et choisissez ce que vous voulez sur l'écran d'installation. Les cases à cocher sont toute la configuration : une pour autoriser le clic et la saisie (décochée, c'est la navigation en lecture seule, le réglage livré), et une par module de capacités. Lancer le paquet demande <code>uv</code> (la commande <code>uvx</code>) sur votre machine ; le serveur lui-même est récupéré depuis PyPI au premier lancement et pilote son propre Chromium embarqué, jamais votre navigateur ni votre profil.",
+"inst.g1": "Télécharger le paquet .mcpb →",
 "inst.b2": "Une commande",
 "inst.s2": "Tout autre client MCP",
 "inst.p2": "Les modules et le mode lecture seule sont choisis au lancement (<code>--packs</code>, <code>KS4WEB_MODE</code>, <code>KS4WEB_ALLOW_ACTING</code>) et sont identiques pour chaque connexion au processus.",
@@ -1760,6 +1770,7 @@ es: {
 "inst.b1": "Lo más fácil",
 "inst.s1": "Claude Desktop",
 "inst.p1": "Claude Desktop: instale el paquete <code>.mcpb</code> y elija lo que quiera en la pantalla de instalación. Las casillas son toda la configuración: una para permitir el clic y la escritura (desmarcada significa navegación de solo lectura, el valor de fábrica) y una por cada paquete de capacidades. Lanzar el paquete requiere <code>uv</code> (el comando <code>uvx</code>) en su equipo; el servidor se descarga de PyPI en el primer arranque y maneja su propio Chromium incluido, nunca su navegador ni su perfil.",
+"inst.g1": "Descargar el paquete .mcpb →",
 "inst.b2": "Un comando",
 "inst.s2": "Cualquier otro cliente MCP",
 "inst.p2": "Los paquetes y el modo de solo lectura se eligen al arrancar (<code>--packs</code>, <code>KS4WEB_MODE</code>, <code>KS4WEB_ALLOW_ACTING</code>) y son idénticos para cada conexión al proceso.",
