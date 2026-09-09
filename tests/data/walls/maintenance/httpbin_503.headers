@@ -1,9 +1,0 @@
-HTTP/1.1 503 SERVICE UNAVAILABLE
-Date: Mon, 07 Sep 2026 11:45:36 GMT
-Content-Type: text/html; charset=utf-8
-Content-Length: 0
-Connection: keep-alive
-Server: gunicorn/19.9.0
-Access-Control-Allow-Origin: *
-Access-Control-Allow-Credentials: true
-
