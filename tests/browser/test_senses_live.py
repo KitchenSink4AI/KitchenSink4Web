@@ -195,7 +195,14 @@ def test_the_completeness_line_names_the_ocr_capability(fixture_site):
         if ocr.available():
             assert "read_image_text reads text out of them here" in blob
         else:
-            assert "no OCR engine is available here" in blob
+            # THE ABSENT BRANCH, in the words the ledger actually uses. The
+            # row was written against a phrasing the module never shipped,
+            # so it only ever ran green on a machine that HAS the engine and
+            # went red the first time a runner without one reached it. The
+            # short reason is asserted too, which is the part that makes the
+            # flag useful: it says WHY, not only that.
+            assert "nothing here reads pixels" in blob
+            assert ocr.short_reason() in blob
     run(go())
 
 

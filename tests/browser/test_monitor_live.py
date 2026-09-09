@@ -21,6 +21,7 @@ import time
 
 import pytest
 
+from kitchensink4web.engine import hygiene
 from kitchensink4web.engine import monitors as _monitors
 from kitchensink4web.engine import session as _session
 from kitchensink4web.engine.session import MANAGER
@@ -30,6 +31,17 @@ from kitchensink4web.ops import monitor as _monitor_ops
 from kitchensink4web.policy import budgets as _budgets
 
 pytestmark = pytest.mark.browser
+
+#: THE PROCESS LAYER IS WIN32-ONLY BY CONSTRUCTION. `hygiene.WINDOWS` gates
+#: the process table, liveness, and the kill; off Windows a session journals
+#: no owned PIDs, so nothing can be killed and health reads `unknown` rather
+#: than alive or dead. A row that watches that layer says so here rather
+#: than failing on a capability this build does not claim on this platform.
+needs_process_hygiene = pytest.mark.skipif(
+    not hygiene.WINDOWS,
+    reason="process hygiene (the owned-PID journal, liveness, and the kill) "
+           "is Win32-only in this build, so no PID is journalled on this "
+           "platform and there is nothing here to observe")
 
 #: What the mutable site currently serves, and how many times it has been
 #: asked. The 429 pin needs the request COUNT, because "we did not retry"
@@ -259,6 +271,7 @@ def test_m18_each_condition_detects_its_own_change(mutable_site, condition,
 
 # -------------------------------------------------------------------- M-19
 
+@needs_process_hygiene
 def test_m19_zero_orphans_after_monitor_teardown(mutable_site):
     async def go():
         from kitchensink4web.engine import hygiene

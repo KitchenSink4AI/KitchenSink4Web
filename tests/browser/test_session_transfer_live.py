@@ -16,11 +16,23 @@ import asyncio
 import pytest
 
 from kitchensink4web.engine import handles as _handles
+from kitchensink4web.engine import hygiene
 from kitchensink4web.engine.session import MANAGER
 from kitchensink4web.errors import Conflict, SessionDead
 from kitchensink4web.ops import lite
 
 pytestmark = pytest.mark.browser
+
+#: THE PROCESS LAYER IS WIN32-ONLY BY CONSTRUCTION. `hygiene.WINDOWS` gates
+#: the process table, liveness, and the kill; off Windows a session journals
+#: no owned PIDs, so nothing can be killed and health reads `unknown` rather
+#: than alive or dead. A row that watches that layer says so here rather
+#: than failing on a capability this build does not claim on this platform.
+needs_process_hygiene = pytest.mark.skipif(
+    not hygiene.WINDOWS,
+    reason="process hygiene (the owned-PID journal, liveness, and the kill) "
+           "is Win32-only in this build, so no PID is journalled on this "
+           "platform and there is nothing here to observe")
 
 
 def run(coro):
@@ -196,6 +208,7 @@ def test_h17_budget_spend_carries_and_is_disclosed(session_factory,
 
 # ------------------------------------------------------------------ H-18
 
+@needs_process_hygiene
 def test_h18_a_dead_browser_refuses_with_the_health_verdict(session_factory,
                                                             fixture_site):
     """One verdict, quoted. Two features computing liveness separately is

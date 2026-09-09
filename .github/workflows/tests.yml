@@ -20,7 +20,10 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
       - name: Install
-        run: pip install -e ".[dev]"
+        # The accessibility extra comes along because it is a PINNED engine
+        # rather than a nicety: without it the tests that read an audit
+        # refuse with "the engine is not installed" instead of running.
+        run: pip install -e ".[dev,accessibility]"
       - name: Run test suite
         # tests/unit only. The browser half runs in its own job below, which
         # needs a downloaded browser and is therefore slower and narrower.
@@ -46,7 +49,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install
-        run: pip install -e ".[dev]"
+        run: pip install -e ".[dev,accessibility]"
       - name: Install Chromium and its system libraries (Linux)
         # Lane A is the browser the server ships with. Lane B drives an
         # installed Chrome, Edge, or Firefox and stays a local gate: a runner
@@ -58,5 +61,14 @@ jobs:
       - name: Install Chromium (Windows)
         if: runner.os == 'Windows'
         run: python -m playwright install chromium
-      - name: Run browser suite
+      - name: Run browser suite (Linux, under a virtual display)
+        # A runner has no X server, and the headed lane really does need one:
+        # a headed launch there dies with "Missing X server or $DISPLAY"
+        # before Chromium is up. `xvfb-run` supplies the display rather than
+        # skipping the lane, so the headed tests are actually run here and
+        # not merely counted. `-a` picks a free display number.
+        if: runner.os == 'Linux'
+        run: xvfb-run -a python -m pytest tests/browser -q
+      - name: Run browser suite (Windows)
+        if: runner.os == 'Windows'
         run: python -m pytest tests/browser -q

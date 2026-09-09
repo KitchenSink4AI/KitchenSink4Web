@@ -24,14 +24,28 @@ from __future__ import annotations
 
 import asyncio
 import json as _json
+import time
 
 import pytest
 
-from kitchensink4web.engine import session as _session
+from kitchensink4web.engine import hygiene, session as _session
 from kitchensink4web.engine.session import MANAGER
 from kitchensink4web.ops import lite, monitor as _monitor
 
 pytestmark = pytest.mark.browser
+
+#: THE PROCESS LAYER IS WIN32-ONLY BY CONSTRUCTION. `hygiene.WINDOWS` gates
+#: the process table, liveness, CPU accounting, and the kill; off Windows a
+#: session journals no owned PIDs, so `_kill_browsers` reaches nothing and
+#: health reads `unknown` rather than alive or dead. Every row below that
+#: kills something to watch what happens next needs that layer, and says so
+#: here rather than failing on a capability this build does not claim on
+#: this platform.
+needs_process_hygiene = pytest.mark.skipif(
+    not hygiene.WINDOWS,
+    reason="process hygiene (the owned-PID journal, liveness, and the kill) "
+           "is Win32-only in this build, so nothing can be killed or "
+           "declared dead on this platform")
 
 
 def run(coro):
@@ -44,26 +58,41 @@ def run(coro):
     return asyncio.run(main())
 
 
-def _kill_browsers(sess) -> None:
+async def _kill_browsers(sess, timeout: float = 20.0) -> None:
     """Kill every OS process one session owns, and leave the handle behind.
 
     This is the field shape: the Session object is still in the manager's
-    dict, still listed by status, and its browser is gone."""
-    from kitchensink4web.engine import hygiene
-    for jar in sess.contexts.values():
-        for pid in list(jar.journal.pids):
-            hygiene.kill(pid)
+    dict, still listed by status, and its browser is gone.
+
+    THE WAIT IS PART OF THE KILL. `taskkill /F` returns when the request is
+    filed, not when the process is gone, and on a loaded CI runner the gap
+    was long enough that the very next line read the browser as alive and
+    failed a row about a death that did arrive a moment later. Waiting for
+    the processes to actually leave the table pins the same property without
+    the race, and the wait is AWAITED and not slept: the driver delivers
+    its disconnect on this loop, so a blocking sleep here would hold up the
+    very event the rows below go on to read."""
+    pids = [pid for jar in sess.contexts.values()
+            for pid in list(jar.journal.pids)]
+    for pid in pids:
+        hygiene.kill(pid)
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if not any(hygiene.alive(pid) for pid in pids):
+            return
+        await asyncio.sleep(0.1)
 
 
 # ---------------------------------------------------- LAYER 3: the blocker
 
 
+@needs_process_hygiene
 def test_a_dead_session_does_not_block_a_new_one(session_factory):
     """THE SHIP BLOCKER. Before the fix the dead handle stayed in the list
     and the shared driver stayed cached, and every open after it failed."""
     async def go():
         doomed = await session_factory()
-        _kill_browsers(doomed)
+        await _kill_browsers(doomed)
         assert doomed.browser_alive() is False
         fresh = await session_factory()
         assert fresh.session_id in MANAGER.sessions
@@ -75,12 +104,13 @@ def test_a_dead_session_does_not_block_a_new_one(session_factory):
     run(go())
 
 
+@needs_process_hygiene
 def test_the_open_that_reaped_says_what_it_reaped(session_factory):
     """A handle disappearing between two calls is a thing the caller is owed
     an explanation for."""
     async def go():
         doomed = await session_factory()
-        _kill_browsers(doomed)
+        await _kill_browsers(doomed)
         result = await lite.manage_session(action="open")
         assert doomed.session_id in [r["session"] for r in result["reaped"]]
         assert "never blocks a new one" in result["reaped_note"]
@@ -122,6 +152,7 @@ def test_a_user_session_and_the_monitor_run_on_different_drivers(
     run(go())
 
 
+@needs_process_hygiene
 def test_killing_a_user_browser_leaves_the_monitor_alive(session_factory):
     """THE FIELD REPRO, inverted into a pin. In the field a user browser's
     death took the monitor's with it; here it must not."""
@@ -129,7 +160,7 @@ def test_killing_a_user_browser_leaves_the_monitor_alive(session_factory):
         user = await session_factory()
         monitor_session = await MANAGER.open(headless=True, role="monitor")
         try:
-            _kill_browsers(user)
+            await _kill_browsers(user)
             assert user.browser_alive() is False
             assert monitor_session.browser_alive() is not False, (
                 "the monitor's browser died with a user session's browser")
@@ -177,6 +208,7 @@ def test_a_slot_with_sessions_on_it_keeps_its_driver(session_factory):
     run(go())
 
 
+@needs_process_hygiene
 def test_a_dead_driver_is_replaced_rather_than_handed_back(session_factory):
     """THE FIELD MECHANISM, reproduced exactly and then severed.
 
@@ -242,12 +274,13 @@ def test_a_user_driver_death_does_not_reach_the_monitors(session_factory):
 # ------------------------------------------------- LAYER 1 + 3: it is NAMED
 
 
+@needs_process_hygiene
 def test_the_status_report_names_a_dead_monitor_out_loud(session_factory):
     """The tester found the dead monitor by accident, three layers in."""
     async def go():
         monitor_session = await MANAGER.open(headless=True, role="monitor")
         try:
-            _kill_browsers(monitor_session)
+            await _kill_browsers(monitor_session)
             report = await lite.manage_session(action="status")
             assert report["monitor_session"]["browser"] == "dead"
             assert report["monitor_session"]["session"] == \
@@ -259,6 +292,7 @@ def test_the_status_report_names_a_dead_monitor_out_loud(session_factory):
     run(go())
 
 
+@needs_process_hygiene
 def test_a_healthy_monitor_is_named_too(session_factory):
     """BOTH-DIRECTION PIN. "The monitor is fine" is the answer that stops a
     caller hunting, and it is worth as much as the other one."""
@@ -291,6 +325,7 @@ def test_no_monitor_no_monitor_line(session_factory):
     run(go())
 
 
+@needs_process_hygiene
 def test_session_dead_carries_machine_readable_recovery(session_factory):
     """Field item 7. The refusal named a recovery in prose and left the
     caller to discover the rest of the casualties by hand."""
@@ -298,7 +333,7 @@ def test_session_dead_carries_machine_readable_recovery(session_factory):
         from kitchensink4web import envelope
         doomed = await session_factory()
         page = doomed.focused
-        _kill_browsers(doomed)
+        await _kill_browsers(doomed)
         # The tools raise; `envelope.refusal` is what the server wrapper
         # turns the exception into, and the recovery has to survive that
         # trip rather than only existing on the exception object.
@@ -317,13 +352,14 @@ def test_session_dead_carries_machine_readable_recovery(session_factory):
     run(go())
 
 
+@needs_process_hygiene
 def test_the_monitor_session_restarts_and_reports_the_restart():
     """Auto-restart, and the restart is a reported fact rather than a
     silently-replaced browser."""
     async def go():
         _monitor.SESSION_RESTARTS.clear()
         first = await _monitor._monitor_session()
-        _kill_browsers(first)
+        await _kill_browsers(first)
         second = await _monitor._monitor_session()
         try:
             assert second.session_id != first.session_id

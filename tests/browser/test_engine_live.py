@@ -27,6 +27,17 @@ FIREFOX_INSTALLED = any(
     (r"C:\Program Files\Mozilla Firefox\firefox.exe",
      r"C:\Program Files (x86)\Mozilla Firefox\firefox.exe"))
 
+#: THE PROCESS LAYER IS WIN32-ONLY BY CONSTRUCTION. `hygiene.WINDOWS` gates
+#: the process table, the creation-time fence, liveness, CPU accounting, and
+#: the kill; off Windows a session journals no owned PIDs at all. A row that
+#: watches that layer says so here rather than failing on a capability this
+#: build does not claim on this platform.
+needs_process_hygiene = pytest.mark.skipif(
+    not hygiene.WINDOWS,
+    reason="process hygiene (the owned-PID journal, liveness, CPU time, and "
+           "the kill) is Win32-only in this build, so no PID is journalled "
+           "on this platform and there is nothing here to observe")
+
 
 def run(coro):
     """Run a test body and close every session inside the SAME event loop.
@@ -47,6 +58,7 @@ def run(coro):
 # ------------------------------------------------------------- lifecycle
 
 
+@needs_process_hygiene
 def test_a_session_mints_handles_and_owns_its_processes(session_factory,
                                                         fixture_site):
     async def go():
@@ -96,6 +108,7 @@ def test_three_cycles_leak_nothing(session_factory, fixture_site):
     run(go())
 
 
+@needs_process_hygiene
 def test_the_idle_park_stops_a_busy_page(session_factory):
     """Verified by CPU, because "we called goto about:blank" is not evidence
     that a page stopped burning a core (chrome-devtools-mcp #2599: 28 to 30

@@ -32,6 +32,17 @@ from kitchensink4web.policy import budgets as _budgets
 
 pytestmark = pytest.mark.browser
 
+#: THE PROCESS LAYER IS WIN32-ONLY BY CONSTRUCTION. `hygiene.WINDOWS` gates
+#: the process table, liveness, and the kill; off Windows a session journals
+#: no owned PIDs, so nothing can be killed and health reads `unknown` rather
+#: than alive or dead. A row that watches that layer says so here rather
+#: than failing on a capability this build does not claim on this platform.
+needs_process_hygiene = pytest.mark.skipif(
+    not hygiene.WINDOWS,
+    reason="process hygiene (the owned-PID journal, liveness, and the kill) "
+           "is Win32-only in this build, so no PID is journalled on this "
+           "platform and there is nothing here to observe")
+
 
 def run(coro):
     async def main():
@@ -283,6 +294,7 @@ def test_c9_closing_one_context_invalidates_only_its_refs(session_factory,
 
 # ------------------------------------------------------------------ C10
 
+@needs_process_hygiene
 def test_c10_zero_orphans_after_a_two_context_session(session_factory):
     async def go():
         sess = await session_factory(contexts=2)
@@ -436,6 +448,7 @@ def test_c13_a_failed_second_context_tears_down_the_first(monkeypatch,
 
 # ------------------------------------------------------------------ C14
 
+@needs_process_hygiene
 def test_c14_one_dead_context_does_not_report_a_healthy_session(
         session_factory):
     """`degraded` is the aggregate word. Reporting a session as alive

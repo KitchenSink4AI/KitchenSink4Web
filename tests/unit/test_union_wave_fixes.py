@@ -164,10 +164,16 @@ def test_shell_tokens_are_expanded_before_the_receipt(tmp_path, monkeypatch):
     cannot see."""
     from kitchensink4web.ops import common
     monkeypatch.setenv("UW_PROBE_DIR", str(tmp_path))
-    where = common.write_text_file("%UW_PROBE_DIR%/probe.txt", "x", "save probe")
+    # The TOKEN is per-platform, because the expansion is: `os.path.
+    # expandvars` reads `%VAR%` on Windows and `$VAR` on POSIX, and a shell
+    # token spelled the other way is not a token there, it is a filename.
+    # The row pins the same behaviour either way — the variable is resolved
+    # before the receipt, and the receipt carries no unexpanded token.
+    token = "%UW_PROBE_DIR%" if os.name == "nt" else "$UW_PROBE_DIR"
+    where = common.write_text_file(f"{token}/probe.txt", "x", "save probe")
     assert where == str(tmp_path / "probe.txt")
     assert (tmp_path / "probe.txt").read_text() == "x"
-    assert "%" not in where
+    assert "UW_PROBE_DIR" not in where
 
 
 def test_a_relative_path_is_reported_absolute(tmp_path, monkeypatch):
