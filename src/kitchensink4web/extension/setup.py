@@ -300,15 +300,26 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--install-dir", default=None)
     parser.add_argument("--no-registry", action="store_true",
                         help="write the files and leave the registry alone.")
+    parser.add_argument(
+        "--host-name", default=register.HOST_NAME,
+        help=("the native messaging host name to register under. Changing it "
+              "means the extension cannot find the relay, so this is for "
+              "tests and for running a second install side by side, not for "
+              "ordinary use. It exists because a test that removed the "
+              "DEFAULT name would uninstall a working setup off the "
+              "developer's own machine."),
+    )
     args = parser.parse_args(argv)
 
     where = Path(args.install_dir) if args.install_dir else None
     try:
         if args.remove:
-            result = remove(args.browser, install_dir=where)
+            result = remove(args.browser, install_dir=where,
+                            host_name=args.host_name)
         else:
             result = install(args.browser, install_dir=where,
                              extension_id=args.extension_id,
+                             host_name=args.host_name,
                              touch_registry=not args.no_registry)
     except Exception as exc:
         print(f"KS4Web browser setup failed: {exc}", file=sys.stderr)

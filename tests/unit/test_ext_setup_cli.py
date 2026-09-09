@@ -13,9 +13,16 @@ import pytest
 
 from kitchensink4web.extension import setup
 
+#: NEVER the shipped host name. `--remove` under the default name would
+#: unregister a working Lane C off the developer's own machine, and the
+#: removal path deliberately looks in the real per-user application
+#: directory as well as the one it was handed.
+TEST_HOST = "ks4web_test_phase4_cli"
+
 
 def test_the_module_entry_point_installs_and_says_where(tmp_path, capsys):
     code = setup.main(["--browser", "firefox", "--no-registry",
+                       "--host-name", TEST_HOST,
                        "--install-dir", str(tmp_path / "app")])
     out = capsys.readouterr().out
 
@@ -29,15 +36,18 @@ def test_no_registry_still_reports_success(tmp_path, capsys):
     """`--no-registry` writes files and registers nothing, and that IS the
     job it was asked to do. Returning 1 there would make a deliberate choice
     look like a failure."""
-    code = setup.main(["--no-registry", "--install-dir", str(tmp_path / "app")])
+    code = setup.main(["--no-registry", "--host-name", TEST_HOST,
+                       "--install-dir", str(tmp_path / "app")])
     assert code == 0
 
 
 def test_the_module_entry_point_removes(tmp_path, capsys):
-    setup.main(["--no-registry", "--install-dir", str(tmp_path / "app")])
+    setup.main(["--no-registry", "--host-name", TEST_HOST,
+                "--install-dir", str(tmp_path / "app")])
     capsys.readouterr()
 
-    code = setup.main(["--remove", "--install-dir", str(tmp_path / "app")])
+    code = setup.main(["--remove", "--host-name", TEST_HOST,
+                       "--install-dir", str(tmp_path / "app")])
     out = capsys.readouterr().out
     assert code == 0
     assert not (tmp_path / "app" / "extension" / "firefox").exists()
@@ -46,7 +56,8 @@ def test_the_module_entry_point_removes(tmp_path, capsys):
 
 def test_an_unknown_browser_is_rejected_by_argparse(tmp_path):
     with pytest.raises(SystemExit) as exc:
-        setup.main(["--browser", "safari", "--install-dir", str(tmp_path)])
+        setup.main(["--browser", "safari", "--host-name", TEST_HOST,
+                    "--install-dir", str(tmp_path)])
     assert exc.value.code == 2
 
 
@@ -57,7 +68,8 @@ def test_a_failure_returns_two_rather_than_raising(tmp_path, monkeypatch, capsys
         raise OSError("the disk said no")
 
     monkeypatch.setattr(setup, "install", boom)
-    code = setup.main(["--no-registry", "--install-dir", str(tmp_path)])
+    code = setup.main(["--no-registry", "--host-name", TEST_HOST,
+                       "--install-dir", str(tmp_path)])
     assert code == 2
     assert "the disk said no" in capsys.readouterr().err
 

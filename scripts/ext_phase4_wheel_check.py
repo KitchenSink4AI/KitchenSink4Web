@@ -39,6 +39,12 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
+#: NEVER the shipped host name. The removal step deliberately looks in the
+#: real per-user application directory as well as the one it was handed, so a
+#: proof run under the default name would uninstall a working Lane C off the
+#: developer's own machine as a side effect of checking a wheel.
+TEST_HOST = "ks4web_wheel_proof"
+
 #: Nothing appears on the author's desktop. Every subprocess here is silent,
 #: has no stdin, and dies on a timeout rather than waiting for a person.
 _QUIET = {
@@ -155,6 +161,7 @@ def main() -> int:
         target = scratch / "installdir"
         proc = run([str(python), "-m", "kitchensink4web.extension.setup",
                     "--browser", "firefox", "--no-registry",
+                    "--host-name", TEST_HOST,
                     "--install-dir", str(target)])
         findings["setup_stdout"] = proc.stdout
         findings["setup_returncode"] = proc.returncode
@@ -196,6 +203,7 @@ def main() -> int:
         # 5. And take it back off.
         proc = run([str(python), "-m", "kitchensink4web.extension.setup",
                     "--browser", "firefox", "--remove",
+                    "--host-name", TEST_HOST,
                     "--install-dir", str(target)])
         findings["remove_stdout"] = proc.stdout
         findings["remove_returncode"] = proc.returncode
