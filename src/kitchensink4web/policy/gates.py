@@ -133,6 +133,19 @@ GATED_CLASSES: dict[str, str] = {
     # it satisfies the closed-set invariant the table is held to.
     "credential_injection": "attaching a stored credential to requests sent "
                             "to one origin",
+    # LANE C's DOOR. `storage_load` is the nearest sibling and the reason
+    # this is its own class rather than a reuse of that one: loading a saved
+    # session puts ONE site's cookies into a browser this server owns, and
+    # this puts the server into a browser holding EVERY site the human is
+    # signed in to. Borrowing the storage_load sentence would ask somebody to
+    # allow "loading a saved signed-in session into this browser" for an
+    # operation that loads nothing and reaches all of them, which is the
+    # borrowed-sentence defect four entries up, at a wider scope.
+    #
+    # It names no policy, unlocks no mode, widens no origin list, and loads
+    # no pack: it authorizes a CONNECTION, and every action taken over that
+    # connection still goes through this table and through `approve()`.
+    "real_profile_browse": "connecting to the browser you are signed in to",
 }
 
 #: THE PROMPT SENTENCE: one or two sentences a person reads at a
@@ -166,6 +179,12 @@ PROMPT_SENTENCES: dict[str, str] = {
         "The stored credential {name} will be attached to requests to "
         "{origin}, and only to that origin. Its value is not shown here and "
         "has never been in this conversation.",
+    "real_profile_browse":
+        "This connects KS4Web to the browser you use, on the profile you are "
+        "signed in to, so it can read and act on pages as you. Your browser "
+        "is not restarted and no window is closed when the session ends. "
+        "Every click, every form, and every submission still asks exactly "
+        "what it would ask on any other lane.",
 }
 
 

@@ -1,13 +1,14 @@
 {
   "manifest_version": 2,
   "name": "[COPY PENDING] KitchenSink4Web",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "[COPY PENDING] extension store description",
   "permissions": [
     "activeTab",
     "tabs",
     "nativeMessaging",
     "storage",
+    "webNavigation",
     "<all_urls>"
   ],
   "background": {

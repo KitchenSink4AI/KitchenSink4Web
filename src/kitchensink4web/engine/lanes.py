@@ -11,9 +11,15 @@ than in a document somebody has to remember to update.
   a KS4Web-owned profile. `channel="moz-firefox"` is the dogfood lane and S3
   confirmed it holds on playwright-python 1.62.0, launching the installed
   Firefox 154 with no flag gating and no `executable_path` contingency.
-- **Lane C, live attach.** Deferred: S5 and S6 are DEFERRED BY SAFETY and the
-  Firefox differentiator is UNVERIFIED until they run, so the lane is declared
-  here and refuses rather than pretending. Nothing public may claim it.
+- **Lane C, the real profile through the extension.** The live-attach spike
+  (S5/S6) stayed deferred and then got answered from the other side: Phase 1
+  MEASURED `--remote-debugging-port` setting `navigator.webdriver` on this
+  machine, which retired the attach approach on evidence, and proved a
+  browser extension reading a page the browser does not know is being read.
+  So Lane C is the user's own browser, on the user's own profile, driven from
+  INSIDE it by code the browser itself runs. There is no debugging port, no
+  driver, and no process this server owns. It refuses when the extension is
+  not connected, and the refusal names what to install.
 
 **The Firefox safety constant.** Playwright's `BidiFirefox.defaultArgs` does
 not pass `-no-remote`, unlike its own Juggler path, so a launch can be adopted
@@ -78,6 +84,49 @@ CHANNEL_ALIASES: dict[str, str] = {
 }
 
 
+#: The launch switch for Lane C. DEFAULT OFF, and the default is the whole
+#: posture: this lane reaches the user's real logged-in browser, so it is a
+#: human's explicit decision at launch and never something a tool argument or
+#: a fallback turns on. `lane='C'` with the switch off refuses and says how to
+#: turn it on; it never quietly opens Lane A instead.
+ENV_EXTENSION = "KS4WEB_EXTENSION"
+
+
+def extension_enabled() -> bool:
+    """Whether the human turned Lane C on at launch.
+
+    Same loud-typo shape as the other toggles in this file: empty is off,
+    'true' is on, 'false' is off, anything else refuses rather than guessing.
+    A misspelled 'ture' that read as off would be the silent degrade this
+    whole module exists to prevent, one switch along."""
+    raw = os.environ.get(ENV_EXTENSION)
+    if raw is None:
+        return False
+    value = raw.strip().lower()
+    if value in ("", "false", "0", "off", "no"):
+        return False
+    if value in ("true", "1", "on", "yes"):
+        return True
+    raise BadParams(
+        f"{ENV_EXTENSION}={raw!r} is not a switch value: use 'true' or "
+        f"'false' (empty means off). It turns on the lane that drives your "
+        f"own browser through the KS4Web extension, so it is a decision a "
+        f"human makes at launch and nothing else can reach.")
+
+
+def extension_off_refusal() -> str:
+    return (
+        "Lane C drives YOUR browser, on YOUR profile, through the KS4Web "
+        "extension, and it is off. It is off by default because it reaches "
+        "every site you are signed in to, so turning it on is a human's "
+        f"launch-time decision: set {ENV_EXTENSION}=true and restart the "
+        "server. The extension has to be installed in that browser as well. "
+        "[COPY PENDING] Lane C install instruction sentence. "
+        "Nothing was opened; lane='A' (a bundled browser) and lane='B' (your "
+        "installed browser on a KS4Web-owned profile) both work with the "
+        "switch off.")
+
+
 @dataclass(frozen=True)
 class LaneSpec:
     """A resolved launch shape. Everything the session manager needs and
@@ -92,6 +141,17 @@ class LaneSpec:
     @property
     def is_firefox(self) -> bool:
         return self.engine == "firefox"
+
+    @property
+    def is_extension(self) -> bool:
+        """Lane C: the user's own browser, driven from inside it.
+
+        Asked all over the ops layer, because the differences are real and
+        are product surface rather than implementation detail: no owned
+        process, no profile directory, no driver, no `page.goto` returning a
+        response object, and a completeness block with one honest absence in
+        it."""
+        return self.engine == "extension"
 
     @property
     def is_bidi_firefox(self) -> bool:
@@ -177,6 +237,7 @@ CAPABILITIES: dict[str, dict] = {
     },
     "about_pages": {
         "chromium": "ok", "firefox_bidi": "unsupported",
+        "extension": "unsupported",
         "message": (
             "about: pages cannot be navigated on Firefox/BiDi. The driver "
             "refuses with 'Navigation to about:support is not allowed in this "
@@ -184,6 +245,61 @@ CAPABILITIES: dict[str, dict] = {
             "about:config reads are unavailable on this lane. KS4Web reads "
             "provenance from the process table and the user-agent string "
             "instead."
+        ),
+    },
+    # ----------------------------------------------------------------
+    # LANE C's OWN ROWS. Every row above answers `ok` for the extension
+    # column by the table's own default, which is right for the ones that
+    # are about the DRIVER: the extension has no driver and no BiDi gap.
+    # These four are where the extension is the one that differs, and each
+    # is a fact about what an extension can observe rather than a
+    # limitation somebody chose.
+    # ----------------------------------------------------------------
+    "closed_shadow_count": {
+        "chromium": "ok", "firefox_bidi": "ok", "extension": "unsupported",
+        "message": (
+            "closed shadow roots are NOT COUNTED on the extension lane. "
+            "Counting them means patching Element.prototype.attachShadow "
+            "where PAGE script will call it, and Element.prototype reached "
+            "from a content script is the Xray view, so a patch applied "
+            "there would count nothing and report a confident zero. The "
+            "completeness block prints the absence rather than a number this "
+            "lane did not earn. Lane A and Lane B count them."
+        ),
+    },
+    "navigation_status": {
+        "chromium": "ok", "firefox_bidi": "ok", "extension": "unsupported",
+        "message": (
+            "the HTTP status of a top-level navigation is unavailable on the "
+            "extension lane. An extension can only see it through the "
+            "webRequest machinery, and this build does not ask for that "
+            "permission: it is the permission that would let the extension "
+            "read every request the browser makes, on a profile carrying the "
+            "user's real logins. The navigation result reports status: null "
+            "rather than guessing, and the wall classifier reads the "
+            "document instead of the response."
+        ),
+    },
+    "full_page_screenshot": {
+        "chromium": "ok", "firefox_bidi": "ok", "extension": "unsupported",
+        "message": (
+            "a screenshot on the extension lane is the VIEWPORT and only the "
+            "viewport: tabs.captureVisibleTab is what an extension has. A "
+            "full-page capture would be a scroll-and-stitch, and stitching "
+            "pixels and calling the result a screenshot of the page is a "
+            "claim this build does not make. Lane A and Lane B capture the "
+            "full page."
+        ),
+    },
+    "trusted_events": {
+        "chromium": "ok", "firefox_bidi": "ok", "extension": "cost",
+        "message": (
+            "events dispatched on the extension lane carry isTrusted: false. "
+            "Firefox gives an extension no equivalent of Chrome's debugger "
+            "API for synthesising trusted input. The prior-art survey found "
+            "no major bot detector gating on that flag alone, and that is a "
+            "reading of the field rather than a guarantee, so every act on "
+            "this lane reports the flag and the claim stays checkable."
         ),
     },
 }
@@ -197,7 +313,14 @@ URL_UNTRUSTED_AFTER_HISTORY = ("firefox_bidi",)
 
 
 def capability_key(spec: LaneSpec) -> str:
-    """Which column of the truth table a lane reads."""
+    """Which column of the truth table a lane reads.
+
+    Asked through `spec.engine` rather than `spec.is_extension`, because both
+    of these functions are reached with duck-typed spec objects (the lane
+    hint's own test fixture is one) and a property that only the real class
+    carries turns a lane question into an AttributeError somebody catches."""
+    if getattr(spec, "engine", None) == "extension":
+        return "extension"
     return "firefox_bidi" if spec.is_bidi_firefox else "chromium"
 
 
@@ -214,6 +337,13 @@ def lane_key(spec: LaneSpec) -> str:
     Headed and headless are separate keys because headless is the block vector
     on Chromium. Collapsing them would teach the database the wrong lesson
     about a headed lane that works fine."""
+    if getattr(spec, "engine", None) == "extension":
+        # ONE KEY FOR THE WHOLE LANE, and headless is not part of it. What a
+        # site sees here is the user's ordinary browser, which is the point
+        # of the lane: there is no driver signature, no `HeadlessChrome` user
+        # agent, and no automation flag to record a verdict against. A record
+        # under this key says what happened to a REAL browsing session.
+        return "extension:native:headed"
     if spec.engine == "firefox":
         backend = "bidi" if spec.is_bidi_firefox else "juggler"
     elif spec.engine == "webkit":
@@ -362,22 +492,25 @@ def resolve(lane: str | None = None, engine: str | None = None,
         headless = os.environ.get("KS4WEB_HEADLESS", "1").strip().lower() \
             not in ("0", "false", "off", "no")
 
-    if lane == "C":
-        raise LaneUnsupported(
-            "Lane C (attaching to a browser you are already running) is not "
-            "built. Its two spikes are deferred by a standing safety rule "
-            "rather than by a finding: KS4Web does not attach to the author's "
-            "live browser, so the Firefox live-attach path is UNVERIFIED and "
-            "the lane refuses rather than claiming it. Use lane='A' (a "
-            "bundled browser) or lane='B' (your installed Chrome, Edge, or "
-            "Firefox), both on a KS4Web-owned profile."
-        )
+    if lane in ("C", "REAL"):
+        # `real` is the spelling the design spec uses at the tool surface and
+        # it is the one a human reaches for, so it is an alias rather than a
+        # refusal that lists the letter. Same lane, same object, no degrade.
+        if not extension_enabled():
+            raise LaneUnsupported(extension_off_refusal())
+        # Headless is meaningless here and a caller who passed it should be
+        # told so rather than have it silently ignored: the browser is the
+        # user's, it is already running, and nothing in this lane launches
+        # anything.
+        return LaneSpec(lane="C", engine="extension", channel=None,
+                        headless=False, args=())
     if lane not in ("A", "B"):
         raise BadParams(
             f"unknown lane {lane!r}: the lanes are 'A' (bundled browser), "
             f"'B' (your installed browser, still on a KS4Web-owned profile), "
-            f"and 'C' (live attach, not built). Set KS4WEB_LANE or pass "
-            f"lane= explicitly.")
+            f"and 'C' (your own browser, through the KS4Web extension; "
+            f"'real' is accepted for it). Set KS4WEB_LANE or pass lane= "
+            f"explicitly.")
 
     if lane == "B":
         channel = channel or "chrome"

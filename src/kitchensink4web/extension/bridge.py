@@ -29,6 +29,11 @@ from . import protocol
 PROTOCOL_VERSION = 1
 DEFAULT_ENDPOINT_NAME = "extension_endpoint.json"
 
+#: Unsolicited pushes kept for the next caller who asks. The extension sends
+#: one per SPA history update, and a session that never reads them must not
+#: grow a list forever.
+EVENT_MAX = 200
+
 
 def default_state_dir() -> Path:
     """Where the endpoint file lives when nobody says otherwise."""
@@ -75,6 +80,7 @@ class Bridge:
         self._next_id = 1
         self._waiters: dict[int, threading.Event] = {}
         self._replies: dict[int, dict] = {}
+        self._events: list[dict] = []
         self._stopped = threading.Event()
 
         self._accept_thread = threading.Thread(target=self._accept_loop, daemon=True)
@@ -184,12 +190,31 @@ class Bridge:
                     message = json.loads(line.decode("utf-8"))
                 except (UnicodeDecodeError, json.JSONDecodeError):
                     continue
+                if "event" in message and "id" not in message:
+                    # An unsolicited push. It correlates with no request, so
+                    # it goes on the event list for whoever asks next rather
+                    # than into the reply table keyed by an id it has not got.
+                    with self._lock:
+                        self._events.append(message)
+                        while len(self._events) > EVENT_MAX:
+                            self._events.pop(0)
+                    continue
                 ident = message.get("id")
                 if not isinstance(ident, int):
                     continue
                 try:
                     whole = assembler.feed(message)
-                except protocol.ProtocolError:
+                except protocol.ProtocolError as exc:
+                    # A reply that cannot be reassembled must not leave its
+                    # caller waiting out the full timeout for an answer that
+                    # is never coming. The waiter is woken with the reason.
+                    self._replies[ident] = {
+                        "id": ident,
+                        "error": {"code": "BAD_PAYLOAD", "message": str(exc)},
+                    }
+                    waiter = self._waiters.get(ident)
+                    if waiter is not None:
+                        waiter.set()
                     continue
                 if whole is None:
                     continue
@@ -221,11 +246,50 @@ class Bridge:
         extension's own code and message when it answers with a refusal.
         """
         message = self.send_raw(method, params)
-        ident = message["id"]
+        return self._await(message["id"], timeout, method)
+
+    def batch(self, steps: list[dict], timeout: float = 60.0,
+              params: dict | None = None) -> list[dict]:
+        """Send several commands as ONE round trip.
+
+        Returns one entry per step, in order, each carrying `result` or
+        `error`. A failed step does NOT stop the ones after it: the caller
+        asked several questions and gets several answers, which is the shape
+        that makes a five-field form fill one hop instead of five. A caller
+        that wants stop-on-first-error checks the entries; a batch that
+        stopped early would leave it unable to tell "not run" from "ran and
+        said nothing".
+        """
+        if not steps:
+            raise BridgeError("a batch needs at least one step")
+        message = self._send(
+            {"batch": [{"method": s["method"], "params": s.get("params") or {}}
+                       for s in steps],
+             "params": params or {}})
+        result = self._await(message["id"], timeout, "batch")
+        entries = result.get("batch")
+        if not isinstance(entries, list) or len(entries) != len(steps):
+            raise BridgeError(
+                f"a batch of {len(steps)} step(s) came back with "
+                f"{len(entries) if isinstance(entries, list) else 'no'} "
+                f"answer(s); the pairing is by position and cannot be "
+                f"reconstructed from a mismatched list")
+        return entries
+
+    def events(self, drain: bool = True) -> list[dict]:
+        """The unsolicited pushes since the last call. SPA history updates
+        arrive here, because they correlate with no request."""
+        with self._lock:
+            found = list(self._events)
+            if drain:
+                self._events.clear()
+        return found
+
+    def _await(self, ident: int, timeout: float, what: str):
         event = self._waiters[ident]
         if not event.wait(timeout):
             self._waiters.pop(ident, None)
-            raise TimeoutError(f"{method} (id {ident}) went unanswered for {timeout}s")
+            raise TimeoutError(f"{what} (id {ident}) went unanswered for {timeout}s")
         self._waiters.pop(ident, None)
         reply = self._replies.pop(ident)
         if "error" in reply:
@@ -234,6 +298,9 @@ class Bridge:
         return reply.get("result")
 
     def send_raw(self, method: str, params: dict | None = None) -> dict:
+        return self._send({"method": method, "params": params or {}})
+
+    def _send(self, body: dict) -> dict:
         with self._lock:
             conn_file = self._conn_file
             if conn_file is None:
@@ -242,7 +309,7 @@ class Bridge:
                 )
             ident = self._next_id
             self._next_id += 1
-            message = {"id": ident, "method": method, "params": params or {}}
+            message = {"id": ident, **body}
             self._waiters[ident] = threading.Event()
             conn_file.write(json.dumps(message, separators=(",", ":")).encode("utf-8") + b"\n")
             conn_file.flush()
