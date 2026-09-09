@@ -39,6 +39,7 @@ from fastmcp.server.middleware import Middleware
 from pydantic import ValidationError as _PydanticValidationError
 
 from . import __version__, confirm, envelope, packs, profiles
+from .extension import setup as extension_setup
 from .errors import (BadParams, ConfirmationRequired, ReadOnlyMode,
                      Timeout, ValidationFailed)
 from .ops import lite
@@ -481,6 +482,37 @@ def configure(
     }
 
 
+def _run_setup_browser(args) -> int:
+    """`--setup-browser`, both directions. Returns the exit code.
+
+    Exit codes carry the verdict because this command is the one thing here
+    a shell script is likely to wrap: 0 is configured and verified, 1 is
+    something was written but did not read back, 2 is refused.
+    """
+    try:
+        if args.remove:
+            result = extension_setup.remove(args.browser)
+        else:
+            result = extension_setup.install(
+                args.browser, extension_id=args.extension_id)
+    except Exception as exc:
+        print(f"KS4Web browser setup failed: {exc}", file=sys.stderr)
+        return 2
+
+    print(extension_setup.render(result))
+    if result["action"] == "remove":
+        return 0
+    verified = result["verified"]
+    # Written is not installed. The check is whether the browser's own oracle
+    # can find what we wrote, which is the discipline phase 1 established and
+    # the only thing that distinguishes a real registration from a hopeful one.
+    if verified["host_registered"] and verified["extension_complete"]:
+        return 0
+    print("KS4Web: setup wrote its files but could not verify them; "
+          "the details above say which piece is missing", file=sys.stderr)
+    return 1
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         prog="web-mcp",
@@ -504,7 +536,44 @@ def main() -> None:
               "navigation, and scrolling; 'strict' additionally limits "
               "navigation to the origin allowlist."),
     )
+    # Lane C setup. These four run a COMMAND and exit; they never start the
+    # MCP server, because a user running setup wants a machine configured and
+    # a prompt back, not a process holding stdio open.
+    parser.add_argument(
+        "--setup-browser", action="store_true",
+        help=("install the browser extension and register the native "
+              "messaging host for Lane C, then exit. Adds nothing to any "
+              "browser: it prints the one step you have to do yourself."),
+    )
+    parser.add_argument(
+        "--browser", default="firefox",
+        choices=sorted(extension_setup._FLAVOR_OF),
+        help="which browser --setup-browser configures (default: firefox).",
+    )
+    parser.add_argument(
+        "--remove", action="store_true",
+        help=("with --setup-browser: undo the registration and delete the "
+              "staged extension. It cannot remove the add-on from the "
+              "browser; only you can do that."),
+    )
+    parser.add_argument(
+        "--extension-id", default=None,
+        help=("override the extension id the native messaging host trusts. "
+              "Needed when a Chromium browser assigns an id other than the "
+              "one derived from the unpacked directory path."),
+    )
     args = parser.parse_args()
+
+    if args.setup_browser:
+        raise SystemExit(_run_setup_browser(args))
+    for flag, name in ((args.remove, "--remove"),
+                       (args.extension_id, "--extension-id")):
+        if flag:
+            # Refuse rather than ignore. A `--remove` that silently started a
+            # server would leave the user believing something was uninstalled.
+            print(f"KS4Web: {name} only means something with --setup-browser",
+                  file=sys.stderr)
+            raise SystemExit(2)
 
     cli_packs = None
     if args.packs:

@@ -118,6 +118,13 @@ SESSION_OPEN_HOOKS: list = []
 #: process-identity check with a better message.
 TOMBSTONE_MAX = 32
 
+#: How long a Lane C open waits for a browser to dial the endpoint. Phase 1
+#: measured the relay connecting 241 ms and 467 ms after the add-on
+#: installed, so this is generous rather than tight, and what it is really
+#: buying is the difference between an honest "the extension is not
+#: connected" and a timeout on the caller's first read.
+EXTENSION_CONNECT_S = 8.0
+
 #: The closed set of reasons a session can end. `crash` is derived rather
 #: than declared: a close that finds every owned PID already gone did not
 #: happen the way an explicit close does, and saying so is free.
@@ -895,6 +902,16 @@ class SessionManager:
         #: status surface, which is where a caller looks when every call is
         #: refusing and nothing has told them why.
         self.driver_deaths: deque = deque(maxlen=TOMBSTONE_MAX)
+        #: THE LANE C LISTENER, one per process and created on first use.
+        #: Not per session: the browser dials the endpoint file, there is one
+        #: of those, and one browser answers one server. A second Lane C
+        #: session in the same process shares this bridge; a second SERVER
+        #: is refused by the endpoint's own pid check rather than silently
+        #: stealing the browser.
+        #:
+        #: Created lazily, for the reason the whole engine is lazy (DESIGN
+        #: 4.1): a server nobody asks to browse opens no sockets.
+        self.extension_bridge: Any = None
 
     @property
     def _pw(self) -> Any:
@@ -1033,6 +1050,17 @@ class SessionManager:
         default exactly where it was."""
         spec = lanes.resolve(lane=lane, engine=engine, channel=channel,
                              headless=headless)
+        if spec.is_extension:
+            # LANE C FORKS HERE, BEFORE ANYTHING IS LAUNCHED OR REAPED. There
+            # is no driver to start, no browser to install, no profile to
+            # create, and nothing on this machine that this session will own,
+            # so every line below would either do nothing or do something
+            # wrong. The reaper in particular: it exists to kill browsers
+            # this server started, and the browser this session is about to
+            # speak to is one the human started.
+            return await self._connect_extension(
+                spec, role=role, contexts=contexts, device=device,
+                viewport=viewport, locale=locale, timezone=timezone)
         jars = contexts if isinstance(contexts, int) else 0
         if jars < 1 or jars > MAX_CONTEXTS:
             raise BadParams(
@@ -1089,6 +1117,131 @@ class SessionManager:
             for hook in SESSION_OPEN_HOOKS:
                 hook(session, built)
             return session
+
+    #: The Lane C stand-in for a profile directory. It is a SENTENCE rather
+    #: than a path on purpose: everything that consumes `profile_dir` either
+    #: prints it or hands it to `hygiene._remove_tree`, which refuses any
+    #: path without the owned-profile marker in it. So the string that is
+    #: safest to hand the remover is also the one that reads correctly in a
+    #: status block, and there is no directory anywhere for the two to
+    #: disagree about.
+    EXTENSION_PROFILE = "your own browser profile (not owned by KS4Web)"
+
+    async def _connect_extension(self, spec, *, role: str, contexts: int,
+                                 device, viewport, locale, timezone
+                                 ) -> Session:
+        """Lane C: connect to the browser the human is already running.
+
+        THE ASYMMETRY WITH `open()` IS THE POINT. That method launches,
+        adopts pids, creates a profile, installs an init script, and arms a
+        reaper. This one opens a socket and waits for a browser to dial in.
+        Nothing here is owned, so nothing here is journalled, and the reaper
+        is never told this session exists.
+
+        The four context options refuse rather than being ignored. A locale
+        or a viewport is taken at CONTEXT CONSTRUCTION on the Playwright
+        lanes, and there is no construction here: the context is the user's
+        browser, already built, already sized, already in whatever locale
+        their operating system is in. Applying them would mean lying to the
+        page about a window the user can see.
+        """
+        from ..extension import bridge as _bridge_mod
+        from ..extension import lane as _extlane
+
+        for name, value in (("device", device), ("viewport", viewport),
+                            ("locale", locale), ("timezone", timezone)):
+            if value is not None:
+                raise BadParams(
+                    f"{name}= is a context option and lane C has no context "
+                    f"to construct: it drives the browser window you already "
+                    f"have open, at the size it already is, in the locale "
+                    f"your machine is in. Setting it would put a claim in "
+                    f"the payload that the page's own scripts can see through. "
+                    f"Open on lane 'A' or 'B' when you need an emulated "
+                    f"context. Nothing was opened.")
+        if contexts != 1:
+            raise BadParams(
+                f"lane C has ONE cookie jar and it is yours. A second jar on "
+                f"the Playwright lanes is a second browser process on a "
+                f"second owned profile directory; here it would be a second "
+                f"browser you are signed in to, which this server has no way "
+                f"to create and no business creating. contexts={contexts!r} "
+                f"was refused and nothing was opened.")
+
+        # THE TOKENIZER, WARMED HERE TOO, and its absence was the whole of
+        # phase 2's "419 ms first read". `open()` warms the estimator because
+        # launching a browser is already slow for honest reasons; this path
+        # launches nothing, so it skipped the warm, and the o200k BPE table
+        # then loaded inside the first `get_page_view` on the lane. Measured
+        # on this machine: 221 ms of a 477 ms first read, once per process,
+        # charged to whichever read happened to be first.
+        _warm_estimator()
+        if self.extension_bridge is None:
+            self.extension_bridge = _bridge_mod.Bridge()
+        bridge = self.extension_bridge
+        context = _extlane.ExtensionContext(bridge)
+        # The wait is what turns "the extension is not installed" into an
+        # answer instead of a timeout on the first read. A browser that is
+        # running with the extension in it dials in within half a second;
+        # Phase 1 measured 241 ms and 467 ms.
+        if not bridge.connected:
+            await asyncio.to_thread(bridge.wait_for_browser,
+                                    EXTENSION_CONNECT_S)
+        await context.probe()
+
+        sid = self._next_session_id()
+        session = Session(session_id=sid, spec=spec, emulation={},
+                          emulation_kwargs={}, role=role,
+                          driver_slot=self.driver_slot_for(role))
+        journal = hygiene.OwnedProcesses(f"{sid}-c1", self.EXTENSION_PROFILE,
+                                         spec.label)
+        # NEVER FLUSHED, NEVER ADOPTED, NEVER RECORDED. An empty journal is
+        # the mechanical statement that this server may kill nothing for this
+        # session, and it is stronger than a rule somebody has to remember:
+        # `hygiene.kill` is only ever reached through a journal's pid list.
+        handle = ContextHandle(label="c1", context=context,
+                               profile_dir=self.EXTENSION_PROFILE,
+                               journal=journal, spec=spec)
+        session.contexts["c1"] = handle
+        session.focused_context = "c1"
+
+        tabs = await context.tabs()
+        active = next((t for t in tabs if t.get("active")), None)
+        page = _extlane.ExtensionPage(
+            bridge,
+            tab_id=active.get("id") if active else None,
+            url=(active or {}).get("url") or "about:blank",
+            title=(active or {}).get("title") or "")
+        record = self._attach_extension_page(session, page)
+        session.focused = record.handle
+        self.sessions[sid] = session
+        for hook in SESSION_OPEN_HOOKS:
+            hook(session, [handle])
+        return session
+
+    def _attach_extension_page(self, session: Session, page,
+                               context_label: str = "c1") -> PageHandle:
+        """A page handle over an extension tab.
+
+        Deliberately NOT `_attach_page`. That method installs a dialog desk,
+        a crash listener, a navigation-response recorder and a popup adoption
+        hook, every one of which is a Playwright event subscription, and
+        three of the four have no equivalent here at all: an extension cannot
+        see a native dialog, cannot be told the renderer crashed, and cannot
+        read a navigation's response without the webRequest permission this
+        build does not ask for. Building a version that subscribed to nothing
+        and reported the same fields would be the silent-degrade shape.
+        """
+        for existing in session.pages.values():
+            if existing.page is page:
+                return existing
+        handle = self._next_page_handle()
+        record = PageHandle(handle=handle, page=page, context=context_label)
+        record.touch(page.url)
+        session.pages[handle] = record
+        if session.focused is None:
+            session.focused = handle
+        return record
 
     async def _launch_context(self, session: Session, spec, emulation,
                               emulation_report, pw,

@@ -148,6 +148,11 @@ def test_no_gate_class_touches_policy_state():
         "credential_submit", "broadcast_submit", "destructive_submit",
         "legal_assent", "age_gate_detected", "sensitive_origin",
         "credential_injection",
+        # Lane C's door (2026-09-09). It authorizes a CONNECTION to the
+        # browser the human is signed in to; it names no policy, unlocks no
+        # mode, widens no origin list, and loads no pack, and every action
+        # taken over that connection meets this same table again.
+        "real_profile_browse",
     }
     # dialog_accept joined 2026-09-06 with handle_dialog. It gates ANSWERING
     # a native dialog with OK and never dismissal, because dismissal is the

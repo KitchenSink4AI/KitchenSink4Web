@@ -1,0 +1,115 @@
+{
+  "workdir": "C:\\Users\\nykal\\AppData\\Local\\Temp\\ks4web-phase1-4lnjulz2",
+  "started": "2026-09-09 22:30:36",
+  "firefox": "C:\\Program Files\\Mozilla Firefox\\firefox.exe",
+  "webdriver_probe": {
+    "plain": "false",
+    "debugger": "false",
+    "remote": "true"
+  },
+  "registration": {
+    "host_name": "ks4web",
+    "batch": "C:\\Users\\nykal\\AppData\\Local\\Temp\\ks4web-phase1-4lnjulz2\\nativehost\\ks4web_relay.bat",
+    "manifest": "C:\\Users\\nykal\\AppData\\Local\\Temp\\ks4web-phase1-4lnjulz2\\nativehost\\ks4web.json",
+    "registry_key": "HKEY_CURRENT_USER\\Software\\Mozilla\\NativeMessagingHosts\\ks4web",
+    "extension_id": "web@kitchensink4.ai"
+  },
+  "registry_readback": "C:\\Users\\nykal\\AppData\\Local\\Temp\\ks4web-phase1-4lnjulz2\\nativehost\\ks4web.json",
+  "addon": {
+    "id": "web@kitchensink4.ai",
+    "actor": false
+  },
+  "connect_ms": 240.9,
+  "ping": {
+    "pong": true,
+    "host": "ks4web",
+    "extensionId": "web@kitchensink4.ai",
+    "at": 1788960643119
+  },
+  "first_read_ms": 35.5,
+  "page": {
+    "url": "http://127.0.0.1:60590/",
+    "title": "KS4Web Phase 1 heavy fixture",
+    "chars": 228281,
+    "webdriver": false,
+    "frame": "top",
+    "readMs": 4,
+    "passwordFields": [
+      {
+        "name": "secret",
+        "id": null,
+        "value": "[PROTECTED]"
+      }
+    ],
+    "sentinel_present": true,
+    "password_value_leaked": false
+  },
+  "latency_ping": {
+    "rounds": 25,
+    "min_ms": 1.83,
+    "median_ms": 5.16,
+    "p95_ms": 13.13,
+    "max_ms": 15.48
+  },
+  "latency": {
+    "page_chars": 228281,
+    "rounds": 25,
+    "min_ms": 9.76,
+    "median_ms": 15.09,
+    "p95_ms": 54.0,
+    "max_ms": 61.83
+  },
+  "payload": {
+    "ladder": [
+      {
+        "requested_bytes": 65536,
+        "elapsed_ms": 5.6,
+        "returned_bytes": 65536,
+        "ok": true
+      },
+      {
+        "requested_bytes": 262144,
+        "elapsed_ms": 8.7,
+        "returned_bytes": 262144,
+        "ok": true
+      },
+      {
+        "requested_bytes": 786432,
+        "elapsed_ms": 40.9,
+        "returned_bytes": 786432,
+        "ok": true
+      },
+      {
+        "requested_bytes": 1048576,
+        "elapsed_ms": 26.3,
+        "returned_bytes": 1048576,
+        "ok": true
+      },
+      {
+        "requested_bytes": 4194304,
+        "elapsed_ms": 123.4,
+        "returned_bytes": 4194304,
+        "ok": true
+      },
+      {
+        "requested_bytes": 16777216,
+        "elapsed_ms": 403.3,
+        "returned_bytes": 16777216,
+        "ok": true
+      },
+      {
+        "requested_bytes": 67108864,
+        "elapsed_ms": 1489.5,
+        "returned_bytes": 67108864,
+        "ok": true
+      }
+    ],
+    "largest_unchunked_ok": 67108864,
+    "chunked_retry": {}
+  },
+  "refusals": {
+    "unknown_method": "refused: UNKNOWN_METHOD: [COPY PENDING] unknown method text: no.such.method"
+  },
+  "ok": true,
+  "registry_after_cleanup": null
+}

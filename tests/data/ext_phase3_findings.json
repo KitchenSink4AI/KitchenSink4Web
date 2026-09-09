@@ -1,0 +1,121 @@
+{
+  "first_read_after_navigation": {
+    "n": 5,
+    "min_ms": 91.6,
+    "median_ms": 110.92,
+    "p95_ms": 388.99,
+    "max_ms": 388.99
+  },
+  "get_page_view_heavy": {
+    "n": 15,
+    "min_ms": 12.61,
+    "median_ms": 19.1,
+    "p95_ms": 24.72,
+    "max_ms": 24.72,
+    "budget_used": 1920,
+    "refs_minted": 394,
+    "wire_calls": {
+      "page.evaluate": 18
+    },
+    "cache_hits": 17,
+    "cache_misses": 6
+  },
+  "get_page_view_heavy_forced_walk": {
+    "n": 15,
+    "min_ms": 61.58,
+    "median_ms": 73.04,
+    "p95_ms": 120.78,
+    "max_ms": 120.78,
+    "wire_calls": {
+      "page.evaluate": 15
+    }
+  },
+  "repeated_read_unchanged_page": {
+    "n": 15,
+    "min_ms": 13.32,
+    "median_ms": 18.02,
+    "p95_ms": 273.04,
+    "max_ms": 273.04,
+    "cache_hits": 16
+  },
+  "get_page_view_light": {
+    "n": 15,
+    "min_ms": 3.42,
+    "median_ms": 4.39,
+    "p95_ms": 17.41,
+    "max_ms": 17.41
+  },
+  "get_page_view_228k": {
+    "n": 15,
+    "min_ms": 12.88,
+    "median_ms": 14.46,
+    "p95_ms": 22.89,
+    "max_ms": 22.89,
+    "budget_used": 1964,
+    "wire_calls": {
+      "page.evaluate": 18
+    },
+    "cache_hits": 17
+  },
+  "click": {
+    "n": 15,
+    "min_ms": 66.63,
+    "median_ms": 79.61,
+    "p95_ms": 117.8,
+    "max_ms": 117.8,
+    "wire_calls_total": {
+      "page.evaluate": 16,
+      "page.act": 16
+    },
+    "evaluates_per_click": 1.0
+  },
+  "fill_form_fields": 4,
+  "fill_form_4_fields": {
+    "n": 5,
+    "min_ms": 32.08,
+    "median_ms": 45.26,
+    "p95_ms": 91.35,
+    "max_ms": 91.35,
+    "wire_calls_total": {
+      "page.evaluate": 24,
+      "page.act": 24
+    },
+    "evaluates_per_call": 4.0
+  },
+  "navigate_reload_same_url": {
+    "n": 4,
+    "min_ms": 22.11,
+    "median_ms": 27.77,
+    "p95_ms": 43.67,
+    "max_ms": 43.67
+  },
+  "take_screenshot": {
+    "n": 4,
+    "min_ms": 15.0,
+    "median_ms": 21.27,
+    "p95_ms": 50.42,
+    "max_ms": 50.42,
+    "base64_chars": 51392
+  },
+  "bg_ping_paced": {
+    "n": 15,
+    "min_ms": 1.48,
+    "median_ms": 2.8,
+    "p95_ms": 5.58,
+    "max_ms": 5.58
+  },
+  "bg_ping": {
+    "n": 12,
+    "min_ms": 0.79,
+    "median_ms": 1.25,
+    "p95_ms": 1.5,
+    "max_ms": 1.5
+  },
+  "page_stamp": {
+    "n": 15,
+    "min_ms": 2.72,
+    "median_ms": 7.65,
+    "p95_ms": 12.19,
+    "max_ms": 12.19
+  }
+}

@@ -153,6 +153,18 @@ PREAUTHORIZABLE: frozenset[str] = frozenset({
     "evaluate_script",
     "storage_load",
     "clipboard_read",
+    # LANE C's DOOR sits beside `storage_load` and for the same reasons. It
+    # is Tier 1 rather than Tier 2 because a research run that has to have a
+    # human present to OPEN A CONNECTION is a lane nobody uses at 3am, and
+    # the connection is not where the harm is: every action taken over it
+    # meets the same table on the way through, and the five irreducible
+    # classes still ask on every single one.
+    #
+    # It is NOT in GRADE_CLEARED, which is the half that matters. No consent
+    # scope widens it: `full` does not silently reach into the browser the
+    # human is signed in to, because the scope was granted about what to do
+    # with a browser and this is a decision about WHICH browser.
+    "real_profile_browse",
 })
 
 #: Class -> the scopes that clear it by grade alone. A class absent here is

@@ -80,15 +80,79 @@ def test_a_typo_is_an_error_rather_than_a_shrug():
         lanes.resolve(lane="A", engine="safari")
 
 
-def test_lane_c_refuses_and_says_why_it_is_not_built():
-    """S5 and S6 are DEFERRED BY SAFETY rather than by a finding: KS4Web does
-    not attach to the author's live browser, so the Firefox live-attach
-    differentiator is UNVERIFIED and no public copy may claim it."""
+def test_lane_c_refuses_while_the_switch_is_off_and_says_which_switch(
+        monkeypatch):
+    """Lane C was 'not built' until Phase 1 measured its way past the two
+    deferred spikes; what it is now is OFF BY DEFAULT, which is a different
+    fact and needs a different sentence.
+
+    The refusal has to name the switch, because a human who wants the lane
+    cannot reach it from inside a session by design and would otherwise have
+    nothing to act on."""
+    monkeypatch.delenv(lanes.ENV_EXTENSION, raising=False)
     with pytest.raises(LaneUnsupported) as caught:
         lanes.resolve(lane="C")
     message = str(caught.value)
-    assert "not built" in message
+    assert lanes.ENV_EXTENSION in message
     assert "lane='A'" in message and "lane='B'" in message
+
+
+def test_lane_c_resolves_when_the_human_turned_it_on(monkeypatch):
+    """THE OTHER DIRECTION of the pin above. A switch that refused in both
+    states would pass the refusal test on its own, which is how a lane ships
+    unreachable."""
+    monkeypatch.setenv(lanes.ENV_EXTENSION, "true")
+    spec = lanes.resolve(lane="C")
+    assert spec.lane == "C"
+    assert spec.engine == "extension"
+    assert spec.is_extension is True
+    # Nothing is launched, so nothing is headless. A spec that claimed
+    # headless would put a word in the status line that is not true of the
+    # user's own window.
+    assert spec.headless is False
+
+
+def test_real_is_the_same_lane_as_c(monkeypatch):
+    """`real` is the spelling the design spec uses at the tool surface and
+    the one a human reaches for. An alias is not a silent degrade: it lands
+    on the lane the caller obviously meant."""
+    monkeypatch.setenv(lanes.ENV_EXTENSION, "true")
+    assert lanes.resolve(lane="real") == lanes.resolve(lane="C")
+
+
+def test_a_misspelled_extension_switch_refuses_rather_than_reading_as_off(
+        monkeypatch):
+    """The loud-typo rule, one switch along. A 'ture' that read as off would
+    leave a human who turned the lane on wondering why it is not there."""
+    monkeypatch.setenv(lanes.ENV_EXTENSION, "ture")
+    with pytest.raises(BadParams):
+        lanes.resolve(lane="C")
+
+
+def test_lane_c_names_the_four_things_it_cannot_do(monkeypatch):
+    """Every row is a fact about what an extension can OBSERVE, and each one
+    would otherwise be a silent wrong answer: a confident zero for closed
+    shadow roots, a null status read as a 200, a viewport crop read as the
+    page, and a synthetic event read as a real one."""
+    monkeypatch.setenv(lanes.ENV_EXTENSION, "true")
+    spec = lanes.resolve(lane="C")
+    assert lanes.capability(spec, "closed_shadow_count") == "unsupported"
+    assert lanes.capability(spec, "navigation_status") == "unsupported"
+    assert lanes.capability(spec, "full_page_screenshot") == "unsupported"
+    # A COST, not a gap. The events work; they carry isTrusted: false and the
+    # lane says so on every act rather than refusing to act at all.
+    assert lanes.capability(spec, "trusted_events") == "cost"
+
+
+def test_lane_c_keeps_every_capability_the_driver_gaps_were_about(monkeypatch):
+    """The other direction: the extension column is not a shorter lane. The
+    S4 gaps are BiDi driver gaps, and a lane with no driver does not have
+    them, so nothing may be marked unsupported here by inheritance."""
+    monkeypatch.setenv(lanes.ENV_EXTENSION, "true")
+    spec = lanes.resolve(lane="C")
+    for name in ("response_body_read", "request_body_read",
+                 "history_navigation", "downloads", "http_auth"):
+        assert lanes.capability(spec, name) == "ok", name
 
 
 # ------------------------------------------------------- the capabilities

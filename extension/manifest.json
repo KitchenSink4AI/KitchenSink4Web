@@ -1,0 +1,43 @@
+{
+  "manifest_version": 2,
+  "name": "[COPY PENDING] KitchenSink4Web",
+  "version": "0.2.0",
+  "description": "[COPY PENDING] extension store description",
+  "permissions": [
+    "activeTab",
+    "tabs",
+    "nativeMessaging",
+    "storage",
+    "webNavigation",
+    "<all_urls>"
+  ],
+  "background": {
+    "scripts": [
+      "background.js"
+    ],
+    "persistent": true
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_idle",
+      "all_frames": true
+    }
+  ],
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "web@kitchensink4.ai",
+      "strict_min_version": "142.0",
+      "data_collection_permissions": {
+        "required": [
+          "none"
+        ]
+      }
+    }
+  }
+}
