@@ -4,9 +4,9 @@
   "title": "KitchenSink4Web",
   "description": "Everything plus the kitchen sink for the open web: reads a whole page for the price of a paragraph.",
   "version": "1.0.0",
-  "websiteUrl": "https://nometalalchemist.github.io/KitchenSink4Web/",
+  "websiteUrl": "https://kitchensink4ai.github.io/KitchenSink4Web/",
   "repository": {
-    "url": "https://github.com/nometalalchemist/KitchenSink4Web",
+    "url": "https://github.com/KitchenSink4AI/KitchenSink4Web",
     "source": "github"
   },
   "packages": [
