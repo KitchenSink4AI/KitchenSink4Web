@@ -115,4 +115,5 @@ testpaths = ["tests"]
 timeout = 120
 markers = [
     "browser: needs a real browser (none exist before Phase 1; auto-skipped)",
+    "slow: shells out to a build backend or a package installer; runs in the full suite, worth deselecting during a tight edit loop",
 ]

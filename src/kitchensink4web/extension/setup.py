@@ -64,6 +64,7 @@ def install(
     dev_src: Path | None = None,
     python_executable: str | None = None,
     touch_registry: bool = True,
+    host_name: str = register.HOST_NAME,
 ) -> dict:
     """Stage the extension, register the relay, and report every path.
 
@@ -71,6 +72,10 @@ def install(
     Chromium extension keeps the id its signing key gives it, and that id
     cannot be computed from a path. Absent one, an unpacked Chromium load
     gets the path-derived id and Firefox gets the id its manifest pins.
+
+    ``host_name`` is not a knob a user needs and exists for the tests: the
+    author's machine carries a live `ks4web` registration, and a test that
+    wrote to the real name would break their browser to prove a point.
     """
     if browser not in _FLAVOR_OF:
         raise ValueError(
@@ -95,6 +100,7 @@ def install(
 
     registration = register.install(
         install_dir,
+        host_name=host_name,
         extension_id=resolved_id,
         python_executable=python_executable,
         src_dir=dev_src,
@@ -113,12 +119,14 @@ def install(
         "extension_id_source": id_source,
         "registration": registration,
         "where": register.describe(browser),
-        "verified": verify(browser, install_dir=install_dir),
+        "verified": verify(browser, install_dir=install_dir,
+                           host_name=host_name),
     }
 
 
 def remove(browser: str = "firefox", *, install_dir: Path | None = None,
-           keep_extension: bool = False) -> dict:
+           keep_extension: bool = False,
+           host_name: str = register.HOST_NAME) -> dict:
     """Take the registration off the machine.
 
     The staged extension directory goes too unless asked otherwise, because
@@ -129,7 +137,8 @@ def remove(browser: str = "firefox", *, install_dir: Path | None = None,
     rather than reporting a clean removal that left half the system in place.
     """
     install_dir = Path(install_dir) if install_dir else default_install_dir()
-    result = register.uninstall(install_dir, browser=browser)
+    result = register.uninstall(install_dir, host_name=host_name,
+                                browser=browser)
 
     ext_dir = staged_extension_dir(install_dir, browser)
     removed_extension = False
@@ -152,14 +161,15 @@ def remove(browser: str = "firefox", *, install_dir: Path | None = None,
         "browser": browser,
         "install_dir": str(install_dir),
         "removed": {**result["removed"], "extension": removed_extension},
-        "still_registered": register.read_registration(browser=browser),
+        "still_registered": register.read_registration(host_name, browser=browser),
         # Stated as a fact rather than buried: the browser still has the
         # add-on installed and no command here can change that.
         "requires_human": "remove the add-on in the browser's own add-ons page",
     }
 
 
-def verify(browser: str = "firefox", *, install_dir: Path | None = None) -> dict:
+def verify(browser: str = "firefox", *, install_dir: Path | None = None,
+           host_name: str = register.HOST_NAME) -> dict:
     """Check what is actually on the machine, not what we just tried to write.
 
     Phase 1's discipline: write it, then read it back through the same oracle
@@ -169,7 +179,7 @@ def verify(browser: str = "firefox", *, install_dir: Path | None = None) -> dict
     install_dir = Path(install_dir) if install_dir else default_install_dir()
     flavor = _FLAVOR_OF.get(browser, "firefox")
     ext_dir = staged_extension_dir(install_dir, browser)
-    found = register.read_registration(browser=browser)
+    found = register.read_registration(host_name, browser=browser)
 
     expected = set(artifact.files(flavor))
     present = {p.name for p in ext_dir.iterdir()} if ext_dir.is_dir() else set()
@@ -267,6 +277,53 @@ def render(result: dict) -> str:
     return "\n".join(lines)
 
 
+def main(argv: list[str] | None = None) -> int:
+    """``python -m kitchensink4web.extension.setup``.
+
+    The same command `--setup-browser` runs, reachable without importing the
+    MCP server. That is not a convenience: `server.py` pulls in fastmcp, and
+    setting up a browser should not require the machinery it is setting the
+    browser up FOR. It also means the installed-wheel proof can run the real
+    command rather than a stand-in for it.
+    """
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        prog="python -m kitchensink4web.extension.setup",
+        description=("Install or remove the KS4Web browser extension and its "
+                     "native messaging host registration."),
+    )
+    parser.add_argument("--browser", default="firefox",
+                        choices=sorted(_FLAVOR_OF))
+    parser.add_argument("--remove", action="store_true")
+    parser.add_argument("--extension-id", default=None)
+    parser.add_argument("--install-dir", default=None)
+    parser.add_argument("--no-registry", action="store_true",
+                        help="write the files and leave the registry alone.")
+    args = parser.parse_args(argv)
+
+    where = Path(args.install_dir) if args.install_dir else None
+    try:
+        if args.remove:
+            result = remove(args.browser, install_dir=where)
+        else:
+            result = install(args.browser, install_dir=where,
+                             extension_id=args.extension_id,
+                             touch_registry=not args.no_registry)
+    except Exception as exc:
+        print(f"KS4Web browser setup failed: {exc}", file=sys.stderr)
+        return 2
+
+    print(render(result))
+    if result["action"] == "remove":
+        return 0
+    verified = result["verified"]
+    if verified["extension_complete"] and (
+            verified["host_registered"] or args.no_registry):
+        return 0
+    return 1
+
+
 def _next_steps(result: dict) -> list[str]:
     """The FACTS of the manual half. Wording is the author's."""
     path = result["extension"]["path"]
@@ -286,3 +343,7 @@ def _next_steps(result: dict) -> list[str]:
         f"{result['extension_id']}; if it differs, re-run with "
         f"--extension-id <the id shown>",
     ]
+
+
+if __name__ == "__main__":  # pragma: no cover
+    raise SystemExit(main())
