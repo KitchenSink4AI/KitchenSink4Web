@@ -33,7 +33,8 @@ from kitchensink4web.errors import (ConfirmationRequired,          # noqa: E402
                                     CredentialRefused)
 from kitchensink4web.extension import lane as _extlane             # noqa: E402
 from kitchensink4web.extension import register                     # noqa: E402
-from kitchensink4web.extension.bridge import Bridge                # noqa: E402
+from kitchensink4web.extension.bridge import (Bridge,
+                                                    BridgeError)                # noqa: E402
 from kitchensink4web.ops import extops                             # noqa: E402
 from kitchensink4web.policy import consent, readonly               # noqa: E402
 from tests.fixtures.firefox_harness import (                       # noqa: E402
@@ -158,8 +159,20 @@ def live(tmp_path_factory):
         bridge.request("consent.set", {"origins": ["*"]}, timeout=30.0)
         deadline = time.monotonic() + 30.0
         while time.monotonic() < deadline:
-            if "Checkout" in bridge.request("page.read",
-                                            timeout=30.0).get("text", ""):
+        # A BROWSER STILL STARTING HAS `about:blank` ON SCREEN, and the
+        # extension refuses privileged schemes rather than trying and
+        # failing -- correctly, and this loop is what has to tolerate it.
+        # Without the guard the fixture dies on the refusal instead of
+        # polling past it, which is a harness defect that looks exactly
+        # like a product one: it reproduces on phase 2 code as soon as a
+        # third extension module joins the suite (measured at one run in
+        # four), and it is why phase 3 saw ten module-setup errors in a
+        # full-suite run that no isolated run could reproduce.
+            try:
+                text = bridge.request("page.read", timeout=30.0).get("text", "")
+            except BridgeError:
+                text = ""
+            if "Checkout" in text:
                 break
             time.sleep(0.25)
         yield bridge, pages

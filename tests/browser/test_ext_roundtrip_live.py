@@ -86,7 +86,20 @@ def live(tmp_path_factory):
         # sentinel rather than on a fixed sleep.
         deadline = time.monotonic() + 30.0
         while time.monotonic() < deadline:
-            if SENTINEL in bridge.request("page.read", timeout=30.0).get("text", ""):
+        # A BROWSER STILL STARTING HAS `about:blank` ON SCREEN, and the
+        # extension refuses privileged schemes rather than trying and
+        # failing -- correctly, and this loop is what has to tolerate it.
+        # Without the guard the fixture dies on the refusal instead of
+        # polling past it, which is a harness defect that looks exactly
+        # like a product one: it reproduces on phase 2 code as soon as a
+        # third extension module joins the suite (measured at one run in
+        # four), and it is why phase 3 saw ten module-setup errors in a
+        # full-suite run that no isolated run could reproduce.
+            try:
+                text = bridge.request("page.read", timeout=30.0).get("text", "")
+            except BridgeError:
+                text = ""
+            if SENTINEL in text:
                 break
             time.sleep(0.25)
         yield bridge
