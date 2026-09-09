@@ -1168,6 +1168,14 @@ class SessionManager:
                 f"to create and no business creating. contexts={contexts!r} "
                 f"was refused and nothing was opened.")
 
+        # THE TOKENIZER, WARMED HERE TOO, and its absence was the whole of
+        # phase 2's "419 ms first read". `open()` warms the estimator because
+        # launching a browser is already slow for honest reasons; this path
+        # launches nothing, so it skipped the warm, and the o200k BPE table
+        # then loaded inside the first `get_page_view` on the lane. Measured
+        # on this machine: 221 ms of a 477 ms first read, once per process,
+        # charged to whichever read happened to be first.
+        _warm_estimator()
         if self.extension_bridge is None:
             self.extension_bridge = _bridge_mod.Bridge()
         bridge = self.extension_bridge
