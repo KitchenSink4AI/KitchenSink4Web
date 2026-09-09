@@ -10,3 +10,8 @@ spikes/*/.venv/
 spikes/*/out/raw/
 gates/_victim_*.json
 spikes/*/out/
+
+# Local-only fixture corpora: third-party page captures stay off the public record.
+# Present on a developer machine, absent from a fresh clone; the tests that read
+# them skip when they are not there.
+corpus/
