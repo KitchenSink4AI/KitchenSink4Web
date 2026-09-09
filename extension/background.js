@@ -295,6 +295,67 @@ async function toFrame(tabId, frameId, message) {
 }
 
 /*
+ * THE DOCUMENT_IDLE RACE, and it is the gap the research flagged as the one
+ * where the timing bugs live.
+ *
+ * A manifest content script at document_idle is injected some time after the
+ * document commits. A command that arrives in that window gets "Could not
+ * establish connection. Receiving end does not exist." from sendMessage, and
+ * the honest reading of that error is not "the page has no content script",
+ * it is "not yet". A click that navigates and a read that follows it are
+ * exactly the sequence that lands there, and it is the ordinary sequence
+ * rather than an unusual one.
+ *
+ * So the retry is bounded and explicit: inject content.js directly (the file
+ * guards itself with __ks4webContentLoaded, so a second copy is free), wait
+ * a beat, and try again. What is NOT done is retry forever: past the budget
+ * the error travels, because a document that never gets a content script is
+ * a real condition (a privileged page the scheme check missed, a document
+ * the browser replaced mid-command) and pretending otherwise would turn a
+ * refusal into a hang.
+ */
+const CONNECT_RETRIES = 6;
+const CONNECT_WAIT_MS = 120;
+
+function isNotListening(err) {
+  const text = String((err && err.message) || err || "");
+  return text.indexOf("Receiving end does not exist") >= 0
+    || text.indexOf("Could not establish connection") >= 0;
+}
+
+function pause(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function toFrameWaiting(tabId, frameId, message) {
+  let last = null;
+  for (let attempt = 0; attempt <= CONNECT_RETRIES; attempt++) {
+    try {
+      return await toFrame(tabId, frameId, message);
+    } catch (err) {
+      if (!isNotListening(err)) {
+        throw err;
+      }
+      last = err;
+      try {
+        await browser.tabs.executeScript(tabId, {
+          file: "/content.js",
+          frameId: frameId,
+          runAt: "document_end",
+        });
+        // The bundle went with the old document; a fresh content script
+        // means a fresh isolated world and no projection in it.
+        injected.delete(frameKey(tabId, frameId));
+      } catch (inner) {
+        /* the document may still be committing; the wait below covers it */
+      }
+      await pause(CONNECT_WAIT_MS);
+    }
+  }
+  throw last;
+}
+
+/*
  * Everything that touches a page goes through here: the scheme refusal, the
  * consent gate, the rate limit, the bundle injection, and then the message.
  */
@@ -316,6 +377,10 @@ async function pageCommand(method, params) {
     note(method, tab.url, "refused:rate");
     throw { code: "RATE_LIMITED", message: throttled };
   }
+  // THE LISTENER FIRST, THE BUNDLE SECOND. A frame with no content script
+  // yet cannot answer, and injecting 300 KB of projection into a document
+  // that is about to be replaced is the expensive way to find that out.
+  const ready = await toFrameWaiting(tab.id, frameId, { method: "page.ready" });
   let injectedNow = false;
   if (method === "page.evaluate" || method === "page.act") {
     injectedNow = await ensureBundle(tab.id, frameId);

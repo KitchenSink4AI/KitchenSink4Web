@@ -75,6 +75,13 @@ def live(tmp_path_factory):
         rdp.install_temporary_addon(ROOT / "extension")
         if not bridge.wait_for_browser(60.0):
             pytest.fail("the extension never connected to the bridge")
+        # THE EXTENSION SHIPS DENYING (Phase 2). Until a session records the
+        # consent ladder's answer browser-side, every page command refuses:
+        # an unconfigured gate and an empty one are different states and
+        # only one of them is "allow nothing". A connected extension that
+        # nobody has authorized touches no page, which is why this line has
+        # to be here and did not have to be in Phase 1.
+        bridge.request("consent.set", {"origins": ["*"]}, timeout=30.0)
         # document_idle can land after the add-on does, so settle on the
         # sentinel rather than on a fixed sleep.
         deadline = time.monotonic() + 30.0

@@ -1,0 +1,50 @@
+{
+  "first_read_after_navigation_ms": 419.47,
+  "get_page_view_heavy": {
+    "n": 15,
+    "min_ms": 59.33,
+    "median_ms": 64.55,
+    "p95_ms": 86.82,
+    "max_ms": 86.82,
+    "budget_used": 1920,
+    "refs_minted": 386
+  },
+  "get_page_view_light": {
+    "n": 15,
+    "min_ms": 4.26,
+    "median_ms": 5.2,
+    "p95_ms": 7.42,
+    "max_ms": 7.42
+  },
+  "click": {
+    "n": 15,
+    "min_ms": 120.45,
+    "median_ms": 129.64,
+    "p95_ms": 159.28,
+    "max_ms": 159.28
+  },
+  "navigate_reload_same_url": {
+    "n": 4,
+    "min_ms": 19.19,
+    "median_ms": 21.01,
+    "p95_ms": 22.96,
+    "max_ms": 22.96
+  },
+  "take_screenshot": {
+    "n": 4,
+    "min_ms": 13.83,
+    "median_ms": 16.3,
+    "p95_ms": 19.77,
+    "max_ms": 19.77,
+    "base64_chars": 51404,
+    "masked_fields": 0
+  },
+  "bg_ping": {
+    "n": 15,
+    "min_ms": 0.54,
+    "median_ms": 0.7,
+    "p95_ms": 1.79,
+    "max_ms": 1.79
+  },
+  "session_ids_used": 1
+}

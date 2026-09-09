@@ -215,8 +215,18 @@
         if (!form) {
           return { error: { code: "NO_FORM", message: "[COPY PENDING] no form text: " + String(ref) } };
         }
+        // THE SUBMITTER IS ONLY EVER A SUBMIT CONTROL. requestSubmit throws
+        // outright on anything else, and the element this act arrives on is
+        // usually the FIELD rather than the button: typing into a search box
+        // and pressing Enter is implicit form submission, which has no
+        // submitter at all. Passing the field would turn the oldest submit
+        // path on the web into a TypeError.
+        const type = (el.type || "").toLowerCase();
+        const isSubmitter = el !== form
+          && (type === "submit" || type === "image"
+              || (el.tagName === "BUTTON" && type !== "button" && type !== "reset"));
         if (typeof form.requestSubmit === "function") {
-          form.requestSubmit(el.form && el.tagName !== "FORM" ? el : undefined);
+          form.requestSubmit(isSubmitter ? el : undefined);
         } else {
           form.submit();
         }
