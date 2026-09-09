@@ -9,15 +9,96 @@ that never calls it still sees something sane.
 `live_tools` returns the tool objects FastMCP actually holds, which is the
 only honest source for any count or cost: the pack registry tracks membership
 by name and deliberately keeps no second copy of the objects.
+
+THE PAGE CAPTURES ARE LOCAL-ONLY, so this file also decides what a run
+without them is allowed to claim. `corpus/` and the saved responses under
+`tests/data/walls/` are other people's pages, so they live on the developer
+machine and are not tracked; a fresh clone, which is what CI checks out, has
+the manifests and none of the bodies. The tests that read them are skipped
+with the reason stated rather than left to fail on a missing file, and
+nothing is skipped where the captures ARE present.
+
+Same shape as KitchenSink4PPT's `tests/conftest.py`, which skips on a private
+deck corpus for the same reason. The difference is that PPT can generate a
+structural stand-in for a missing deck and a captured web page cannot be
+stood in for at all, so a skip here is the whole of the answer.
 """
 
 from __future__ import annotations
 
 import asyncio
+import re
+from pathlib import Path
 
 import pytest
 
 from kitchensink4web import server
+
+ROOT = Path(__file__).resolve().parents[1]
+CORPUS = ROOT / "corpus"
+WALLS = ROOT / "tests" / "data" / "walls"
+
+
+def _captures(root: Path) -> list[Path]:
+    """The capture files under `root`, ignoring any that are empty.
+
+    Size and not just existence: a truncated or zero-byte capture tells the
+    classifier nothing and would fail as if the code were wrong, which is the
+    failure this is here to keep out of CI."""
+    return [p for p in root.glob("*/*.html") if p.stat().st_size > 0]
+
+
+#: What each root is, said once, for the skip reason a reader sees.
+_SETS = {
+    "corpus": (CORPUS, "corpus/", "the frozen benchmark pages, the "
+               "pathological fixture site, and the adversarial sets"),
+    "walls": (WALLS, "tests/data/walls/", "the saved wall and error "
+              "responses collected from real hosts"),
+}
+
+#: A module needs a set when it builds a path into that set's root. The
+#: patterns match the path construction and not the word, so a file that only
+#: MENTIONS the corpus in a docstring still runs.
+_NEEDS = {
+    "corpus": re.compile(r'/\s*"corpus"'),
+    "walls": re.compile(r'"data"\s*/\s*"walls"'),
+}
+
+
+def pytest_configure(config):
+    config.addinivalue_line(
+        "markers",
+        "needs_captures(*sets): this test reads, or measures something "
+        "derived from, the local page captures named ('corpus', 'walls'). "
+        "For the tests that do not build the path themselves and therefore "
+        "cannot be found by reading the file.")
+
+
+def pytest_collection_modifyitems(config, items):
+    missing = {k for k, (root, _, _) in _SETS.items() if not _captures(root)}
+    if not missing:
+        return
+    reasons: dict[str, str] = {}
+    for key in missing:
+        _root, where, what = _SETS[key]
+        reasons[key] = (
+            f"{where} is not on this machine ({what}). The captures are "
+            f"other people's pages, so they are kept local and out of the "
+            f"tracked tree; this test reads them and cannot run without "
+            f"them. Everything that does not read them still runs.")
+    needs: dict[str, set[str]] = {}
+    for item in items:
+        fname = str(item.fspath)
+        if fname not in needs:
+            text = Path(fname).read_text(encoding="utf-8", errors="ignore")
+            needs[fname] = {k for k, pat in _NEEDS.items()
+                            if pat.search(text)}
+        wanted = set(needs[fname])
+        marker = item.get_closest_marker("needs_captures")
+        if marker:
+            wanted |= set(marker.args)
+        for key in sorted(wanted & missing):
+            item.add_marker(pytest.mark.skip(reason=reasons[key]))
 
 
 @pytest.fixture(autouse=True)

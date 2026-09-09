@@ -495,9 +495,17 @@ def _live_test_count() -> dict[str, int]:
     return counts
 
 
+@pytest.mark.needs_captures("corpus", "walls")
 def test_the_published_test_count_matches_a_live_collection():
     """The suite count as the surfaces state it, against what pytest
     collects in this working tree at this moment.
+
+    Checked only where the captures are, and the reason is arithmetic
+    rather than caution: the fixtures that parametrize over a capture set
+    collapse to a single empty-parameter placeholder when the captures are
+    absent, so a clone without them collects a smaller suite than the one
+    the published figure describes. Measuring the claim there would fail
+    the claim for being true.
 
     The test count is the one published figure that moves every time
     somebody writes a test, so an exact match would turn "added a test"

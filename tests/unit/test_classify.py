@@ -151,6 +151,14 @@ def _load() -> list[Fixture]:
                 continue
             if not (entry.get("files") or {}).get("html"):
                 continue
+            # The manifests are tracked and the saved responses are not, so a
+            # fresh clone reaches this line with an entry whose body is not on
+            # disk. Reading it would raise during COLLECTION, which is a red
+            # suite rather than the honest answer; the skip in
+            # tests/conftest.py gives the honest answer, and it only gets the
+            # chance if the import survives.
+            if not (CORPUS / category / entry["files"]["html"]).is_file():
+                continue
             out.append(Fixture(category, entry))
     return out
 
