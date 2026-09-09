@@ -78,14 +78,41 @@ async def _kill_browsers(sess, timeout: float = 20.0) -> None:
     one. It is AWAITED and not slept, because the driver delivers its
     disconnect on this loop and a blocking sleep here would hold up the very
     event these rows go on to read."""
+    _LAST_KILL.clear()
     for jar in sess.contexts.values():
         for pid in list(jar.journal.pids):
-            hygiene.kill(pid)
+            _LAST_KILL[pid] = hygiene.kill(pid)
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         if sess.browser_alive() is False:
             return
         await asyncio.sleep(0.1)
+
+
+#: What `hygiene.kill` answered for each PID of the last kill, for the
+#: evidence line below.
+_LAST_KILL: dict[int, bool] = {}
+
+
+def _death_evidence(sess) -> str:
+    """Why a session that was just killed still reads alive, in one line.
+
+    A bare `assert True is False` says a browser outlived its kill and
+    nothing about WHICH of the three ways that can happen: the kill was
+    refused, the process is genuinely still running, or the process is gone
+    and only the survivor check still answers for it through a handle
+    somebody else holds. On a runner, which one it is decides whether there
+    is anything to fix here at all."""
+    rows = []
+    for label, jar in sess.contexts.items():
+        for pid, born in jar.journal.pids.items():
+            rows.append(
+                f"{label}/{pid}: killed={_LAST_KILL.get(pid)} "
+                f"wait_object_alive={hygiene.alive(pid)} "
+                f"created_then={born} created_now={hygiene.creation_time(pid)}")
+        rows.append(f"{label}: survivors={jar.journal.survivors()} "
+                    f"verdict={jar.alive()}")
+    return f"the browser outlived its kill. " + "; ".join(rows)
 
 
 # ---------------------------------------------------- LAYER 3: the blocker
@@ -166,7 +193,7 @@ def test_killing_a_user_browser_leaves_the_monitor_alive(session_factory):
         monitor_session = await MANAGER.open(headless=True, role="monitor")
         try:
             await _kill_browsers(user)
-            assert user.browser_alive() is False
+            assert user.browser_alive() is False, _death_evidence(user)
             assert monitor_session.browser_alive() is not False, (
                 "the monitor's browser died with a user session's browser")
             # And a new session still opens, which is layer 3 seen from here.
