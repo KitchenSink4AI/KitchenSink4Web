@@ -99,7 +99,16 @@ where = ["src"]
 # The in-page extractor is the projection, and a wheel without it installs a
 # server that cannot read a page. Declared here rather than discovered at
 # ship time.
-kitchensink4web = ["projection/*.js", "profile_data/*.json"]
+#
+# `extension/assets/*.js` is the browser extension's own source. It ships as
+# SOURCE and not as a built .xpi on purpose: `projection.bundle.js` is
+# compiled from `projection/*.js`, and a prebuilt copy inside the wheel would
+# be a claim about the machine that built it that nothing re-checks in the
+# field. `--setup-browser` compiles the bundle from the projection THIS
+# install has, so the extension in the browser and the server driving it
+# cannot disagree. See `extension/artifact.py`.
+kitchensink4web = ["projection/*.js", "profile_data/*.json",
+                   "extension/assets/*.js"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
