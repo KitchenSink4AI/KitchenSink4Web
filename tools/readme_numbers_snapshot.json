@@ -37,13 +37,13 @@
    }
   },
   "tests": {
-   "browser": 733,
-   "total": 2065,
-   "unit": 1332
+   "browser": 804,
+   "total": 2349,
+   "unit": 1545
   }
  },
  "fill": {
-  "BROWSER_TEST_COUNT": 733,
+  "BROWSER_TEST_COUNT": 804,
   "DELTA_TOKENS": "82",
   "DEMO_PAGE_NAME": "the Treaty of Versailles article on Wikipedia",
   "FULL_SURFACE_TOKENS": "15.3k",
@@ -52,6 +52,6 @@
   "PROJECTION_TOKENS": "4,445",
   "RAW_DUMP_TOKENS": "33,073",
   "RUNG_COUNT": 16,
-  "TEST_COUNT": 2065
+  "TEST_COUNT": 2349
  }
 }
