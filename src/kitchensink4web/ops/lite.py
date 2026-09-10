@@ -7500,6 +7500,85 @@ async def handle_dialog(
                       f"did."))
 
 
+#: The suite, by PyPI name. Identity data rather than copy: an agent that
+#: has been told what it is talking to can also be told what else exists in
+#: the same family, and these three names are the whole of it.
+_FAMILY: dict[str, str] = {
+    "kitchensink4word": "Microsoft Word (.docx) editing",
+    "kitchensink4xl": "Microsoft Excel (.xlsx) editing",
+    "kitchensink4ppt": "Microsoft PowerPoint (.pptx) editing",
+}
+
+
+def _measured_figures() -> dict:
+    """The figures shipped inside the wheel, written by
+    `tools/measure_readme_numbers.py` from a live pytest collection and
+    checked against a fresh collection by the copy guards.
+
+    Read from package data rather than counted here, because a running
+    server has no test suite to count and a number typed by hand is the
+    thing this file exists not to do. Missing or unreadable is reported as
+    such: an absent figure is honest, an invented one is not."""
+    try:
+        import json as _json
+        from importlib import resources
+
+        raw = (resources.files("kitchensink4web")
+               .joinpath("figures.json").read_text(encoding="utf-8"))
+        return _json.loads(raw)
+    except Exception:
+        return {}
+
+
+async def get_server_info() -> dict:
+    """Report what this server is and what it is running: the product and
+    PyPI package names, the version a client was handed at initialize, the
+    homepage and repository, the sibling servers in the same suite, the
+    tool surface registered in THIS process (how many tools, how many of
+    them are the lite core, which capability packs are loaded and which
+    exist, and the read-only grade and consent scope in force), the test
+    figures measured for this release, and the host Python and platform.
+    Counts come from the live registry, so they describe the process you
+    are connected to rather than the product in general. Needs no browser,
+    opens no page, and reveals no path or user name, so a bug report can
+    carry the output as it stands.
+    """
+    import platform as _platform
+    import sys as _sys
+
+    from .. import __version__
+
+    rosters = _packs.tool_names()
+    figures = _measured_figures()
+    return {
+        "product": "KitchenSink4Web",
+        "package": "kitchensink4web",
+        "version": __version__,
+        "homepage": "https://kitchensink4.ai/KitchenSink4Web/",
+        "repository": "https://github.com/KitchenSink4AI/KitchenSink4Web",
+        "suite": "KitchenSink4AI",
+        "family": _FAMILY,
+        "surface": {
+            "tools_registered": sum(len(m) for m in rosters.values()),
+            "lite_core": len(rosters.get("lite", ())),
+            "packs_loaded": _packs.loaded_packs(),
+            "packs_available": _packs.pack_names(),
+            "read_only": readonly.grade(),
+            "read_only_decided_by": readonly.source(),
+            "consent_scope": _consent.scope(),
+            "note": ("packs and read-only mode are resolved once at launch, "
+                     "so this surface is identical for every connection to "
+                     "this process and no call changes it"),
+        },
+        "tests": figures.get("tests", {}),
+        "tests_measured_at_version": figures.get("version"),
+        "host": {
+            "python": _platform.python_version(),
+            "platform": _sys.platform,
+        },
+    }
+
+
 #: The lite roster, in the order DESIGN 2.1 lists it. `server.py` registers
 #: exactly this and nothing else in Phase 0.
 # Imported HERE rather than at the top of the module: `ops/monitor.py`
@@ -7527,5 +7606,6 @@ LITE_TOOLS = (
     manage_session,
     get_audit,
     get_workflows,
+    get_server_info,
     _monitor_ops.monitor,
 )

@@ -224,10 +224,47 @@ def _test_counts() -> dict:
     return counts
 
 
+#: The figure file that SHIPS, read at runtime by `get_server_info`. It
+#: carries only the test counts, which is the one published figure a running
+#: server cannot re-derive for itself and the one a caller is most entitled
+#: to check. Page-read figures are deliberately not in here: they move with
+#: the installed extras (4,437 against 4,445), so a file written from an
+#: arbitrary venv would ship a number that disagrees with the product's own
+#: pages.
+SHIPPED_FIGURES = ROOT / "src" / "kitchensink4web" / "figures.json"
+
+
+def _write_shipped_figures(tests: dict) -> None:
+    version = re.search(r'__version__ = "([^"]+)"',
+                        (ROOT / "src" / "kitchensink4web" /
+                         "__init__.py").read_text(encoding="utf-8")).group(1)
+    SHIPPED_FIGURES.write_text(json.dumps({
+        "note": ("Measured, never typed. Written by "
+                 "tools/measure_readme_numbers.py --write from a live pytest "
+                 "collection, and checked against a fresh collection by "
+                 "tests/unit/test_copy_guards.py."),
+        "version": version,
+        "tests": {k: tests[k] for k in ("unit", "browser", "total")
+                  if tests.get(k)},
+    }, indent=1) + "\n", encoding="utf-8")
+    print(f"wrote {SHIPPED_FIGURES.relative_to(ROOT)}: {tests}")
+
+
 def main() -> None:
+    if "--tests-only" in sys.argv:
+        # The tests block alone, for a wave that changed the suite and not
+        # the page reads. No browser, no corpus, and no chance of restamping
+        # a page figure from the wrong environment.
+        tests = _test_counts()
+        _write_shipped_figures(tests)
+        print(json.dumps({"tests": tests}, indent=1))
+        return
+
     page = asyncio.run(_page_numbers())
     surface = _surface_numbers()
     tests = _test_counts()
+    if "--write" in sys.argv:
+        _write_shipped_figures(tests)
     demo, delta = page["demo"], page["delta"]
 
     payload = {

@@ -59,6 +59,15 @@ mcp = FastMCP(
     # log and every bug report a user files reads this field.
     version=__version__,
     instructions=(
+        # SELF-IDENTIFICATION, and it leads for a reason. The instructions
+        # string is the one block of this server's own prose that lands in a
+        # connected agent's context, and until this line it named no product
+        # at all: an agent could use every tool here and never learn what it
+        # was talking to, which the client alias ("web", whatever a user
+        # typed in their config) does not tell it either. get_server_info
+        # answers the same question on request; this answers it unasked.
+        "KitchenSink4Web (kitchensink4web on PyPI), part of the "
+        "KitchenSink4AI suite. "
         "Browser automation with a cheap first read. get_page_view returns "
         "an orientation of any page under a token budget it never exceeds, "
         "with references you can act on; find_elements is the cheap "

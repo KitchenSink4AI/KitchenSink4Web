@@ -1,7 +1,7 @@
 [project]
 name = "kitchensink4web"
-version = "1.0.0"
-description = "Kitchen-sink browser MCP server: a cheap first read of any page, durable refs, and a shipped safety layer"
+version = "1.0.1"
+description = "Browser MCP server: budgeted page reads, honest unread accounting, structured extraction, consent-gated acting. The kitchen sink."
 readme = "README.md"
 # DESIGN 10.3 rule 5 held the license out of every file until the decision
 # landed and named the LICENSE file a Phase 9 artifact. The decision landed
@@ -10,7 +10,7 @@ readme = "README.md"
 # carries the retargeted per-product notice, the same split the siblings use.
 license = "AGPL-3.0-only"
 license-files = ["LICENSE", "NOTICE.md"]
-authors = [{ name = "nometalalchemist" }]
+authors = [{ name = "Alvut Consulting, LLC (KitchenSink4AI)" }]
 keywords = [
     "mcp", "browser", "playwright", "web", "automation", "claude",
     "model-context-protocol", "token-efficient", "accessibility-tree",
@@ -107,7 +107,12 @@ where = ["src"]
 # field. `--setup-browser` compiles the bundle from the projection THIS
 # install has, so the extension in the browser and the server driving it
 # cannot disagree. See `extension/artifact.py`.
-kitchensink4web = ["projection/*.js", "profile_data/*.json",
+#
+# `figures.json` is the measured evidence figure get_server_info reports.
+# It ships INSIDE the wheel because the question it answers ("how much is
+# this thing tested") is asked of a running server, which has no test suite
+# to count and must not invent a number.
+kitchensink4web = ["projection/*.js", "profile_data/*.json", "figures.json",
                    "extension/assets/*.js"]
 
 [tool.pytest.ini_options]

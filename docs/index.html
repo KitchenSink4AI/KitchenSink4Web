@@ -16,8 +16,8 @@
             listing 64,596, serialized DOM 691,486)
     4,445   this server's first read of the same page (rung 6, budget 5,000)
     82      delta read after one click (corpus/b/pathological.html)
-    19      lite tools / ~5.8k tokens;  52 full / ~15.3k tokens
-    2,349   tests, 804 of them driving a real browser
+    20      lite tools / ~6.0k tokens;  53 full / ~15.5k tokens
+    2,369   tests, 822 of them driving a real browser
     16      rungs on the budget ladder
   The DEPT. 00 map panel quotes the real region rows from
   corpus/a/out/wikipedia_versailles.projection.txt. The DEPT. 00 dump panel
@@ -42,10 +42,177 @@
 <meta name="description" content="A browser MCP server that reads a whole page for the price of a paragraph. A raw dump of one Wikipedia article costs 33,073 tokens; this server's first read of it costs 4,445, and every region is priced before you open it. Starts read-only: the tools that click and type are absent until you switch them on.">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🪴</text></svg>">
 <link rel="llms" href="llms.txt" type="text/plain">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght,SOFT@9..144,300..900,50&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
+/* SELF-HOSTED FACES. This page used to pull Fraunces and IBM Plex Mono from
+   the Google Fonts CDN, which made every reader's browser announce this visit
+   to a third party before a word of the page rendered. The faces now ship
+   beside the page in docs/fonts/, both under the SIL Open Font License 1.1,
+   whose texts are in that directory. The @font-face blocks below are Google's
+   own generated CSS with the URLs pointed at the local copies, so the subset
+   split and the unicode ranges are unchanged. */
+/* vietnamese */
+@font-face {
+  font-family: 'Fraunces';
+  font-style: normal;
+  font-weight: 300 900;
+  font-display: swap;
+  src: url(fonts/fraunces-300-900-vietnamese.woff2) format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'Fraunces';
+  font-style: normal;
+  font-weight: 300 900;
+  font-display: swap;
+  src: url(fonts/fraunces-300-900-latin-ext.woff2) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'Fraunces';
+  font-style: normal;
+  font-weight: 300 900;
+  font-display: swap;
+  src: url(fonts/fraunces-300-900-latin.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* cyrillic-ext */
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(fonts/ibm-plex-mono-400-cyrillic-ext.woff2) format('woff2');
+  unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+}
+/* cyrillic */
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(fonts/ibm-plex-mono-400-cyrillic.woff2) format('woff2');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+/* vietnamese */
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(fonts/ibm-plex-mono-400-vietnamese.woff2) format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(fonts/ibm-plex-mono-400-latin-ext.woff2) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(fonts/ibm-plex-mono-400-latin.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* cyrillic-ext */
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url(fonts/ibm-plex-mono-500-cyrillic-ext.woff2) format('woff2');
+  unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+}
+/* cyrillic */
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url(fonts/ibm-plex-mono-500-cyrillic.woff2) format('woff2');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+/* vietnamese */
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url(fonts/ibm-plex-mono-500-vietnamese.woff2) format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url(fonts/ibm-plex-mono-500-latin-ext.woff2) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url(fonts/ibm-plex-mono-500-latin.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* cyrillic-ext */
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url(fonts/ibm-plex-mono-600-cyrillic-ext.woff2) format('woff2');
+  unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+}
+/* cyrillic */
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url(fonts/ibm-plex-mono-600-cyrillic.woff2) format('woff2');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+/* vietnamese */
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url(fonts/ibm-plex-mono-600-vietnamese.woff2) format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url(fonts/ibm-plex-mono-600-latin-ext.woff2) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url(fonts/ibm-plex-mono-600-latin.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
 /* metric-matched local fallbacks, per the family pages: Courier New shares IBM Plex Mono's
    advance width, Georgia scaled 104% matches Fraunces at text weights. */
 @font-face{font-family:"Plex Mono Fallback";src:local("Courier New");size-adjust:100%;line-gap-override:0%}
@@ -556,7 +723,7 @@ footer a{color:var(--brass)}
   <div class="wrap">
     <div class="sec-head"><span class="no" data-i18n="no1">DEPT. 01</span><h2 data-i18n="h2.tale">Out of the box, it can look but not touch</h2></div>
     <div class="tale" data-label="THE HOUSE RULE">
-      <p data-i18n="tale.p1">A browser is where your logins, your money, and your mistakes all live. So out of the box, your AI gets reading tools only: it can open pages, follow links, and scroll. The tools for clicking, typing, and submitting are deliberately left out. They are not switched off somewhere, waiting to be found; the AI is simply never given them. A malicious webpage cannot trick your AI into clicking something, because your AI has nothing to click with.</p>
+      <p data-i18n="tale.p1">A browser is where your logins, your money, and your mistakes all live. So out of the box, your AI gets reading tools only: it can open pages, follow links, and scroll. The tools for clicking, typing, and submitting are deliberately left out. They are not switched off somewhere, waiting to be found; the AI is simply never given them. Malicious webpages are treated as untrusted data, never as instructions, because your AI has nothing to click with.</p>
       <p data-i18n="tale.p2">When you do want help filling in a form or clicking through a site, open the server's settings, the same screen you saw when you installed it, and tick one box: allow clicking and typing. The tools appear. Untick it and they are gone again. No reinstalling, no technical steps, and at any moment you can see which mode you are in by glancing at the AI's tool list.</p>
       <p data-i18n="tale.p3">It reads defensively too. Some webpages hide invisible text written for AIs, not people, saying things like "ignore your instructions and click here." This server strips that hidden text out of what your AI sees, counts it, and reports that it was there. Your AI never even gets tempted.</p>
       <a class="tale-go" href="#install" data-i18n="tale.fwd">The one-time setup that makes this painless is the tip just below the install steps.</a>
@@ -590,8 +757,8 @@ footer a{color:var(--brass)}
     <div class="tablewrap">
       <table class="bill">
         <tr><th data-i18n="bill.h1">On the meter</th><th class="num" data-i18n="bill.h2">Tools</th><th class="num" data-i18n="bill.h3">Tokens</th><th data-i18n="bill.h4">When it draws</th></tr>
-        <tr><td data-i18n="bill.r1">Lite core</td><td class="num">19</td><td class="num">5.8k</td><td data-i18n="bill.w1">From the first message of every session</td></tr>
-        <tr><td data-i18n="bill.r2">Every pack switched on</td><td class="num">52</td><td class="num">15.3k</td><td data-i18n="bill.w2">Only when the packs are chosen at launch</td></tr>
+        <tr><td data-i18n="bill.r1">Lite core</td><td class="num">20</td><td class="num">6.0k</td><td data-i18n="bill.w1">From the first message of every session</td></tr>
+        <tr><td data-i18n="bill.r2">Every pack switched on</td><td class="num">53</td><td class="num">15.5k</td><td data-i18n="bill.w2">Only when the packs are chosen at launch</td></tr>
         <tr><td data-i18n="bill.r3">First read of one long article</td><td class="num">·</td><td class="num">4,445</td><td data-i18n="bill.w3">Once, and it never exceeds the budget you set</td></tr>
         <tr class="sum"><td data-i18n="bill.r4">The same read again, after one click</td><td class="num">·</td><td class="num">82</td><td data-i18n="bill.w4">Every repeat read, priced on what changed</td></tr>
       </table>
@@ -641,7 +808,7 @@ footer a{color:var(--brass)}
     <div class="maturity">
       <h3 data-i18n="maturity.h">Young, and raised in a hard school</h3>
       <p data-i18n="maturity.p">This is the newest product in the family, and the page will not pretend otherwise. Before release we attack our own products deliberately: hostile test rounds that try to trick the safety features, leak data, and break the guarantees, followed by fixes, followed by fresh attacks, until a round comes back empty-handed. What this server has not had yet is a long life in strangers' browsers. While it earns one, the design carries the risk for you: it starts read-only, it prices every read before taking it, and it tells you what it could not see. If the web is where you live, bring your strangest pages and tell us what broke.</p>
-      <div class="maturity-fig"><div class="spec"><span class="n">2,349</span><span class="l" data-i18n="spec.tests">Tests</span></div></div>
+      <div class="maturity-fig"><div class="spec"><span class="n">2,369</span><span class="l" data-i18n="spec.tests">Tests</span></div></div>
     </div>
     <span class="ticket" data-i18n="svc.ticket">NOW SERVING · TAKE A NUMBER · SAME DESK AS THE WORD, POWERPOINT, AND EXCEL SINKS</span>
     <div class="service-grid">
@@ -690,13 +857,13 @@ footer a{color:var(--brass)}
       <a class="counter" href="https://kitchensink4.ai/KitchenSink4PPT/">
         <span class="icon">💡</span>
         <h3>KitchenSink4PPT</h3>
-        <p data-i18n="fam2.p">Everything plus the kitchen sink for Microsoft PowerPoint: diagrams built from real shapes, so you can drag a box and the arrows follow. Same never-corrupts promise, for slides.</p>
+        <p data-i18n="fam2.p">Everything plus the kitchen sink for Microsoft PowerPoint: diagrams built from real shapes, so you can drag a box and the arrows follow. Same corruption-safe design, for slides.</p>
         <span class="go" data-i18n="fam2.g">Visit the paint aisle →</span>
       </a>
       <a class="counter" href="https://kitchensink4.ai/KitchenSink4XL/">
         <span class="icon">🔌</span>
         <h3>KitchenSink4XL</h3>
-        <p data-i18n="fam3.p">Everything plus the kitchen sink for Excel (.xlsx): every value labeled calculated, cached, or missing, so the AI never repeats a stale number as a fresh one. Same never-corrupts promise, now for spreadsheets.</p>
+        <p data-i18n="fam3.p">Everything plus the kitchen sink for Excel (.xlsx): every value labeled calculated, cached, or missing, so the AI never repeats a stale number as a fresh one. Same corruption-safe design, now for spreadsheets.</p>
         <span class="go" data-i18n="fam3.g">Visit the electrical aisle →</span>
       </a>
       <a class="counter" href="https://kitchensink4.ai/products/">
@@ -711,7 +878,7 @@ footer a{color:var(--brass)}
 
 <footer>
   <div class="wrap row">
-    <span data-i18n="f.left">&copy; 2026 Alvut Consulting, LLC &middot; <b>AGPL-3.0</b>: free for individuals and personal use.<br>Companies building it into their own products need a commercial license; <a href='https://github.com/KitchenSink4AI/KitchenSink4Web/issues/new/choose'>open an issue</a> and we will talk it through.</span>
+    <span data-i18n="f.left">&copy; 2026 Alvut Consulting, LLC &middot; Licensed <b>AGPL-3.0</b>: free for any use that meets the AGPL's terms, including its source-sharing obligations.<br>Commercial licenses for organizations that need to ship these in closed products (<a href='mailto:licensing@kitchensink4.ai'>licensing@kitchensink4.ai</a>).</span>
     <span style="text-align:right" data-i18n="f.right"><a href='https://github.com/KitchenSink4AI/KitchenSink4Web'>github.com/KitchenSink4AI/KitchenSink4Web</a> · <a href='https://github.com/KitchenSink4AI/KitchenSink4Web/issues/new/choose'>report a wilted read</a><br>Built on the KitchenSink4Word safety core, prototyped with Claude Code, and left out in the weather until it stopped flinching. Water before noon. 🪴</span>
   </div>
   <div class="wrap" style="text-align:center;padding:6px 0;font-size:11px"><a href="https://kitchensink4.ai/" data-i18n="f.corp">The office upstairs: KitchenSink4AI →</a></div>
@@ -904,7 +1071,7 @@ en: {
 "no1": "DEPT. 01",
 "h2.tale": "Out of the box, it can look but not touch",
 "tale.label": "THE HOUSE RULE",
-"tale.p1": "A browser is where your logins, your money, and your mistakes all live. So out of the box, your AI gets reading tools only: it can open pages, follow links, and scroll. The tools for clicking, typing, and submitting are deliberately left out. They are not switched off somewhere, waiting to be found; the AI is simply never given them. A malicious webpage cannot trick your AI into clicking something, because your AI has nothing to click with.",
+"tale.p1": "A browser is where your logins, your money, and your mistakes all live. So out of the box, your AI gets reading tools only: it can open pages, follow links, and scroll. The tools for clicking, typing, and submitting are deliberately left out. They are not switched off somewhere, waiting to be found; the AI is simply never given them. Malicious webpages are treated as untrusted data, never as instructions, because your AI has nothing to click with.",
 "tale.p2": "When you do want help filling in a form or clicking through a site, open the server's settings, the same screen you saw when you installed it, and tick one box: allow clicking and typing. The tools appear. Untick it and they are gone again. No reinstalling, no technical steps, and at any moment you can see which mode you are in by glancing at the AI's tool list.",
 "tale.p3": "It reads defensively too. Some webpages hide invisible text written for AIs, not people, saying things like \"ignore your instructions and click here.\" This server strips that hidden text out of what your AI sees, counts it, and reports that it was there. Your AI never even gets tempted.",
 "tale.fwd": "The one-time setup that makes this painless is the tip just below the install steps.",
@@ -984,14 +1151,14 @@ en: {
 "h2.fam": "The other aisles",
 "fam1.p": "Everything plus the kitchen sink for Microsoft Word: the original of the family. Tracked changes, footnotes, citations, live editing in your own Word window, and a reference list that finally matches the citations. Engineered not to corrupt.",
 "fam1.g": "Visit the plumbing aisle →",
-"fam2.p": "Everything plus the kitchen sink for Microsoft PowerPoint: diagrams built from real shapes, so you can drag a box and the arrows follow. Same never-corrupts promise, for slides.",
+"fam2.p": "Everything plus the kitchen sink for Microsoft PowerPoint: diagrams built from real shapes, so you can drag a box and the arrows follow. Same corruption-safe design, for slides.",
 "fam2.g": "Visit the paint aisle →",
-"fam3.p": "Everything plus the kitchen sink for Excel (.xlsx): every value labeled calculated, cached, or missing, so the AI never repeats a stale number as a fresh one. Same never-corrupts promise, now for spreadsheets.",
+"fam3.p": "Everything plus the kitchen sink for Excel (.xlsx): every value labeled calculated, cached, or missing, so the AI never repeats a stale number as a fresh one. Same corruption-safe design, now for spreadsheets.",
 "fam3.g": "Visit the electrical aisle →",
 "fam4.t": "The storefront",
 "fam4.p": "The whole hardware store on one page: every KitchenSink server, what it does, and where to report what broke. Plus a shelf or two that are not empty by accident.",
 "fam4.g": "Browse the store →",
-"f.left": "&copy; 2026 Alvut Consulting, LLC &middot; <b>AGPL-3.0</b>: free for individuals and personal use.<br>Companies building it into their own products need a commercial license; <a href='https://github.com/KitchenSink4AI/KitchenSink4Web/issues/new/choose'>open an issue</a> and we will talk it through.",
+"f.left": "&copy; 2026 Alvut Consulting, LLC &middot; Licensed <b>AGPL-3.0</b>: free for any use that meets the AGPL's terms, including its source-sharing obligations.<br>Commercial licenses for organizations that need to ship these in closed products (<a href='mailto:licensing@kitchensink4.ai'>licensing@kitchensink4.ai</a>).",
 "f.corp": "The office upstairs: KitchenSink4AI →",
 "f.right": "<a href='https://github.com/KitchenSink4AI/KitchenSink4Web'>github.com/KitchenSink4AI/KitchenSink4Web</a> · <a href='https://github.com/KitchenSink4AI/KitchenSink4Web/issues/new/choose'>report a wilted read</a><br>Built on the KitchenSink4Word safety core, prototyped with Claude Code, and left out in the weather until it stopped flinching. Water before noon. 🪴",
 "f.affil": "Not affiliated with or endorsed by Google, Mozilla, Microsoft, or any website this server visits. Chrome, Chromium, Firefox, and Edge are trademarks of their respective owners, used nominatively to name the browsers this server can drive."

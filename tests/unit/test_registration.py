@@ -47,6 +47,12 @@ LITE_ROSTER = {
     #: under the shipped read-only default: a monitor navigates and reads
     #: and does nothing else.
     "monitor",
+    #: get_server_info joined on 2026-09-10 (v1.0.1). It is lite because the
+    #: question it answers, what am I connected to, has to be answerable in
+    #: every launch shape, including the shipped read-only default where a
+    #: pack tool would be absent. It reads this process own registry and
+    #: package metadata and touches nothing else.
+    "get_server_info",
 }
 
 
@@ -57,8 +63,9 @@ def test_lite_roster_is_exactly_the_design(launch):
     assert set(state["registered"]) == LITE_ROSTER
     # Sixteen, plus `monitor` (lifecycle wave) and `batch` and `do`
     # (composites wave). Each branch measured its own delta against
-    # sixteen; nineteen is the union.
-    assert len(LITE_ROSTER) == 19
+    # sixteen; nineteen was the union, and `get_server_info` made it twenty
+    # at v1.0.1.
+    assert len(LITE_ROSTER) == 20
 
 
 def test_bare_launch_defaults_to_browse_read_only(launch, monkeypatch):

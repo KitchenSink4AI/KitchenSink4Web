@@ -411,6 +411,18 @@ def test_version_is_consistent_across_manifests():
             f"kitchensink4web=={version}"
         ], f"{rel}'s uvx pin does not match the package version"
 
+    # EIGHT fields since 1.0.1: `figures.json` ships inside the wheel and
+    # names the version it was measured at, so a bump that forgets to
+    # re-measure is caught here rather than by a user reading a figure from
+    # the release before this one.
+    shipped_figures = json.loads(
+        (ROOT / "src" / "kitchensink4web" / "figures.json").read_text(
+            encoding="utf-8"))
+    assert shipped_figures["version"] == version, (
+        f"figures.json was measured at {shipped_figures['version']} and "
+        f"pyproject says {version}. Re-run "
+        f"tools/measure_readme_numbers.py --tests-only.")
+
     sys.path.insert(0, str(ROOT / "src"))
     import kitchensink4web
     if kitchensink4web.__version__ == "0.0.0":
@@ -536,6 +548,36 @@ def test_the_published_test_count_matches_a_live_collection():
             f"{where} claims {claimed} browser tests against a live "
             f"collection of {live['browser']}. Re-run "
             f"tools/measure_readme_numbers.py and restamp.")
+
+
+@pytest.mark.needs_captures("corpus", "walls")
+def test_the_shipped_figure_file_matches_a_live_collection():
+    """`src/kitchensink4web/figures.json` is a published surface with no page
+    to read it off: it ships inside the wheel and `get_server_info` reads it
+    out to whatever agent asks what it is talking to.
+
+    Same rule and the same reason as the prose above. Never publish more
+    evidence than exists, do not go stale, and check it only where the
+    captures are, because a clone without them collects a smaller suite than
+    the figure describes."""
+    import json
+
+    shipped = json.loads(
+        (ROOT / "src" / "kitchensink4web" / "figures.json").read_text(
+            encoding="utf-8"))
+    live = _live_test_count()
+    for key in ("unit", "browser", "total"):
+        claimed = shipped["tests"][key]
+        assert claimed <= live[key], (
+            f"figures.json claims {claimed} {key} tests and a live "
+            f"collection finds {live[key]}. Never publish more evidence "
+            f"than exists.")
+        assert claimed >= live[key] * 0.95, (
+            f"figures.json claims {claimed} {key} tests against a live "
+            f"collection of {live[key]}. Re-run "
+            f"tools/measure_readme_numbers.py --tests-only.")
+    assert shipped["tests"]["unit"] + shipped["tests"]["browser"] == \
+        shipped["tests"]["total"], "figures.json does not add up"
 
 
 def test_the_published_surface_and_ladder_figures_match_this_build():

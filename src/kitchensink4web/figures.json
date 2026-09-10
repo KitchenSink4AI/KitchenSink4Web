@@ -1,0 +1,9 @@
+{
+ "note": "Measured, never typed. Written by tools/measure_readme_numbers.py --write from a live pytest collection, and checked against a fresh collection by tests/unit/test_copy_guards.py.",
+ "version": "1.0.1",
+ "tests": {
+  "unit": 1547,
+  "browser": 822,
+  "total": 2369
+ }
+}

@@ -1,12 +1,12 @@
 # KitchenSink4Web
 
 > Browser MCP server for agents. A budgeted first read of any page, durable
-> refs you can act on, and a safety layer that ships on. 19 tools at session
-> start, 52 with every capability pack loaded. stdio. Out of the box the
+> refs you can act on, and a safety layer that ships on. 20 tools at session
+> start, 53 with every capability pack loaded. stdio. Out of the box the
 > tools that click, type and submit are NOT REGISTERED: read-only is the
 > shipped default and it is a property of the tool list, not a runtime check.
 
-Release: 1.0.0.
+Release: 1.0.1.
 Transport: stdio.
 Platform: cross-platform. The default lane drives the server's own bundled
 Chromium, downloaded by Playwright on first use, never the user's browser and
@@ -19,10 +19,10 @@ of which ship with the source.
 
 ## 1. Token economics
 
-- Session start loads the lite pack: 19 tools, about 5,800 tokens. Under the
-  shipped read-only default 8 of those 19 are absent, so the wire cost is
-  about 3,400 tokens for 11 tools.
-- Everything loaded: 52 tools, about 15,300 tokens.
+- Session start loads the lite pack: 20 tools, about 6,000 tokens. Under the
+  shipped read-only default 8 of those 20 are absent, so the wire cost is
+  about 3,600 tokens for 12 tools.
+- Everything loaded: 53 tools, about 15,500 tokens.
 - Packs are chosen at LAUNCH (`--packs`, `KS4WEB_MODE`, `KS4WEB_PACK_<NAME>`,
   `KS4WEB_ALL_PACKS`) and are fixed for the whole process. There is no
   mid-session `enable_tools` here, by design: an absent pack is provably
@@ -136,19 +136,22 @@ of which ship with the source.
 
 Chosen at launch. `lite` is always present.
 
-- `lite` (16): get_page_view, find_elements, get_text, navigate, scroll,
+- `lite` (20): get_page_view, find_elements, get_text, navigate, scroll,
   wait_for, manage_session, manage_tabs, get_audit, get_workflows,
-  handle_dialog, and the five acting tools click, type_text, fill_form,
-  press_keys, find_and_act.
-- `extract` (8): get_table, get_list, get_links, get_metadata,
-  extract_fields, export_data, get_article, read_pages.
-- `capture` (4): take_screenshot, save_page, export_pdf, emulate.
+  get_server_info, handle_dialog, monitor, batch, do, and the five acting
+  tools click, type_text, fill_form, press_keys, find_and_act.
+- `extract` (10): get_table, get_list, get_links, get_metadata,
+  extract_fields, export_data, get_article, read_pages, extract_page,
+  aggregate.
+- `capture` (5): take_screenshot, save_page, export_pdf, emulate,
+  read_image_text.
 - `network` (4): list_requests, get_request, set_routing, export_har.
 - `storage` (4): manage_cookies, manage_storage, save_auth_state,
   load_auth_state.
 - `files` (3): download, upload_file, manage_clipboard.
 - `diagnostics` (3): list_console, get_page_errors, evaluate_script.
 - `workflows` (3): save_workflow, run_workflow, list_workflows.
+- `accessibility` (1): get_accessibility.
 
 ## 6. Error vocabulary
 
@@ -185,7 +188,7 @@ human flips, which is a launch-time instruction and not an in-session route.
 
 ## 8. Test evidence
 
-2,349 tests, 804 of which drive a real browser. Gate batteries re-run the
+2,369 tests, 822 of which drive a real browser. Gate batteries re-run the
 findings of four adversarial attack rounds covering prompt injection through
 page content, hidden-text smuggling, credential-theft attempts, gate
 bypasses, workflow replay tampering, and resource abuse. A live field
