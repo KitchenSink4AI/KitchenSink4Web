@@ -221,6 +221,15 @@ def _attach_recorder(session, contexts=None) -> None:
             pass
 
     for handle in handles:
+        # A context without an event stream cannot be recorded, and lane
+        # C(extension) is exactly that: watching network traffic through
+        # the extension would need the webRequest permission this build
+        # does not ask for on a profile carrying the user's logins. The
+        # absence is written into the log so list_requests refuses with
+        # the reason instead of answering with a confident empty list.
+        if not hasattr(handle.context, "on"):
+            _log(session).setdefault("no_stream", []).append(handle.label)
+            continue
         handle.context.on("request", on_request)
         handle.context.on("response", on_response)
         handle.context.on("requestfailed", on_failed)
@@ -260,6 +269,16 @@ async def list_requests(
     """
     sess = common.session_of(session)
     log = _log(sess)
+    no_stream = log.get("no_stream") or []
+    if no_stream and not log["records"] and \
+            len(no_stream) >= len(sess.contexts):
+        raise LaneUnsupported(
+            "no requests were recorded and none will be: this session's "
+            "browser is connected through the extension (lane C), which "
+            "has no network event stream. Watching one would need the "
+            "webRequest permission this build does not ask for on a "
+            "profile carrying your logins. This is a lane limit, not an "
+            "empty page.")
     rows = list(log["records"])
     hidden_analytics = sum(1 for r in rows if r["analytics"])
     if not include_analytics:

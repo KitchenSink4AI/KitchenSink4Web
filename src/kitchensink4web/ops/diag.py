@@ -26,7 +26,7 @@ import re
 
 from .. import pagedata as _pagedata
 from ..engine import session as _session
-from ..errors import BadParams
+from ..errors import BadParams, LaneUnsupported
 from ..policy import engine as _policy
 from . import common
 
@@ -122,14 +122,26 @@ def _attach_recorder(session, contexts=None) -> None:
                 pass
         return on_pageerror
 
-    labels = {h.label for h in handles}
+    # A context without an event stream cannot feed this recorder, and
+    # lane C(extension) is exactly that: its pages are read over the
+    # bridge, which carries no console firehose. The absence is written
+    # into the store so list_console and get_page_errors refuse with the
+    # reason instead of reporting a quiet console as though it were true.
+    streamable = {h.label for h in handles if hasattr(h.context, "on")}
+    for handle in handles:
+        if handle.label not in streamable:
+            store.setdefault("no_stream", []).append(handle.label)
     for page in session.pages.values():
-        if getattr(page, "context", "c1") not in labels:
+        if getattr(page, "context", "c1") not in streamable:
+            continue
+        if not hasattr(page.page, "on"):
             continue
         page.page.on("console", on_console)
         page.page.on("pageerror", on_pageerror_for(page.page))
     # New pages in each context inherit the listeners too.
     for handle in handles:
+        if handle.label not in streamable:
+            continue
         handle.context.on("page", lambda p: (
             p.on("console", on_console), p.on("pageerror", on_pageerror_for(p))))
 
@@ -185,6 +197,7 @@ async def list_console(
             f"default 'error' is errors only; 'all' shows every level.")
     sess = common.session_of(session)
     store = _store(sess)
+    _refuse_if_no_stream(sess, store, tool="list_console")
     wanted = (set(_LEVELS) if level == "all"
               else set(_LEVELS[:_LEVELS.index(level) + 1]))
     groups: dict[tuple, dict] = {}
@@ -228,6 +241,24 @@ async def list_console(
     }
 
 
+def _refuse_if_no_stream(sess, store: dict, tool: str) -> None:
+    """A console store that was never fed is not an empty console.
+
+    Lane C(extension) reads pages over the bridge, which carries no
+    console firehose, so on that lane a quiet store means nothing was
+    listening rather than nothing was said. Refusing with the reason is
+    the honest answer; an empty list would be a statement about the page
+    that nothing here is in a position to make."""
+    no_stream = store.get("no_stream") or []
+    if no_stream and not store["messages"] and not store["errors"] and \
+            len(no_stream) >= len(sess.contexts):
+        raise LaneUnsupported(
+            f"{tool} recorded nothing and never will in this session: the "
+            f"browser is connected through the extension (lane C), whose "
+            f"bridge carries no console event stream. This is a lane "
+            f"limit, not a quiet console.")
+
+
 def _origins_line(rows: list) -> str:
     """Every origin represented in a diagnostics payload, for the envelope
     label. A session-wide store can carry several, and "untrusted content
@@ -256,6 +287,7 @@ async def get_page_errors(session: str | None = None,
                              default=20, maximum=1000)
     sess = common.session_of(session)
     store = _store(sess)
+    _refuse_if_no_stream(sess, store, tool="get_page_errors")
     errors = store["errors"][-limit:]
     # Same ruling as list_console (IG-03): a thrown `Error` message and its
     # stack are page-authored prose, not keyed cells.
