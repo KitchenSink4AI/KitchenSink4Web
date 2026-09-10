@@ -782,6 +782,159 @@
     return out;
   }
 
+  // A FORM WITHOUT A `<form>`, and it is the shape of every mail composer,
+  // chat box, and inline editor written after 2010. (Compose bug, found in
+  // the 2026-09-10 acceptance test against a real signed-in OWA mailbox.)
+  //
+  // The composer's To well, subject box, message body and Send button were
+  // absent from `get_page_view` at 3,000 / 6,000 / 12,000 tokens and at
+  // `detail=full`, while a screenshot of the same session showed all four
+  // rendered. Nothing was hidden and nothing hit the return cap: all twenty
+  // controls were WALKED and CLASSIFIED, into `other`, where they lost the
+  // class quota to the message list. Three separate rules put them there and
+  // every one of them keyed off markup the page does not carry:
+  //
+  //   - `form_control` required a `<form>` ANCESTOR, and the page had no
+  //     `<form>` element anywhere ("forms (page has none)" is the read's own
+  //     line). So the subject `<input>` was not a form control.
+  //   - `primary` required the button to sit in a `main`/`dialog`/`form`/
+  //     `search` REGION, and the composer is a bare `<div>` outside every
+  //     landmark. So Send was not a primary action. The read even said so:
+  //     "1 region(s) own nothing at all and were not listed".
+  //   - Everything left over is `other`, whose quota is the smallest on the
+  //     ladder (24 at rung 1) and which the mail list wins on rank: a message
+  //     row is a large in-viewport named box and a Send button is a small one.
+  //
+  // So the page's most important control was evicted by its own inbox. On
+  // lane C that is not an expensive second call, it is total acting
+  // blindness: the extension's acting tools take only refs a read minted, so
+  // a control no read lists is a control no agent can reach.
+  //
+  // THE FIX IS TO NAME THE THING THE PAGE ACTUALLY HAS. Two or more fields
+  // sharing a tight container ARE a form, whatever the tag says, so that
+  // container is segmented as a region of kind `panel` and the two existing
+  // rules then fire on it unchanged: fields inside a panel are form controls,
+  // buttons inside a panel are primary actions. The panel is also PRINTED in
+  // the page-shape block, which is the honest half -- before this the compose
+  // surface appeared in no block of the read at all.
+  //
+  // Three bounds keep it from becoming the flood the `form_control` quota was
+  // written to prevent, because "every loose input on an app shell claims the
+  // completeness guarantee" is a real failure and this is one edit away from
+  // it:
+  //
+  //   1. TWO FIELDS, not one. A lone site-search box is not a form and stays
+  //      exactly where it was.
+  //   2. SIX HOPS. The climb from a field stops six ancestors up, so a
+  //      cluster buried deep in an app resolves to a container near the
+  //      fields rather than to the application root fifteen levels above
+  //      them. This is what stops one `<div id="root">` from swallowing a
+  //      whole single-page app.
+  //   3. THE OUTERMOST CONTAINER OF A CLUSTER ONLY. Without it the composer
+  //      yields two nested panels, one for the recipient row and one for the
+  //      whole surface, and a read that prints both has described the page
+  //      twice.
+  //
+  // Fields already owned by a real `<form>` are skipped outright: that case
+  // has worked since S1 and nothing here should touch it.
+  // WHAT SEEDS A GROUP IS TEXT ENTRY, and the narrowing is `corpus/b/
+  // loose_controls.html`'s doing. The first version of this rule seeded on
+  // any field at all, and that page -- an application-shell toolbar with a
+  // search box, four filter checkboxes, two selects, a radio group, a date
+  // and a range, nineteen loose controls in all -- became a panel, so every
+  // one of them claimed the form-control quota. There is a pin for exactly
+  // that (`test_loose_controls_compete_rather_than_claiming_the_form_
+  // exemption`) and it caught this, which is the pin doing its job: the
+  // form-control guarantee is sized for forms and a filter bar is not one.
+  //
+  // The line between the two is what a human DOES with the controls. A
+  // composer is a surface you TYPE INTO: a recipient well, a subject box, a
+  // message body. A toolbar is a bar you SET: checkboxes, radios, a sort
+  // select, a date, a range. So a cluster is seeded only by fields that take
+  // free text, and one search box in a toolbar is one seed, not two.
+  //
+  // `plaintext-only` and the case-insensitive flags are not pedantry: a bare
+  // `contenteditable` attribute parses to the empty string, editors ship
+  // `contenteditable="plaintext-only"` for single-line wells, and attribute
+  // VALUES are case-sensitive in CSS while `el.isContentEditable` is not. A
+  // field this selector misses cannot help seed a group even though the
+  // classifier downstream would have recognised it.
+  //
+  // `NON_TEXT_INPUT` is everything an `<input>` can be that a human does not
+  // TYPE free text into. An unrecognised or missing `type` renders as a text
+  // box per the HTML spec, so the test is by exclusion rather than by
+  // allow-list: a future input type that takes text seeds a group without an
+  // edit here, and one that does not is one word away from being excluded.
+  const NON_TEXT_INPUT = new RegExp('^(hidden|checkbox|radio|range|date|time'
+    + '|datetime-local|month|week|color|file|submit|reset|button|image)$');
+  const GROUP_SEED_SEL = 'input,textarea,'
+    + '[role=textbox],[role=combobox],[role=searchbox],[role=spinbutton],'
+    + '[contenteditable=""],[contenteditable="true" i],'
+    + '[contenteditable="plaintext-only" i]';
+  const GROUP_HOPS = 6;
+  const GROUP_FIELD_CAP = 200;
+
+  function ksSeedsGroup(el) {
+    if (el.tagName === 'INPUT') {
+      const t = (el.getAttribute('type') || 'text').toLowerCase();
+      return !NON_TEXT_INPUT.test(t);
+    }
+    if (el.tagName === 'TEXTAREA') return true;
+    const role = (el.getAttribute('role') || '').trim().split(/\s+/)[0];
+    if (role === 'textbox' || role === 'combobox' || role === 'searchbox'
+        || role === 'spinbutton') return true;
+    return !!el.isContentEditable;
+  }
+
+  // Once a panel EXISTS, every field in it belongs to it, the same way every
+  // control inside a `<form>` belongs to that form. A composer's "request a
+  // read receipt" checkbox is part of the mail, not a stray toggle. So this
+  // stays wide while the seed rule above stays narrow: they answer two
+  // different questions.
+  function ksIsField(el, tag, role) {
+    if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return true;
+    if (role === 'textbox' || role === 'combobox' || role === 'searchbox'
+        || role === 'spinbutton') return true;
+    return !!el.isContentEditable;
+  }
+
+  function fieldGroupRoots(scope) {
+    const roots = new Set();
+    try {
+      if (!scope || !scope.querySelectorAll) return roots;
+      const fields = scope.querySelectorAll(GROUP_SEED_SEL);
+      const counts = new Map();
+      let seen = 0;
+      for (const f of fields) {
+        if (seen++ >= GROUP_FIELD_CAP) break;
+        // A real form already owns this one, and the form rules already
+        // handle it. Only the form-LESS fields build a panel.
+        if (f.form || (f.closest && f.closest('form'))) continue;
+        // A toolbar's checkboxes and selects are not a form (see above).
+        if (!ksSeedsGroup(f)) continue;
+        // Laid out at all. A `display:none` field has no boxes, and a
+        // hidden cluster must not conjure a region over live content.
+        if (!f.getClientRects || !f.getClientRects().length) continue;
+        let node = f.parentElement, hops = 0;
+        while (node && hops++ < GROUP_HOPS) {
+          if (node === document.body || node === document.documentElement) break;
+          counts.set(node, (counts.get(node) || 0) + 1);
+          node = node.parentElement;
+        }
+      }
+      counts.forEach(function (n, node) { if (n >= 2) roots.add(node); });
+      // Bound 3: keep the outermost container of each cluster.
+      Array.from(roots).forEach(function (node) {
+        for (let p = node.parentElement; p; p = p.parentElement) {
+          if (roots.has(p)) { roots.delete(node); return; }
+        }
+      });
+    } catch (e) { /* a page that cannot be queried has no panels */ }
+    return roots;
+  }
+
+  const fieldGroups = fieldGroupRoots(scopeRoot || document.body);
+
   function regionCandidate(el) {
     const role = el.getAttribute && el.getAttribute('role');
     if (role) {
@@ -791,6 +944,9 @@
     if (LM_TAG[el.tagName]) return LM_TAG[el.tagName];
     if (el.tagName === 'SECTION' &&
         (el.getAttribute('aria-label') || el.getAttribute('aria-labelledby'))) return 'region';
+    // A declared landmark always wins; `panel` is what is left when the page
+    // declared nothing and grouped its fields anyway.
+    if (fieldGroups.has(el)) return 'panel';
     return null;
   }
 
@@ -1247,15 +1403,32 @@
             // prevent.
             else if (formEl && (tag === 'INPUT' || tag === 'SELECT'
                                 || tag === 'TEXTAREA')) cls = 'form_control';
+            // AND A FORM WITHOUT A `<form>` IS STILL A FORM. Same promise,
+            // one rung wider: a field inside a `panel` region -- two or more
+            // fields sharing a tight container, which is what a mail
+            // composer is -- is a form control too. The widening is scoped to
+            // panels precisely so that nothing outside one changes class:
+            // panels did not exist before this rule and every page that
+            // declares its landmarks classifies exactly as it did.
+            // The role list is wider here than above because a form-less
+            // composer builds its fields out of divs, so the tag test alone
+            // would find only the subject box and leave the recipient well
+            // and the message body behind.
+            else if (region && region.kind === 'panel'
+                     && ksIsField(el, tag, role)) cls = 'form_control';
             else if (role === 'searchbox' || role === 'combobox') cls = 'primary';
             else if (region && region.nav_shaped) cls = 'nav';
             else if (role === 'tab' || role === 'menuitem' || role === 'menuitemcheckbox'
                      || role === 'menuitemradio') cls = 'nav';
+            // `panel` joins `form` here for the same reason it joined the
+            // rule above: the button that sends the mail is the submit
+            // button of a form the page never wrote a `<form>` tag for.
             else if (type === 'submit' || el.getAttribute('aria-haspopup')
                      || el.getAttribute('aria-expanded') !== null
                      || (role === 'button' && region &&
                          (region.kind === 'main' || region.kind === 'dialog'
                           || region.kind === 'alertdialog' || region.kind === 'form'
+                          || region.kind === 'panel'
                           || region.kind === 'search'))) cls = 'primary';
             else cls = 'other';
 
@@ -1454,6 +1627,15 @@
     if (SHADOW_ON && el.shadowRoot) {
       shadowRootsTraversed++;
       shadowElements += el.shadowRoot.querySelectorAll('*').length;
+      // Field groups are found per ROOT, because `querySelectorAll` stops
+      // dead at every shadow boundary. Without this line a composer built as
+      // a web component is the same bug again in a different tree, and the
+      // read would be silently better at mail clients that ship plain divs
+      // than at ones that ship components. Found here rather than up front
+      // because a shadow root is not reachable until its host is walked.
+      fieldGroupRoots(el.shadowRoot).forEach(function (n) {
+        fieldGroups.add(n);
+      });
       for (let child = el.shadowRoot.firstElementChild; child;
            child = child.nextElementSibling) {
         walk(child, depth + 1);
