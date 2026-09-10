@@ -159,7 +159,7 @@ FIGURE_SURFACES = (
 #: venv has to check what is installed before it believes its own output.
 PUBLISHED_FIGURES = (
     ('4,445', 'tokens for the first read of the demo page', 'tools/measure_readme_numbers.py'),
-    ('2,065', 'tests', 'pytest --collect-only'),
+    ('2,066', 'tests', 'pytest --collect-only'),
     ('33,073', 'tokens in the raw dump of the same page', 'tools/measure_readme_numbers.py'),
 )
 
@@ -171,6 +171,9 @@ SUPERSEDED_FIGURES = (
     ('4 437', 'the same figure with a french separator'),
     ('2,055', 'the previous test count'),
     ('2,062', 'the test count before the gate gained its figure guard'),
+    ('2,065', 'the test count at v1.0.0'),
+    ('5.8k', 'the lite surface cost before get_server_info joined it'),
+    ('15.3k', 'the full surface cost before get_server_info joined it'),
     ('6.5k', 'the previous lite surface cost'),
     ('16.0k', 'the previous full surface cost'),
 )

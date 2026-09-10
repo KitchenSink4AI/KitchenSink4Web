@@ -2,7 +2,7 @@
   "manifest_version": "0.3",
   "name": "kitchensink4web",
   "display_name": "KitchenSink4Web",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Lets Claude browse the web for you: read pages and articles, pull out tables and data, take screenshots. Out of the box it can only read; clicking and typing stay off until you turn them on.",
   "long_description": "KitchenSink4Web connects Claude to a real web browser of its own. Ask it to read an article, compare products across pages, pull a table out of a website, or watch a page for changes. It reads pages efficiently, so a long page does not swallow the conversation, and it always says what it could and could not see. Out of the box it is read-only: Claude can open pages and read them, nothing more. The checkboxes below are the whole configuration; each adds one capability, and anything that lets Claude change things on a page stays off until you check it. Uses its own private browser, never yours; requires uv on your machine. Part of the KitchenSink4 family (Word, PowerPoint, Excel, Web) from KitchenSink4AI (kitchensink4.ai).",
   "author": {
@@ -39,7 +39,7 @@
     "mcp_config": {
       "command": "uvx",
       "args": [
-        "kitchensink4web==1.0.0"
+        "kitchensink4web==1.0.1"
       ],
       "env": {
         "KS4WEB_ALLOW_ACTING": "${user_config.allow_acting}",

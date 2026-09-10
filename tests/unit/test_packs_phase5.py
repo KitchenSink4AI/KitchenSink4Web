@@ -55,10 +55,11 @@ def test_full_surface_is_fifty_two_tools(launch):
     and `read_image_text` and `get_accessibility` (the senses wave).
     Every branch measured its own delta against forty-five and each was
     right in isolation, so this number is the UNION rather than any one
-    branch's arithmetic."""
+    branch's arithmetic. FIFTY-THREE on 2026-09-10, when `get_server_info`
+    joined the lite core."""
     state = launch(cli_packs=packs.pack_names(), read_only=False)
-    assert len(state["registered"]) == 52
-    assert len(set(state["registered"])) == 52
+    assert len(state["registered"]) == 53
+    assert len(set(state["registered"])) == 53
 
 
 def test_full_surface_under_read_only_hides_every_mutating_pack_tool(launch):
