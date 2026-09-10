@@ -5930,11 +5930,14 @@ async def manage_session(
                 jars[label]["saved_now"] = await _storage.save_auth_state(
                     session=sess.session_id, context=label, path=path)
         result = await MANAGER.close(sess.session_id)
-        # A "remember this for 30 minutes" answer is scoped to the session
-        # the human answered in, so closing the session ends it. Nothing
-        # here is persisted anywhere, and the process holding it is the
-        # longest any grant can live.
-        _consent.clear_grants()
+        # A "remember this for 30 minutes" answer means 30 minutes: grants
+        # die by their TTL or with the process, never with a session. A
+        # grant wipe used to live right here and ran on EVERY close, so
+        # under normal session churn the 30-minute promise died in seconds
+        # (author-reported 2026-09-10; the consent ladder suite now pins
+        # that no wipe exists outside the consent module's startup reset).
+        # Nothing is persisted anywhere; the process holding a grant is
+        # the longest it can live.
         # The learned lane records are flushed here rather than only on the
         # debounce, because a conversation that opens a session, hits a wall,
         # and closes is exactly the shape that would otherwise learn something

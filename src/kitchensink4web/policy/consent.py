@@ -936,8 +936,8 @@ def decide(action_class: str | None, *, url: str | None = None,
 
     if _grant_for(action_class, url):
         return Decision(GRANT, action_class,
-                        "a human allowed this class on this origin earlier "
-                        "in this session and asked to be remembered")
+                        "a human allowed this class on this origin and "
+                        "asked for it to be remembered for 30 minutes")
 
     return Decision(ASK, action_class, "this class asks under the consent "
                                        f"scope {_scope!r}")
@@ -965,7 +965,7 @@ def describe() -> dict:
         "preauth": PREAUTH_TEACHING,
         "preauthorizable": sorted(PREAUTHORIZABLE),
         "preauthorized": preauth_entries(),
-        "remembered_this_session": grants(),
+        "remembered": grants(),
         "sensitive_origins": sensitive_origins(),
         "unattended": unattended(),
     }

@@ -799,12 +799,38 @@ def test_the_remember_answer_is_offered_on_tier_1_only(monkeypatch):
     assert consent.grantable("evaluate_script") is False
 
 
-def test_grants_die_with_the_session(monkeypatch):
+def test_grants_die_by_ttl_or_startup_reset_never_with_a_session(monkeypatch):
+    """The prompt says "remember this for 30 minutes", so 30 minutes is
+    what a grant lives, session churn or not. clear_grants() exists for
+    the startup reset in apply(); until 2026-09-10 manage_session(close)
+    also called it, which wiped EVERY grant in the process whenever ANY
+    session closed - under normal churn the 30-minute promise died in
+    seconds."""
     setup(monkeypatch, scope="research")
     consent.add_grant("clipboard_read", "https://a.example")
     assert consent.grants()
-    consent.clear_grants()
+    consent.clear_grants()          # the startup reset still clears
     assert consent.grants() == []
+
+
+def test_nothing_outside_the_consent_module_wipes_grants():
+    """Structural pin for the promise above: clear_grants has exactly one
+    sanctioned home, the startup reset inside policy/consent.py. A second
+    call site is a session-scoped wipe wearing a new location, which is
+    the exact defect this pin was written after."""
+    import pathlib
+    src = pathlib.Path(consent.__file__).resolve().parents[1]
+    offenders = []
+    for path in src.rglob("*.py"):
+        if path.name == "consent.py" and path.parent.name == "policy":
+            continue
+        text = path.read_text(encoding="utf-8", errors="replace")
+        if "clear_grants(" in text:
+            offenders.append(str(path.relative_to(src)))
+    assert offenders == [], (
+        f"clear_grants() is called outside policy/consent.py: {offenders}. "
+        f"A grant dies by TTL or process exit, never because a session "
+        f"closed.")
 
 
 def test_every_gated_class_has_its_own_sentence():
