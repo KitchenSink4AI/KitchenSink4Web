@@ -273,7 +273,7 @@ a:hover{text-decoration-style:wavy;text-decoration-thickness:1px;text-underline-
 .catalog-no{display:inline-block;border:1.5px solid var(--ink);padding:4px 14px;
   font-size:11px;letter-spacing:.3em;text-transform:uppercase;margin-bottom:28px;
   background:var(--paper-deep)}
-.hero h1{font-size:clamp(40px,8vw,96px);font-weight:900;line-height:.95;
+.hero h1{overflow-wrap:anywhere;font-size:clamp(40px,8vw,96px);font-weight:900;line-height:.95;
   letter-spacing:-.015em;font-variation-settings:'SOFT' 50;
   text-shadow:3px 3px 0 var(--paper-deep), 5px 5px 0 var(--rule)}
 .hero h1 .four{color:var(--brass)}
@@ -354,12 +354,12 @@ section:before{content:"";position:absolute;left:0;right:0;top:0;height:12px;
   background:
     repeating-linear-gradient(45deg, transparent 0 7px, var(--rule) 7px 8px),
     repeating-linear-gradient(-45deg, transparent 0 7px, var(--rule) 7px 8px)}
-.sec-head{display:flex;align-items:baseline;gap:16px;margin-bottom:34px}
+.sec-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:10px 16px;margin-bottom:34px}
 .sec-head .glossed{min-width:0}
 .sec-head .gloss{display:block;font-family:'IBM Plex Mono',"Plex Mono Fallback",ui-monospace,monospace;
   font-size:11.5px;font-weight:400;letter-spacing:.02em;color:var(--ink-soft);margin-top:6px}
-.sec-head h2{font-size:clamp(24px,3.8vw,38px);font-weight:800}
-.sec-head .no{font-size:12px;letter-spacing:.25em;color:var(--brass);white-space:nowrap;
+.sec-head h2{min-width:0;overflow-wrap:anywhere;font-size:clamp(24px,3.8vw,38px);font-weight:800}
+.sec-head .no{font-size:12px;letter-spacing:.25em;color:var(--brass);white-space:normal;max-width:100%;overflow-wrap:anywhere;
   border:2px solid currentColor;border-radius:3px;padding:3px 10px;transform:rotate(-2deg);
   display:inline-block;opacity:.85;
   mask-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='4' height='4'%3E%3Crect width='4' height='4' fill='white'/%3E%3Ccircle cx='2.5' cy='1.5' r='.3' fill='black'/%3E%3C/svg%3E")}
@@ -379,7 +379,7 @@ section:before{content:"";position:absolute;left:0;right:0;top:0;height:12px;
 .demo-panel h3{font-size:12px;letter-spacing:.22em;text-transform:uppercase;
   margin-bottom:6px;padding-right:118px}
 @media(max-width:520px){.demo-panel h3{padding-right:0}
-  .corner-tag{position:static;display:inline-block;margin-bottom:8px;transform:none}}
+  .demo-panel .corner-tag,.demo-panel .corner-tag.native{position:static;display:inline-block;margin-bottom:8px;transform:none}}
 .demo-panel.bad h3{color:var(--stamp)}
 .demo-panel.good h3{color:var(--brass)}
 .demo-panel>p{font-size:12.5px;color:var(--ink-soft);margin-top:12px;line-height:1.55}
@@ -824,7 +824,7 @@ footer a{color:var(--brass)}
         <p data-i18n="svc2.p">Something you wish your AI could do in a browser and this server does not offer. Describe the real task, not just the feature, and it goes on the workbench.</p>
         <span class="go" data-i18n="svc2.g">Request a feature →</span>
       </a>
-      <a class="counter" href="https://github.com/KitchenSink4AI/KitchenSink4Web/issues/new/choose">
+      <a class="counter" href="https://kitchensink4.ai/contact/?category=licensing#cat-licensing">
         <span class="icon">💼</span>
         <h3 data-i18n="svc3.t">Using this in a company product?</h3>
         <p data-i18n="svc3.p">Free for any use that meets the AGPL's terms, including its source-sharing obligations. If your company wants to build it into a product of its own, that needs a commercial license, with terms worked out case by case. This counter is where you start that conversation.</p>
