@@ -6,7 +6,14 @@
 [![PyPI](https://img.shields.io/pypi/v/kitchensink4web)](https://pypi.org/project/kitchensink4web/)
 [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE)
 
-[Landing page](https://kitchensink4ai.github.io/KitchenSink4Web/) · [llms.txt](https://kitchensink4ai.github.io/KitchenSink4Web/llms.txt) (machine-readable capability manifest for agents and LLM crawlers)
+[Landing page](https://kitchensink4.ai/KitchenSink4Web/) · [llms.txt](https://kitchensink4.ai/KitchenSink4Web/llms.txt) (machine-readable capability manifest for agents and LLM crawlers)
+
+A browser MCP server built for honesty: budgeted page reads with an exact account of what
+went unread, structured extraction with named evidence, real-browser lanes, monitors,
+workflows, and a consent ladder that always asks a human before payments or credentials.
+Read-only out of the box. Works with Claude Code, Claude Desktop, Cursor, and any MCP
+client. Part of the KitchenSink4AI suite with kitchensink4word (Word), kitchensink4xl
+(Excel), and kitchensink4ppt (PowerPoint).
 
 Everything plus the kitchen sink for the open web: a browser MCP server that reads a whole page
 for the price of a paragraph, and starts out unable to change anything at all.
@@ -48,7 +55,7 @@ cross-origin frame is counted and named, never entered.
 
 ## The packs
 
-The server starts lite: reading, navigation, and session management, 19 tools. Capability packs
+The server starts lite: reading, navigation, and session management, 20 tools. Capability packs
 are chosen at launch and are fixed for the whole session, which means an absent pack is provably
 absent, not merely switched off:
 
@@ -147,8 +154,8 @@ recommend for the page you are on. It never switches lanes for you.
 
 | Surface | Tokens |
 |---|---|
-| Lite tool surface | 5.8k |
-| Full surface (all packs) | 15.3k |
+| Lite tool surface | 6.0k |
+| Full surface (all packs) | 15.5k |
 | First read of the Treaty of Versailles article on Wikipedia | 4,445 |
 | Delta read after one click | 82 |
 
@@ -169,7 +176,7 @@ older `KS4WEB_NO_UPDATE_CHECK=1` spelling is still honored.
 
 ## Testing
 
-2,065 tests, of which 733 drive a real browser. Beyond the suite, every release passes gate
+2,066 tests, of which 733 drive a real browser. Beyond the suite, every release passes gate
 batteries that re-run the adversarial findings of four attack rounds: prompt injection through
 page content, hidden-text smuggling, credential-theft attempts, gate bypasses, workflow
 replay tampering, and resource abuse. The gates are not aspirational; each one exists because an
@@ -277,12 +284,13 @@ process.
 
 ## License
 
-**AGPL-3.0.** Free for individuals and personal use, and it stays that way.
+KitchenSink4Web is dual-licensed:
 
-Companies building it into their own products need a commercial license, with
-terms worked out case by case.
-[Open an issue](https://github.com/KitchenSink4AI/KitchenSink4Web/issues/new?template=commercial_license.yml)
-and we will talk it through.
+**AGPL-3.0 (open source).** Free for anyone (individuals, academics, and businesses) for any use that complies with the AGPL's terms. Those terms include sharing source, including your modifications, when you distribute the software or make it available over a network.
+
+**Commercial license.** For organizations that want to build KitchenSink4Web into their own products or services without the AGPL's source-sharing obligations. Contact licensing@kitchensink4.ai.
+
+Copyright (c) 2026 Alvut Consulting, LLC. KitchenSink4AI is a product line of Alvut Consulting, LLC.
 
 ---
 
