@@ -666,6 +666,22 @@ footer .row>span{min-width:0;overflow-wrap:anywhere}
 .setup-note .term,.install-grid .term{font-size:13px}
 .setup-note .term div,.install-grid .term div{white-space:pre-wrap;overflow-wrap:anywhere}
 .route .cmd{white-space:pre-wrap;overflow-wrap:anywhere}
+
+.mcp-compat .platform-note{font-size:13px;line-height:1.6;color:var(--ink-soft);margin:12px 0 0}
+
+.desktop-steps{padding-left:22px;font-size:13px;line-height:1.65;color:var(--ink-soft);margin:12px 0 18px}.desktop-steps li{padding-left:3px;margin:0 0 10px;overflow-wrap:anywhere}.desktop-steps code{font:inherit;font-weight:700}
+
+.desktop-route-divider{border-top:1px solid var(--ink-soft);opacity:.35;margin:22px 0}
+
+.desktop-option{border-top:1px solid var(--ink-soft);margin-top:16px}
+.desktop-option summary{display:flex;align-items:center;gap:10px;list-style:none;cursor:pointer;font-family:inherit;font-size:13px;font-weight:700;line-height:1.5;padding:14px 0;color:var(--ink)}
+.desktop-option summary::-webkit-details-marker{display:none}
+.desktop-option summary::before{content:'+';font-size:18px;line-height:1;flex:0 0 14px}
+.desktop-option[open] summary::before{content:'−'}
+.desktop-option summary:focus-visible{outline:2px solid currentColor;outline-offset:3px}
+.desktop-option-body{padding:0 0 14px}
+.platform-label,.hero .platform-label{display:table;margin:16px auto 10px;padding:8px 15px;border:2px solid var(--ink);background:var(--paper-deep);color:var(--ink);font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:700;letter-spacing:.04em;line-height:1.5;max-width:100%}
+.platform-hero-note,.hero .platform-hero-note{font-family:inherit;font-size:12px;line-height:1.6;margin:8px auto 18px;max-width:640px}
 </style>
 </head>
 <body>
@@ -716,7 +732,7 @@ footer .row>span{min-width:0;overflow-wrap:anywhere}
     <span class="can-hint bloom" data-i18n="hero.bloom">in bloom</span>
   </div>
   <div class="catalog-no rev d2" data-i18n="hero.catno">Model Context Protocol · Server for the Open Web</div>
-  <h1 class="rev d2">KitchenSink<span class="four">4</span>Web</h1>
+  <h1 class="rev d2">KitchenSink<span class="four">4</span>Web</h1><p class="platform-label" data-i18n="platform.hero">Windows · macOS · Linux</p><p class="platform-hero-note" data-i18n="platform.heroNote">Optional image text recognition (OCR): Windows only.</p>
   <p class="tagline rev d3" data-i18n="hero.tagline">Everything plus the kitchen sink for the open web: this server lets your AI browse real websites, reads whole pages for a fraction of the usual cost, and cannot click anything until you say so.</p>
   <div class="specs-strip rev d4">
     <div class="spec"><span class="n">7×</span><span class="l" data-i18n="spec.c1">cheaper page reads, measured on a real article</span></div>
@@ -823,6 +839,7 @@ footer .row>span{min-width:0;overflow-wrap:anywhere}
 <p data-i18n="compat.lead">Works with Claude Desktop, Claude Code, Codex, and other AI apps that support local MCP servers, including open-source clients.</p>
 <p data-i18n="compat.chatgpt">ChatGPT: use a desktop app with local MCP support. ChatGPT on the web needs a separate remote connection; these downloads do not set that up.</p>
 
+<p class="platform-note" data-i18n="setup.platform">Windows, macOS and Linux for browsing. Optional built-in image text recognition (OCR) requires Windows.</p>
 </div>
 <div class="setup-note"><h3 data-i18n="setup.title">First time? Start here.</h3><p data-i18n="setup.intro">These tools need a small launcher called uv. Set it up once for all four products. Already have it? Skip to your app below.</p><p data-i18n="setup.windows">On Windows, open the Start menu, type PowerShell, and open Windows PowerShell. Paste this line into that window and press Enter:</p><div class="term"><div>winget install --id=astral-sh.uv -e</div></div><p data-i18n="setup.restart">When installation finishes, close and reopen your AI app and any command windows.</p><p data-i18n="setup.help">Using a Mac, or need help? Follow the <a href="https://docs.astral.sh/uv/getting-started/installation/">uv installation guide</a>. On a work computer, your IT team may need to install it for you.</p></div>
 
@@ -830,20 +847,12 @@ footer .row>span{min-width:0;overflow-wrap:anywhere}
       <div class="step">
         <span class="badge" data-i18n="inst.b1">Easiest</span>
         <h3 data-i18n="setup.desktopTitle">Using a desktop AI app?</h3>
-        <p data-i18n="setup.desktop">Claude Desktop: download the file ending in <b>.mcpb</b> under Assets on the download page. In Claude Desktop, open <b>Settings → Extensions → Advanced settings → Install Extension</b> and select that file.</p><p data-i18n="setup.local">ChatGPT Desktop, Codex, or another app with local MCP settings: add a local server using the command and argument below, then save and restart the app. Menu names and availability vary by app.</p><div class="term"><div>Command: uvx
-Arguments: kitchensink4web</div></div>
-        <a class="go" href="https://github.com/KitchenSink4AI/KitchenSink4Web/releases/latest" data-i18n="setup.download">Download for Claude Desktop →</a>
+        <details class="desktop-option"><summary>Claude Desktop</summary><div class="desktop-option-body"><p data-i18n="setup.desktop">Claude Desktop: download the file ending in <b>.mcpb</b> under Assets on the download page. In Claude Desktop, open <b>Settings → Extensions → Advanced settings → Install Extension</b> and select that file.</p><a class="go" href="https://github.com/KitchenSink4AI/KitchenSink4Web/releases/latest" data-i18n="setup.download">Download for Claude Desktop →</a></div></details><details class="desktop-option"><summary data-i18n="setup.otherApps">ChatGPT Desktop / other apps</summary><div class="desktop-option-body"><p data-i18n="setup.local">For ChatGPT Desktop, Codex, or another desktop app with an <b>MCP servers</b> setting:</p><ol class="desktop-steps" data-i18n="setup.fields"><li>Open <b>Settings → MCP servers → Add server</b>.</li><li>Choose <b>Local</b> or <b>STDIO</b>. This means the tool runs on your computer.</li><li>Give it a name, such as <b>KitchenSink4Web</b>. In the box labeled <b>Command</b>, enter <code>uvx</code>. In <b>Arguments</b>, enter <code>kitchensink4web</code>.</li><li>Save, then restart the app. If these options are missing, check your app's MCP setup guide.</li></ol></div></details>
+
       </div>
       <div class="step">
         <span class="badge" data-i18n="inst.b2">One command</span>
         <h3 data-i18n="setup.cliTitle">Using Claude Code or Codex? Paste this.</h3><p data-i18n="setup.cli">With your app installed and the first-time setup complete, open PowerShell on Windows or Terminal on a Mac. Paste the command labeled for your app and press Enter. Then restart your AI session.</p><p class="client-label">Claude Code</p><div class="term"><div>claude mcp add web -s user -- uvx kitchensink4web</div></div><p class="client-label">Codex</p><div class="term"><div>codex mcp add web -- uvx kitchensink4web</div></div>
-      </div>
-    </div>
-    <div class="tipcard">
-      <span class="key" aria-hidden="true">🔑</span>
-      <div>
-        <h3 data-i18n="inst.tipt">One tip that removes most permission pop-ups</h3>
-        <p data-i18n="inst.tip">In Claude Desktop's Tool permissions for this server, set the <b>Read-only tools</b> group to <b>Always Allow</b>. Those tools cannot change anything, so approving them once is safe, and Claude stops asking about every read. Leave the acting tools on <b>Ask</b>, so anything that changes things still checks with you first.</p>
       </div>
     </div>
     <details class="devfold">
@@ -1180,6 +1189,10 @@ en: {
 "no4": "DEPT. 04",
 "h2.install": "Planting it",
 "inst.b1": "Easiest",
+"setup.platform": "Windows, macOS and Linux for browsing. Optional built-in image text recognition (OCR) requires Windows.",
+"setup.otherApps": "ChatGPT Desktop / other apps",
+"platform.hero": "Windows · macOS · Linux",
+"platform.heroNote": "Optional image text recognition (OCR): Windows only.",
 "setup.title": "First time? Start here.",
 "setup.intro": "These tools need a small launcher called uv. Set it up once for all four products. Already have it? Skip to your app below.",
 "setup.windows": "On Windows, open the Start menu, type PowerShell, and open Windows PowerShell. Paste this line into that window and press Enter:",
@@ -1190,24 +1203,16 @@ en: {
 "setup.desktopTitle": "Using a desktop AI app?",
 "setup.desktop": "Claude Desktop: download the file ending in <b>.mcpb</b> under Assets on the download page. In Claude Desktop, open <b>Settings → Extensions → Advanced settings → Install Extension</b> and select that file.",
 "setup.download": "Download for Claude Desktop →",
-"setup.local": "ChatGPT Desktop, Codex, or another app with local MCP settings: add a local server using the command and argument below, then save and restart the app. Menu names and availability vary by app.",
+"setup.local": "For ChatGPT Desktop, Codex, or another desktop app with an <b>MCP servers</b> setting:",
+"setup.fields": "<li>Open <b>Settings → MCP servers → Add server</b>.</li><li>Choose <b>Local</b> or <b>STDIO</b>. This means the tool runs on your computer.</li><li>Give it a name, such as <b>KitchenSink4Web</b>. In the box labeled <b>Command</b>, enter <code>uvx</code>. In <b>Arguments</b>, enter <code>kitchensink4web</code>.</li><li>Save, then restart the app. If these options are missing, check your app's MCP setup guide.</li>",
 "compat.lead": "Works with Claude Desktop, Claude Code, Codex, and other AI apps that support local MCP servers, including open-source clients.",
 "compat.chatgpt": "ChatGPT: use a desktop app with local MCP support. ChatGPT on the web needs a separate remote connection; these downloads do not set that up.",
-"compat.codex": "Codex setup",
-"compat.pre": "Install uv first, then run:",
-"compat.other": "Other clients: use uvx as the command and the package name as its argument. Follow your app's MCP setup instructions.",
-"inst.s1": "Claude Desktop",
-"inst.p1": "Claude Desktop: install the <code>.mcpb</code> bundle and pick what you want on the install screen. The checkboxes are the whole configuration: one to allow clicking and typing (off means read-only browsing, the shipped default), and one per capability pack. Launching the bundle requires <code>uv</code> (the <code>uvx</code> command) on your machine; the server itself is fetched from PyPI on first launch and drives its own bundled Chromium, never your browser or your profile.",
-"inst.g1": "Download the .mcpb bundle →",
 "inst.b2": "One command",
-"inst.s2": "Any other MCP client",
 "inst.p2": "Packs and read-only mode are chosen at launch (<code>--packs</code>, <code>KS4WEB_MODE</code>, <code>KS4WEB_ALLOW_ACTING</code>) and are identical for every connection to the process.",
 "inst.shed": "Potting shed",
 "inst.dev": "For developers: pip, uvx, source, other MCP clients",
 "inst.dp1": "Install the package and point any MCP client at the executable:",
 "inst.dp2": "Then in any client's config: <code>{&quot;mcpServers&quot;: {&quot;web&quot;: {&quot;command&quot;: &quot;kitchensink4web&quot;}}}</code>. Running from a clone works the same way; point the command at the <code>web-mcp</code> executable in the clone's virtual environment. Full setup, including the pack and mode switches, is in the <a href='https://github.com/KitchenSink4AI/KitchenSink4Web#install'>README</a>.",
-"inst.tipt": "One tip that removes most permission pop-ups",
-"inst.tip": "In Claude Desktop's Tool permissions for this server, set the <b>Read-only tools</b> group to <b>Always Allow</b>. Those tools cannot change anything, so approving them once is safe, and Claude stops asking about every read. Leave the acting tools on <b>Ask</b>, so anything that changes things still checks with you first.",
 "no5": "DEPT. 05",
 "h2.svc": "Customer service",
 "maturity.h": "Young, and raised in a hard school",
@@ -1335,6 +1340,10 @@ ko: {
 "no4": "4번 매장",
 "h2.install": "심는 법",
 "inst.b1": "가장 쉬운 길",
+"setup.platform": "웹 탐색은 Windows, macOS, Linux를 지원합니다. 선택 기능인 내장 이미지 문자 인식(OCR)은 Windows가 필요합니다.",
+"setup.otherApps": "ChatGPT Desktop / 다른 앱",
+"platform.hero": "Windows · macOS · Linux",
+"platform.heroNote": "선택 기능인 이미지 문자 인식(OCR): Windows 전용.",
 "setup.title": "처음이라면 여기부터 시작하세요.",
 "setup.intro": "이 도구에는 uv라는 작은 실행 프로그램이 필요합니다. 네 제품에 대해 한 번만 설치하면 됩니다. 이미 있다면 아래에서 앱을 선택하세요.",
 "setup.windows": "Windows 시작 메뉴에서 PowerShell을 검색하고 Windows PowerShell을 여세요. 아래 명령을 그 창에 붙여 넣고 Enter를 누르세요:",
@@ -1345,24 +1354,16 @@ ko: {
 "setup.desktopTitle": "데스크톱 AI 앱을 사용하시나요?",
 "setup.desktop": "Claude Desktop: 다운로드 페이지의 Assets에서 <b>.mcpb</b> 파일을 받으세요. Claude Desktop의 <b>Settings → Extensions → Advanced settings → Install Extension</b>에서 해당 파일을 선택하세요.",
 "setup.download": "Claude Desktop용 다운로드 →",
-"setup.local": "ChatGPT Desktop, Codex 또는 로컬 MCP 설정이 있는 앱에서는 아래 명령과 인수로 로컬 서버를 추가하고 저장한 뒤 앱을 다시 시작하세요. 메뉴 이름과 지원 여부는 앱에 따라 다릅니다.",
+"setup.local": "ChatGPT Desktop, Codex 또는 <b>MCP servers</b> 설정이 있는 데스크톱 앱:",
+"setup.fields": "<li><b>Settings → MCP servers → Add server</b>를 여세요.</li><li><b>Local</b> 또는 <b>STDIO</b>를 선택하세요. 내 컴퓨터에서 도구를 실행한다는 뜻입니다.</li><li>이름을 <b>KitchenSink4Web</b>처럼 정하세요. <b>Command</b> 입력란에 <code>uvx</code>, <b>Arguments</b> 입력란에 <code>kitchensink4web</code>를 입력하세요.</li><li>저장한 뒤 앱을 다시 시작하세요. 해당 옵션이 없으면 앱의 MCP 설정 안내를 확인하세요.</li>",
 "compat.lead": "Claude Desktop, Claude Code, Codex 및 로컬 MCP 서버를 지원하는 다른 AI 앱과 함께 사용할 수 있습니다. 오픈소스 클라이언트도 포함됩니다.",
 "compat.chatgpt": "ChatGPT: 로컬 MCP를 지원하는 데스크톱 앱을 사용하세요. 웹 ChatGPT에는 별도의 원격 연결이 필요하며, 이 다운로드에는 해당 설정이 포함되지 않습니다.",
-"compat.codex": "Codex 설정",
-"compat.pre": "먼저 uv를 설치한 다음 실행하세요:",
-"compat.other": "다른 클라이언트에서는 명령을 uvx로, 인수를 패키지 이름으로 지정하세요. 앱의 MCP 설정 안내를 따르세요.",
-"inst.s1": "Claude Desktop",
-"inst.p1": "Claude Desktop: <code>.mcpb</code> 번들을 설치하고 설치 화면에서 원하는 것을 고르면 됩니다. 체크박스가 설정의 전부입니다. 클릭과 입력을 허용하는 것 하나(끄면 배포 기본값인 읽기 전용 열람), 그리고 기능 팩마다 하나씩입니다. 번들을 실행하려면 컴퓨터에 <code>uv</code>(<code>uvx</code> 명령)가 있어야 하며, 서버 자체는 첫 실행 때 PyPI에서 받아오고 자체 번들 Chromium을 구동합니다. 사용자의 브라우저나 프로필은 건드리지 않습니다.",
-"inst.g1": ".mcpb 번들 내려받기 →",
 "inst.b2": "명령 한 줄",
-"inst.s2": "그 밖의 모든 MCP 클라이언트",
 "inst.p2": "팩과 읽기 전용 모드는 실행 시점에 정해지며(<code>--packs</code>, <code>KS4WEB_MODE</code>, <code>KS4WEB_ALLOW_ACTING</code>), 그 프로세스에 연결하는 모든 연결에 동일하게 적용됩니다.",
 "inst.shed": "원예 창고",
 "inst.dev": "개발자용: pip, uvx, 소스, 다른 MCP 클라이언트",
 "inst.dp1": "패키지를 설치하고 원하는 MCP 클라이언트가 실행 파일을 가리키게 하면 됩니다:",
 "inst.dp2": "그다음 클라이언트 설정에 <code>{&quot;mcpServers&quot;: {&quot;web&quot;: {&quot;command&quot;: &quot;kitchensink4web&quot;}}}</code>를 넣으세요. 클론에서 실행할 때도 같은 방식이며, 클론의 가상 환경에 있는 <code>web-mcp</code> 실행 파일을 가리키면 됩니다. 팩과 모드 스위치를 포함한 전체 설정은 <a href='https://github.com/KitchenSink4AI/KitchenSink4Web#install'>README</a>에 있습니다.",
-"inst.tipt": "권한 팝업을 대부분 없애는 팁 하나",
-"inst.tip": "Claude Desktop에서 이 서버의 도구 권한을 열고, <b>Read-only tools</b> 그룹을 <b>Always Allow</b>로 설정하세요. 그 도구들은 아무것도 바꿀 수 없으므로 한 번 허용해 두어도 안전하고, Claude가 읽을 때마다 묻지 않게 됩니다. 행동 도구는 <b>Ask</b>로 두세요. 그러면 무언가를 바꾸는 일은 여전히 먼저 확인을 받습니다.",
 "no5": "5번 매장",
 "h2.svc": "고객 서비스",
 "maturity.h": "어리지만, 혹독하게 자랐습니다",
@@ -1490,6 +1491,10 @@ ja: {
 "no4": "第04売り場",
 "h2.install": "植えつけ",
 "inst.b1": "いちばん簡単",
+"setup.platform": "Web 閲覧は Windows、macOS、Linux に対応。オプションの組み込み画像文字認識 (OCR) には Windows が必要です。",
+"setup.otherApps": "ChatGPT Desktop / その他のアプリ",
+"platform.hero": "Windows · macOS · Linux",
+"platform.heroNote": "オプションの画像文字認識 (OCR): Windows 専用。",
 "setup.title": "初めての方はこちらから。",
 "setup.intro": "必要なのは uv という小さな起動ツールです。4 製品共通で一度だけ設定します。導入済みなら下でアプリを選んでください。",
 "setup.windows": "Windows のスタートメニューで PowerShell を検索し、Windows PowerShell を開きます。次の行をそのウィンドウに貼り付けて Enter を押してください:",
@@ -1500,24 +1505,16 @@ ja: {
 "setup.desktopTitle": "デスクトップ AI アプリをお使いですか?",
 "setup.desktop": "Claude Desktop: ダウンロードページの Assets から <b>.mcpb</b> ファイルを取得します。Claude Desktop の <b>Settings → Extensions → Advanced settings → Install Extension</b> でそのファイルを選びます。",
 "setup.download": "Claude Desktop 用にダウンロード →",
-"setup.local": "ChatGPT Desktop、Codex、その他ローカル MCP 設定があるアプリでは、下のコマンドと引数でローカルサーバーを追加し、保存してアプリを再起動します。メニュー名や対応状況はアプリによって異なります。",
+"setup.local": "ChatGPT Desktop、Codex、その他 <b>MCP servers</b> 設定があるデスクトップアプリ:",
+"setup.fields": "<li><b>Settings → MCP servers → Add server</b> を開きます。</li><li><b>Local</b> または <b>STDIO</b> を選びます。自分のコンピューターでツールを実行するという意味です。</li><li>名前を <b>KitchenSink4Web</b> などにします。<b>Command</b> 欄に <code>uvx</code>、<b>Arguments</b> 欄に <code>kitchensink4web</code> と入力します。</li><li>保存してアプリを再起動します。項目が見つからない場合は、そのアプリの MCP 設定ガイドを確認してください。</li>",
 "compat.lead": "Claude Desktop、Claude Code、Codex、およびローカル MCP サーバーに対応する AI アプリで利用できます。オープンソースのクライアントも含みます。",
 "compat.chatgpt": "ChatGPT: ローカル MCP 対応のデスクトップアプリを使用してください。Web 版には別途リモート接続が必要です。このダウンロードでは設定されません。",
-"compat.codex": "Codex の設定",
-"compat.pre": "まず uv をインストールしてから実行:",
-"compat.other": "その他のクライアントでは、コマンドを uvx、引数をパッケージ名に設定してください。各アプリの MCP 設定手順に従ってください。",
-"inst.s1": "Claude Desktop",
-"inst.p1": "Claude Desktop: <code>.mcpb</code>バンドルを入れ、インストール画面で好きなものを選ぶだけです。チェックボックスが設定のすべてで、クリックと入力を許可するものがひとつ(オフなら出荷時既定の読み取り専用ブラウジング)、そして機能パックごとにひとつです。バンドルの起動には<code>uv</code>(<code>uvx</code>コマンド)が必要で、サーバー本体は初回起動時にPyPIから取得され、同梱のChromiumを動かします。あなたのブラウザやプロファイルには触れません。",
-"inst.g1": ".mcpb バンドルをダウンロード →",
 "inst.b2": "コマンド1行",
-"inst.s2": "そのほかのMCPクライアント",
 "inst.p2": "パックと読み取り専用モードは起動時に決まり(<code>--packs</code>、<code>KS4WEB_MODE</code>、<code>KS4WEB_ALLOW_ACTING</code>)、そのプロセスへのすべての接続で同じです。",
 "inst.shed": "園芸小屋",
 "inst.dev": "開発者向け: pip、uvx、ソース、その他の MCP クライアント",
 "inst.dp1": "パッケージを入れて、任意の MCP クライアントから実行ファイルを指すだけです:",
 "inst.dp2": "そのうえでクライアントの設定に <code>{&quot;mcpServers&quot;: {&quot;web&quot;: {&quot;command&quot;: &quot;kitchensink4web&quot;}}}</code> を書きます。クローンから動かす場合も同じで、クローンの仮想環境にある <code>web-mcp</code> 実行ファイルを指してください。パックとモードの切り替えを含む完全な手順は <a href='https://github.com/KitchenSink4AI/KitchenSink4Web#install'>README</a> にあります。",
-"inst.tipt": "権限のポップアップをほとんど消すコツがひとつ",
-"inst.tip": "Claude Desktopで、このサーバーのツール権限を開き、<b>Read-only tools</b>グループを<b>Always Allow</b>にしてください。これらのツールは何も変えられないので、一度許可しておいても安全ですし、Claudeが読むたびに尋ねてくることがなくなります。操作するツールは<b>Ask</b>のままにしておけば、何かを変える動作はこれまでどおり先にあなたへ確認します。",
 "no5": "第05売り場",
 "h2.svc": "カスタマーサービス",
 "maturity.h": "若く、そして厳しく育てられました",
@@ -1645,6 +1642,10 @@ zh: {
 "no4": "第 04 号柜台",
 "h2.install": "把它种下去",
 "inst.b1": "最省事",
+"setup.platform": "浏览功能支持 Windows、macOS 和 Linux。可选的内置图像文字识别（OCR）需要 Windows。",
+"setup.otherApps": "ChatGPT Desktop / 其他应用",
+"platform.hero": "Windows · macOS · Linux",
+"platform.heroNote": "可选的图像文字识别（OCR）：仅限 Windows。",
 "setup.title": "首次使用？从这里开始。",
 "setup.intro": "这些工具需要一个名为 uv 的小型启动程序。四款产品只需设置一次。已经安装？直接在下方选择您的应用。",
 "setup.windows": "在 Windows 开始菜单搜索 PowerShell，打开 Windows PowerShell。将下面这一行粘贴到该窗口，然后按 Enter：",
@@ -1655,24 +1656,16 @@ zh: {
 "setup.desktopTitle": "使用桌面 AI 应用？",
 "setup.desktop": "Claude Desktop：下载页面 Assets 下以 <b>.mcpb</b> 结尾的文件。在 Claude Desktop 中打开 <b>Settings → Extensions → Advanced settings → Install Extension</b>，然后选择该文件。",
 "setup.download": "下载 Claude Desktop 安装包 →",
-"setup.local": "对于 ChatGPT Desktop、Codex 或其他提供本地 MCP 设置的应用，请使用下方命令和参数添加本地服务器，保存后重启应用。菜单名称和可用性因应用而异。",
+"setup.local": "适用于 ChatGPT Desktop、Codex 或其他有 <b>MCP servers</b> 设置的桌面应用：",
+"setup.fields": "<li>打开 <b>Settings → MCP servers → Add server</b>。</li><li>选择 <b>Local</b> 或 <b>STDIO</b>，表示在您的电脑上运行工具。</li><li>为它命名，例如 <b>KitchenSink4Web</b>。在标为 <b>Command</b> 的输入框中填写 <code>uvx</code>，在 <b>Arguments</b> 中填写 <code>kitchensink4web</code>。</li><li>保存并重启应用。如果没有这些选项，请查看该应用的 MCP 设置指南。</li>",
 "compat.lead": "支持 Claude Desktop、Claude Code、Codex 及其他支持本地 MCP 服务器的 AI 应用，包括开源客户端。",
 "compat.chatgpt": "ChatGPT：请使用支持本地 MCP 的桌面应用。网页版需要单独配置远程连接；这些下载不会完成该配置。",
-"compat.codex": "Codex 设置",
-"compat.pre": "先安装 uv，然后运行：",
-"compat.other": "其他客户端：将命令设为 uvx，参数设为包名，并按照应用的 MCP 设置说明操作。",
-"inst.s1": "Claude Desktop",
-"inst.p1": "Claude Desktop：安装 <code>.mcpb</code> 捆绑包，在安装界面上挑你要的东西。那些复选框就是全部配置：一个用来允许点击和输入（不勾就是出厂默认的只读浏览），其余每个能力包一个。启动这个捆绑包需要你的机器上有 <code>uv</code>（也就是 <code>uvx</code> 命令）；服务器本身在首次启动时从 PyPI 取回，并驱动它自带的 Chromium，绝不碰你的浏览器或你的配置文件。",
-"inst.g1": "下载 .mcpb 安装包 →",
 "inst.b2": "一条命令",
-"inst.s2": "任何其他 MCP 客户端",
 "inst.p2": "能力包与只读模式在启动时确定（<code>--packs</code>、<code>KS4WEB_MODE</code>、<code>KS4WEB_ALLOW_ACTING</code>），并且对连接到该进程的每一个连接都相同。",
 "inst.shed": "园艺工棚",
 "inst.dev": "开发者选项：pip、uvx、源码、其他 MCP 客户端",
 "inst.dp1": "安装这个包，然后让任意 MCP 客户端指向可执行文件：",
 "inst.dp2": "然后在客户端配置里写 <code>{&quot;mcpServers&quot;: {&quot;web&quot;: {&quot;command&quot;: &quot;kitchensink4web&quot;}}}</code>。从克隆仓库运行的方式相同，指向克隆虚拟环境里的 <code>web-mcp</code> 可执行文件即可。包含能力包与模式开关的完整说明见 <a href='https://github.com/KitchenSink4AI/KitchenSink4Web#install'>README</a>。",
-"inst.tipt": "一个能去掉大部分权限弹窗的小提示",
-"inst.tip": "在 Claude Desktop 里打开这台服务器的工具权限，把<b>Read-only tools</b>分组设为<b>Always Allow</b>。那些工具改不了任何东西，所以一次性批准是安全的，Claude 也不会每读一次就来问一遍。操作类工具请保持<b>Ask</b>，这样凡是会改动东西的操作，仍旧会先征求你的同意。",
 "no5": "第 05 号柜台",
 "h2.svc": "客户服务",
 "maturity.h": "年纪轻，管得严",
@@ -1800,34 +1793,30 @@ de: {
 "no4": "ABT. 04",
 "h2.install": "Einpflanzen",
 "inst.b1": "Am einfachsten",
+"setup.platform": "Surfen unter Windows, macOS und Linux. Die optionale integrierte Texterkennung in Bildern (OCR) benötigt Windows.",
+"setup.otherApps": "ChatGPT Desktop / andere Apps",
+"platform.hero": "Windows · macOS · Linux",
+"platform.heroNote": "Optionale Texterkennung in Bildern (OCR): nur Windows.",
 "setup.title": "Zum ersten Mal hier? Hier geht es los.",
 "setup.intro": "Diese Werkzeuge benötigen das kleine Startprogramm uv. Einmal einrichten reicht für alle vier Produkte. Schon installiert? Wählen Sie unten Ihre App.",
-"setup.windows": "Öffnen Sie unter Windows das Startmenü, suchen Sie PowerShell und öffnen Sie Windows PowerShell. Fügen Sie diese Zeile dort ein und drücken Sie die Eingabetaste:",
+"setup.windows": "Öffnen Sie unter Windows das Startmenü, suchen Sie PowerShell und öffnen Sie Windows PowerShell. Fügen Sie diese Zeile dort ein und drücken Sie Enter:",
 "setup.restart": "Schließen und öffnen Sie nach der Installation Ihre KI-App und alle Befehlsfenster erneut.",
 "setup.help": "Mac oder weitere Hilfe? Nutzen Sie die <a href=\"https://docs.astral.sh/uv/getting-started/installation/\">uv-Installationsanleitung</a>. Auf einem Arbeitsrechner muss eventuell Ihre IT die Installation übernehmen.",
 "setup.cliTitle": "Claude Code oder Codex? Diesen Befehl einfügen.",
-"setup.cli": "Nach Installation der App und der Ersteinrichtung öffnen Sie PowerShell unter Windows oder Terminal auf dem Mac. Fügen Sie den Befehl für Ihre App ein und drücken Sie die Eingabetaste. Starten Sie danach Ihre KI-Sitzung neu.",
+"setup.cli": "Nach Installation der App und der Ersteinrichtung öffnen Sie PowerShell unter Windows oder Terminal auf dem Mac. Fügen Sie den Befehl für Ihre App ein und drücken Sie Enter. Starten Sie danach Ihre KI-Sitzung neu.",
 "setup.desktopTitle": "Eine KI-App auf dem Desktop?",
 "setup.desktop": "Claude Desktop: Laden Sie unter Assets die Datei mit der Endung <b>.mcpb</b> herunter. Wählen Sie diese in Claude Desktop unter <b>Settings → Extensions → Advanced settings → Install Extension</b> aus.",
 "setup.download": "Für Claude Desktop herunterladen →",
-"setup.local": "ChatGPT Desktop, Codex oder andere Apps mit lokalen MCP-Einstellungen: Fügen Sie einen lokalen Server mit Befehl und Argument unten hinzu, speichern Sie und starten Sie die App neu. Menüs und Verfügbarkeit variieren.",
+"setup.local": "Für ChatGPT Desktop, Codex oder eine andere Desktop-App mit der Einstellung <b>MCP servers</b>:",
+"setup.fields": "<li>Öffnen Sie <b>Settings → MCP servers → Add server</b>.</li><li>Wählen Sie <b>Local</b> oder <b>STDIO</b>. Das Werkzeug läuft damit auf Ihrem Computer.</li><li>Vergeben Sie einen Namen, etwa <b>KitchenSink4Web</b>. Geben Sie im Feld <b>Command</b> <code>uvx</code> und im Feld <b>Arguments</b> <code>kitchensink4web</code> ein.</li><li>Speichern Sie und starten Sie die App neu. Fehlen diese Optionen, lesen Sie die MCP-Anleitung Ihrer App.</li>",
 "compat.lead": "Für Claude Desktop, Claude Code, Codex und andere KI-Apps mit Unterstützung für lokale MCP-Server, einschließlich Open-Source-Clients.",
 "compat.chatgpt": "ChatGPT: Verwenden Sie eine Desktop-App mit lokaler MCP-Unterstützung. ChatGPT im Web benötigt eine separate Remote-Verbindung; diese Downloads richten sie nicht ein.",
-"compat.codex": "Codex einrichten",
-"compat.pre": "Zuerst uv installieren, dann ausführen:",
-"compat.other": "Andere Clients: uvx als Befehl und den Paketnamen als Argument verwenden. Folgen Sie der MCP-Anleitung Ihrer App.",
-"inst.s1": "Claude Desktop",
-"inst.p1": "Claude Desktop: Installieren Sie das <code>.mcpb</code>-Bündel und wählen Sie im Installationsbildschirm aus, was Sie möchten. Die Kästchen sind die gesamte Konfiguration: eines, um Klicken und Tippen zu erlauben (aus bedeutet reines Lesen beim Browsen, die ausgelieferte Voreinstellung), und eines pro Fähigkeitspaket. Der Start des Bündels verlangt <code>uv</code> (den Befehl <code>uvx</code>) auf Ihrem Rechner; der Server selbst wird beim ersten Start von PyPI geholt und steuert sein eigenes mitgeliefertes Chromium, nie Ihren Browser und nie Ihr Profil.",
-"inst.g1": ".mcpb-Bündel herunterladen →",
 "inst.b2": "Ein Befehl",
-"inst.s2": "Jeder andere MCP-Client",
 "inst.p2": "Pakete und Lesemodus werden beim Start gewählt (<code>--packs</code>, <code>KS4WEB_MODE</code>, <code>KS4WEB_ALLOW_ACTING</code>) und sind für jede Verbindung zu diesem Prozess identisch.",
 "inst.shed": "Pflanzschuppen",
 "inst.dev": "Für Entwickler: pip, uvx, Quellcode, andere MCP-Clients",
 "inst.dp1": "Paket installieren und einen beliebigen MCP-Client auf die ausführbare Datei zeigen lassen:",
 "inst.dp2": "Dann in der Konfiguration des Clients: <code>{&quot;mcpServers&quot;: {&quot;web&quot;: {&quot;command&quot;: &quot;kitchensink4web&quot;}}}</code>. Aus einem Klon heraus läuft es genauso, dann zeigt der Befehl auf die ausführbare Datei <code>web-mcp</code> in der virtuellen Umgebung des Klons. Das vollständige Setup samt Paket- und Modusschaltern steht in der <a href='https://github.com/KitchenSink4AI/KitchenSink4Web#install'>README</a>.",
-"inst.tipt": "Ein Tipp, der die meisten Berechtigungsfenster verschwinden lässt",
-"inst.tip": "Öffnen Sie in Claude Desktop die Werkzeugberechtigungen für diesen Server und setzen Sie die Gruppe <b>Read-only tools</b> auf <b>Always Allow</b>. Diese Werkzeuge können nichts ändern, ein einmaliges Zustimmen ist also sicher, und Claude fragt nicht mehr bei jedem Lesevorgang nach. Lassen Sie die handelnden Werkzeuge auf <b>Ask</b>, damit alles, was etwas verändert, weiterhin zuerst bei Ihnen nachfragt.",
 "no5": "ABT. 05",
 "h2.svc": "Kundenservice",
 "maturity.h": "Jung, und in einer harten Schule aufgewachsen",
@@ -1955,6 +1944,10 @@ fr: {
 "no4": "RAYON 04",
 "h2.install": "Le mettre en terre",
 "inst.b1": "Le plus simple",
+"setup.platform": "Navigation sous Windows, macOS et Linux. La reconnaissance de texte intégrée dans les images (OCR), en option, nécessite Windows.",
+"setup.otherApps": "ChatGPT Desktop / autres applications",
+"platform.hero": "Windows · macOS · Linux",
+"platform.heroNote": "Reconnaissance de texte dans les images (OCR), en option : Windows uniquement.",
 "setup.title": "Première installation ? Commencez ici.",
 "setup.intro": "Ces outils ont besoin d'un petit lanceur appelé uv. Une seule installation suffit pour les quatre produits. Déjà installé ? Choisissez votre application ci-dessous.",
 "setup.windows": "Sous Windows, ouvrez le menu Démarrer, cherchez PowerShell et ouvrez Windows PowerShell. Collez cette ligne dans cette fenêtre, puis appuyez sur Entrée :",
@@ -1965,24 +1958,16 @@ fr: {
 "setup.desktopTitle": "Une application IA de bureau ?",
 "setup.desktop": "Claude Desktop : téléchargez le fichier <b>.mcpb</b> dans Assets. Dans Claude Desktop, ouvrez <b>Settings → Extensions → Advanced settings → Install Extension</b> et sélectionnez ce fichier.",
 "setup.download": "Télécharger pour Claude Desktop →",
-"setup.local": "ChatGPT Desktop, Codex ou autre application avec des réglages MCP locaux : ajoutez un serveur local avec la commande et l'argument ci-dessous, enregistrez et redémarrez l'application. Les menus et la disponibilité varient.",
+"setup.local": "Pour ChatGPT Desktop, Codex ou une autre application de bureau avec un réglage <b>MCP servers</b> :",
+"setup.fields": "<li>Ouvrez <b>Settings → MCP servers → Add server</b>.</li><li>Choisissez <b>Local</b> ou <b>STDIO</b>. Cela signifie que l'outil fonctionne sur votre ordinateur.</li><li>Donnez-lui un nom, par exemple <b>KitchenSink4Web</b>. Dans le champ <b>Command</b>, saisissez <code>uvx</code>. Dans <b>Arguments</b>, saisissez <code>kitchensink4web</code>.</li><li>Enregistrez, puis redémarrez l'application. Si ces options manquent, consultez son guide de configuration MCP.</li>",
 "compat.lead": "Compatible avec Claude Desktop, Claude Code, Codex et les autres applications IA prenant en charge les serveurs MCP locaux, y compris les clients open source.",
 "compat.chatgpt": "ChatGPT : utilisez une application de bureau compatible avec les MCP locaux. La version web nécessite une connexion distante distincte, que ces téléchargements ne configurent pas.",
-"compat.codex": "Configurer Codex",
-"compat.pre": "Installez uv, puis exécutez :",
-"compat.other": "Autres clients : utilisez uvx comme commande et le nom du paquet comme argument. Suivez les instructions MCP de votre application.",
-"inst.s1": "Claude Desktop",
-"inst.p1": "Claude Desktop : installez le paquet <code>.mcpb</code> et choisissez ce que vous voulez sur l'écran d'installation. Les cases à cocher sont toute la configuration : une pour autoriser le clic et la saisie (décochée, c'est la navigation en lecture seule, le réglage livré), et une par module de capacités. Lancer le paquet demande <code>uv</code> (la commande <code>uvx</code>) sur votre machine ; le serveur lui-même est récupéré depuis PyPI au premier lancement et pilote son propre Chromium embarqué, jamais votre navigateur ni votre profil.",
-"inst.g1": "Télécharger le paquet .mcpb →",
 "inst.b2": "Une commande",
-"inst.s2": "Tout autre client MCP",
 "inst.p2": "Les modules et le mode lecture seule sont choisis au lancement (<code>--packs</code>, <code>KS4WEB_MODE</code>, <code>KS4WEB_ALLOW_ACTING</code>) et sont identiques pour chaque connexion au processus.",
 "inst.shed": "Cabane de rempotage",
 "inst.dev": "Pour les développeurs : pip, uvx, sources, autres clients MCP",
 "inst.dp1": "Installez le paquet, puis pointez n'importe quel client MCP sur l'exécutable :",
 "inst.dp2": "Ensuite, dans la configuration du client : <code>{&quot;mcpServers&quot;: {&quot;web&quot;: {&quot;command&quot;: &quot;kitchensink4web&quot;}}}</code>. Depuis un clone, c'est identique : pointez la commande sur l'exécutable <code>web-mcp</code> de l'environnement virtuel du clone. L'installation complète, modules et modes compris, est dans le <a href='https://github.com/KitchenSink4AI/KitchenSink4Web#install'>README</a>.",
-"inst.tipt": "Une astuce qui supprime la plupart des fenêtres d'autorisation",
-"inst.tip": "Dans Claude Desktop, ouvrez les autorisations d'outils de ce serveur et mettez le groupe <b>Read-only tools</b> sur <b>Always Allow</b>. Ces outils ne peuvent rien changer, les approuver une fois est donc sans risque, et Claude cesse de demander à chaque lecture. Laissez les outils d'action sur <b>Ask</b>, pour que tout ce qui modifie quelque chose continue de vous consulter d'abord.",
 "no5": "RAYON 05",
 "h2.svc": "Service client",
 "maturity.h": "Jeune, et élevé à la dure",
@@ -2110,6 +2095,10 @@ es: {
 "no4": "SECCIÓN 04",
 "h2.install": "Plantarlo",
 "inst.b1": "Lo más fácil",
+"setup.platform": "Navegación en Windows, macOS y Linux. El reconocimiento de texto integrado en imágenes (OCR), opcional, requiere Windows.",
+"setup.otherApps": "ChatGPT Desktop / otras aplicaciones",
+"platform.hero": "Windows · macOS · Linux",
+"platform.heroNote": "Reconocimiento de texto en imágenes (OCR), opcional: solo Windows.",
 "setup.title": "¿Primera vez? Empiece aquí.",
 "setup.intro": "Estas herramientas necesitan un pequeño programa de inicio llamado uv. Se configura una sola vez para los cuatro productos. ¿Ya lo tiene? Elija su aplicación abajo.",
 "setup.windows": "En Windows, abra el menú Inicio, busque PowerShell y abra Windows PowerShell. Pegue esta línea en esa ventana y pulse Intro:",
@@ -2120,24 +2109,16 @@ es: {
 "setup.desktopTitle": "¿Usa una aplicación de IA de escritorio?",
 "setup.desktop": "Claude Desktop: descargue el archivo <b>.mcpb</b> en Assets. En Claude Desktop, abra <b>Settings → Extensions → Advanced settings → Install Extension</b> y seleccione ese archivo.",
 "setup.download": "Descargar para Claude Desktop →",
-"setup.local": "ChatGPT Desktop, Codex u otra aplicación con ajustes MCP locales: añada un servidor local con el comando y argumento siguientes, guarde y reinicie la aplicación. Los menús y la disponibilidad varían.",
+"setup.local": "Para ChatGPT Desktop, Codex u otra aplicación de escritorio con un ajuste <b>MCP servers</b>:",
+"setup.fields": "<li>Abra <b>Settings → MCP servers → Add server</b>.</li><li>Elija <b>Local</b> o <b>STDIO</b>. Esto significa que la herramienta se ejecuta en su equipo.</li><li>Asígnele un nombre, por ejemplo <b>KitchenSink4Web</b>. En el campo <b>Command</b>, escriba <code>uvx</code>. En <b>Arguments</b>, escriba <code>kitchensink4web</code>.</li><li>Guarde y reinicie la aplicación. Si no encuentra estas opciones, consulte su guía de configuración MCP.</li>",
 "compat.lead": "Compatible con Claude Desktop, Claude Code, Codex y otras aplicaciones de IA que admitan servidores MCP locales, incluidos clientes de código abierto.",
 "compat.chatgpt": "ChatGPT: use una aplicación de escritorio compatible con MCP local. La versión web necesita una conexión remota aparte; estas descargas no la configuran.",
-"compat.codex": "Configurar Codex",
-"compat.pre": "Instale uv y ejecute:",
-"compat.other": "Otros clientes: use uvx como comando y el nombre del paquete como argumento. Siga las instrucciones MCP de su aplicación.",
-"inst.s1": "Claude Desktop",
-"inst.p1": "Claude Desktop: instale el paquete <code>.mcpb</code> y elija lo que quiera en la pantalla de instalación. Las casillas son toda la configuración: una para permitir el clic y la escritura (desmarcada significa navegación de solo lectura, el valor de fábrica) y una por cada paquete de capacidades. Lanzar el paquete requiere <code>uv</code> (el comando <code>uvx</code>) en su equipo; el servidor se descarga de PyPI en el primer arranque y maneja su propio Chromium incluido, nunca su navegador ni su perfil.",
-"inst.g1": "Descargar el paquete .mcpb →",
 "inst.b2": "Un comando",
-"inst.s2": "Cualquier otro cliente MCP",
 "inst.p2": "Los paquetes y el modo de solo lectura se eligen al arrancar (<code>--packs</code>, <code>KS4WEB_MODE</code>, <code>KS4WEB_ALLOW_ACTING</code>) y son idénticos para cada conexión al proceso.",
 "inst.shed": "Cobertizo de macetas",
 "inst.dev": "Para desarrolladores: pip, uvx, código fuente, otros clientes MCP",
 "inst.dp1": "Instale el paquete y apunte cualquier cliente MCP al ejecutable:",
 "inst.dp2": "Después, en la configuración del cliente: <code>{&quot;mcpServers&quot;: {&quot;web&quot;: {&quot;command&quot;: &quot;kitchensink4web&quot;}}}</code>. Desde un clon funciona igual: apunte el comando al ejecutable <code>web-mcp</code> del entorno virtual del clon. La instalación completa, con los interruptores de paquetes y modos, está en el <a href='https://github.com/KitchenSink4AI/KitchenSink4Web#install'>README</a>.",
-"inst.tipt": "Un consejo que elimina casi todas las ventanas de permiso",
-"inst.tip": "En Claude Desktop, abra los permisos de herramientas de este servidor y ponga el grupo <b>Read-only tools</b> en <b>Always Allow</b>. Esas herramientas no pueden cambiar nada, así que aprobarlas una vez es seguro, y Claude deja de preguntar en cada lectura. Deje las herramientas de acción en <b>Ask</b>, para que todo lo que cambie algo siga consultándole antes.",
 "no5": "SECCIÓN 05",
 "h2.svc": "Atención al cliente",
 "maturity.h": "Joven, y criado en una escuela dura",
