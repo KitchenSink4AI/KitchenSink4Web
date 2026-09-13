@@ -647,6 +647,9 @@ footer .row>span{min-width:0;overflow-wrap:anywhere}
 }
 
 .footer-links{text-align:center;padding:10px 20px;font-size:12px}.footer-links a{white-space:nowrap}.release-date{font-size:12px;color:var(--ink-soft);white-space:nowrap;margin-left:auto}
+
+/* Local MCP client compatibility and optional setup commands. */
+.mcp-compat{margin:0 0 24px;min-width:0;max-width:100%;line-height:1.6}.mcp-compat p{margin:10px 0;overflow-wrap:anywhere}.mcp-compat summary{cursor:pointer;font-weight:700}.mcp-compat pre{max-width:100%;overflow-x:auto;padding:12px;border:1px solid currentColor;font-size:13px;line-height:1.65}.mcp-compat code{font-family:monospace}
 </style>
 </head>
 <body>
@@ -800,6 +803,16 @@ footer .row>span{min-width:0;overflow-wrap:anywhere}
 <section id="install">
   <div class="wrap">
     <div class="sec-head"><span class="no" data-i18n="no4">DEPT. 04</span><h2 data-i18n="h2.install">Planting it</h2></div>
+    <div class="mcp-compat">
+<p data-i18n="compat.lead">Works with Claude Desktop, Claude Code, Codex, and other AI apps that support local MCP servers, including open-source clients.</p>
+<p data-i18n="compat.chatgpt">ChatGPT: use a desktop app with local MCP support. ChatGPT on the web needs a separate remote connection; these downloads do not set that up.</p>
+<details><summary data-i18n="compat.codex">Codex setup</summary>
+<p data-i18n="compat.pre">Install uv first, then run:</p>
+<pre><code>codex mcp add web -- uvx kitchensink4web</code></pre>
+<p data-i18n="compat.other">Other clients: use uvx as the command and the package name as its argument. Follow your app's MCP setup instructions.</p>
+</details>
+</div>
+
     <div class="install-grid">
       <div class="step">
         <span class="badge" data-i18n="inst.b1">Easiest</span>
@@ -1154,6 +1167,11 @@ en: {
 "no4": "DEPT. 04",
 "h2.install": "Planting it",
 "inst.b1": "Easiest",
+"compat.lead": "Works with Claude Desktop, Claude Code, Codex, and other AI apps that support local MCP servers, including open-source clients.",
+"compat.chatgpt": "ChatGPT: use a desktop app with local MCP support. ChatGPT on the web needs a separate remote connection; these downloads do not set that up.",
+"compat.codex": "Codex setup",
+"compat.pre": "Install uv first, then run:",
+"compat.other": "Other clients: use uvx as the command and the package name as its argument. Follow your app's MCP setup instructions.",
 "inst.s1": "Claude Desktop",
 "inst.p1": "Claude Desktop: install the <code>.mcpb</code> bundle and pick what you want on the install screen. The checkboxes are the whole configuration: one to allow clicking and typing (off means read-only browsing, the shipped default), and one per capability pack. Launching the bundle requires <code>uv</code> (the <code>uvx</code> command) on your machine; the server itself is fetched from PyPI on first launch and drives its own bundled Chromium, never your browser or your profile.",
 "inst.g1": "Download the .mcpb bundle →",
@@ -1293,6 +1311,11 @@ ko: {
 "no4": "4번 매장",
 "h2.install": "심는 법",
 "inst.b1": "가장 쉬운 길",
+"compat.lead": "Claude Desktop, Claude Code, Codex 및 로컬 MCP 서버를 지원하는 다른 AI 앱과 함께 사용할 수 있습니다. 오픈소스 클라이언트도 포함됩니다.",
+"compat.chatgpt": "ChatGPT: 로컬 MCP를 지원하는 데스크톱 앱을 사용하세요. 웹 ChatGPT에는 별도의 원격 연결이 필요하며, 이 다운로드에는 해당 설정이 포함되지 않습니다.",
+"compat.codex": "Codex 설정",
+"compat.pre": "먼저 uv를 설치한 다음 실행하세요:",
+"compat.other": "다른 클라이언트에서는 명령을 uvx로, 인수를 패키지 이름으로 지정하세요. 앱의 MCP 설정 안내를 따르세요.",
 "inst.s1": "Claude Desktop",
 "inst.p1": "Claude Desktop: <code>.mcpb</code> 번들을 설치하고 설치 화면에서 원하는 것을 고르면 됩니다. 체크박스가 설정의 전부입니다. 클릭과 입력을 허용하는 것 하나(끄면 배포 기본값인 읽기 전용 열람), 그리고 기능 팩마다 하나씩입니다. 번들을 실행하려면 컴퓨터에 <code>uv</code>(<code>uvx</code> 명령)가 있어야 하며, 서버 자체는 첫 실행 때 PyPI에서 받아오고 자체 번들 Chromium을 구동합니다. 사용자의 브라우저나 프로필은 건드리지 않습니다.",
 "inst.g1": ".mcpb 번들 내려받기 →",
@@ -1432,6 +1455,11 @@ ja: {
 "no4": "第04売り場",
 "h2.install": "植えつけ",
 "inst.b1": "いちばん簡単",
+"compat.lead": "Claude Desktop、Claude Code、Codex、およびローカル MCP サーバーに対応する AI アプリで利用できます。オープンソースのクライアントも含みます。",
+"compat.chatgpt": "ChatGPT: ローカル MCP 対応のデスクトップアプリを使用してください。Web 版には別途リモート接続が必要です。このダウンロードでは設定されません。",
+"compat.codex": "Codex の設定",
+"compat.pre": "まず uv をインストールしてから実行:",
+"compat.other": "その他のクライアントでは、コマンドを uvx、引数をパッケージ名に設定してください。各アプリの MCP 設定手順に従ってください。",
 "inst.s1": "Claude Desktop",
 "inst.p1": "Claude Desktop: <code>.mcpb</code>バンドルを入れ、インストール画面で好きなものを選ぶだけです。チェックボックスが設定のすべてで、クリックと入力を許可するものがひとつ(オフなら出荷時既定の読み取り専用ブラウジング)、そして機能パックごとにひとつです。バンドルの起動には<code>uv</code>(<code>uvx</code>コマンド)が必要で、サーバー本体は初回起動時にPyPIから取得され、同梱のChromiumを動かします。あなたのブラウザやプロファイルには触れません。",
 "inst.g1": ".mcpb バンドルをダウンロード →",
@@ -1571,6 +1599,11 @@ zh: {
 "no4": "第 04 号柜台",
 "h2.install": "把它种下去",
 "inst.b1": "最省事",
+"compat.lead": "支持 Claude Desktop、Claude Code、Codex 及其他支持本地 MCP 服务器的 AI 应用，包括开源客户端。",
+"compat.chatgpt": "ChatGPT：请使用支持本地 MCP 的桌面应用。网页版需要单独配置远程连接；这些下载不会完成该配置。",
+"compat.codex": "Codex 设置",
+"compat.pre": "先安装 uv，然后运行：",
+"compat.other": "其他客户端：将命令设为 uvx，参数设为包名，并按照应用的 MCP 设置说明操作。",
 "inst.s1": "Claude Desktop",
 "inst.p1": "Claude Desktop：安装 <code>.mcpb</code> 捆绑包，在安装界面上挑你要的东西。那些复选框就是全部配置：一个用来允许点击和输入（不勾就是出厂默认的只读浏览），其余每个能力包一个。启动这个捆绑包需要你的机器上有 <code>uv</code>（也就是 <code>uvx</code> 命令）；服务器本身在首次启动时从 PyPI 取回，并驱动它自带的 Chromium，绝不碰你的浏览器或你的配置文件。",
 "inst.g1": "下载 .mcpb 安装包 →",
@@ -1710,6 +1743,11 @@ de: {
 "no4": "ABT. 04",
 "h2.install": "Einpflanzen",
 "inst.b1": "Am einfachsten",
+"compat.lead": "Für Claude Desktop, Claude Code, Codex und andere KI-Apps mit Unterstützung für lokale MCP-Server, einschließlich Open-Source-Clients.",
+"compat.chatgpt": "ChatGPT: Verwenden Sie eine Desktop-App mit lokaler MCP-Unterstützung. ChatGPT im Web benötigt eine separate Remote-Verbindung; diese Downloads richten sie nicht ein.",
+"compat.codex": "Codex einrichten",
+"compat.pre": "Zuerst uv installieren, dann ausführen:",
+"compat.other": "Andere Clients: uvx als Befehl und den Paketnamen als Argument verwenden. Folgen Sie der MCP-Anleitung Ihrer App.",
 "inst.s1": "Claude Desktop",
 "inst.p1": "Claude Desktop: Installieren Sie das <code>.mcpb</code>-Bündel und wählen Sie im Installationsbildschirm aus, was Sie möchten. Die Kästchen sind die gesamte Konfiguration: eines, um Klicken und Tippen zu erlauben (aus bedeutet reines Lesen beim Browsen, die ausgelieferte Voreinstellung), und eines pro Fähigkeitspaket. Der Start des Bündels verlangt <code>uv</code> (den Befehl <code>uvx</code>) auf Ihrem Rechner; der Server selbst wird beim ersten Start von PyPI geholt und steuert sein eigenes mitgeliefertes Chromium, nie Ihren Browser und nie Ihr Profil.",
 "inst.g1": ".mcpb-Bündel herunterladen →",
@@ -1849,6 +1887,11 @@ fr: {
 "no4": "RAYON 04",
 "h2.install": "Le mettre en terre",
 "inst.b1": "Le plus simple",
+"compat.lead": "Compatible avec Claude Desktop, Claude Code, Codex et les autres applications IA prenant en charge les serveurs MCP locaux, y compris les clients open source.",
+"compat.chatgpt": "ChatGPT : utilisez une application de bureau compatible avec les MCP locaux. La version web nécessite une connexion distante distincte, que ces téléchargements ne configurent pas.",
+"compat.codex": "Configurer Codex",
+"compat.pre": "Installez uv, puis exécutez :",
+"compat.other": "Autres clients : utilisez uvx comme commande et le nom du paquet comme argument. Suivez les instructions MCP de votre application.",
 "inst.s1": "Claude Desktop",
 "inst.p1": "Claude Desktop : installez le paquet <code>.mcpb</code> et choisissez ce que vous voulez sur l'écran d'installation. Les cases à cocher sont toute la configuration : une pour autoriser le clic et la saisie (décochée, c'est la navigation en lecture seule, le réglage livré), et une par module de capacités. Lancer le paquet demande <code>uv</code> (la commande <code>uvx</code>) sur votre machine ; le serveur lui-même est récupéré depuis PyPI au premier lancement et pilote son propre Chromium embarqué, jamais votre navigateur ni votre profil.",
 "inst.g1": "Télécharger le paquet .mcpb →",
@@ -1988,6 +2031,11 @@ es: {
 "no4": "SECCIÓN 04",
 "h2.install": "Plantarlo",
 "inst.b1": "Lo más fácil",
+"compat.lead": "Compatible con Claude Desktop, Claude Code, Codex y otras aplicaciones de IA que admitan servidores MCP locales, incluidos clientes de código abierto.",
+"compat.chatgpt": "ChatGPT: use una aplicación de escritorio compatible con MCP local. La versión web necesita una conexión remota aparte; estas descargas no la configuran.",
+"compat.codex": "Configurar Codex",
+"compat.pre": "Instale uv y ejecute:",
+"compat.other": "Otros clientes: use uvx como comando y el nombre del paquete como argumento. Siga las instrucciones MCP de su aplicación.",
 "inst.s1": "Claude Desktop",
 "inst.p1": "Claude Desktop: instale el paquete <code>.mcpb</code> y elija lo que quiera en la pantalla de instalación. Las casillas son toda la configuración: una para permitir el clic y la escritura (desmarcada significa navegación de solo lectura, el valor de fábrica) y una por cada paquete de capacidades. Lanzar el paquete requiere <code>uv</code> (el comando <code>uvx</code>) en su equipo; el servidor se descarga de PyPI en el primer arranque y maneja su propio Chromium incluido, nunca su navegador ni su perfil.",
 "inst.g1": "Descargar el paquete .mcpb →",
