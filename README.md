@@ -282,6 +282,8 @@ process.
 > **Read-only tools** group to **Always Allow**. Those tools cannot change
 > anything on any page, and it stops most permission prompts.
 
+For guided Windows setup, signed license receipts, and email support, see the KitchenSink4AI Business edition: https://kitchensink4.ai/products/business/
+
 ## License
 
 KitchenSink4Web is dual-licensed:
