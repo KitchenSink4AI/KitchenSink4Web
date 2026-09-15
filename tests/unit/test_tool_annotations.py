@@ -34,6 +34,7 @@ import asyncio
 import pytest
 
 from kitchensink4web import packs, server
+from kitchensink4web.policy import readonly
 from kitchensink4web.policy import tool_annotations as ann
 
 DOCS = Path(__file__).resolve().parents[2] / "docs"
@@ -60,15 +61,22 @@ def _wire(tool) -> dict:
 ALL_PACKS = sorted(packs.PACK_SUMMARIES)
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture()
 def registered():
-    """tool name -> tool object, with every pack on and acting unlocked."""
+    """tool name -> tool object, with every pack on and acting unlocked.
+
+    FUNCTION-scoped, and it restores the exact grade it found. The read-only
+    grade is process-global, so a module-scoped version of this fixture
+    outlives the conftest's per-test `_no_grade_leak` check and leaves the
+    grade wrong for every test the shuffle runs afterwards. Re-launching per
+    test costs milliseconds; getting this wrong costs the rest of the suite.
+    """
+    before = readonly.grade()
     state = server.configure(cli_packs=ALL_PACKS, read_only=False)
     assert state["read_only"] is None
     tools = asyncio.run(server.mcp._list_tools())
-    out = {t.name: t for t in tools}
-    yield out
-    server.configure()
+    yield {t.name: t for t in tools}
+    server.configure(read_only=before if before is not None else False)
 
 
 def test_every_registered_tool_carries_a_non_empty_title(registered):
