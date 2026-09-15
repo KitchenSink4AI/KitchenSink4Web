@@ -6,8 +6,11 @@ readme = "README.md"
 # DESIGN 10.3 rule 5 held the license out of every file until the decision
 # landed and named the LICENSE file a Phase 9 artifact. The decision landed
 # 2026-09-06 (Q1: the family AGPL), so this is Phase 9 delivering it. LICENSE
-# is the stock AGPL-3.0 text, byte-identical to the sibling repos'; NOTICE.md
-# carries the retargeted per-product notice, the same split the siblings use.
+# is the canonical AGPL-3.0 text from gnu.org, byte-exact and unmodified, so
+# that GitHub's licence detection identifies it; it is byte-identical to the
+# sibling repos' LICENSE for the same reason. NOTICE.md carries the product
+# copyright line and the retargeted per-product notice, the same split the
+# siblings use.
 license = "AGPL-3.0-only"
 license-files = ["LICENSE", "NOTICE.md"]
 authors = [{ name = "Alvut Consulting, LLC (KitchenSink4AI)" }]
