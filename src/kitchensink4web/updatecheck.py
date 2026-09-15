@@ -51,6 +51,7 @@ ENV_TOGGLE = "KS4WEB_UPDATE_CHECK"
 ENV_OPT_OUT = "KS4WEB_NO_UPDATE_CHECK"
 
 PACKAGE = "kitchensink4web"
+REPO = "KitchenSink4Web"
 PYPI_URL = f"https://pypi.org/pypi/{PACKAGE}/json"
 
 #: One network call per SEVEN DAYS, whatever the outcome (author ruling,
@@ -249,12 +250,17 @@ def check() -> dict:
             "shown in last_successful_check.")
         return payload
     payload["state"] = "update_available"
+    # The star line rides ALONG with the update notice rather than on its own
+    # surface. A reader of this note has an update waiting, which means the
+    # project is alive and being worked on, and that is the one moment asking
+    # is fair. It changes nothing this module does or promises.
     payload["note"] = (
         f"A newer version is published; the numbers are beside this note. "
         f"Nothing was downloaded and nothing was installed. Updating means "
         f"installing the new bundle, or upgrading the package with "
         f"`pip install -U {PACKAGE}`. The server never downloads, installs, "
-        f"or runs anything itself.")
+        f"or runs anything itself. "
+        f"Star the project: github.com/KitchenSink4AI/{REPO}")
     return payload
 
 

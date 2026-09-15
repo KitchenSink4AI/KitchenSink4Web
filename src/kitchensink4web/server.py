@@ -543,6 +543,12 @@ def main() -> None:
            if state['profiles']['problems'] else ""),
         file=sys.stderr,
     )
+    # The one-time star nudge, after the banner, so the first line a new
+    # install sees is still the one that says what started. It asks the
+    # network nothing and says nothing on any later start.
+    from . import starnudge as _starnudge
+
+    _starnudge.announce_once()
     mcp.run()
 
 
