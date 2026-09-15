@@ -135,6 +135,10 @@ If a feature refuses with `CONFIRMATION_REQUIRED` on claude.ai web, it works on 
 | claude.ai web | All reading, navigation, and search. Gated actions refuse honestly because no confirmation can render; pre-authorized classes work if configured at launch. |
 
 
+## Privacy Policy
+
+[[OWNER: privacy policy section, links https://kitchensink4.ai/privacy/]]
+
 ## Browsers and lanes
 
 The default lane drives the server's own bundled Chromium. It never touches your browser or your
