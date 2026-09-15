@@ -6,7 +6,8 @@
 > tools that click, type and submit are NOT REGISTERED: read-only is the
 > shipped default and it is a property of the tool list, not a runtime check.
 
-Release: 1.0.1.
+Release: v1.0.1
+MCP registry name: io.github.nometalalchemist/kitchensink4web
 Transport: stdio.
 Platform: cross-platform. The default lane drives the server's own bundled
 Chromium, downloaded by Playwright on first use, never the user's browser and
@@ -162,9 +163,11 @@ with `isError=true` and never arrive as a success.
 
 AMBIGUOUS_LOCATION, AUTH_REQUIRED, BAD_PARAMS, BLOCKED_BY_SITE,
 BUDGET_EXHAUSTED, CONFIRMATION_REQUIRED, CONFLICT, CREDENTIAL_REFUSED,
-LANE_UNSUPPORTED, LOOP_DETECTED, MODAL_BLOCKED, NAVIGATION_BLOCKED, NOT_FOUND,
-NOT_IMPLEMENTED, PAGE_UNREACHABLE, RANGE_OUT_OF_BOUNDS, READ_ONLY_MODE,
-STALE_ANCHOR, TARGET_CHANGED, TIMEOUT, UNSUPPORTED_CONTENT, VALIDATION_FAILED.
+DRIVER_FAILURE, FILE_WRITE_FAILED, INTERNAL_ERROR, LANE_UNSUPPORTED,
+LOOP_DETECTED, MODAL_BLOCKED, NAVIGATION_BLOCKED, NAVIGATION_FAILED,
+NOT_FOUND, NOT_IMPLEMENTED, PAGE_UNREACHABLE, RANGE_OUT_OF_BOUNDS,
+READ_ONLY_MODE, SESSION_DEAD, STALE_ANCHOR, TARGET_CHANGED, TIMEOUT,
+UNSUPPORTED_CONTENT, VALIDATION_FAILED.
 
 Two of these are worth knowing before you meet them. `AMBIGUOUS_LOCATION`
 lists every candidate with a ref, so the recovery is one call and never a
@@ -194,3 +197,41 @@ page content, hidden-text smuggling, credential-theft attempts, gate
 bypasses, workflow replay tampering, and resource abuse. A live field
 campaign, two sessions across 12 real sites and three browser engines
 totaling 141KB of logs, drove the current tuning.
+
+## 9. Install
+
+- Claude Desktop: download the `.mcpb` bundle from the latest GitHub release and open it. Requires `uv` on PATH. The install screen's checkboxes are the whole configuration: one to allow clicking and typing (off means read-only browsing, the shipped default), and one per capability pack.
+- uvx, no install: `uvx kitchensink4web`
+- pip: `pip install kitchensink4web`, then `python -m kitchensink4web.server`
+- Any MCP client: run the server over stdio, for example `{"mcpServers": {"web": {"command": "uvx", "args": ["kitchensink4web"]}}}`
+
+Packs and read-only mode are chosen at launch (`--packs`, `KS4WEB_MODE`,
+`KS4WEB_ALLOW_ACTING`) and are identical for every connection to the process.
+
+## 10. Links
+
+- GitHub: https://github.com/KitchenSink4AI/KitchenSink4Web
+- PyPI: https://pypi.org/project/kitchensink4web/
+- Landing page: https://kitchensink4.ai/KitchenSink4Web/
+- Family: https://kitchensink4.ai/products/
+- Issues, including licensing: https://github.com/KitchenSink4AI/KitchenSink4Web/issues/new/choose
+
+## 11. License
+
+AGPL-3.0. Free for anyone (individuals, academics, and businesses) for any use
+that complies with the AGPL's terms. Those terms include sharing source,
+including your modifications, when you distribute the software or make it
+available over a network. For organizations that want to build KitchenSink4Web
+into their own products or services without the AGPL's source-sharing
+obligations, a commercial license is arranged here:
+https://github.com/KitchenSink4AI/KitchenSink4Web/issues/new?template=commercial_license.yml
+
+Copyright (c) 2026 Alvut Consulting, LLC. KitchenSink4AI is a product line of
+Alvut Consulting, LLC.
+
+## 12. Trademarks
+
+Not affiliated with or endorsed by Google, Mozilla, Microsoft, or any website
+this server visits. Chrome, Chromium, Firefox, and Edge are trademarks of their
+respective owners, used nominatively to name the browsers this server can
+drive.

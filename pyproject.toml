@@ -16,6 +16,18 @@ keywords = [
     "model-context-protocol", "token-efficient", "accessibility-tree",
     "read-only", "audit-trail", "scraping", "forms", "downloads",
 ]
+classifiers = [
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Intended Audience :: End Users/Desktop",
+    "Natural Language :: English",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
 requires-python = ">=3.12"
 dependencies = [
     # fastmcp is PINNED from day one (the Word v2 lesson: never ship
