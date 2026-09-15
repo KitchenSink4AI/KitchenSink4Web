@@ -53,6 +53,7 @@ title carries product or marketing language.
 | `get_page_errors` | Get Page Errors | mechanical |
 | `get_page_view` | Get Page View | mechanical |
 | `get_request` | Get Request | mechanical |
+| `get_server_info` | Get Server Info | mechanical |
 | `get_table` | Get Table | mechanical |
 | `get_text` | Get Text | mechanical |
 | `get_workflows` | Get Workflows | mechanical |

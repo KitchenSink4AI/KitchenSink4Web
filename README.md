@@ -12,31 +12,73 @@
 
 [Landing page](https://kitchensink4.ai/KitchenSink4Web/) · [llms.txt](https://kitchensink4.ai/KitchenSink4Web/llms.txt) (machine-readable capability manifest for agents and LLM crawlers)
 
-A browser MCP server built for honesty: budgeted page reads with an exact account of what
-went unread, structured extraction with named evidence, real-browser lanes, monitors,
-workflows, and a consent ladder that always asks a human before payments or credentials.
-Read-only out of the box. Works with Claude Code, Claude Desktop, Cursor, and any MCP
-client. Part of the KitchenSink4AI suite with kitchensink4word (Word), kitchensink4xl
-(Excel), and kitchensink4ppt (PowerPoint).
+**Read websites and extract data with your AI assistant, read-only by default, with clicking and typing when you allow it.**
 
-Everything plus the kitchen sink for the open web: a browser MCP server that reads a whole page
-for the price of a paragraph, and starts out unable to change anything at all.
+Read websites and pull out the data you need from Claude Code, Codex CLI, Copilot CLI or any other MCP client that runs local tools. KitchenSink4Web drives a browser on your computer, returns a page within a size budget and says what it left unread, and exports tables to CSV or JSON. It starts read-only; clicking, typing and form filling are switched on only when you choose. Websites receive ordinary browsing requests; what reaches your AI provider is decided by your AI app. The Community edition is free under the AGPL. The Business edition adds a Windows installer, a signed update channel, a licence your company can approve and support.
 
-New here? Start with the [Quickstart](docs/QUICKSTART.md); the [Cookbook](docs/COOKBOOK.md) has the ten most common jobs, and [Architecture](docs/ARCHITECTURE.md) explains how the pieces fit.
+**Works on:** Windows, macOS and Linux for the browser tools. Image-text recognition uses Windows OCR. A browser download and some optional dependencies may be needed.
 
-## Two numbers that matter
+## Install
 
-The same page, read two ways. A raw dump of the Treaty of Versailles article on Wikipedia costs
-33,073 tokens of your assistant's memory. This server's first read of it costs 4,445. The
-difference is not compression, it is a different product: a map of the page with a price on every
-region, instead of the whole page whether you wanted it or not.
+Pick the route for your AI app. The commands go in PowerShell on Windows or a terminal on macOS and Linux, not into an AI chat. The package routes need Python 3.12 or newer.
 
-Numbers on this page are measured by scripts in `tools/`, not written by hand. Re-run them
-yourself; the README is regenerated from their output.
+**Claude Desktop**
 
+Install [uv](https://docs.astral.sh/uv/getting-started/installation/), then quit and reopen Claude Desktop. Download the `.mcpb` file from [KitchenSink4Web releases](https://github.com/KitchenSink4AI/KitchenSink4Web/releases/latest). In Claude Desktop open Settings, then Extensions, then Advanced settings, then Install extension, and choose the file. The bundle fetches the Python package the first time it starts, so the first launch needs a network connection. Restart your session and check that the tools show as connected.
+
+**Claude Code or Codex CLI**
+
+Install uv, then run the line for your app and restart your session:
+
+```sh
+claude mcp add web -s user -- uvx kitchensink4web
 ```
-.venv/Scripts/python.exe -X utf8 tools/measure_readme_numbers.py
+
+```sh
+codex mcp add web -- uvx kitchensink4web
 ```
+
+**Any other local MCP client**
+
+Use `uvx` as the command and `kitchensink4web` as its argument, or install the package and use `kitchensink4web` as the server command:
+
+```sh
+pip install kitchensink4web
+```
+
+Then follow your client's guide for adding a local MCP server. Installing the package on its own does not connect it to an AI app.
+
+**Business edition**
+
+Compare the editions on the [pricing page](https://kitchensink4.ai/pricing/). Already purchased? Your Windows installer and download link are in your [licence portal](https://get.kitchensink4.ai/my-license/).
+
+## What it can do
+
+53 tools with every pack and browser actions enabled. The default read-only lite launch exposes 12; lite with actions has 20.
+
+- Read a page within a chosen size budget and see what was left unread.
+- Find one section or element without fetching the whole page again.
+- Extract tables, lists and article text, then export CSV or JSON.
+- Take screenshots or save a page as PDF.
+- Read only what changed on a page you already read.
+- Watch a page for changes while the server runs.
+- Turn on clicking, typing and form filling when a task needs them.
+- Record a browser task and replay it with checks, with the workflow pack.
+- Run automated accessibility checks with the optional dependency.
+
+What is available depends on the packs you enable and the applications installed. The full tool reference is below.
+
+## Business edition
+
+Need a licence your company can approve and a setup someone supports? The Business edition pairs these tools with a Windows installer, a signed update channel and support under the Business terms. Update checks tell you when a covered release is available; nothing installs on its own. Compare the options on the [pricing page](https://kitchensink4.ai/pricing/). The Community edition stays free under the AGPL, including business use that meets its terms.
+
+## Privacy Policy
+
+The tools run on your computer, and KitchenSink4AI receives no documents and no usage data from them. Your AI app may send prompts, file contents and tool results to its own provider under that app's settings and terms. Installing downloads packages, and the Community version check contacts PyPI unless you disable it; those requests carry connection details such as your network address and never your documents. The browser connects to the websites you ask it to use, and those sites see ordinary browsing requests. A missing tokenizer table may be downloaded once; the text being measured is never sent. Cloud folders and backups follow their own settings. The [Privacy Policy](https://kitchensink4.ai/privacy/) covers the product, purchases and support records.
+
+*Not affiliated with or endorsed by Google, Mozilla, Microsoft, or any website this server
+visits. Chrome, Chromium, Firefox, and Edge are trademarks of their respective owners, used
+nominatively to name the browsers this server can drive.*
 
 ## The cheap first read
 
@@ -73,6 +115,25 @@ absent, not merely switched off:
 | diagnostics | Lets Claude run JavaScript on a page, one script at a time, each one shown to you for approval first. This is the most powerful and most dangerous setting on this page. Leave it off unless you know you need it. |
 | workflows | Record a multi-step task once and replay it later. Every replay checks that the page still matches before anything runs. |
 | accessibility | Checks a page against the WCAG accessibility rules using axe-core, groups what it finds by rule, and says plainly what automated testing cannot check. Needs an optional extra installed; the tool tells you how if it is missing. |
+
+## Browsers and lanes
+
+The default lane drives the server's own bundled Chromium. It never touches your browser or your
+profile; sessions open in a fresh profile that is deleted on close unless you explicitly save
+signed-in state to a file.
+
+Lane B drives a browser you already have installed (Chrome, Edge, or Firefox), still with its own
+separate profile, never yours. Installed Firefox is the lane to reach for on research-heavy work:
+sites that turn away automated Chromium routinely serve Firefox normally, and both Firefox lanes
+pass bot checks that block headless Chromium. That is lane steering, not evasion; the server does
+not disguise what it is, it just lets you use a browser the site treats better.
+
+Signed-in sessions are saved and reloaded with `save_auth_state` and `auth_state=` on open. The
+state file records when its session cookies expire, and loading a stale file says so plainly
+instead of letting the login fail mysteriously.
+
+`manage_session(action='status')` reports which browsers are installed and which lane it would
+recommend for the page you are on. It never switches lanes for you.
 
 ## The safety model
 
@@ -134,29 +195,19 @@ If a feature refuses with `CONFIRMATION_REQUIRED` on claude.ai web, it works on 
 | Claude Code | Everything, with confirmations rendered. |
 | claude.ai web | All reading, navigation, and search. Gated actions refuse honestly because no confirmation can render; pre-authorized classes work if configured at launch. |
 
+## Two numbers that matter
 
-## Privacy Policy
+The same page, read two ways. A raw dump of the Treaty of Versailles article on Wikipedia costs
+33,073 tokens of your assistant's memory. This server's first read of it costs 4,445. The
+difference is not compression, it is a different product: a map of the page with a price on every
+region, instead of the whole page whether you wanted it or not.
 
-[[OWNER: privacy policy section, links https://kitchensink4.ai/privacy/]]
+Numbers on this page are measured by scripts in `tools/`, not written by hand. Re-run them
+yourself; the README is regenerated from their output.
 
-## Browsers and lanes
-
-The default lane drives the server's own bundled Chromium. It never touches your browser or your
-profile; sessions open in a fresh profile that is deleted on close unless you explicitly save
-signed-in state to a file.
-
-Lane B drives a browser you already have installed (Chrome, Edge, or Firefox), still with its own
-separate profile, never yours. Installed Firefox is the lane to reach for on research-heavy work:
-sites that turn away automated Chromium routinely serve Firefox normally, and both Firefox lanes
-pass bot checks that block headless Chromium. That is lane steering, not evasion; the server does
-not disguise what it is, it just lets you use a browser the site treats better.
-
-Signed-in sessions are saved and reloaded with `save_auth_state` and `auth_state=` on open. The
-state file records when its session cookies expire, and loading a stale file says so plainly
-instead of letting the login fail mysteriously.
-
-`manage_session(action='status')` reports which browsers are installed and which lane it would
-recommend for the page you are on. It never switches lanes for you.
+```
+.venv/Scripts/python.exe -X utf8 tools/measure_readme_numbers.py
+```
 
 ## Context cost (measured)
 
@@ -250,37 +301,15 @@ hostnames and dates, no pages, no addresses, nothing typed. It exists so a site 
 browser can be read with one that works. It is stored on this machine, it never leaves unless you
 export it, learning can be turned off with one switch, and one call erases it entirely.
 
-## Requirements
+## Install options and settings
 
-- Python 3.12 or newer (developed on 3.14)
-- [uv](https://docs.astral.sh/uv/) on your PATH for the Claude Desktop bundle route, which uses
-  `uvx` to start the server
-- Playwright, installed as a dependency of this package
-- A browser engine, downloaded by Playwright on first use rather than shipped in the wheel
-- Windows, macOS, or Linux
+The install routes are at the top of this file. This section covers what you
+choose when the server starts.
 
-## Install
-
-Claude Desktop: install the `.mcpb` bundle and pick what you want on the
-install screen. The checkboxes are the whole configuration: one to allow
-clicking and typing (off means read-only browsing, the shipped default),
-and one per capability pack. Launching the bundle requires `uv` (the `uvx`
-command) on your machine; the server itself is fetched from PyPI on first
-launch and drives its own bundled Chromium, never your browser or your
-profile.
-
-Any other MCP client:
-
-```
-uvx kitchensink4web
-```
-
-or
-
-```
-pip install kitchensink4web
-python -m kitchensink4web.server
-```
+The Claude Desktop bundle puts the whole configuration on its install screen
+as checkboxes: one to allow clicking and typing (off means read-only
+browsing, the shipped default), and one per capability pack. The server
+drives its own bundled Chromium, never your browser or your profile.
 
 Packs and read-only mode are chosen at launch (`--packs`, `KS4WEB_MODE`,
 `KS4WEB_ALLOW_ACTING`) and are identical for every connection to the
@@ -289,8 +318,6 @@ process.
 > **Tip for Claude Desktop:** in Tool permissions, set this server's
 > **Read-only tools** group to **Always Allow**. Those tools cannot change
 > anything on any page, and it stops most permission prompts.
-
-For guided Windows setup, signed license receipts, and email support, see the KitchenSink4AI Business edition: https://kitchensink4.ai/products/business/
 
 ## License
 

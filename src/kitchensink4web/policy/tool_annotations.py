@@ -44,7 +44,7 @@ policy/readonly.py and is not repeated here. The other three live here:
   than guessed.
 
 * **openWorldHint** -- true on every tool that reaches a remote site, which is
-  nearly all of them. The four exceptions in CLOSED_WORLD read or write
+  nearly all of them. The five exceptions in CLOSED_WORLD read or write
   only local state: the recipe book, the saved-workflow store, and this
   session's own action log.
 
@@ -83,6 +83,7 @@ TITLES: dict[str, str] = {
     "get_page_errors":   "Get Page Errors",
     "get_page_view":     "Get Page View",
     "get_request":       "Get Request",
+    "get_server_info":   "Get Server Info",
     "get_table":         "Get Table",
     "get_text":          "Get Text",
     "get_workflows":     "Get Workflows",
@@ -142,9 +143,10 @@ IDEMPOTENT: frozenset[str] = frozenset({
 
 })
 
-#: openWorldHint: false. These four never reach a remote site.
+#: openWorldHint: false. These five never reach a remote site.
 CLOSED_WORLD: frozenset[str] = frozenset({
-    "get_audit", "get_workflows", "list_workflows", "save_workflow"
+    "get_audit", "get_server_info", "get_workflows", "list_workflows",
+    "save_workflow"
 })
 
 
