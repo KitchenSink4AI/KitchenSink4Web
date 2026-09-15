@@ -43,6 +43,7 @@ from .errors import (BadParams, ConfirmationRequired, ReadOnlyMode,
                      Timeout, ValidationFailed)
 from .ops import lite
 from .policy import audit, consent, credentials, gates, readonly
+from .policy import tool_annotations
 
 # Redaction lives in the serializer (DESIGN 5.3): installed at import, before
 # any tool can run, so there is no window where a payload rides out unscrubbed.
@@ -399,7 +400,9 @@ def register(fn, pack: str | None = None) -> bool:
     mcp.tool(
         _wrap(fn),
         name=name,
-        annotations={"readOnlyHint": readonly.read_only_hint(name)},
+        annotations=tool_annotations.annotations(
+            name, readonly.read_only_hint(name)
+        ),
         output_schema=None,
     )
     packs.register(name, pack)
