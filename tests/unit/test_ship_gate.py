@@ -176,6 +176,10 @@ SUPERSEDED_FIGURES = (
     ('15.3k', 'the full surface cost before get_server_info joined it'),
     ('6.5k', 'the previous lite surface cost'),
     ('16.0k', 'the previous full surface cost'),
+    ('15.5k', 'the full surface on the description-plus-schema estimator'),
+    ('6.0k', 'the lite surface on the same old estimator'),
+    ('15,500', 'the same full figure written out'),
+    ('6,000 tokens', 'the same lite figure written out'),
 )
 
 

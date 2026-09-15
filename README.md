@@ -213,8 +213,8 @@ yourself; the README is regenerated from their output.
 
 | Surface | Tokens |
 |---|---|
-| Lite tool surface | 6.0k |
-| Full surface (all packs) | 15.5k |
+| Lite tool surface | 6.9k |
+| Full surface (all packs) | 17.9k |
 | First read of the Treaty of Versailles article on Wikipedia | 4,445 |
 | Delta read after one click | 82 |
 
