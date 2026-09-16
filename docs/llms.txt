@@ -6,7 +6,7 @@
 > tools that click, type and submit are NOT REGISTERED: read-only is the
 > shipped default and it is a property of the tool list, not a runtime check.
 
-Release: v1.0.1
+Release: v1.0.2
 MCP registry name: io.github.nometalalchemist/kitchensink4web
 Transport: stdio.
 Platform: cross-platform. The default lane drives the server's own bundled
