@@ -7,7 +7,7 @@ readme = "README.md"
 # landed and named the LICENSE file a Phase 9 artifact. The decision landed
 # 2026-09-06 (Q1: the family AGPL), so this is Phase 9 delivering it. LICENSE
 # is the canonical AGPL-3.0 text from gnu.org, byte-exact and unmodified, so
-# that GitHub's licence detection identifies it; it is byte-identical to the
+# that GitHub's license detection identifies it; it is byte-identical to the
 # sibling repos' LICENSE for the same reason. NOTICE.md carries the product
 # copyright line and the retargeted per-product notice, the same split the
 # siblings use.
