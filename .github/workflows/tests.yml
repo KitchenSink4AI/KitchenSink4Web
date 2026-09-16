@@ -45,10 +45,59 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
+        with:
+          # The filter below diffs this push against the commit it started
+          # from, and that commit has to be in the clone to be diffed.
+          fetch-depth: 0
+      - name: Is there anything here a browser could test?
+        # A DOCS PUSH THAT FAILS THIS JOB IS A FALSE RED, and a false red
+        # teaches the owner to stop reading the job. This suite drives a real
+        # Chromium against a real corpus for six to twelve minutes, so it has
+        # a flake rate that is small per run and not small across a week; a
+        # prose edit to docs/index.html buys none of that coverage and can
+        # still spend the red. Two of the failures on record (2026-09-16,
+        # 4527660 and 327c8c0) were exactly this: one docs/index.html link
+        # fix and one .gitignore line, each landing a genuine but unrelated
+        # race in the suite.
+        #
+        # PUSH EVENTS ONLY, on purpose. A pull request always runs the whole
+        # suite: that is where a change is actually judged, and a workflow
+        # that reports nothing on a PR is a required check that never
+        # arrives. Skipping steps rather than the job also keeps this job
+        # reporting success instead of going missing.
+        id: filter
+        shell: bash
+        run: |
+          set -euo pipefail
+          run=true
+          if [ "${{ github.event_name }}" = "push" ]; then
+            before="${{ github.event.before }}"
+            if [ -n "$before" ] \
+               && git cat-file -e "${before}^{commit}" 2>/dev/null; then
+              changed=$(git diff --name-only "$before" "${{ github.sha }}")
+              echo "changed files:"
+              echo "$changed"
+              # Everything NOT matched here is treated as code. A new kind of
+              # file is run, not skipped: the failure mode of guessing wrong
+              # about a path is a suite that silently stops covering it.
+              code=$(printf '%s\n' "$changed" | grep -vE \
+                '^(docs/|research/|\.gitignore$|\.gitattributes$|LICENSE$)' \
+                | grep -vE '\.md$' || true)
+              if [ -z "$code" ]; then
+                run=false
+              fi
+            fi
+          fi
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+          if [ "$run" = "false" ]; then
+            echo "Docs, markdown or repo-metadata only: the browser suite did not run for this push." >> "$GITHUB_STEP_SUMMARY"
+          fi
       - uses: actions/setup-python@v7
+        if: steps.filter.outputs.run == 'true'
         with:
           python-version: "3.12"
       - name: Install
+        if: steps.filter.outputs.run == 'true'
         run: pip install -e ".[dev,accessibility]"
       - name: Install Chromium and its system libraries (Linux)
         # Lane A is the browser the server ships with. Lane B drives an
@@ -56,10 +105,10 @@ jobs:
         # has no installed browser the server did not put there itself.
         # `--with-deps` is a Linux-only apt step, so the two runners get
         # separate lines rather than one line that warns on Windows.
-        if: runner.os == 'Linux'
+        if: steps.filter.outputs.run == 'true' && runner.os == 'Linux'
         run: python -m playwright install --with-deps chromium
       - name: Install Chromium (Windows)
-        if: runner.os == 'Windows'
+        if: steps.filter.outputs.run == 'true' && runner.os == 'Windows'
         run: python -m playwright install chromium
       - name: Run browser suite (Linux, under a virtual display)
         # A runner has no X server, and the headed lane really does need one:
@@ -67,8 +116,8 @@ jobs:
         # before Chromium is up. `xvfb-run` supplies the display rather than
         # skipping the lane, so the headed tests are actually run here and
         # not merely counted. `-a` picks a free display number.
-        if: runner.os == 'Linux'
+        if: steps.filter.outputs.run == 'true' && runner.os == 'Linux'
         run: xvfb-run -a python -m pytest tests/browser -q
       - name: Run browser suite (Windows)
-        if: runner.os == 'Windows'
+        if: steps.filter.outputs.run == 'true' && runner.os == 'Windows'
         run: python -m pytest tests/browser -q

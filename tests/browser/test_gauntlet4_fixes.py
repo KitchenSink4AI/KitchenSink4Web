@@ -277,6 +277,30 @@ async def _open(site, path):
     return session, page
 
 
+async def _popup(session, needle, timeout=15.0):
+    """Wait for the popup whose URL carries `needle` and return its handle.
+
+    A FIXED SLEEP IS NOT A WAIT. `window.open` is adopted asynchronously, so
+    a loaded runner can hand the context back after the sleep has already
+    expired; the bare `next()` this replaces then raised StopIteration
+    INSIDE a coroutine, which Python re-raises as the unreadable
+    "RuntimeError: coroutine raised StopIteration" rather than as the
+    missing popup it actually is. Polling to a deadline waits as long as the
+    machine needs and fails with the handles it did see.
+    """
+    deadline = asyncio.get_running_loop().time() + timeout
+    while True:
+        for handle, record in list(session.pages.items()):
+            if needle in record.page.url:
+                return handle
+        if asyncio.get_running_loop().time() >= deadline:
+            raise AssertionError(
+                f"no popup carrying {needle!r} appeared within {timeout}s; "
+                f"the handles open were "
+                f"{ {h: r.page.url for h, r in session.pages.items()} }")
+        await asyncio.sleep(0.05)
+
+
 # ------------------------------------- G4-01: the auth tier is status-gated
 
 
@@ -469,9 +493,7 @@ def test_g4_05_an_adopted_popup_is_policed_before_it_is_read(site,
     async def go():
         session, page = await _open(site, "/g4/window-open")
         await lite.click(page=page, location={"text": "Open the viewer"})
-        await asyncio.sleep(0.8)
-        popup = next(h for h, r in session.pages.items()
-                     if "/g4/popup" in r.page.url)
+        popup = await _popup(session, "/g4/popup")
         monkeypatch.setenv(origins.ENV_DENY, site)
         try:
             await lite.get_text(page=popup)
@@ -492,9 +514,7 @@ def test_g4_05_a_popup_onto_a_wall_is_classified_not_served(site):
     async def go():
         session, page = await _open(site, "/g4/window-open-wall")
         await lite.click(page=page, location={"text": "Open the report"})
-        await asyncio.sleep(0.8)
-        popup = next(h for h, r in session.pages.items()
-                     if "/g4/real-challenge" in r.page.url)
+        popup = await _popup(session, "/g4/real-challenge")
         try:
             got = await lite.get_text(page=popup)
             return "served: " + str(got.get("text"))[:120]

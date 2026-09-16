@@ -288,9 +288,14 @@ def test_aggregate_summary_counts_failures(site):
         got = await extract_ops.aggregate(
             urls=[f"{site}/p/81", _DEAD, f"{site}/p/83"],
             schema=["price"], page=page)
-        assert got["failed"] == 1
-        assert got["succeeded"] == 2
-        assert got["requested"] == 3
+        # The slots ride along on every assertion here. A bare `assert 2 == 1`
+        # says a second URL failed and NOT which one or why, and the answer
+        # matters: an extra failure on a live URL means the dead hop was not
+        # parked before the next one started, which is a cascade, not a
+        # counting bug.
+        assert got["failed"] == 1, got["results"]
+        assert got["succeeded"] == 2, got["results"]
+        assert got["requested"] == 3, got["results"]
         assert "2" in got["continue"] and "1" in got["continue"]
     run(go())
 

@@ -2082,11 +2082,28 @@ def _action_result(record, tool: str, desc: dict, resolved: dict,
 
 
 async def _park_to_blank(sess, record, why: str) -> None:
-    """Abandon whatever this page landed on, and say so to the ref ladder."""
-    try:
-        await record.page.goto("about:blank", timeout=10000)
-    except Exception:
-        pass
+    """Abandon whatever this page landed on, and say so to the ref ladder.
+
+    THE PARK IS TRIED TWICE, because the thing it is parking away from can
+    still be in flight. A hop that failed on a dead host leaves Chromium
+    navigating to its own `chrome-error://chromewebdata` document, and that
+    navigation interrupts this one: the goto raises "navigation is
+    interrupted by another navigation", the page stays parked on the error
+    document, and the NEXT hop in an `aggregate` walk then fails for a
+    reason that has nothing to do with its own URL. One dead URL taking the
+    ones after it down is the batch-sinking this helper exists to prevent,
+    so a first attempt that loses that race waits for the error navigation
+    to settle and parks again. Both attempts stay best-effort: a page that
+    cannot be parked at all is still marked abandoned below, which is what
+    the ref ladder acts on.
+    """
+    for attempt in (0, 1):
+        try:
+            await record.page.goto("about:blank", timeout=10000)
+            break
+        except Exception:                               # noqa: BLE001
+            if attempt == 0:
+                await asyncio.sleep(0.25)
     record.touch("about:blank")
     sess.invalidate_page(record.handle, why)
 
