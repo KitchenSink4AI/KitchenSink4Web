@@ -17,3 +17,6 @@ spikes/*/out/
 corpus/
 tests/data/walls/**/*.html
 tests/data/walls/**/*.headers
+
+# Internal engineering log; kept local like the other Sinks (Word 657793f)
+BUILD_LOG.md
