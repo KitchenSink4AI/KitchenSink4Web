@@ -1,5 +1,10 @@
 # Changelog
 
+### 1.0.2
+- Product page, README, and install buttons now say Community Edition, with a Community Edition badge under the product name.
+- LICENSE made byte-exact to the canonical GNU AGPL-3.0 text; NOTICE.md updated to match.
+- User-visible strings use US spelling (license). No changes to tool behaviour.
+
 ### 1.0.1
 - The server now says what it is. Its instructions line, the one block of its own prose a connected agent reads, opens by naming KitchenSink4Web, its PyPI package, and the KitchenSink4AI suite, and a new `get_server_info` tool answers the same question on request: product and package names, version, homepage and repository, the sibling servers, the tool surface registered in this process, and the test figures measured for this release. It is in the lite core, so it is present under the shipped read-only default, and its counts come from the live registry rather than from anything typed by hand.
 - `survivors()` asked a creation time whether a process was alive, and a creation time answers a different question. Windows keeps `OpenProcess` succeeding on an exited process for as long as any handle to it remains, and the browser driver holds one for every browser it launched, so a killed browser kept counting as a survivor and `browser_alive()` reported a live browser after every process it owned was dead. The wait object answers liveness now; the creation time keeps its own job, which is defeating PID reuse.

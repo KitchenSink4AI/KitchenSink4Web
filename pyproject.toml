@@ -1,13 +1,16 @@
 [project]
 name = "kitchensink4web"
-version = "1.0.1"
-description = "Browser MCP server: budgeted page reads, honest unread accounting, structured extraction, consent-gated acting. The kitchen sink."
+version = "1.0.2"
+description = "Browser tools for your AI assistant: budgeted page reads, tables, screenshots and optional clicking and typing. Read-only by default, runs locally, for Claude Code, Codex CLI and other MCP clients."
 readme = "README.md"
 # DESIGN 10.3 rule 5 held the license out of every file until the decision
 # landed and named the LICENSE file a Phase 9 artifact. The decision landed
 # 2026-09-06 (Q1: the family AGPL), so this is Phase 9 delivering it. LICENSE
-# is the stock AGPL-3.0 text, byte-identical to the sibling repos'; NOTICE.md
-# carries the retargeted per-product notice, the same split the siblings use.
+# is the canonical AGPL-3.0 text from gnu.org, byte-exact and unmodified, so
+# that GitHub's license detection identifies it; it is byte-identical to the
+# sibling repos' LICENSE for the same reason. NOTICE.md carries the product
+# copyright line and the retargeted per-product notice, the same split the
+# siblings use.
 license = "AGPL-3.0-only"
 license-files = ["LICENSE", "NOTICE.md"]
 authors = [{ name = "Alvut Consulting, LLC (KitchenSink4AI)" }]
@@ -15,6 +18,18 @@ keywords = [
     "mcp", "browser", "playwright", "web", "automation", "claude",
     "model-context-protocol", "token-efficient", "accessibility-tree",
     "read-only", "audit-trail", "scraping", "forms", "downloads",
+]
+classifiers = [
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Intended Audience :: End Users/Desktop",
+    "Natural Language :: English",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 requires-python = ">=3.12"
 dependencies = [

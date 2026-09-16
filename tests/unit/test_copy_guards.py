@@ -223,7 +223,7 @@ def test_the_license_landed_whole():
 
     # The stock AGPL text, not a summary of it, and the same file the
     # siblings ship. Two structural markers rather than a digest, so a
-    # line-ending normalization does not read as a licence change.
+    # line-ending normalization does not read as a license change.
     text = license_file.read_text(encoding="utf-8")
     assert "GNU AFFERO GENERAL PUBLIC LICENSE" in text
     assert "Version 3, 19 November 2007" in text
@@ -246,11 +246,11 @@ def test_the_license_landed_whole():
 
 
 def test_every_published_surface_agrees_on_the_license():
-    """One licence, stated the same way everywhere a reader meets it."""
+    """One license, stated the same way everywhere a reader meets it."""
     for where, text in _published_files().items():
         if where == "docs/llms.txt":
-            continue          # the agent-facing file states no licence
-        assert "AGPL-3.0" in text, f"{where} does not name the licence"
+            continue          # the agent-facing file states no license
+        assert "AGPL-3.0" in text, f"{where} does not name the license"
 
 
 def _projection_strings() -> dict[str, str]:
