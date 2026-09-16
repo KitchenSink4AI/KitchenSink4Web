@@ -14,7 +14,7 @@
 
 **Read websites and extract data with your AI assistant, read-only by default, with clicking and typing when you allow it.**
 
-Read websites and pull out the data you need from Claude Code, Codex CLI, Copilot CLI or any other MCP client that runs local tools. KitchenSink4Web drives a browser on your computer, returns a page within a size budget and says what it left unread, and exports tables to CSV or JSON. It starts read-only; clicking, typing and form filling are switched on only when you choose. Websites receive ordinary browsing requests; what reaches your AI provider is decided by your AI app. The Community edition is free under the AGPL. The Business edition adds a Windows installer, a signed update channel, a licence your company can approve and support.
+Read websites and pull out the data you need from Claude Code, Codex CLI, Copilot CLI or any other MCP client that runs local tools. KitchenSink4Web drives a browser on your computer, returns a page within a size budget and says what it left unread, and exports tables to CSV or JSON. It starts read-only; clicking, typing and form filling are switched on only when you choose. Websites receive ordinary browsing requests; what reaches your AI provider is decided by your AI app. The Community edition is free under the AGPL. The Business edition adds a Windows installer, a signed update channel, a license your company can approve and support.
 
 **Works on:** Windows, macOS and Linux for the browser tools. Image-text recognition uses Windows OCR. A browser download and some optional dependencies may be needed.
 
@@ -50,7 +50,7 @@ Then follow your client's guide for adding a local MCP server. Installing the pa
 
 **Business edition**
 
-Compare the editions on the [pricing page](https://kitchensink4.ai/pricing/). Already purchased? Your Windows installer and download link are in your [licence portal](https://get.kitchensink4.ai/my-license/).
+Compare the editions on the [pricing page](https://kitchensink4.ai/pricing/). Already purchased? Your Windows installer and download link are in your [license portal](https://get.kitchensink4.ai/my-license/).
 
 ## What it can do
 
@@ -70,7 +70,7 @@ What is available depends on the packs you enable and the applications installed
 
 ## Business edition
 
-Need a licence your company can approve and a setup someone supports? The Business edition pairs these tools with a Windows installer, a signed update channel and support under the Business terms. Update checks tell you when a covered release is available; nothing installs on its own. Compare the options on the [pricing page](https://kitchensink4.ai/pricing/). The Community edition stays free under the AGPL, including business use that meets its terms.
+Need a license your company can approve and a setup someone supports? The Business edition pairs these tools with a Windows installer, a signed update channel and support under the Business terms. Update checks tell you when a covered release is available; nothing installs on its own. Compare the options on the [pricing page](https://kitchensink4.ai/pricing/). The Community edition stays free under the AGPL, including business use that meets its terms.
 
 ## Privacy Policy
 

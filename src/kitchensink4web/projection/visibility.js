@@ -639,7 +639,7 @@ function ksPaintsAbove(cand, el) {
 //    would wait on a timer; it is Chromium-only, and a visibility rule that
 //    differs by engine is the divergence this file exists to remove; the spec
 //    explicitly permits FALSE NEGATIVES ("the implementation may return
-//    false"), which is a licence a refusal cannot be built on; and it returns
+//    false"), which is a license a refusal cannot be built on; and it returns
 //    ONE BOOLEAN for the whole element with no technique named and no
 //    majority rule, so a sticky header clipping a button's top edge is
 //    reported the same way a full-bleed lid is. That last one is the

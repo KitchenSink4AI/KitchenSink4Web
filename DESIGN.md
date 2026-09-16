@@ -2106,7 +2106,7 @@ safe.
   `delay >= 100`, so every acting call would wait on a timer; it is
   Chromium-only, and a visibility rule that differs by engine is the
   divergence `visibility.js` exists to remove; the spec explicitly permits
-  false negatives, which is a licence a refusal cannot be built on; and it
+  false negatives, which is a license a refusal cannot be built on; and it
   returns ONE BOOLEAN for the whole element, with no technique named and no
   majority rule, so a sticky header clipping a button's top edge reads exactly
   like a full-bleed lid. The last one is not a detail, it is the false-positive
