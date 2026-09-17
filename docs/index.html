@@ -318,7 +318,7 @@ body.watered .can-hint.bloom{display:block}
   font-size:12px;letter-spacing:.14em;text-transform:uppercase;border-radius:4px;
   opacity:.85;line-height:1.3;
   mask-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='4' height='4'%3E%3Crect width='4' height='4' fill='white'/%3E%3Ccircle cx='1' cy='1' r='.35' fill='black'/%3E%3C/svg%3E")}
-@media(max-width:640px){.stamp{display:none}}
+@media(max-width:699.98px){.stamp{display:none}}
 
 /* reveal on load */
 .rev{opacity:0;transform:translateY(14px);animation:rev .7s cubic-bezier(.2,.7,.2,1) forwards}
@@ -576,7 +576,6 @@ details.devfold code{background-color:var(--paper-deep);border:1px solid var(--r
 
 /* ---------- footer ---------- */
 footer{border-top:3px double var(--ink);padding:36px 0 48px;font-size:12px;color:var(--ink-soft)}
-footer .row{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
 footer a{color:var(--brass)}
 .colophon{text-align:center;padding:22px 0 0;font-size:10px;letter-spacing:.28em;
   text-transform:uppercase;opacity:.45}
@@ -602,12 +601,8 @@ footer a{color:var(--brass)}
 
 .counter,.step,.demo-panel{min-width:0;overflow-wrap:anywhere}
 .tale:before{max-width:calc(100% - 56px);white-space:normal;line-height:1.35;text-align:center}
-footer .row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:28px}
-footer .row>span{min-width:0;overflow-wrap:anywhere}
 @media(max-width:900px){
 
-  footer .row{grid-template-columns:1fr;gap:20px;text-align:center}
-  footer .row>span:last-child{text-align:center!important}
 }
 @media(max-width:640px){
   .wrap{padding-left:18px;padding-right:18px}
@@ -799,33 +794,8 @@ details.nav-menu.lang-menu>summary{height:32px;padding:0 10px;
   .deptline{font-size:9px;letter-spacing:.14em;gap:8px}
 }
 
-/* ---------- the edition roundel, then the Business box under the tile ------
-   The roundel now reads before the name, so its own top margin is dropped and
-   the catalogue box's 28px carries the gap above it. The Business link keeps
-   the words the banner carried and the shape of the page's primary button,
-   filled with the accent deepened toward the ink so the paper-coloured label
-   clears WCAG AA on every finish, the evening coats included. --biz-accent
-   walks the same fallback chain .edition-badge does, so one block serves the
-   four palettes. */
 .hero .edition-badge{margin:0 auto 10px}
 .hero .platform-hero-note{margin-bottom:0}
-.hero-biz{margin:14px auto 0;text-align:center}
-.hero-biz-btn{--biz-accent:var(--copper,var(--brass,var(--patina,var(--ink))));
-  --biz-ink:var(--biz-accent);
-  display:inline-flex;align-items:center;justify-content:center;
-  min-height:44px;max-width:100%;padding:11px 20px;
-  border:2px solid var(--biz-ink);background:var(--biz-ink);color:var(--paper);
-  font-family:'IBM Plex Mono',"Plex Mono Fallback",ui-monospace,monospace;
-  font-size:12px;font-weight:700;letter-spacing:.04em;line-height:1.4;
-  text-decoration:none;overflow-wrap:anywhere;
-  box-shadow:3px 3px 0 var(--ink);transition:all .15s}
-.hero-biz-btn:hover{transform:translate(-2px,-2px);box-shadow:5px 5px 0 var(--ink);
-  color:var(--paper);text-decoration:none}
-.hero-biz-btn:focus-visible{outline:3px solid var(--ink);outline-offset:4px}
-@supports (color:color-mix(in srgb,red 50%,blue)){
-  .hero-biz-btn{--biz-ink:color-mix(in srgb,var(--biz-accent) 70%,var(--ink))}
-}
-@media(max-width:560px){.hero-biz-btn{padding:11px 14px;font-size:11px;letter-spacing:.02em}}
 
 /* ---------- the awning, unrolled under the department line ---------- */
 .awning{height:44px;margin:0 0 17px;position:relative;
@@ -842,6 +812,49 @@ details.nav-menu.lang-menu>summary{height:32px;padding:0 10px;
   background-size:92px 17px;
   animation:scallop-sway 3.2s ease-in-out .9s 2}
 @keyframes scallop-sway{0%,100%{transform:translateY(0)}50%{transform:translateY(2.5px)}}
+/* ==========================================================================
+   HERO ORDER, STICKY RAIL AND FOOTER (#847, owner ruling)
+   The Business link left the hero as a box and rejoined the button row as an
+   outline button, so the row is the one place a reader chooses what to do.
+   The rail sticks the way the corporate masthead does; every anchor target
+   carries the rail's real height as scroll-margin so a jump link lands clear
+   of it. The footer is one centred stack instead of two aligned columns.
+   ========================================================================== */
+:root{--rail-h:63px}
+.mast{position:sticky;top:0;z-index:40;background:var(--paper)}
+[id]{scroll-margin-top:var(--rail-h)}
+
+.hero-cta{display:flex;flex-wrap:wrap;align-items:stretch;justify-content:center;
+  gap:12px;margin-top:36px}
+.hero-cta .btn{display:inline-flex;align-items:center;justify-content:center;
+  min-height:44px;margin:0;text-align:center}
+.hero .platform-hero-note.mac-note{margin:10px auto 0}
+
+/* the idiom note reads as a footnote to the tagline, not a floating italic */
+.idiom-note{font-family:'IBM Plex Mono',"Plex Mono Fallback",ui-monospace,monospace;
+  font-size:11.5px;line-height:1.7;letter-spacing:.04em;color:var(--ink-soft);
+  max-width:640px;margin:18px auto 0;border-top:1px solid var(--rule);padding-top:14px;
+  font-style:normal;opacity:1}
+.idiom-note:empty{display:none;border:0;padding:0;margin:0}
+
+footer{padding-top:28px;font-size:12px;line-height:1.7;text-align:center}
+.footer-links{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;
+  gap:8px 16px;max-width:888px;margin:0 auto 16px;padding:0 24px;
+  font-size:11px;letter-spacing:.12em;text-transform:uppercase}
+.footer-links a{white-space:nowrap;text-decoration:none}
+.footer-links a:hover{text-decoration:underline}
+.f-copy{margin:0 auto 12px}
+.f-lic{max-width:720px;margin:0 auto 14px}
+.f-lic a{overflow-wrap:anywhere}
+.f-tm{max-width:720px;margin:0 auto 12px;opacity:.5;font-size:11px}
+footer .colophon{text-align:center}
+.f-views{margin:8px auto 0}
+@media(max-width:699.98px){:root{--rail-h:59px}}
+@media(max-width:560px){
+  .hero-cta{flex-direction:column;align-items:stretch}
+  .hero-cta .btn{width:100%}
+  .footer-links{gap:8px 12px}
+}
 </style>
 </head>
 <body>
@@ -942,7 +955,6 @@ details.nav-menu.lang-menu>summary{height:32px;padding:0 10px;
   <p class="edition-badge rev d2" data-i18n="hero.edition">Community Edition</p>
   <h1 class="rev d2">KitchenSink<span class="four">4</span>Web</h1>
   <p class="platform-label" data-i18n="platform.hero">Windows · macOS · Linux</p><p class="platform-hero-note" data-i18n="platform.heroNote">Optional image text recognition (OCR): Windows only.</p>
-  <p class="hero-biz rev d2"><a class="hero-biz-btn" href="https://kitchensink4.ai/products/business/">Business Editions and commercial Fixtures? Click here</a></p>
   <p class="tagline rev d3" data-i18n="hero.tagline">Everything plus the kitchen sink for the open web: this server lets your AI browse real websites, reads whole pages for a fraction of the usual cost, and cannot click anything until you say so.</p>
   <div class="specs-strip rev d4">
     <div class="spec"><span class="n">7×</span><span class="l" data-i18n="spec.c1">cheaper page reads, measured on a real article</span></div>
@@ -950,9 +962,10 @@ details.nav-menu.lang-menu>summary{height:32px;padding:0 10px;
     <div class="spec"><span class="n" data-i18n="spec.opt">OPT-IN</span><span class="l" data-i18n="spec.c3">Clicking and typing are optional. Reading works by default.</span></div>
   </div>
   <p class="spec-fine rev d4" data-i18n="spec.fine">Measured: the same encyclopedia article costs 33,073 tokens as a raw dump and 4,445 read here, at a typical 200,000-token AI working memory.</p>
-  <div class="rev d5">
-    <a class="btn primary" href="#install" data-i18n="btn.install">Install the Sink (Community Edition)</a>
+  <div class="rev d5 hero-cta">
+    <a class="btn primary" href="#install" data-i18n="btn.install">Install the Sink</a>
     <a class="btn" href="https://github.com/KitchenSink4AI/KitchenSink4Web" data-i18n="btn.source">Read the Source</a>
+    <a class="btn" href="https://kitchensink4.ai/products/business/" data-i18n="btn.biz">Business editions</a>
   </div>
 
 </header>
@@ -1139,15 +1152,23 @@ details.nav-menu.lang-menu>summary{height:32px;padding:0 10px;
 </section>
 
 <footer>
-  <div class="wrap row">
-    <span data-i18n="f.left">&copy; 2026 Alvut Consulting, LLC &middot; Licensed <b>AGPL-3.0</b>: free for any use that meets the AGPL's terms, including its source-sharing obligations.<br>Commercial licenses for organizations that need to ship these in closed products (<a href='mailto:licensing@kitchensink4.ai'>licensing@kitchensink4.ai</a>).</span>
-    <span style="text-align:right" data-i18n="f.right"><a href="https://github.com/KitchenSink4AI/KitchenSink4Web">Source code</a> · <a href="https://github.com/KitchenSink4AI/KitchenSink4Web/issues/new/choose">Report a glitch</a></span>
-  </div>
-  <div class="wrap" style="text-align:center;padding:6px 0;font-size:11px"><a href="https://kitchensink4.ai/corporate/" data-i18n="f.corp">The office upstairs: KitchenSink4AI →</a></div>
-  <div class="wrap" style="text-align:center;padding:6px 0;opacity:.5;font-size:11px" data-i18n="f.affil">Not affiliated with or endorsed by Google, Mozilla, Microsoft, or any website this server visits. Chrome, Chromium, Firefox, and Edge are trademarks of their respective owners, used nominatively to name the browsers this server can drive.</div>
-  <div class="wrap" style="text-align:center;padding:10px 0"><img src="https://visitor-badge.laobi.icu/badge?page_id=kitchensink4ai.KitchenSink4Web&left_color=%231e3550&right_color=%232a7a45&left_text=views" alt="views" height="18" style="vertical-align:middle"></div>
-  <div class="wrap colophon">SET IN FRAUNCES &amp; IBM PLEX MONO · CATALOG № 41</div>
-<nav class="footer-links" aria-label="Contact, privacy, and sale terms"><a href="#service" data-i18n="m.service">SERVICE</a> · <a href="https://pypi.org/project/kitchensink4web/">PYPI</a> · <a href="https://kitchensink4.ai/contact/" data-i18n="f.contact">Contact</a> · <a href="https://kitchensink4.ai/privacy/" data-i18n="f.privacy">Privacy</a> · <a href="https://kitchensink4.ai/terms-of-sale/" data-i18n="f.terms">Terms of sale</a> · <a href="https://kitchensink4.ai/refunds/" data-i18n="f.refunds">Refunds</a> · <a href="https://kitchensink4.ai/company/" data-i18n="f.company">Company</a></nav>
+  <nav class="footer-links wrap" aria-label="Site, contact, and sale terms">
+    <a href="https://kitchensink4.ai/products/" data-i18n="sw.store">The Works</a>
+    <a href="https://github.com/KitchenSink4AI/KitchenSink4Web" data-i18n="f.src">Source code</a>
+    <a href="https://github.com/KitchenSink4AI/KitchenSink4Web/issues/new/choose" data-i18n="f.glitch">Report a glitch</a>
+    <a href="#service" data-i18n="m.service">SERVICE</a>
+    <a href="https://pypi.org/project/kitchensink4web/">PYPI</a>
+    <a href="https://kitchensink4.ai/contact/" data-i18n="f.contact">Contact</a>
+    <a href="https://kitchensink4.ai/privacy/" data-i18n="f.privacy">Privacy</a>
+    <a href="https://kitchensink4.ai/terms-of-sale/" data-i18n="f.terms">Terms of sale</a>
+    <a href="https://kitchensink4.ai/refunds/" data-i18n="f.refunds">Refunds</a>
+    <a href="https://kitchensink4.ai/company/" data-i18n="f.company">Company</a>
+  </nav>
+  <p class="f-copy wrap">&copy; 2026 Alvut Consulting, LLC &middot; AGPL-3.0</p>
+  <p class="f-lic wrap" data-i18n="f.lic">Free for any use that meets the AGPL's terms, including its source-sharing obligations. Commercial licenses for closed products: <a href='mailto:licensing@kitchensink4.ai'>licensing@kitchensink4.ai</a></p>
+  <p class="f-tm wrap" data-i18n="f.affil">Not affiliated with or endorsed by Google, Mozilla, Microsoft, or any website this server visits. Chrome, Chromium, Firefox, and Edge are trademarks of their respective owners, used nominatively to name the browsers this server can drive.</p>
+  <p class="colophon wrap">SET IN FRAUNCES &amp; IBM PLEX MONO · CATALOG № 41</p>
+  <p class="f-views wrap"><img src="https://visitor-badge.laobi.icu/badge?page_id=kitchensink4ai.KitchenSink4Web&left_color=%231e3550&right_color=%232a7a45&left_text=views" alt="views" height="18" style="vertical-align:middle"></p>
 </footer>
 
 <script>
@@ -1313,7 +1334,7 @@ en: {
 "spec.c3": "Clicking and typing are optional. Reading works by default.",
 "spec.fine": "Measured: the same encyclopedia article costs 33,073 tokens as a raw dump and 4,445 read here, at a typical 200,000-token AI working memory.",
 "cmp.gloss": "(other web-browsing MCPs)",
-"btn.install": "Install the Sink (Community Edition)",
+"btn.install": "Install the Sink",
 "btn.source": "Read the Source",
 "no0": "DEPT. 00",
 "h2.demo": "Reading a page should not cost the whole conversation",
@@ -1422,9 +1443,10 @@ en: {
 "fam4.t": "The storefront",
 "fam4.p": "The whole hardware store on one page: every KitchenSink server, what it does, and where to report what broke. Plus a shelf or two that are not empty by accident.",
 "fam4.g": "Browse the store →",
-"f.left": "&copy; 2026 Alvut Consulting, LLC &middot; Licensed <b>AGPL-3.0</b>: free for any use that meets the AGPL's terms, including its source-sharing obligations.<br>Commercial licenses for organizations that need to ship these in closed products (<a href='mailto:licensing@kitchensink4.ai'>licensing@kitchensink4.ai</a>).",
-"f.corp": "The office upstairs: KitchenSink4AI →",
-"f.right": "<a href=\"https://github.com/KitchenSink4AI/KitchenSink4Web\">Source code</a> · <a href=\"https://github.com/KitchenSink4AI/KitchenSink4Web/issues/new/choose\">Report a glitch</a>",
+"f.lic": "Free for any use that meets the AGPL's terms, including its source-sharing obligations. Commercial licenses for closed products: <a href='mailto:licensing@kitchensink4.ai'>licensing@kitchensink4.ai</a>",
+"f.src": "Source code",
+"f.glitch": "Report a glitch",
+"btn.biz": "Business editions",
 "f.affil": "Not affiliated with or endorsed by Google, Mozilla, Microsoft, or any website this server visits. Chrome, Chromium, Firefox, and Edge are trademarks of their respective owners, used nominatively to name the browsers this server can drive."
 },
 ko: {
@@ -1449,7 +1471,7 @@ ko: {
 "spec.c3": "클릭과 입력은 선택 사항입니다. 읽기는 기본으로 작동합니다.",
 "spec.fine": "측정: 같은 백과사전 기사가 통째로 쏟으면 33,073 토큰, 여기서 읽으면 4,445 토큰이며, AI의 작업 기억은 보통 200,000 토큰입니다.",
 "cmp.gloss": "(다른 웹 브라우징 MCP)",
-"btn.install": "설치하기 (Community Edition)",
+"btn.install": "설치하기",
 "btn.source": "소스 보기",
 "no0": "0번 매장",
 "h2.demo": "페이지 하나를 읽는 데 대화 전체를 쓸 수는 없습니다",
@@ -1558,9 +1580,10 @@ ko: {
 "fam4.t": "스토어",
 "fam4.p": "철물점 전체가 한 페이지에. 모든 KitchenSink 서버와 그 서버가 하는 일, 그리고 고장 난 것을 알리러 갈 곳까지. 게다가 우연히 비어 있는 것이 아닌 선반이 한둘.",
 "fam4.g": "스토어 둘러보기 →",
-"f.left": "&copy; 2026 Alvut Consulting, LLC &middot; <b>AGPL-3.0</b> 라이선스: 소스 공개 의무를 포함한 AGPL 조건을 충족하는 모든 사용에는 무료입니다.<br>비공개 제품에 담아 배포해야 하는 조직을 위한 상업용 라이선스(<a href='mailto:licensing@kitchensink4.ai'>licensing@kitchensink4.ai</a>).",
-"f.corp": "위층 사무실: KitchenSink4AI →",
-"f.right": "<a href=\"https://github.com/KitchenSink4AI/KitchenSink4Web\">소스 코드</a> · <a href=\"https://github.com/KitchenSink4AI/KitchenSink4Web/issues/new/choose\">오류 신고</a>",
+"f.lic": "소스 공개 의무를 포함한 AGPL 조건을 충족하는 모든 용도에 무료입니다. 비공개 제품을 위한 상업용 라이선스: <a href='mailto:licensing@kitchensink4.ai'>licensing@kitchensink4.ai</a>",
+"f.src": "소스 코드",
+"f.glitch": "오류 신고",
+"btn.biz": "Business 에디션",
 "f.affil": "Google, Mozilla, Microsoft 및 이 서버가 방문하는 어떤 웹사이트와도 제휴하거나 승인을 받지 않았습니다. Chrome, Chromium, Firefox, Edge는 각 소유자의 상표이며, 이 서버가 구동할 수 있는 브라우저를 가리키기 위해 지시적으로 사용했습니다."
 },
 ja: {
@@ -1585,7 +1608,7 @@ ja: {
 "spec.c3": "クリックと入力は任意で有効にできます。読み取りは標準で使えます。",
 "spec.fine": "実測: 同じ百科事典の記事は、そのまま流し込むと 33,073 トークン、ここで読むと 4,445 トークン。AIの作業記憶はふつう 200,000 トークンです。",
 "cmp.gloss": "（ほかのウェブ閲覧MCP）",
-"btn.install": "導入する (Community Edition)",
+"btn.install": "導入する",
 "btn.source": "ソースを読む",
 "no0": "第00売り場",
 "h2.demo": "ページを1枚読むのに会話ぜんぶを使うことはありません",
@@ -1694,9 +1717,10 @@ ja: {
 "fam4.t": "ストア",
 "fam4.p": "金物店まるごと1ページに。すべてのKitchenSinkサーバーと、それぞれが何をするのか、そして壊れたものをどこに知らせるのか。そのうえ、偶然空いているわけではない棚がひとつふたつ。",
 "fam4.g": "店内を見る →",
-"f.left": "&copy; 2026 Alvut Consulting, LLC &middot; <b>AGPL-3.0</b> ライセンス: ソースコード公開義務を含むAGPLの条件を満たすあらゆる用途で無料です。<br>クローズドな製品に組み込んで提供する必要がある組織向けには商用ライセンスをご用意しています(<a href='mailto:licensing@kitchensink4.ai'>licensing@kitchensink4.ai</a>)。",
-"f.corp": "上の階の事務所：KitchenSink4AI →",
-"f.right": "<a href=\"https://github.com/KitchenSink4AI/KitchenSink4Web\">ソースコード</a> · <a href=\"https://github.com/KitchenSink4AI/KitchenSink4Web/issues/new/choose\">不具合を報告</a>",
+"f.lic": "ソースコード公開義務を含む AGPL の条件を満たすあらゆる用途で無料です。クローズドな製品向けの商用ライセンス: <a href='mailto:licensing@kitchensink4.ai'>licensing@kitchensink4.ai</a>",
+"f.src": "ソースコード",
+"f.glitch": "不具合を報告",
+"btn.biz": "Business エディション",
 "f.affil": "Google、Mozilla、Microsoft、およびこのサーバーが訪れるいかなるウェブサイトとも提携しておらず、推奨も受けていません。Chrome、Chromium、Firefox、Edgeは各権利者の商標であり、このサーバーが動かせるブラウザを指すために指示的に用いています。"
 },
 zh: {
@@ -1721,7 +1745,7 @@ zh: {
 "spec.c3": "点击和输入可按需启用。默认即可读取。",
 "spec.fine": "实测：同一篇百科文章，整页倾倒要 33,073 个令牌，在这里读只要 4,445 个，而 AI 的工作记忆通常是 200,000 个令牌。",
 "cmp.gloss": "（其他网页浏览 MCP）",
-"btn.install": "装上这套水槽 (Community Edition)",
+"btn.install": "装上这套水槽",
 "btn.source": "阅读源码",
 "no0": "第 00 号柜台",
 "h2.demo": "读一个页面，不该花掉整场对话",
@@ -1830,9 +1854,10 @@ zh: {
 "fam4.t": "门店",
 "fam4.p": "整间五金店就在一页上：每一台 KitchenSink 服务器、它能做什么，以及出了问题该到哪里去报。另外还有一两个并非偶然空着的货架。",
 "fam4.g": "逛逛门店 →",
-"f.left": "&copy; 2026 Alvut Consulting, LLC &middot; 依 <b>AGPL-3.0</b> 授权：凡符合 AGPL 条款（含其源码公开义务）的用途均免费。<br>需要把这些装进闭源产品发行的组织可购买商业许可（<a href='mailto:licensing@kitchensink4.ai'>licensing@kitchensink4.ai</a>）。",
-"f.corp": "楼上的办公室：KitchenSink4AI →",
-"f.right": "<a href=\"https://github.com/KitchenSink4AI/KitchenSink4Web\">源代码</a> · <a href=\"https://github.com/KitchenSink4AI/KitchenSink4Web/issues/new/choose\">报告问题</a>",
+"f.lic": "凡符合 AGPL 条款(含其源码公开义务)的用途均免费。闭源产品的商业许可: <a href='mailto:licensing@kitchensink4.ai'>licensing@kitchensink4.ai</a>",
+"f.src": "源代码",
+"f.glitch": "报告问题",
+"btn.biz": "Business 版本",
 "f.affil": "与 Google、Mozilla、Microsoft 以及本服务器访问的任何网站均无从属关系，也未获其背书。Chrome、Chromium、Firefox 和 Edge 是各自权利人的商标，此处仅作指称使用，用以说明本服务器可以驱动哪些浏览器。"
 },
 de: {
@@ -1857,7 +1882,7 @@ de: {
 "spec.c3": "Klicken und Eingaben sind optional. Lesen funktioniert standardmäßig.",
 "spec.fine": "Gemessen: derselbe Lexikonartikel kostet 33.073 Tokens als Rohabzug und 4.445, hier gelesen, bei einem typischen KI-Arbeitsgedächtnis von 200.000 Tokens.",
 "cmp.gloss": "(andere Web-Browsing-MCPs)",
-"btn.install": "Die Spüle einbauen (Community Edition)",
+"btn.install": "Die Spüle einbauen",
 "btn.source": "Den Quelltext lesen",
 "no0": "ABT. 00",
 "h2.demo": "Eine Seite zu lesen sollte nicht das ganze Gespräch kosten",
@@ -1966,9 +1991,10 @@ de: {
 "fam4.t": "Das Ladengeschäft",
 "fam4.p": "Der ganze Baumarkt auf einer Seite: jeder KitchenSink-Server, was er tut und wohin man meldet, was kaputtgegangen ist. Dazu ein, zwei Regale, die nicht aus Versehen leer sind.",
 "fam4.g": "Im Laden umsehen →",
-"f.left": "&copy; 2026 Alvut Consulting, LLC &middot; Lizenziert unter <b>AGPL-3.0</b>: kostenlos für jede Nutzung, die die Bedingungen der AGPL einschließlich ihrer Pflicht zur Quelloffenlegung erfüllt.<br>Kommerzielle Lizenzen für Organisationen, die diese in geschlossenen Produkten ausliefern müssen (<a href='mailto:licensing@kitchensink4.ai'>licensing@kitchensink4.ai</a>).",
-"f.corp": "Das Büro über dem Laden: KitchenSink4AI →",
-"f.right": "<a href=\"https://github.com/KitchenSink4AI/KitchenSink4Web\">Quellcode</a> · <a href=\"https://github.com/KitchenSink4AI/KitchenSink4Web/issues/new/choose\">Fehler melden</a>",
+"f.lic": "Kostenlos für jede Nutzung, die die Bedingungen der AGPL einschließlich ihrer Pflicht zur Quelloffenlegung erfüllt. Kommerzielle Lizenzen für geschlossene Produkte: <a href='mailto:licensing@kitchensink4.ai'>licensing@kitchensink4.ai</a>",
+"f.src": "Quellcode",
+"f.glitch": "Fehler melden",
+"btn.biz": "Business-Editionen",
 "f.affil": "Nicht verbunden mit Google, Mozilla, Microsoft oder einer Website, die dieser Server besucht, und von ihnen nicht unterstützt. Chrome, Chromium, Firefox und Edge sind Marken ihrer jeweiligen Inhaber und werden nur nennend verwendet, um die Browser zu benennen, die dieser Server steuern kann."
 },
 fr: {
@@ -1993,7 +2019,7 @@ fr: {
 "spec.c3": "Clics et saisie sont facultatifs. La lecture fonctionne par défaut.",
 "spec.fine": "Mesuré : le même article d'encyclopédie coûte 33 073 jetons en déversement brut et 4 445 lu ici, pour une mémoire de travail d'IA typique de 200 000 jetons.",
 "cmp.gloss": "(autres MCP de navigation web)",
-"btn.install": "Installer l'évier (Community Edition)",
+"btn.install": "Installer l'évier",
 "btn.source": "Lire le code source",
 "no0": "RAYON 00",
 "h2.demo": "Lire une page ne devrait pas coûter toute la conversation",
@@ -2102,9 +2128,10 @@ fr: {
 "fam4.t": "La boutique",
 "fam4.p": "Toute la quincaillerie sur une page : chaque serveur KitchenSink, ce qu'il fait, et où signaler ce qui a cassé. Plus une étagère ou deux qui ne sont pas vides par hasard.",
 "fam4.g": "Parcourir la boutique →",
-"f.left": "&copy; 2026 Alvut Consulting, LLC &middot; Sous licence <b>AGPL-3.0</b> : gratuit pour tout usage conforme aux conditions de l'AGPL, y compris son obligation de partage du code source.<br>Licences commerciales pour les organisations qui doivent les diffuser dans des produits fermés (<a href='mailto:licensing@kitchensink4.ai'>licensing@kitchensink4.ai</a>).",
-"f.corp": "Le bureau à l'étage : KitchenSink4AI →",
-"f.right": "<a href=\"https://github.com/KitchenSink4AI/KitchenSink4Web\">Code source</a> · <a href=\"https://github.com/KitchenSink4AI/KitchenSink4Web/issues/new/choose\">Signaler un problème</a>",
+"f.lic": "Gratuit pour tout usage conforme aux conditions de l'AGPL, y compris son obligation de partage du code source. Licences commerciales pour les produits fermés : <a href='mailto:licensing@kitchensink4.ai'>licensing@kitchensink4.ai</a>",
+"f.src": "Code source",
+"f.glitch": "Signaler un problème",
+"btn.biz": "Éditions Business",
 "f.affil": "Sans lien avec Google, Mozilla, Microsoft ni aucun site que ce serveur visite, et sans leur approbation. Chrome, Chromium, Firefox et Edge sont des marques de leurs détenteurs respectifs, employées à titre nominatif pour désigner les navigateurs que ce serveur peut piloter."
 },
 es: {
@@ -2129,7 +2156,7 @@ es: {
 "spec.c3": "Los clics y la escritura son opcionales. La lectura funciona por defecto.",
 "spec.fine": "Medido: el mismo artículo de enciclopedia cuesta 33.073 tokens volcado en bruto y 4.445 leído aquí, con una memoria de trabajo de IA típica de 200.000 tokens.",
 "cmp.gloss": "(otros MCP de navegación web)",
-"btn.install": "Instalar el fregadero (Community Edition)",
+"btn.install": "Instalar el fregadero",
 "btn.source": "Leer el código",
 "no0": "SECCIÓN 00",
 "h2.demo": "Leer una página no debería costar toda la conversación",
@@ -2238,9 +2265,10 @@ es: {
 "fam4.t": "La tienda",
 "fam4.p": "Toda la ferretería en una página: cada servidor KitchenSink, qué hace y dónde avisar de lo que se rompió. Más un estante o dos que no están vacíos por casualidad.",
 "fam4.g": "Recorrer la tienda →",
-"f.left": "&copy; 2026 Alvut Consulting, LLC &middot; Con licencia <b>AGPL-3.0</b>: gratis para cualquier uso que cumpla los términos de la AGPL, incluida su obligación de compartir el código fuente.<br>Licencias comerciales para las organizaciones que necesiten distribuirlos en productos cerrados (<a href='mailto:licensing@kitchensink4.ai'>licensing@kitchensink4.ai</a>).",
-"f.corp": "La oficina de arriba: KitchenSink4AI →",
-"f.right": "<a href=\"https://github.com/KitchenSink4AI/KitchenSink4Web\">Código fuente</a> · <a href=\"https://github.com/KitchenSink4AI/KitchenSink4Web/issues/new/choose\">Informar de un fallo</a>",
+"f.lic": "Gratis para cualquier uso que cumpla los términos de la AGPL, incluida su obligación de compartir el código fuente. Licencias comerciales para productos cerrados: <a href='mailto:licensing@kitchensink4.ai'>licensing@kitchensink4.ai</a>",
+"f.src": "Código fuente",
+"f.glitch": "Informar de un fallo",
+"btn.biz": "Ediciones Business",
 "f.affil": "Sin vinculación con Google, Mozilla, Microsoft ni con ningún sitio web que este servidor visite, y sin su respaldo. Chrome, Chromium, Firefox y Edge son marcas de sus respectivos titulares, usadas de forma nominativa para nombrar los navegadores que este servidor puede manejar."
 }
 };
