@@ -269,6 +269,8 @@ a:hover{text-decoration-style:wavy;text-decoration-thickness:1px;text-underline-
 .can .hole{fill:var(--ink-soft);opacity:.7}
 .can .tipgroup{transform-origin:118px 96px;transition:transform .45s cubic-bezier(.3,.7,.3,1)}
 body.watered .can .tipgroup{transform:rotate(-32deg)}
+/* drops sit under the rose in its tipped position (see the SVG note) and are
+   invisible until the can is tipped */
 .can .drop{fill:var(--live);opacity:0}
 body.watered .can .drop{animation:fall 1.15s ease-in infinite}
 body.watered .can .drop:nth-of-type(2){animation-delay:.28s}
@@ -919,9 +921,12 @@ details.nav-menu.lang-menu>summary{height:32px;padding:0 10px;
           <circle class="hole" cx="25" cy="56" r="1.6"/>
           <circle class="hole" cx="31" cy="55" r="1.6"/>
         </g>
-        <circle class="drop" cx="52" cy="86" r="3"/>
-        <circle class="drop" cx="58" cy="86" r="2.4"/>
-        <circle class="drop" cx="47" cy="86" r="2.4"/>
+        <!-- The drops stay outside .tipgroup so they fall straight down rather than
+             along the tipped axis. Their coordinates are where the rose lands once the
+             group has rotated -32deg about 118,96: centre 18,108, outer edge 121. -->
+        <circle class="drop" cx="19" cy="124" r="3"/>
+        <circle class="drop" cx="22.5" cy="124" r="2.4"/>
+        <circle class="drop" cx="15.5" cy="124" r="2.4"/>
       </svg>
     </button>
     <svg class="bed" viewBox="0 0 190 52" aria-hidden="true">
