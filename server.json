@@ -1,6 +1,6 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-  "name": "io.github.nometalalchemist/kitchensink4web",
+  "name": "io.github.KitchenSink4AI/kitchensink4web",
   "title": "KitchenSink4Web",
   "description": "Browser MCP server: budgeted page reads, honest unread accounting, structured extraction.",
   "version": "1.0.2",
