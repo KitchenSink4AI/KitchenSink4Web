@@ -315,16 +315,6 @@ process.
 > **Read-only tools** group to **Always Allow**. Those tools cannot change
 > anything on any page, and it stops most permission prompts.
 
-## Privacy Policy
-
-KitchenSink4Web runs on your computer and processes the pages and browser actions you request. It sends no page content or usage telemetry to KitchenSink4AI. Tool results return to your MCP client; your AI provider handles those results under its own settings and privacy policy.
-
-Browsing contacts the websites you visit. If you enable writing and clicking and authorize a form submission or other action, the destination receives that request and any submitted information under its own policies. Read-only operation is the default.
-
-Browser state, downloaded files and local logs stay where you or your software store them. Retention depends on your local session and storage settings. The server may download a public tokenizer table and, when session status is requested, check PyPI's public package endpoint for updates. These requests carry no page content or customer identifier to KitchenSink4AI; the external hosts receive ordinary network request information. Set `KS4WEB_UPDATE_CHECK=off` to disable the update check. It does not install updates.
-
-If you contact us, the information you choose to send is handled under our [Privacy Policy](https://kitchensink4.ai/privacy/), which covers service providers, retention and contact rights. Do not include private pages or session data in public issue reports. Privacy questions: admin@kitchensink4.ai.
-
 ## License
 
 KitchenSink4Web is dual-licensed:
