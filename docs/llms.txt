@@ -6,8 +6,8 @@
 > tools that click, type and submit are NOT REGISTERED: read-only is the
 > shipped default and it is a property of the tool list, not a runtime check.
 
-Release: v1.0.2
-MCP registry name: io.github.nometalalchemist/kitchensink4web
+Release: v1.0.3
+MCP registry name: io.github.KitchenSink4AI/kitchensink4web
 Transport: stdio.
 Platform: cross-platform. The default lane drives the server's own bundled
 Chromium, downloaded by Playwright on first use, never the user's browser and

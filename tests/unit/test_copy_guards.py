@@ -364,7 +364,7 @@ def test_the_mcp_name_marker_is_readme_line_one():
     v1.0.1 lesson does not get relearned."""
     first = (ROOT / "README.md").read_text(encoding="utf-8").splitlines()[0]
     assert first == (
-        "<!-- mcp-name: io.github.nometalalchemist/kitchensink4web -->"
+        "<!-- mcp-name: io.github.KitchenSink4AI/kitchensink4web -->"
     ), "README line 1 mcp-name marker was lost"
 
 
@@ -381,7 +381,7 @@ def test_the_server_json_description_fits_the_registry_cap():
         f"server.json description is {len(description)} characters and the "
         f"registry cap is 100")
     assert "—" not in description
-    assert server_json["name"] == "io.github.nometalalchemist/kitchensink4web"
+    assert server_json["name"] == "io.github.KitchenSink4AI/kitchensink4web"
 
 
 def test_version_is_consistent_across_manifests():

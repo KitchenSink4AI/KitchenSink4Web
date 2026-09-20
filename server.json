@@ -1,9 +1,9 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-  "name": "io.github.nometalalchemist/kitchensink4web",
+  "name": "io.github.KitchenSink4AI/kitchensink4web",
   "title": "KitchenSink4Web",
   "description": "Browser MCP server: budgeted page reads, honest unread accounting, structured extraction.",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "websiteUrl": "https://kitchensink4.ai/KitchenSink4Web/",
   "repository": {
     "url": "https://github.com/KitchenSink4AI/KitchenSink4Web",
@@ -13,7 +13,7 @@
     {
       "registryType": "pypi",
       "identifier": "kitchensink4web",
-      "version": "1.0.2",
+      "version": "1.0.3",
       "transport": {
         "type": "stdio"
       }

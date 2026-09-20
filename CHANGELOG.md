@@ -1,5 +1,8 @@
 # Changelog
 
+### 1.0.3
+- Documentation and listing only. The MCP Registry entry moves to the io.github.KitchenSink4AI namespace and is published from the release workflow. The bundle manifest carries contact details and the product homepage. No change to tools or behaviour.
+
 ### 1.0.2
 - Product page, README, and install buttons now say Community Edition, with a Community Edition badge under the product name.
 - LICENSE made byte-exact to the canonical GNU AGPL-3.0 text; NOTICE.md updated to match.

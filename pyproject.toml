@@ -1,6 +1,6 @@
 [project]
 name = "kitchensink4web"
-version = "1.0.2"
+version = "1.0.3"
 description = "Browser tools for your AI assistant: budgeted page reads, tables, screenshots and optional clicking and typing. Read-only by default, runs locally, for Claude Code, Codex CLI and other MCP clients."
 readme = "README.md"
 # DESIGN 10.3 rule 5 held the license out of every file until the decision
