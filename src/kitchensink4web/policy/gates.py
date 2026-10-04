@@ -198,6 +198,51 @@ def prompt_sentence(action_class: str, target: dict | None = None,
 #: executing stale intent.
 GATE_TTL_S = 180.0
 
+#: THE QUESTION'S WIRE CONTRACT, defined once and used by both the prompt
+#: `confirm.attempt` sends and the refusal payload below. The field every
+#: question requires, the one value that means yes, and the refusal listed
+#: FIRST so a host that ever preselects the first option lands on no. Plain
+#: `enum` strings rather than titled `oneOf` options: the 2025-06-18 schema
+#: (what the Codex host negotiates) has only `enum`, and VS Code shows an
+#: untitled option's value as its label, so the value is what the person
+#: reads. An `accept` without this choice is never a yes: some hosts answer
+#: `accept` to an empty form, or submit a form's presets, with nobody
+#: choosing anything.
+DECISION_FIELD = "decision"
+ALLOW = "Allow"
+REFUSE_CHOICES = ("Don't allow",)
+#: Offered on Tier 1 prompts only. The money, credential, broadcast,
+#: deletion, legal, off-list, and budget prompts never carry it.
+REMEMBER_FIELD = "remember_30_minutes"
+
+
+def question_schema(offer_remember: bool) -> dict:
+    """The `requestedSchema` of every confirmation question.
+
+    One REQUIRED choice with NO preset answer. Root keys are exactly
+    `type`, `properties` and `required`, and each field uses only keys the
+    strictest known host parser accepts (the ChatGPT app on Windows denies
+    unknown root keys, a root `title` included, and cancels the prompt).
+
+    The optional remember box keeps its preset of false, because consent
+    rides on the required choice and a submitted preset can only ever say
+    "do not remember"."""
+    properties: dict = {
+        DECISION_FIELD: {
+            "type": "string",
+            "title": "Decision",
+            "enum": [*REFUSE_CHOICES, ALLOW],
+        },
+    }
+    if offer_remember:
+        properties[REMEMBER_FIELD] = {
+            "type": "boolean",
+            "title": "Remember 30 Minutes",
+            "default": False,
+        }
+    return {"type": "object", "properties": properties,
+            "required": [DECISION_FIELD]}
+
 #: The fingerprint fields TOCTOU compares. `label` is the visible text the
 #: human actually read, which is the whole point of the check; `href` covers
 #: links and `action` covers forms.
@@ -232,7 +277,7 @@ class Gate:
 
 
 #: The confirmation plumbing's hand-off slot (S8 wiring). When the server's
-#: elicitation plumbing obtains a human ACCEPT, it redeems the gate and
+#: elicitation plumbing obtains a human ALLOW, it redeems the gate and
 #: deposits the resulting Gate here, then re-runs the refused call once in
 #: the same context. `ask()` consumes a matching deposit instead of raising,
 #: which is what lets the second pass proceed WITHOUT any tool argument ever
@@ -350,11 +395,10 @@ class GateEngine:
                     "message": (f"KS4Web asks: allow "
                                 f"{GATED_CLASSES[action_class]}? "
                                 f"{said}{summary}"),
-                    "requestedSchema": {
-                        "type": "object",
-                        "properties": {"allow": {"type": "boolean"}},
-                        "required": ["allow"],
-                    },
+                    # The same question `confirm.attempt` asks, never a
+                    # second shape: a bare boolean here once advertised an
+                    # answer the plumbing no longer accepts.
+                    "requestedSchema": question_schema(False),
                 },
             }],
         }
@@ -459,8 +503,14 @@ class GateEngine:
         prompt: which class is being asked about (Tier 2 gets no "remember
         this" answer) and which origin a grant would be scoped to. Reading
         them here keeps both off the tool boundary; `redeem` is still the
-        only door that consumes anything."""
-        return self._pending.get(request_state)
+        only door that consumes anything.
+
+        An EXPIRED gate is not pending, swept or not: no answer can redeem
+        it, so nothing should be asked about it."""
+        gate = self._pending.get(request_state)
+        if gate is None or time.monotonic() - gate.created > GATE_TTL_S:
+            return None
+        return gate
 
     def pending(self) -> list[dict]:
         self._sweep()

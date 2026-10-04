@@ -47,11 +47,12 @@ clearance is permission to skip the question, never permission to skip the
 verification.
 
 **Audit honesty is non-negotiable.** Every grant record carries
-`cleared_by`, and it distinguishes four causes: `"human"` (an elicitation
-accept), `"grade"` (in-grade under the scope in force), `"preauth"` (a
-launch-time pre-authorization), `"grant"` (an in-session standing grant). A
-trail that recorded a grade-cleared action as though a human answered would
-be a false record, and the audit's own framing cannot survive one.
+`cleared_by`, and it distinguishes four causes: `"human"` (an explicit
+Allow picked in the elicitation), `"grade"` (in-grade under the scope in
+force), `"preauth"` (a launch-time pre-authorization), `"grant"` (an
+in-session standing grant). A trail that recorded a grade-cleared action as
+though a human answered would be a false record, and the audit's own framing
+cannot survive one.
 """
 
 from __future__ import annotations
@@ -80,9 +81,9 @@ ENV_PREAUTH = "KS4WEB_PREAUTH"
 ENV_SENSITIVE_ORIGINS = "KS4WEB_SENSITIVE_ORIGINS"
 
 #: The in-session "remember for 30 minutes" answer. On by default (author
-#: ruling 2026-09-07); an off value drops the elicitation schema back to the
-#: bare accept/decline the build shipped with, which is the kill switch if a
-#: client renders the schema'd prompt badly.
+#: ruling 2026-09-07); an off value drops the remember box and leaves the
+#: one required Allow / Don't allow choice every prompt carries, which is
+#: the kill switch if a client renders the two-field prompt badly.
 ENV_REMEMBER = "KS4WEB_REMEMBER"
 
 #: One line per scope, in `readonly.describe()["permits"]`'s honesty grammar:
@@ -533,8 +534,8 @@ def remember_enabled() -> bool:
 def grantable(action_class: str | None) -> bool:
     """Whether a human may attach 'remember this' to THIS prompt. Tier 2 is
     never grantable, so the money, credential, broadcast, deletion, legal,
-    off-list, and budget prompts keep the bare accept/decline they ship
-    with."""
+    off-list, and budget prompts carry only the required Allow / Don't allow
+    choice (never an empty form, which some hosts auto-accept)."""
     return bool(action_class) and action_class not in IRREDUCIBLE \
         and remember_enabled()
 
@@ -561,8 +562,8 @@ def add_grant(action_class: str, url: str | None,
               ttl_s: float = GRANT_TTL_S) -> dict | None:
     """Record a human's "remember this for 30 minutes" answer.
 
-    CALLERS: the confirmation plumbing only, and only after a human ACCEPTED
-    with the remember answer set. Tier 2 refuses here as well as at the
+    CALLERS: the confirmation plumbing only, and only after a human picked
+    ALLOW with the remember answer set. Tier 2 refuses here as well as at the
     prompt, so a client that invents the field cannot mint one."""
     if action_class in IRREDUCIBLE:
         return None
@@ -638,7 +639,10 @@ def note_confirmation(outcome: str, elapsed_s: float) -> None:
     if outcome == "no_channel":
         _no_channel = True
         return
-    if outcome in ("cancelled", "declined") and elapsed_s < FAST_CANCEL_S:
+    # `unanswered` is an `accept` carrying no explicit choice: a host
+    # answering the form itself, which is a machine when it is instant.
+    if outcome in ("cancelled", "declined", "unanswered") \
+            and elapsed_s < FAST_CANCEL_S:
         _fast_cancels += 1
 
 

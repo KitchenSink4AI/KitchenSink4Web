@@ -316,13 +316,14 @@ def _wrap(fn):
                 result = await _bounded(fn, args, kwargs)
             except ConfirmationRequired as gate_exc:
                 # S8 wiring: put the gate's question to the client over
-                # elicitation. An explicit human ACCEPT redeems the gate,
+                # elicitation. An explicit human ALLOW redeems the gate,
                 # deposits it, and re-runs THIS call once; the re-run
                 # re-resolves its target and the TOCTOU re-validation holds
                 # it to the fingerprint the human confirmed. Anything short
-                # of an accept (headless auto-cancel, decline, timeout, a
-                # client with no elicitation) returns the original refusal:
-                # fail closed, exactly as measured.
+                # of that ALLOW (headless auto-cancel, decline, an accept
+                # with no choice, timeout, a client with no elicitation)
+                # returns the original refusal: fail closed, exactly as
+                # measured.
                 #
                 # run_workflow never lets a step's gate reach here (a
                 # whole-workflow retry would re-execute completed steps); it
@@ -518,6 +519,15 @@ def main() -> None:
     )
     args = parser.parse_args()
 
+    # NOTHING WAITS ON THE CLIENT'S STDERR, installed before anything can
+    # write to it. A client may leave the server's stderr unread, and a full
+    # pipe used to block the one event loop on a log write (no reply again,
+    # `initialize` included), the exit, and every child process that
+    # inherits stderr, the browser driver among them. See stderrlog.
+    from . import stderrlog
+
+    stderrlog.install()
+
     cli_packs = None
     if args.packs:
         raw = [p.strip() for p in args.packs.split(",") if p.strip()]
@@ -534,6 +544,9 @@ def main() -> None:
         state = configure(cli_packs=cli_packs, read_only=args.read_only)
     except Exception as exc:  # startup misconfiguration: fail LOUDLY
         print(f"KS4Web refusing to start: {exc}", file=sys.stderr)
+        # Delivered before the process ends, not left in the pipe: this
+        # line is the only reason a host's log will show.
+        stderrlog.drain()
         raise SystemExit(2) from exc
 
     print(
@@ -552,7 +565,14 @@ def main() -> None:
     from . import starnudge as _starnudge
 
     _starnudge.announce_once()
-    mcp.run()
+    try:
+        mcp.run()
+    finally:
+        # Queued lines get a moment to reach a stderr that is being read; a
+        # writer stuck on one nobody reads is not waited for. A traceback
+        # printed after this point is delivered by the same drain, which
+        # `install` also registered with atexit.
+        stderrlog.drain()
 
 
 if __name__ == "__main__":
