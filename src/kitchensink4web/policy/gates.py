@@ -232,7 +232,7 @@ class Gate:
 
 
 #: The confirmation plumbing's hand-off slot (S8 wiring). When the server's
-#: elicitation plumbing obtains a human ACCEPT, it redeems the gate and
+#: elicitation plumbing obtains a human ALLOW, it redeems the gate and
 #: deposits the resulting Gate here, then re-runs the refused call once in
 #: the same context. `ask()` consumes a matching deposit instead of raising,
 #: which is what lets the second pass proceed WITHOUT any tool argument ever

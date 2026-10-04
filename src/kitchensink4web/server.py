@@ -316,13 +316,14 @@ def _wrap(fn):
                 result = await _bounded(fn, args, kwargs)
             except ConfirmationRequired as gate_exc:
                 # S8 wiring: put the gate's question to the client over
-                # elicitation. An explicit human ACCEPT redeems the gate,
+                # elicitation. An explicit human ALLOW redeems the gate,
                 # deposits it, and re-runs THIS call once; the re-run
                 # re-resolves its target and the TOCTOU re-validation holds
                 # it to the fingerprint the human confirmed. Anything short
-                # of an accept (headless auto-cancel, decline, timeout, a
-                # client with no elicitation) returns the original refusal:
-                # fail closed, exactly as measured.
+                # of that ALLOW (headless auto-cancel, decline, an accept
+                # with no choice, timeout, a client with no elicitation)
+                # returns the original refusal: fail closed, exactly as
+                # measured.
                 #
                 # run_workflow never lets a step's gate reach here (a
                 # whole-workflow retry would re-execute completed steps); it
