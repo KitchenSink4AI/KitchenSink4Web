@@ -44,13 +44,32 @@ writes somewhere that is always drained:
 4. The queue holds QUEUE_LINES lines. When it is full, lines are dropped
    and counted, and the writer says how many once stderr takes a write.
 
-Exit never waits on the writer: `flush` gives queued lines to a stderr that
-is being read, and returns at once when the writer is stuck on one that is
-not; the daemon threads hold nothing the interpreter's shutdown needs.
+THE EXIT. The last thing the server says has to travel the pump and the
+queue before the process ends, and daemon threads stop at interpreter
+shutdown, so it is drained explicitly: `drain` flushes `sys.stderr`, writes
+a drain mark behind it, waits for the pump to pass the mark, then lets the
+writer empty the queue. It runs after `mcp.run()` returns, before the
+deliberate refusal to start (`raise SystemExit(2)`), and from atexit, which
+also covers a traceback printed for an exception escaping `main()`. It is
+bounded (DRAIN_S in all) and stops as soon as the writer is stuck on a
+stderr nobody reads, so exit never waits on such a client; that client
+simply does not get those lines. `os._exit` skips atexit, and the server
+does not call it. A process killed outright loses whatever is still queued.
+
+THE PUMP. A fault while handling a chunk drops that chunk (counted) and the
+pump carries on. If the pump stops anyway, it puts the client's stderr back
+on descriptor 2 and the Windows standard error handle and says so in one
+line: from then on writers reach the client directly, as before `install`,
+which can block again on a client that never reads, but never on a pipe
+nobody empties.
+
+`uninstall` exists for tests only and leaves a few handles and two idle
+threads behind per cycle; the server never calls it.
 """
 
 from __future__ import annotations
 
+import atexit
 import logging
 import os
 import queue
@@ -79,6 +98,14 @@ QUEUE_LINES = 256
 #: How long one write may take before `flush` treats the writer as stuck on
 #: a stderr nobody reads and stops waiting for it.
 STALL_S = 0.25
+
+#: How long `drain` waits, in all, for the pump to pass everything
+#: written to descriptor 2 before it and for the writer to deliver it.
+DRAIN_S = 1.0
+
+#: A line `drain` writes to descriptor 2 and the pump swallows: once the
+#: pump has seen it, everything written before it has been queued.
+DRAIN_MARK = b"\x1b[ks4web-drain]\x1b"
 
 _METHOD = re.compile(r"input_value='([^']{1,80})'")
 
@@ -152,6 +179,10 @@ class NonBlockingStderr:
         self._drop_lock = threading.Lock()
         #: When the write in progress started; None while idle.
         self.busy_since: float | None = None
+        #: Whether a pump is draining the redirected descriptor 2, and the
+        #: signal it gives when a drain mark (see `drain`) comes through.
+        self.pump_alive = False
+        self.drained = threading.Event()
         owner = self
 
         class _Handler(logging.Handler):
@@ -225,10 +256,29 @@ class NonBlockingStderr:
                 return
             time.sleep(0.02)
 
-    def pump(self, rfd: int) -> None:
+    def pump(self, rfd: int, on_exit=None) -> None:
         """Read everything written to the redirected descriptor 2 and queue
         it line by line. Runs on its own daemon thread and never blocks on
-        anything but the read, so the pipe it reads never fills."""
+        anything but the read, so the pipe it reads never fills.
+
+        A fault while handling a chunk drops that chunk (counted) and the
+        pump carries on. If the pump stops anyway (the read fails, or
+        something it cannot catch), `on_exit` runs, which puts the client's
+        stderr back on descriptor 2: writes then go straight to the client
+        again, as they did before `install`, rather than into a pipe nobody
+        empties."""
+        try:
+            self._pump_loop(rfd)
+        finally:
+            self.pump_alive = False
+            self.drained.set()
+            if on_exit is not None:
+                try:
+                    on_exit(self)
+                except Exception:                        # noqa: BLE001
+                    pass
+
+    def _pump_loop(self, rfd: int) -> None:
         pending = b""
         while True:
             try:
@@ -237,16 +287,27 @@ class NonBlockingStderr:
                 return
             if not chunk:
                 return
-            pending += chunk
-            while True:
-                cut = pending.find(b"\n")
-                if cut < 0:
-                    break
-                self._raw(pending[:cut])
-                pending = pending[cut + 1:]
-            while len(pending) >= RAW_LINE:
-                self._raw(pending[:RAW_LINE])
-                pending = pending[RAW_LINE:]
+            try:
+                pending = self._lines(pending + chunk)
+            except Exception:                            # noqa: BLE001
+                pending = b""
+                self.drop()
+
+    def _lines(self, data: bytes) -> bytes:
+        """Queue every complete line in `data`; return the unfinished tail,
+        cut into RAW_LINE pieces once it is that long."""
+        *complete, tail = data.split(b"\n")
+        for line in complete:
+            if line.endswith(DRAIN_MARK):
+                if line[:-len(DRAIN_MARK)]:
+                    self._raw(line[:-len(DRAIN_MARK)])
+                self.drained.set()
+                continue
+            self._raw(line)
+        while len(tail) >= RAW_LINE:
+            self._raw(tail[:RAW_LINE])
+            tail = tail[RAW_LINE:]
+        return tail
 
     def _raw(self, data: bytes) -> None:
         text = data.decode("utf-8", "replace").rstrip("\r")
@@ -322,6 +383,56 @@ _REPLACED: list[tuple[logging.Logger, logging.Handler]] = []
 _HOOKS: dict = {}
 _ORIGINAL_FD: int | None = None
 _LOGGERS = ("", "fastmcp")
+_LOCK = threading.RLock()
+_ATEXIT = False
+
+
+def _restore_descriptor_2(writer: NonBlockingStderr) -> None:
+    """The pump stopped: put the client's stderr back on descriptor 2 (and
+    the Windows standard error handle) so writers reach the client directly
+    instead of filling a pipe nobody empties. Only for the writer still
+    installed, so a pump from an earlier install can never undo a later
+    one."""
+    with _LOCK:
+        if _WRITER is not writer or _ORIGINAL_FD is None:
+            return
+        try:
+            os.dup2(_ORIGINAL_FD, 2)
+            _set_std_error_handle(2)
+        except Exception:                                # noqa: BLE001
+            return
+    writer.offer("WARNING:kitchensink4web:the stderr pump stopped; stderr "
+                 "is written directly again\n")
+
+
+def drain(bound: float = DRAIN_S) -> None:
+    """Deliver what has been written so far, as far as a client that reads
+    stderr will take it, and never wait on one that does not. Runs at exit
+    (atexit) and before a deliberate refusal to start, so the last thing
+    the server says, a refusal or a traceback, is not lost in the pipe or
+    the queue when the process ends.
+
+    Order: flush `sys.stderr` into descriptor 2, write a drain mark behind
+    it and wait for the pump to pass the mark (everything before it is then
+    queued), then let the writer empty the queue, stopping at once if it is
+    stuck on a stderr nobody reads."""
+    writer = _WRITER
+    if writer is None:
+        return
+    end = time.monotonic() + bound
+    try:
+        if sys.stderr is not None:
+            sys.stderr.flush()
+    except Exception:                                    # noqa: BLE001
+        pass
+    if writer.pump_alive:
+        writer.drained.clear()
+        try:
+            os.write(2, DRAIN_MARK + b"\n")
+            writer.drained.wait(max(0.0, end - time.monotonic()))
+        except OSError:
+            pass
+    writer.flush(max(0.0, end - time.monotonic()))
 
 
 def install(stream=None) -> NonBlockingStderr:
@@ -331,17 +442,24 @@ def install(stream=None) -> NonBlockingStderr:
     With no `stream` (the server), descriptor 2 is redirected as described
     above and the writer owns the client's stderr. With a `stream` (tests),
     descriptor 2 is left alone and the writer writes to that object."""
-    global _WRITER, _ORIGINAL_FD
-    if _WRITER is None:
-        redirected = _redirect_descriptor_2() if stream is None else None
-        if redirected is not None:
-            _ORIGINAL_FD, read_end = redirected
-            _WRITER = NonBlockingStderr(fd=_ORIGINAL_FD)
-            threading.Thread(target=_WRITER.pump, args=(read_end,),
-                             daemon=True, name="ks4web-stderr-pump").start()
-        else:
-            _WRITER = NonBlockingStderr(stream)
-    writer = _WRITER
+    global _WRITER, _ORIGINAL_FD, _ATEXIT
+    with _LOCK:
+        if _WRITER is None:
+            redirected = _redirect_descriptor_2() if stream is None else None
+            if redirected is not None:
+                _ORIGINAL_FD, read_end = redirected
+                _WRITER = NonBlockingStderr(fd=_ORIGINAL_FD)
+                _WRITER.pump_alive = True
+                threading.Thread(target=_WRITER.pump,
+                                 args=(read_end, _restore_descriptor_2),
+                                 daemon=True,
+                                 name="ks4web-stderr-pump").start()
+                if not _ATEXIT:
+                    atexit.register(drain)
+                    _ATEXIT = True
+            else:
+                _WRITER = NonBlockingStderr(stream)
+        writer = _WRITER
     for name in _LOGGERS:
         logger = logging.getLogger(name)
         for handler in list(logger.handlers):
@@ -364,7 +482,16 @@ def installed() -> NonBlockingStderr | None:
 
 
 def uninstall() -> None:
-    """Undo `install` (tests). The writer thread is left to idle."""
+    """Undo `install` (tests only; the server never uninstalls). The writer
+    thread is left to idle, and after a redirect so are the pump thread,
+    the pipe's read end and the private duplicate: a few handles and two
+    idle threads per install/uninstall cycle, which only a test that cycles
+    many times would notice."""
+    with _LOCK:
+        _uninstall_locked()
+
+
+def _uninstall_locked() -> None:
     global _WRITER, _ORIGINAL_FD
     if _WRITER is None:
         return

@@ -526,7 +526,7 @@ def main() -> None:
     # inherits stderr, the browser driver among them. See stderrlog.
     from . import stderrlog
 
-    _stderr = stderrlog.install()
+    stderrlog.install()
 
     cli_packs = None
     if args.packs:
@@ -544,6 +544,9 @@ def main() -> None:
         state = configure(cli_packs=cli_packs, read_only=args.read_only)
     except Exception as exc:  # startup misconfiguration: fail LOUDLY
         print(f"KS4Web refusing to start: {exc}", file=sys.stderr)
+        # Delivered before the process ends, not left in the pipe: this
+        # line is the only reason a host's log will show.
+        stderrlog.drain()
         raise SystemExit(2) from exc
 
     print(
@@ -565,9 +568,11 @@ def main() -> None:
     try:
         mcp.run()
     finally:
-        # Queued log lines get a moment to reach a stderr that is being
-        # read; a writer stuck on one nobody reads is not waited for.
-        _stderr.flush(1.0)
+        # Queued lines get a moment to reach a stderr that is being read; a
+        # writer stuck on one nobody reads is not waited for. A traceback
+        # printed after this point is delivered by the same drain, which
+        # `install` also registered with atexit.
+        stderrlog.drain()
 
 
 if __name__ == "__main__":

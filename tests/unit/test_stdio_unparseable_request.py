@@ -411,10 +411,71 @@ def test_the_sdk_still_logs_with_the_prefixes_the_filter_matches():
         assert prefix.strip() in source, prefix
 
 
-def test_main_installs_the_writer_first_and_flushes_it_last():
+def test_main_installs_the_writer_first_and_drains_it_on_every_way_out():
     import inspect
 
     from kitchensink4web import server
     body = inspect.getsource(server.main)
     assert body.index("stderrlog.install()") < body.index("configure(")
-    assert body.index("mcp.run()") < body.index("_stderr.flush(")
+    refusal = body.index("refusing to start")
+    drained = body.index("stderrlog.drain()", refusal)
+    assert refusal < drained < body.index("raise SystemExit(2)")
+    run = body.index("mcp.run()")
+    assert run < body.index("stderrlog.drain()", run)
+
+
+#: The pump stops for good (something it cannot catch): descriptor 2 must
+#: go back to the client's stderr, so a client that reads it still gets a
+#: large write rather than a writer blocked on a pipe nobody empties.
+PUMP_STOPS = r"""
+import json, os, sys, threading, time
+from kitchensink4web import stderrlog
+def stop(self, data):
+    raise KeyboardInterrupt("pump stops")
+stderrlog.NonBlockingStderr._lines = stop
+stderrlog.install()
+os.write(2, b"trigger\n")
+end = time.monotonic() + 10
+while time.monotonic() < end and any(
+        t.name == "ks4web-stderr-pump" for t in threading.enumerate()):
+    time.sleep(0.05)
+box = {}
+def big():
+    os.write(2, b"x" * 200000 + b"\n"); box["done"] = True
+th = threading.Thread(target=big, daemon=True); th.start(); th.join(10)
+sys.stdout.write(json.dumps({"done": bool(box)}) + "\n"); sys.stdout.flush()
+os._exit(0)
+"""
+
+
+@pytest.mark.timeout(120)
+def test_a_stopped_pump_hands_descriptor_2_back_to_the_client():
+    proc = subprocess.Popen(
+        [sys.executable, "-X", "utf8", "-c", PUMP_STOPS],
+        stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE, creationflags=NOWIN)
+    err = bytearray()
+
+    def read_err():
+        while True:
+            chunk = proc.stderr.read1(65536)
+            if not chunk:
+                return
+            err.extend(chunk)
+
+    threading.Thread(target=read_err, daemon=True).start()
+    out = bytearray()
+    reader = threading.Thread(target=lambda: out.extend(proc.stdout.read()),
+                              daemon=True)
+    reader.start()
+    try:
+        proc.wait(timeout=60)
+        reader.join(10)
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+            proc.wait(timeout=30)
+    last = bytes(out).decode().strip().splitlines()[-1]
+    assert json.loads(last) == {"done": True}
+    time.sleep(0.5)
+    assert err.count(b"x") >= 200000, "the large write never reached stderr"
