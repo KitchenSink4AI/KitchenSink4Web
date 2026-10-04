@@ -58,49 +58,13 @@ from .policy import consent, gates
 #: against a gate that expired while the human was reading the prompt.
 ELICIT_TIMEOUT_S = 150.0
 
-#: THE WIRE CONTRACT. The field every question requires, the one value that
-#: means yes, and the refusal listed FIRST so a host that ever preselects the
-#: first option of a choice lands on no. Plain `enum` strings rather than
-#: titled `oneOf` options: the 2025-06-18 schema (what the Codex host
-#: negotiates) has only `enum`, and VS Code shows an untitled option's value
-#: as its label, so the value is what the person reads.
-DECISION_FIELD = "decision"
-ALLOW = "Allow"
-REFUSE_CHOICES = ("Don't allow",)
-#: Offered on Tier 1 prompts only. The money, credential, broadcast,
-#: deletion, legal, off-list, and budget prompts never carry it.
-REMEMBER_FIELD = "remember_30_minutes"
-
-
-def question_schema(offer_remember: bool) -> dict:
-    """The `requestedSchema` every confirmation sends.
-
-    A "remember this for 30 minutes" answer is what stops one task raising
-    the same question five times, and its SCOPE is (origin, action class,
-    ttl) rather than a string, a target, or a URL with a query. That is the
-    difference between a consent unit and the useless blanket "always
-    allow" the author correctly rejected: input strings vary, classes do
-    not. It keeps its preset of false, because consent rides on the
-    required choice and a submitted preset can only ever say "do not
-    remember".
-
-    Root keys are exactly `type`, `properties` and `required`, and each
-    field uses only keys the strictest known host parser accepts."""
-    properties: dict = {
-        DECISION_FIELD: {
-            "type": "string",
-            "title": "Decision",
-            "enum": [*REFUSE_CHOICES, ALLOW],
-        },
-    }
-    if offer_remember:
-        properties[REMEMBER_FIELD] = {
-            "type": "boolean",
-            "title": "Remember 30 Minutes",
-            "default": False,
-        }
-    return {"type": "object", "properties": properties,
-            "required": [DECISION_FIELD]}
+#: The question's wire contract lives with the gates (`policy/gates.py`),
+#: so the prompt sent here and the refusal payload can never disagree.
+DECISION_FIELD = gates.DECISION_FIELD
+ALLOW = gates.ALLOW
+REFUSE_CHOICES = gates.REFUSE_CHOICES
+REMEMBER_FIELD = gates.REMEMBER_FIELD
+question_schema = gates.question_schema
 
 
 def read_answer(result) -> str:
@@ -218,7 +182,8 @@ async def attempt(exc: ConfirmationRequired) -> gates.Gate | None:
     # A GATE THAT IS ALREADY GONE IS NEVER PUT TO A HUMAN. An expired,
     # spent, or unknown token cannot be redeemed by any answer, so asking
     # would only collect a yes that does nothing and tell the person their
-    # answer mattered.
+    # answer mattered. `peek_pending` returns None for all three, an expired
+    # gate included even before the sweep removes it.
     pending = gates.ENGINE.peek_pending(token)
     if pending is None:
         return None
