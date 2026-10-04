@@ -519,6 +519,14 @@ def main() -> None:
     )
     args = parser.parse_args()
 
+    # LOG LINES NEVER WAIT ON STDERR, installed before anything can log. A
+    # client may leave the server's stderr unread, and a full pipe used to
+    # block the one event loop on a log write: no reply again, `initialize`
+    # included. See stderrlog.
+    from . import stderrlog
+
+    _stderr = stderrlog.install()
+
     cli_packs = None
     if args.packs:
         raw = [p.strip() for p in args.packs.split(",") if p.strip()]
@@ -553,7 +561,12 @@ def main() -> None:
     from . import starnudge as _starnudge
 
     _starnudge.announce_once()
-    mcp.run()
+    try:
+        mcp.run()
+    finally:
+        # Queued log lines get a moment to reach a stderr that is being
+        # read; a stderr nobody reads costs this one bounded second.
+        _stderr.flush(1.0)
 
 
 if __name__ == "__main__":
