@@ -16,7 +16,10 @@ about 2.6 KB of it, so the first probe blocked the server inside that write
 and nothing after it was ever answered. The same happened after
 `initialize`. Shorter lines alone only move the wall (the KitchenSink4XL
 server went silent after about 36 bad requests with clipped lines), so log
-lines now go through a bounded queue to a writer thread (`stderrlog`).
+lines now go through a bounded queue to a writer thread, and everything
+else that writes to stderr (prints, raw writes, child processes) writes
+into a pipe the server always drains (`stderrlog`). The process must also
+still exit when the client closes stdin.
 """
 
 from __future__ import annotations
@@ -102,9 +105,17 @@ def test_120_bad_requests_with_stderr_never_read_then_initialize_and_a_call(
             obj = json.loads(raw)
             if "id" in obj:
                 replies[obj["id"]] = obj
+        # And it EXITS when the client closes stdin, stderr still unread:
+        # interpreter shutdown must not wait on the stuck writer.
+        proc.stdin.close()
+        try:
+            exit_code = proc.wait(timeout=30)
+        except subprocess.TimeoutExpired:
+            exit_code = None
     finally:
-        proc.kill()
-        proc.wait(timeout=30)
+        if proc.poll() is None:
+            proc.kill()
+            proc.wait(timeout=30)
 
     missing = sorted(wanted - set(replies))
     assert not missing, (
@@ -120,6 +131,60 @@ def test_120_bad_requests_with_stderr_never_read_then_initialize_and_a_call(
     assert not replies[2]["result"].get("isError"), replies[2]
     assert "error" in replies[3], replies[3]
     assert "result" in replies[4], replies[4]
+    assert exit_code == 0, (
+        f"the server did not exit cleanly after stdin closed with its "
+        f"stderr unread (exit code {exit_code})")
+
+
+#: A process with the writer installed the way `main()` installs it, whose
+#: stderr the parent never reads: a large print, a large raw write to
+#: descriptor 2, and a child that inherits stderr and writes plenty to it
+#: must all return, and the process must still exit 0.
+EVERY_OTHER_WRITER = r"""
+import os, subprocess, sys, time, json
+from kitchensink4web import stderrlog
+stderrlog.install()
+t0 = time.monotonic()
+print("p" * 200000, file=sys.stderr)
+os.write(2, b"r" * 200000 + b"\n")
+child = subprocess.run(
+    [sys.executable, "-c",
+     "import sys; sys.stderr.write('c' * 300000); sys.stderr.flush()"],
+    stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, timeout=30,
+    creationflags=0x08000000 if os.name == "nt" else 0)
+out = {"secs": round(time.monotonic() - t0, 2), "child": child.returncode}
+sys.stdout.write(json.dumps(out) + "\n"); sys.stdout.flush()
+"""
+
+
+@pytest.mark.timeout(120)
+def test_prints_raw_writes_and_children_never_wait_on_an_unread_stderr():
+    proc = subprocess.Popen(
+        [sys.executable, "-X", "utf8", "-c", EVERY_OTHER_WRITER],
+        stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE, creationflags=NOWIN)
+    got: queue.Queue = queue.Queue()
+    threading.Thread(target=lambda: got.put(proc.stdout.readline()),
+                     daemon=True).start()
+    try:
+        try:
+            line = got.get(timeout=60)
+        except queue.Empty:
+            line = b""
+        assert line, "the writes blocked: nothing came back in 60 s"
+        result = json.loads(line)
+        assert result["child"] == 0
+        assert result["secs"] < 30, result
+        assert proc.wait(timeout=30) == 0
+    finally:
+        if proc.poll() is None:
+            if os.name == "nt":
+                subprocess.run(["taskkill", "/F", "/T", "/PID",
+                                str(proc.pid)], capture_output=True,
+                               creationflags=NOWIN)
+            else:
+                proc.kill()
+            proc.wait(timeout=30)
 
 
 # ------------------------------------------------- the writer, in-process
@@ -268,6 +333,54 @@ def test_dropped_lines_are_counted_and_reported_once_stderr_moves():
     finally:
         log.removeHandler(writer.handler)
         stream.release.set()
+
+
+def test_thread_and_unraisable_exceptions_are_one_logged_line(readable):
+    stream, writer = readable
+
+    def boom():
+        raise ValueError("thread went wrong")
+
+    worker = threading.Thread(target=boom, name="probe-thread")
+    worker.start()
+    worker.join(10)
+
+    class Noisy:
+        def __del__(self):
+            raise RuntimeError("finalizer went wrong")
+
+    Noisy()
+    writer.flush(5)
+    out = stream.getvalue().splitlines()
+    thread_lines = [x for x in out if "probe-thread" in x]
+    assert len(thread_lines) == 1, out
+    assert "ValueError: thread went wrong" in thread_lines[0]
+    assert "(at test_stdio_unparseable_request.py:" in thread_lines[0]
+    unraisable = [x for x in out if "finalizer went wrong" in x]
+    assert len(unraisable) == 1, out
+    assert "RuntimeError" in unraisable[0]
+    for line in out:
+        assert "Traceback" not in line
+        assert len(line.encode()) + 1 <= stderrlog.MAX_LINE
+
+
+def test_uninstall_restores_the_exception_hooks():
+    before = (sys.unraisablehook, threading.excepthook)
+    stderrlog.install(io.StringIO())
+    assert sys.unraisablehook is not before[0]
+    assert threading.excepthook is not before[1]
+    stderrlog.uninstall()
+    assert (sys.unraisablehook, threading.excepthook) == before
+
+
+def test_flush_never_waits_on_a_stuck_writer(blocked):
+    stream, writer = blocked
+    logging.warning("one line the writer will get stuck on")
+    assert stream.entered.wait(10)
+    logging.warning("and one waiting behind it")
+    started = time.monotonic()
+    writer.flush(10.0)
+    assert time.monotonic() - started < 2.0
 
 
 def test_install_is_idempotent_and_uninstall_restores(readable):

@@ -519,10 +519,11 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    # LOG LINES NEVER WAIT ON STDERR, installed before anything can log. A
-    # client may leave the server's stderr unread, and a full pipe used to
-    # block the one event loop on a log write: no reply again, `initialize`
-    # included. See stderrlog.
+    # NOTHING WAITS ON THE CLIENT'S STDERR, installed before anything can
+    # write to it. A client may leave the server's stderr unread, and a full
+    # pipe used to block the one event loop on a log write (no reply again,
+    # `initialize` included), the exit, and every child process that
+    # inherits stderr, the browser driver among them. See stderrlog.
     from . import stderrlog
 
     _stderr = stderrlog.install()
@@ -565,7 +566,7 @@ def main() -> None:
         mcp.run()
     finally:
         # Queued log lines get a moment to reach a stderr that is being
-        # read; a stderr nobody reads costs this one bounded second.
+        # read; a writer stuck on one nobody reads is not waited for.
         _stderr.flush(1.0)
 
 
